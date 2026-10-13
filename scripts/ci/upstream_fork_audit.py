@@ -32,7 +32,7 @@ class GitHubApi:
         self.requests = 0
 
     def get(self, path: str) -> Any:
-        if not path.startswith("/repos/") or ".." in path:
+        if not path.startswith("/repos/") or "/../" in path or path.endswith("/.."):
             raise ValueError(f"invalid GitHub API path: {path}")
         if self.max_requests and self.requests >= self.max_requests:
             raise RequestBudgetExhausted(f"request budget ({self.max_requests}) exceeded")
