@@ -135,7 +135,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     const next = providers.map(p => selectedProviders.has(p.slug) ? {
       ...p,
       imageEndpoint: clear ? '' : groupImageUrl.trim(),
-      rotationStrategy: strategy,
+      ...(clear ? {} : { rotationStrategy: strategy }),
     } : p);
     await persist({ ...settings, cloudProviders: next });
     setSelectedProviders(new Set());
