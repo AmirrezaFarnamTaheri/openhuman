@@ -230,12 +230,21 @@ pub(super) fn handle_inference_update_model_settings(
                                 .label
                                 .filter(|s| !s.trim().is_empty())
                                 .unwrap_or_else(|| slug.clone());
+                            let (image_endpoint, model_image_endpoints, rotation_strategy) =
+                                crate::config::schema::cloud_providers::normalize_fleet_config(
+                                    entry.image_endpoint,
+                                    entry.model_image_endpoints,
+                                    entry.rotation_strategy,
+                                )?;
                             let provider = CloudProviderCreds {
                                 id,
                                 slug,
                                 label,
                                 endpoint,
                                 auth_style,
+                                image_endpoint,
+                                model_image_endpoints,
+                                rotation_strategy,
                                 default_model: entry.default_model,
                             };
                             Ok(provider)
