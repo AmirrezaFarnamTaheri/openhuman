@@ -283,3 +283,23 @@ fn generated_provider_ids_sanitize_and_bound_the_slug_prefix() {
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
 }
+
+#[test]
+fn image_endpoint_presets_round_trip_and_default_without_mapping() {
+    let entry: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "id": "a",
+        "slug": "example",
+        "endpoint": "https://api.example.test/v1",
+        "image_endpoint": "https://vision.example.test/v1",
+        "model_image_endpoints": { "my-vision": "https://models.example.test/v1" }
+    })).unwrap();
+    assert_eq!(entry.image_endpoint.as_deref(), Some("https://vision.example.test/v1"));
+    assert_eq!(entry.model_image_endpoints.get("my-vision").map(String::as_str), Some("https://models.example.test/v1"));
+    let wire = serde_json::to_value(&entry).unwrap();
+    assert_eq!(wire["model_image_endpoints"]["my-vision"], "https://models.example.test/v1");
+    let plain: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "old", "endpoint": "https://api.example.test/v1"
+    })).unwrap();
+    assert_eq!(plain.image_endpoint, None);
+    assert!(plain.model_image_endpoints.is_empty());
+}
