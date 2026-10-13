@@ -7,6 +7,8 @@ import { useProviderConnect } from '../useProviderConnect';
 const api = vi.hoisted(() => ({
   flushCloudProviders: vi.fn(),
   listProviderModels: vi.fn(),
+  probeProviderModelFleet: vi.fn(),
+  clearCloudProviderKey: vi.fn(),
   loadProviderAuthErrors: vi.fn(),
   setCloudProviderKey: vi.fn(),
 }));
@@ -15,6 +17,8 @@ vi.mock('../../../../../services/api/aiSettingsApi', async importOriginal => ({
   ...(await importOriginal<typeof import('../../../../../services/api/aiSettingsApi')>()),
   flushCloudProviders: api.flushCloudProviders,
   listProviderModels: api.listProviderModels,
+  probeProviderModelFleet: api.probeProviderModelFleet,
+  clearCloudProviderKey: api.clearCloudProviderKey,
   loadProviderAuthErrors: api.loadProviderAuthErrors,
   setCloudProviderKey: api.setCloudProviderKey,
 }));
@@ -24,6 +28,10 @@ beforeEach(() => {
   api.flushCloudProviders.mockResolvedValue(undefined);
   api.listProviderModels.mockReset();
   api.listProviderModels.mockResolvedValue([]);
+  api.probeProviderModelFleet.mockReset();
+  api.probeProviderModelFleet.mockResolvedValue({ rejectedKeys: 0 });
+  api.clearCloudProviderKey.mockReset();
+  api.clearCloudProviderKey.mockResolvedValue(undefined);
   api.loadProviderAuthErrors.mockReset();
   api.loadProviderAuthErrors.mockResolvedValue([]);
   api.setCloudProviderKey.mockReset();
@@ -31,6 +39,69 @@ beforeEach(() => {
 });
 
 describe('useProviderConnect', () => {
+  it('rolls back and never reports connected when every credential in the group is rejected', async () => {
+    api.probeProviderModelFleet.mockRejectedValue(new Error('provider returned 401: unauthorized'));
+    const persist = vi.fn().mockResolvedValue(undefined);
+    const onConnected = vi.fn();
+    const { result } = renderHook(() => useProviderConnect({
+      draft: EMPTY_SETTINGS,
+      saved: EMPTY_SETTINGS,
+      persist,
+      t: (_key, fallback) => fallback ?? '',
+      onConnected,
+    }));
+
+    await act(async () => {
+      await expect(result.current.connectProvider({
+        slug: 'openai', value: 'rejected-1\\nrejected-2', credentialMode: 'api_key',
+      })).rejects.toThrow(/401/);
+    });
+    expect(api.probeProviderModelFleet).toHaveBeenCalledWith('openai');
+    expect(api.listProviderModels).not.toHaveBeenCalled();
+    expect(api.flushCloudProviders).toHaveBeenLastCalledWith([]);
+    expect(api.clearCloudProviderKey).toHaveBeenCalledWith('openai');
+    expect(persist).not.toHaveBeenCalled();
+    expect(onConnected).not.toHaveBeenCalled();
+  });
+
+  it('saves a group and shows a localized advisory only after another key is verified', async () => {
+    api.probeProviderModelFleet.mockResolvedValue({ rejectedKeys: 1 });
+    const persist = vi.fn().mockResolvedValue(undefined);
+    const onConnected = vi.fn();
+    const t = vi.fn((key: string, fallback?: string) => fallback ?? key);
+    const { result } = renderHook(() => useProviderConnect({
+      draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS, persist, t, onConnected,
+    }));
+    await act(async () => {
+      await result.current.connectProvider({
+        slug: 'openai', value: 'rejected-1\\nworking-2', credentialMode: 'api_key',
+      });
+    });
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(onConnected).toHaveBeenCalledTimes(1);
+    expect(api.clearCloudProviderKey).not.toHaveBeenCalled();
+    expect(result.current.providerSaveNotice?.message).toMatch(/another key was verified/i);
+    expect(t).toHaveBeenCalledWith('settings.ai.fleet.partialKeyVerified', expect.any(String));
+  });
+
+  it('saves a fully valid credential group without claiming an invalid key', async () => {
+    api.probeProviderModelFleet.mockResolvedValue({ rejectedKeys: 0 });
+    const onConnected = vi.fn();
+    const { result } = renderHook(() => useProviderConnect({
+      draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist: vi.fn().mockResolvedValue(undefined),
+      t: (_key, fallback) => fallback ?? '',
+      onConnected,
+    }));
+    await act(async () => {
+      await result.current.connectProvider({
+        slug: 'openai', value: 'working-1\\nworking-2', credentialMode: 'api_key',
+      });
+    });
+    expect(result.current.providerSaveNotice).toBeNull();
+    expect(onConnected).toHaveBeenCalledOnce();
+  });
+
   it('preserves an existing provider CA when saving a replacement connection', async () => {
     const existing = {
       id: 'provider-1',
