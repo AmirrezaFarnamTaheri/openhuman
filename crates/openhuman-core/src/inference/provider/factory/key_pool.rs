@@ -294,6 +294,24 @@ mod tests {
         assert!(health(scope)[0].0);
     }
     #[test]
+    fn pool_retains_only_salted_key_ids_not_raw_secrets() {
+        let scope = "key-pool-test-no-secrets";
+        let configured = vec!["sensitive_example_token".to_owned()];
+        next_key(scope, &configured);
+        let pools = registry().lock().unwrap();
+        let key = &pools.get(scope).unwrap().keys[0];
+        assert_eq!(key.id, secret_id("sensitive_example_token"));
+        assert_ne!(key.id, secret_id("different_token"));
+    }
+    #[test]
+    fn deleted_provider_scopes_are_pruned() {
+        let prefix = "key-pool-test-prune:";
+        next_key("key-pool-test-prune:model-a", &["a".to_owned()]);
+        next_key("key-pool-test-prune:model-b", &["b".to_owned()]);
+        forget_provider(prefix);
+        assert!(provider_snapshots(prefix).is_empty());
+    }
+    #[test]
     fn leases_are_released_without_underflow() {
         let scope = "key-pool-test-lease";
         let keys = vec!["a".to_owned()];
