@@ -32,6 +32,7 @@ struct Pool {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // Reserved for request-outcome hooks in the full fleet port.
 pub enum KeyFailure {
     Authentication,
     RateLimited,
@@ -89,6 +90,7 @@ pub fn next_key(scope: &str, configured: &[String]) -> Option<(usize, String)> {
 }
 
 /// Update shared health on a response, without retaining response bodies or tokens in logs.
+#[allow(dead_code)] // Called by fleet tests; runtime outcome hooks are pending.
 pub fn record_result(scope: &str, key_index: usize, failure: Option<KeyFailure>) {
     let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some(key) = pools.get_mut(scope).and_then(|pool| pool.keys.get_mut(key_index)) else { return };
@@ -104,6 +106,7 @@ pub fn record_result(scope: &str, key_index: usize, failure: Option<KeyFailure>)
 }
 
 /// Scrubbed health snapshot; never exposes tokens.
+#[allow(dead_code)] // Read-only fleet health API for the planned UI.
 pub fn health(scope: &str) -> Vec<(bool, bool, u64, u64)> {
     let pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     pools.get(scope).map(|pool| pool.keys.iter().map(|key| {
