@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FLEET_MODEL_PRESETS } from '../modelFleetCatalog';
 import {
   applyProviderBulkPatch, applyModelBulkPatch, syncModelPresets, syncConfiguredProviderPresets,
+  parseModelImageEndpoints, validModelFleetEndpoint,
 } from '../modelFleetOps';
 
 const initial = { id: 'handwritten', provider: 'custom', context_window: 24_000,
@@ -55,6 +56,15 @@ describe('model-fleet preset management', () => {
     expect(providers[0].image_endpoint).toBe(rows[0].image_endpoint);
     expect(providers[0].model_image_endpoints).toEqual(rows[0].model_image_endpoints);
     expect(providers[0].endpoint).toBe('https://openrouter.ai/api/v1');
+  });
+
+  it('validates keyed image model endpoints and rejects duplicate model ids', () => {
+    expect(parseModelImageEndpoints('model-x = https://vision.example/v1\nmodel-y = http://localhost:8000/v1')).toEqual({
+      'model-x': 'https://vision.example/v1', 'model-y': 'http://localhost:8000/v1'
+    });
+    expect(() => parseModelImageEndpoints('x = http://a.test\nx = http://b.test')).toThrow(/Duplicate/);
+    expect(() => parseModelImageEndpoints('x = ftp://a.test')).toThrow();
+    expect(validModelFleetEndpoint('https://user:secret@host.test/v1')).toBe(false);
   });
 
   it('bulk image-endpoint edit preserves mapped model endpoints', () => {
