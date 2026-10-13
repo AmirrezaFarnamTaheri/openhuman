@@ -3,7 +3,7 @@
  * and the dialog it opens to collect credentials.
  */
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 
 import { useT } from '../../../../lib/i18n/I18nContext';
 import { openUrl } from '../../../../utils/openUrl';
@@ -77,6 +77,7 @@ export const ProviderKeyDialog = ({
   );
   const [keyValue, setKeyValue] = useState<string>(initialKeyValue ?? '');
   const [multiKeyMode, setMultiKeyMode] = useState(false);
+  const [revealKeys, setRevealKeys] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'saving' | 'oauth'>('idle');
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== 'idle';
@@ -235,7 +236,8 @@ export const ProviderKeyDialog = ({
             </label>
           )}
           {!isLocalRuntime && !endpointKeyMode && multiKeyMode ? (
-            <textarea
+            <div className="space-y-1">
+              <textarea
               id="provider-key-input"
               rows={4}
               value={value}
@@ -243,12 +245,19 @@ export const ProviderKeyDialog = ({
               disabled={busy}
               spellCheck={false}
               autoComplete="off"
+              style={{ WebkitTextSecurity: revealKeys ? 'none' : 'disc' } as CSSProperties}
               className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
               onChange={e => {
                 setValue(e.target.value);
                 setError(null);
               }}
             />
+              <Button type="button" variant="tertiary" size="xs"
+                disabled={busy} onClick={() => setRevealKeys(old => !old)}
+                aria-label={revealKeys ? 'Hide API keys' : 'Reveal API keys'}>
+                {revealKeys ? 'Hide keys' : 'Reveal keys'}
+              </Button>
+            </div>
           ) : (
             <TextField
               id="provider-key-input"
