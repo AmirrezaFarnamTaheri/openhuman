@@ -209,3 +209,28 @@ fn single_catalog_key_is_preserved_without_an_empty_candidate() {
         vec!["only-key"],
     );
 }
+
+#[test]
+fn cloud_fleet_build_uses_resolved_codex_endpoint_without_retargeting_anthropic() {
+    use tinyinference_llm::providers::openai::codex::OpenAiCodexRouting;
+    let openai = openai_entry("oa", "openai");
+    let oauth = OpenAiCodexRouting {
+        endpoint: "https://chatgpt.com/backend-api/codex".into(),
+        using_oauth: true,
+        account_id: Some("acct-1".into()),
+    };
+    assert_eq!(
+        cloud_slug::cloud_base_url(&openai, &oauth),
+        "https://chatgpt.com/backend-api/codex"
+    );
+    let usual = OpenAiCodexRouting::standard("https://api.openai.com/v1");
+    assert_eq!(
+        cloud_slug::cloud_base_url(&openai, &usual),
+        "https://api.openai.com/v1"
+    );
+    let claude = anthropic_entry("an", "anthropic");
+    assert_eq!(
+        cloud_slug::cloud_base_url(&claude, &oauth),
+        "https://api.anthropic.com/v1"
+    );
+}
