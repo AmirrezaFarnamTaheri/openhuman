@@ -120,6 +120,37 @@ pub(super) fn handle_inference_get_client_config(_params: Map<String, Value>) ->
     Box::pin(async move { to_json(crate::inference::rpc::inference_get_client_config().await?) })
 }
 
+#[derive(Debug, Deserialize)]
+struct ModelFleetResetParams {
+    slug: String,
+}
+
+/// Model-fleet health and cooldowns are process-local, keyed by workspace.
+/// The response contains only counts and statuses, never raw token material.
+pub(super) fn handle_inference_model_fleet_status(
+    _params: Map<String, Value>,
+) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let status = crate::inference::provider::factory::model_fleet_health(&config);
+        to_json(Outcome::new(status, vec![]))
+    })
+}
+
+pub(super) fn handle_inference_model_fleet_reset(
+    params: Map<String, Value>,
+) -> ControllerFuture {
+    Box::pin(async move {
+        let update = deserialize_params::<ModelFleetResetParams>(params)?;
+        let config = config_rpc::load_config_with_timeout().await?;
+        crate::inference::provider::factory::model_fleet_reset(&config, &update.slug)?;
+        to_json(Outcome::new(
+            serde_json::json!({ "reset": true, "provider": update.slug }),
+            vec![],
+        ))
+    })
+}
+
 pub(super) fn handle_inference_update_model_settings(
     params: Map<String, Value>,
 ) -> ControllerFuture {
