@@ -64,6 +64,10 @@ fn builtin_cloud_provider_defaults_cover_phase_one_presets() {
             "https://api-inference.modelscope.cn/v1",
             AuthStyle::Bearer,
         ),
+        ("tokendance", "TokenDance", "https://tokendance.space/gateway/v1", AuthStyle::Bearer),
+        ("siliconflow", "SiliconFlow", "https://api.siliconflow.cn/v1", AuthStyle::Bearer),
+        ("qwen-pay-as-you-go", "Qwen Pay-As-You-Go", "https://dashscope.aliyuncs.com/compatible-mode/v1", AuthStyle::Bearer),
+        ("qwen-token-plan", "Qwen Token Plan", "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", AuthStyle::Bearer),
     ] {
         let entry = super::builtin_cloud_provider(slug).expect("builtin preset");
         assert_eq!(entry.slug, slug);
