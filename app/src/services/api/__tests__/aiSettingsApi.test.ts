@@ -17,6 +17,7 @@ import {
   flushCloudProviders,
   importOpenAiCodexCliAuth,
   listProviderModels,
+  probeProviderModelFleet,
   loadAISettings,
   loadLocalProviderSnapshot,
   loadProviderAuthErrors,
@@ -1328,5 +1329,35 @@ describe('model fleet health RPCs', () => {
       method: 'openhuman.inference_model_fleet_reset',
       params: { slug: 'anthropic' },
     });
+  });
+});
+
+describe('credential-group model catalogue verification', () => {
+  beforeEach(() => {
+    mockCallCoreRpc.mockReset();
+  });
+
+  it('returns rejected key count only when Rust confirms an authenticated key', async () => {
+    mockCallCoreRpc.mockResolvedValue({
+      result: {
+        models: [{ id: 'gpt-example' }],
+        fleet_probe: { authenticated: true, checked_keys: 2, rejected_keys: 1 },
+      },
+    });
+    await expect(probeProviderModelFleet('openai')).resolves.toEqual({ rejectedKeys: 1 });
+    expect(mockCallCoreRpc).toHaveBeenCalledWith({
+      method: 'openhuman.inference_list_models',
+      params: { provider_id: 'openai' },
+    });
+  });
+
+  it('does not infer a good key from an unverified model catalogue response', async () => {
+    mockCallCoreRpc.mockResolvedValue({ result: { models: [] } });
+    await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);
+  });
+
+  it('propagates exhausted key-pool authentication failure', async () => {
+    mockCallCoreRpc.mockRejectedValue(new Error('provider returned 401: invalid API key'));
+    await expect(probeProviderModelFleet('openai')).rejects.toThrow(/401/);
   });
 });
