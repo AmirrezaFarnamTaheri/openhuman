@@ -134,6 +134,27 @@ mod tests {
         assert_eq!(health(scope).len(), 2);
     }
     #[test]
+    fn exhaustion_never_reuses_an_attempted_key() {
+        let scope = "key-pool-test-exhausted";
+        let keys = vec!["a".to_owned(), "b".to_owned()];
+        let (first, _) = next_key_excluding(scope, &keys, &[]).unwrap();
+        let (second, _) = next_key_excluding(scope, &keys, &[first]).unwrap();
+        assert_ne!(first, second);
+        assert!(next_key_excluding(scope, &keys, &[first, second]).is_none());
+    }
+
+    #[test]
+    fn outcome_is_attributed_by_secret_not_stale_array_position() {
+        let scope = "key-pool-test-rotated";
+        let initial = vec!["a".to_owned(), "b".to_owned()];
+        let (_, key) = next_key(scope, &initial).unwrap();
+        let updated = vec!["b".to_owned(), "a".to_owned()];
+        next_key(scope, &updated).unwrap();
+        record_result_for(scope, &key, Some(KeyFailure::Authentication), None);
+        assert_eq!(next_key(scope, &updated).unwrap().1, "b");
+    }
+
+    #[test]
     fn updates_pool_without_losing_existing_health() {
         let scope = "key-pool-test-update";
         let initial = vec!["one".to_owned(), "two".to_owned()];
