@@ -245,6 +245,12 @@ export const ProviderKeyDialog = ({
               setError(null);
             }}
           />
+          {!isLocalRuntime && !endpointKeyMode && (
+            <p className="text-xs text-content-muted">
+              Multiple API keys: separate them with commas or semicolons. OpenHuman will
+              store them under this provider and select one credential per request.
+            </p>
+          )}
           {/* OMLX (endpointKeyMode): render the API key field in addition to
               the endpoint field above — the runtime is OpenAI-compatible but
               gated behind a Bearer key. */}
