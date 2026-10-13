@@ -803,10 +803,10 @@ export interface ModelFleetStatus {
 
 /** Read process-local routing health for keys used by recent calls. */
 export async function loadModelFleetStatus(): Promise<ModelFleetStatus> {
-  const response = await callCoreRpc<{ result: ModelFleetStatus }>({
+  const response = await callCoreRpc<ModelFleetStatus>({
     method: CORE_RPC_METHODS.inferenceModelFleetStatus,
   });
-  return response.result ?? { providers: [] };
+  return response ?? { providers: [] };
 }
 
 /** Revive provider keys after replacing/repairing credentials. */
