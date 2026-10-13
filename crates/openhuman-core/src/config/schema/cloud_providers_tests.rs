@@ -64,10 +64,6 @@ fn builtin_cloud_provider_defaults_cover_phase_one_presets() {
             "https://api-inference.modelscope.cn/v1",
             AuthStyle::Bearer,
         ),
-        ("tokendance", "TokenDance", "https://tokendance.space/gateway/v1", AuthStyle::Bearer),
-        ("siliconflow", "SiliconFlow", "https://api.siliconflow.cn/v1", AuthStyle::Bearer),
-        ("qwen-pay-as-you-go", "Qwen Pay-As-You-Go", "https://dashscope.aliyuncs.com/compatible-mode/v1", AuthStyle::Bearer),
-        ("qwen-token-plan", "Qwen Token Plan", "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", AuthStyle::Bearer),
     ] {
         let entry = super::builtin_cloud_provider(slug).expect("builtin preset");
         assert_eq!(entry.slug, slug);
@@ -80,7 +76,7 @@ fn builtin_cloud_provider_defaults_cover_phase_one_presets() {
 #[test]
 fn builtin_cloud_provider_slugs_are_unique() {
     let mut slugs = std::collections::HashSet::new();
-    for provider in BUILTIN_CLOUD_PROVIDERS {
+    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
         assert!(
             slugs.insert(provider.slug),
             "duplicate built-in cloud provider slug {}",
@@ -120,7 +116,7 @@ fn only_openai_builtin_exposes_responses_api() {
 /// is the only built-in that serves `/v1/responses`.
 #[test]
 fn responses_api_capability_is_coupled_to_the_preset_list() {
-    for provider in BUILTIN_CLOUD_PROVIDERS {
+    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
         let expected = provider.slug == "openai";
         assert_eq!(
             builtin_cloud_supports_responses_api(provider.slug),
@@ -185,7 +181,7 @@ fn host_is_builtin_cloud_provider_recognises_inference_hosts() {
         );
     }
     // Every registry endpoint's own host must classify as builtin.
-    for provider in BUILTIN_CLOUD_PROVIDERS {
+    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
         let host = endpoint_host(provider.endpoint).expect("preset endpoint has a host");
         assert!(
             host_is_builtin_cloud_provider(&host),
@@ -243,7 +239,7 @@ fn openai_host_and_unknown_proxies_keep_the_responses_fallback() {
 /// can't silently desync the two gates.
 #[test]
 fn host_gate_agrees_with_slug_capability_for_every_builtin() {
-    for provider in BUILTIN_CLOUD_PROVIDERS {
+    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
         // OpenhumanJwt / Anthropic presets never route through the
         // OpenAI-compatible Responses fallback; the gate only matters for
         // the Bearer OpenAI-compatible hosts.
@@ -285,6 +281,25 @@ fn generated_provider_ids_sanitize_and_bound_the_slug_prefix() {
 }
 
 #[test]
+fn builtin_table_is_the_upstream_catalog_plus_the_managed_route() {
+    use tinyinference_providers::builtin::BUILTIN_CLOUD_PROVIDERS as UPSTREAM;
+    let host = &*BUILTIN_CLOUD_PROVIDERS;
+    assert_eq!(host.len(), UPSTREAM.len() + 1 + super::EXTRA_CLOUD_PROVIDERS.len());
+    assert_eq!(host[0].slug, "openhuman");
+    assert_eq!(host[0].auth_style, AuthStyle::OpenhumanJwt);
+    for (mapped, upstream) in host[1..1 + UPSTREAM.len()].iter().zip(UPSTREAM) {
+        assert_eq!(mapped.slug, upstream.slug);
+        assert_eq!(mapped.label, upstream.label);
+        assert_eq!(mapped.endpoint, upstream.endpoint);
+        let expected = match upstream.auth_style {
+            tinyinference_providers::builtin::BuiltinAuthStyle::Bearer => AuthStyle::Bearer,
+            tinyinference_providers::builtin::BuiltinAuthStyle::Anthropic => AuthStyle::Anthropic,
+        };
+        assert_eq!(mapped.auth_style, expected, "{}", mapped.slug);
+    }
+}
+
+#[test]
 fn image_endpoint_presets_round_trip_and_default_without_mapping() {
     let entry: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
         "id": "a",
@@ -322,4 +337,13 @@ fn reject_invalid_image_endpoints_and_unknown_strategy() {
     assert_eq!(group.as_deref(), Some("https://images.example/v1"));
     assert_eq!(models.get("vision").map(String::as_str), Some("https://vision.example/v1"));
     assert_eq!(strategy.as_deref(), Some("least_busy"));
+}
+
+#[test]
+fn additional_fork_cloud_presets_are_represented_exactly_once() {
+    for slug in ["tokendance", "siliconflow", "qwen-pay-as-you-go", "qwen-token-plan"] {
+        let rows: Vec<_> = BUILTIN_CLOUD_PROVIDERS.iter().filter(|p| p.slug == slug).collect();
+        assert_eq!(rows.len(), 1, "{slug} must have one canonical preset");
+        assert_eq!(rows[0].auth_style, AuthStyle::Bearer);
+    }
 }
