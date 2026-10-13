@@ -151,8 +151,25 @@ pub(super) fn resolve_cloud_slug<'a>(
         fallback_diagnostics::missing_provider_credentials_message(role, slug, local_chat)
     };
 
-    let key = lookup_key_for_slug(slug, config)
+    let mut key = lookup_key_for_slug(slug, config)
         .map_err(|e| anyhow::anyhow!("{} (underlying error: {e})", missing_credentials()))?;
+
+    // Penguin multi-token compatibility: users may store a group of credentials
+    // under one provider slug. Select an individual token before any HTTP client
+    // is constructed; forwarding the delimited string would leak every credential
+    // to the upstream in one invalid Authorization header.
+    if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
+        let candidates = super::key_pool::parse_api_keys(&key);
+        if candidates.len() > 1 {
+            let scope = format!("{}:{}", slug, entry.endpoint);
+            key = super::key_pool::next_key(&scope, &candidates)
+                .map(|(_, selected)| selected)
+                .ok_or_else(|| anyhow::anyhow!(
+                    "[chat-factory] no usable credentials remain for provider '{}'; update or reset its API keys",
+                    slug
+                ))?;
+        }
+    }
 
     // A readable auth profile with no key for this slug returns `Ok("")`, which
     // would otherwise build a client with an empty bearer and surface as a raw
