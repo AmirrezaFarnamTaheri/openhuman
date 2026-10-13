@@ -16,7 +16,7 @@ import type { AISettings, CloudProvider } from './aiPanelTypes';
 import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
 import {
   fleetModelKey, syncModelPresets, applyModelBulkPatch,
-  validModelFleetEndpoint, syncConfiguredProviderPresets,
+  validModelFleetEndpoint, syncConfiguredProviderPresets, updateSelectedGroupSettings,
 } from './modelFleetOps';
 
 interface Props {
@@ -132,11 +132,13 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     if (!clear && !validModelFleetEndpoint(groupImageUrl)) {
       throw new Error('The image endpoint must be a valid http(s) base URL.');
     }
-    const next = providers.map(p => selectedProviders.has(p.slug) ? {
-      ...p,
-      imageEndpoint: clear ? '' : groupImageUrl.trim(),
-      ...(clear ? {} : { rotationStrategy: strategy }),
-    } : p);
+    const next = updateSelectedGroupSettings(providers, selectedProviders, clear
+      ? { imageEndpoint: '' }
+      : {
+          ...(groupImageUrl.trim() ? { imageEndpoint: groupImageUrl.trim() } : {}),
+          rotationStrategy: strategy,
+        }
+    );
     await persist({ ...settings, cloudProviders: next });
     setSelectedProviders(new Set());
   }, t('settings.ai.fleet.providerUpdated', 'Selected provider groups updated.'));
