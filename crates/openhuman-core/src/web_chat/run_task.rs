@@ -113,11 +113,11 @@ pub(crate) async fn run_chat_task(
     // `action_dir`. Applied before checkout so the session agent, its security
     // policy (which grants `action_dir` as a trusted root) and its tools are
     // all built on the thread's folder.
-    if let Some(dir) =
-        crate::threads::ops::thread_working_dir(config.workspace_dir.clone(), thread_id).await?
-    {
+    let thread_dir =
+        crate::threads::ops::thread_working_dir(config.workspace_dir.clone(), thread_id).await?;
+    if let Some(dir) = &thread_dir {
         log::debug!("[web-channel] thread working folder applied thread_id={thread_id}");
-        config.action_dir = dir;
+        config.action_dir = dir.clone();
     }
     let model_override = normalize_model_override(model_override);
     // The cached session (or a cold-boot resumed one) is the thread's single
@@ -157,6 +157,12 @@ pub(crate) async fn run_chat_task(
     agent.set_on_progress(Some(progress_tx));
     agent.set_run_queue(Some(run_queue));
     agent.set_thread_id(Some(thread_id));
+    // Also the turn's workspace, so attachment reads and delegated sub-agents
+    // (which load a fresh config) use the folder its uploads were staged in
+    // (#7714). Same pattern as `agent_chat`'s per-turn cwd.
+    if let Some(dir) = thread_dir {
+        agent.set_workspace_descriptor(Some(tinytools::WorkspaceDescriptor::new(dir)));
+    }
     let turn_state_store = crate::agent::session_store::turn_states_for(&config.workspace_dir);
     // Stamp the resolved agent onto the bridge metadata so the trace exporter
     // can attribute the run (`agent.id` attr / `agent.turn:<id>` trace name).
