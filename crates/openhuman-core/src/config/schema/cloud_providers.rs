@@ -190,6 +190,10 @@ pub const BUILTIN_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
         endpoint: "https://api-inference.modelscope.cn/v1",
         auth_style: AuthStyle::Bearer,
     },
+    BuiltinCloudProvider { slug: "tokendance", label: "TokenDance", endpoint: "https://tokendance.space/gateway/v1", auth_style: AuthStyle::Bearer },
+    BuiltinCloudProvider { slug: "siliconflow", label: "SiliconFlow", endpoint: "https://api.siliconflow.cn/v1", auth_style: AuthStyle::Bearer },
+    BuiltinCloudProvider { slug: "qwen-pay-as-you-go", label: "Qwen Pay-As-You-Go", endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", auth_style: AuthStyle::Bearer },
+    BuiltinCloudProvider { slug: "qwen-token-plan", label: "Qwen Token Plan", endpoint: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", auth_style: AuthStyle::Bearer },
 ];
 
 pub(crate) fn builtin_cloud_provider(type_str: &str) -> Option<&'static BuiltinCloudProvider> {
