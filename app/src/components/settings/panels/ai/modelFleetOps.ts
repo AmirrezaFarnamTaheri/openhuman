@@ -112,6 +112,21 @@ export function validModelFleetEndpoint(value: string): boolean {
   }
 }
 
+/** A blank image-URL input means 'do not edit' unless Clear was clicked;
+ * applying a strategy must not silently clear the existing endpoint.
+ */
+export function updateSelectedGroupSettings<T extends {
+  slug: string;
+  imageEndpoint?: string;
+  rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
+}>(
+  groups: readonly T[],
+  selected: ReadonlySet<string>,
+  patch: Partial<Pick<T, 'imageEndpoint' | 'rotationStrategy'>>
+): T[] {
+  return groups.map(group => selected.has(group.slug) ? { ...group, ...patch } : { ...group });
+}
+
 /** Explicit model-id-to-endpoint group keys, one `model-id = https://...` per line. */
 export function parseModelImageEndpoints(input: string): Record<string, string> {
   const endpoints: Record<string, string> = Object.create(null) as Record<string, string>;
