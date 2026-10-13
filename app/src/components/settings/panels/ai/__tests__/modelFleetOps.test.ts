@@ -3,6 +3,7 @@ import { FLEET_MODEL_PRESETS } from '../modelFleetCatalog';
 import {
   applyProviderBulkPatch, applyModelBulkPatch, syncModelPresets, syncConfiguredProviderPresets,
   parseModelImageEndpoints, parseFleetApiKeys, validModelFleetEndpoint, updateSelectedGroupSettings,
+  insertFleetKeysAtSelection,
 } from '../modelFleetOps';
 
 const initial = { id: 'handwritten', provider: 'custom', context_window: 24_000,
@@ -21,6 +22,28 @@ describe('model-fleet preset management', () => {
     expect(parseFleetApiKeys('  a, b; a\nc\r\n')).toEqual(['a', 'b', 'c']);
     expect(parseFleetApiKeys('one')).toEqual(['one']);
     expect(parseFleetApiKeys(' , ;\n')).toEqual([]);
+  });
+
+  it('preserves an occupied key when additional keys are pasted at a cursor', () => {
+    const rows = ['original-key', 'other-key'];
+    expect(insertFleetKeysAtSelection(rows, 0, 'pasted-1\\npasted-2', 4, 4)).toEqual([
+      'original-key', 'pasted-1', 'pasted-2', 'other-key',
+    ]);
+    expect(rows).toEqual(['original-key', 'other-key']);
+  });
+
+  it('replaces the selected key when its whole value is selected', () => {
+    expect(insertFleetKeysAtSelection(['old', 'other'], 0, 'new-a;new-b', 0, 3))
+      .toEqual(['new-a', 'new-b', 'other']);
+    expect(insertFleetKeysAtSelection(['', 'other'], 0, 'new-a,new-b', 0, 0))
+      .toEqual(['new-a', 'new-b', 'other']);
+  });
+
+  it('never silently truncates credential batches over the row limit', () => {
+    const full = Array.from({ length: 128 }, (_, i) => 'key-' + i);
+    expect(() => insertFleetKeysAtSelection(full, 0, 'additional-a\\nadditional-b', 0, 0))
+      .toThrow(/128/);
+    expect(full).toHaveLength(128);
   });
 
   it('syncs catalog fields without removing custom models and is idempotent', () => {
