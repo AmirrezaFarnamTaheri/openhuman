@@ -293,9 +293,18 @@ async fn unscoped_async_spawn_refuses_before_persisting_a_running_session() {
         )
         .await
         .expect("tool dispatch reports a refusal as a tool outcome");
-    let sessions = SubagentSessionStore::new(workspace.path().to_path_buf())
-        .load()
-        .unwrap();
+    // An unscoped SaaS call fails closed on the store itself, so nothing was
+    // persisted either way.
+    let sessions = match SubagentSessionStore::new(workspace.path().to_path_buf()).load() {
+        Ok(sessions) => sessions,
+        Err(err) => {
+            assert!(
+                err.contains("no tenant scope in SaaS mode; refusing to act as the operator"),
+                "unexpected store error: {err}"
+            );
+            Vec::new()
+        }
+    };
     assert!(
         result.is_error,
         "unscoped spawn must not report accepted: {}",

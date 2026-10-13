@@ -19,7 +19,6 @@ use crate::threads::{
 };
 use crate::web_chat as web_channel;
 use std::path::PathBuf;
-use tinyagents_session::turn_state;
 
 /// Lists all conversation threads.
 pub async fn threads_list(
@@ -443,12 +442,14 @@ async fn thread_delete_inner(
     // mirrors conversation-derived state) remains on disk; the
     // thread row itself is already gone at this point so the caller
     // sees a partial failure they can act on instead of silent drift.
-    turn_state::store::delete(dir.clone(), &request.thread_id).map_err(|err| {
-        format!(
-            "thread {} deleted but turn-snapshot cleanup failed: {err}",
-            request.thread_id
-        )
-    })?;
+    crate::agent::session_store::turn_states_for(&dir)
+        .delete(&request.thread_id)
+        .map_err(|err| {
+            format!(
+                "thread {} deleted but turn-snapshot cleanup failed: {err}",
+                request.thread_id
+            )
+        })?;
     // The thread's conversation memory goes too, for good (by `memory_ids`).
     // Memory off (signed out) or a failed forget queues the deletion for the
     // next sign-in (`memory::deletion`) rather than failing the delete: the

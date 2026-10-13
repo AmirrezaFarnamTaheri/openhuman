@@ -37,17 +37,17 @@ async fn save_rejects_an_empty_toolkit() {
 }
 
 /// A stored preference is never lost: either the module took it (the read
-/// returns it and the legacy file is emptied) or the module was unreachable
-/// (the read fails open to the default and the file is left exactly as it was
+/// returns it and the stored value is emptied) or the module was unreachable
+/// (the read fails open to the default and the value is left exactly as it was
 /// so the migration retries).
 #[tokio::test]
-async fn a_legacy_pref_either_reaches_the_module_or_stays_on_disk() {
+async fn a_legacy_pref_either_reaches_the_module_or_stays_stored() {
     let dir = tempfile::tempdir().unwrap();
     let config = config_in(&dir);
-    let path = file_store::path(&config, USER_SCOPES_FILE);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let legacy = r#"{"github":{"read":true,"write":false,"admin":true}}"#;
-    std::fs::write(&path, legacy).unwrap();
+    let legacy = serde_json::json!({"github":{"read":true,"write":false,"admin":true}});
+    file_store::save(&config, USER_SCOPES_FILE, &legacy)
+        .await
+        .unwrap();
     let stored = UserScopePref {
         read: true,
         write: false,
@@ -56,31 +56,18 @@ async fn a_legacy_pref_either_reaches_the_module_or_stays_on_disk() {
 
     let pref = load_or_default(&config, "github").await;
     let done = migrated().lock().unwrap().contains(&config.workspace_dir);
+    let left: LegacyScopeFile = file_store::load(&config, USER_SCOPES_FILE).await.unwrap();
     if done {
         assert_eq!(pref, stored, "the migrated row must decide visibility");
-        let left: LegacyScopeFile =
-            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        assert!(left.is_empty(), "the legacy file is emptied once moved");
+        assert!(left.is_empty(), "the stored value is emptied once moved");
     } else {
         assert_eq!(
             pref,
             UserScopePref::default(),
             "unreachable module fails open"
         );
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), legacy);
+        assert_eq!(left.get("github"), Some(&stored));
     }
-}
-
-#[tokio::test]
-async fn an_unreadable_legacy_file_defers_the_migration_without_erasing_it() {
-    let dir = tempfile::tempdir().unwrap();
-    let config = config_in(&dir);
-    let path = file_store::path(&config, USER_SCOPES_FILE);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(&path, b"not json").unwrap();
-
-    migrate_legacy(&config).await;
-    assert_eq!(std::fs::read(&path).unwrap(), b"not json");
 }
 
 #[tokio::test]

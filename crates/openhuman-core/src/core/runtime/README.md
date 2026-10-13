@@ -247,5 +247,5 @@ host an agent turn must set:
 
 - [../README.md](../README.md): the rest of `core/`, covering dispatch,
   registry, event bus, transport, and CLI.
-- [Embedding OpenHuman](../../../../../gitbooks/developing/embedding.md)
-- [Deep architecture reference](../../../../../gitbooks/developing/architecture.md)
+- [Embedding OpenHuman](../../../../../docs/gitbooks/en/developing/embedding.md)
+- [Deep architecture reference](../../../../../docs/gitbooks/en/developing/architecture.md)

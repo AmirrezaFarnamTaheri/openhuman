@@ -82,6 +82,15 @@ test("linked TinyDocs E2E enables its required local feature", () => {
   );
 });
 
+test("CI exports the staged TinyMCP library for the multi-server suite", () => {
+  const source = readFileSync(installer, "utf8");
+  assert.match(
+    source,
+    /echo "OPENHUMAN_TINYMCP_TEST_MODULE=\$\{tinymcp_artifact\}"/,
+    "mcp_registry_multi_server loads TinyMCP by file, so the CI env file names it",
+  );
+});
+
 test("MCP registry Rust integration tests run serially", () => {
   const source = readFileSync(localRustRunner, "utf8");
   assert.match(

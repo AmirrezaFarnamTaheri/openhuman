@@ -187,6 +187,15 @@ impl RuntimeBuilder {
         );
         info.configuration_resolved = self.config_source == super::ConfigSource::Resolved;
         info.storage = StorageInfo::describe(self.seams.storage.as_ref(), &config);
+        // `build` gives a stateless workspace with no storage source an
+        // in-memory backend; report what it will install.
+        if !info.storage.configured && matches!(self.workspace, crate::Workspace::Stateless) {
+            info.storage = StorageInfo {
+                source: "backend".into(),
+                driver: Some("memory".into()),
+                configured: true,
+            };
+        }
         info
     }
 }

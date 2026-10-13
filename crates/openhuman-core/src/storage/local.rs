@@ -95,9 +95,11 @@ pub fn backend_for(workspace_dir: &Path) -> Result<Arc<dyn StorageBackend>> {
 /// When the backend cannot be had ([`backend_for`]) or the scope cannot be
 /// resolved (SaaS mode with no acting profile).
 pub fn open(domain: &'static str, workspace_dir: &Path) -> Result<Opened> {
+    // The scope first: a call with no acting scope (SaaS mode, no agent) fails
+    // closed without creating a workspace database as a side effect.
+    let scope = current_scope().with_context(|| format!("[{domain}] resolve the storage scope"))?;
     let backend = backend_for(workspace_dir)
         .with_context(|| format!("[{domain}] open the storage backend"))?;
-    let scope = current_scope().with_context(|| format!("[{domain}] resolve the storage scope"))?;
     Ok(Opened { backend, scope })
 }
 

@@ -172,6 +172,10 @@ fi
 # them with Cargo's default feature set makes the runner fail before a test can
 # execute. Keep this list in the same canonical source as `pnpm test:rust`.
 PRODUCT_FEATURES="$(bash "$REPO_ROOT/scripts/ci/product-features.sh")"
+# scripts/e2e-core.sh adds a storage driver (storage-mongodb) the product set lacks.
+if [ -n "${OPENHUMAN_E2E_EXTRA_FEATURES:-}" ]; then
+  PRODUCT_FEATURES="$PRODUCT_FEATURES,$OPENHUMAN_E2E_EXTRA_FEATURES"
+fi
 
 module_target="$(bash "$SCRIPT_DIR/ci/native-test-module-platform.sh")"
 IFS=$'\t' read -r module_ext module_platform <<< "$module_target"
@@ -276,6 +280,28 @@ for suite in "${SUITES[@]}"; do
     # The registry tests open several process-global module clients across
     # workspaces. Parallel libtest threads can race their module lifecycle.
     echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (serial)"
+    bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
+      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
+      --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+    continue
+  fi
+  if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then
+    # Released TinyMCP cdylib under the real host and its storage backend
+    # (#7737). Ignored in a bare `cargo test` because it needs the staged
+    # module; the staging above put it on OPENHUMAN_MODULE_PATH. It spawns
+    # openhuman-core twice, so run it serially.
+    echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (--ignored, serial)"
+    bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
+      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
+      --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+    continue
+  fi
+  if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then
+    # Released TinyMCP cdylib under the real host and its storage backend
+    # (#7737). Ignored in a bare `cargo test` because it needs the staged
+    # module; the staging above put it on OPENHUMAN_MODULE_PATH. It spawns
+    # openhuman-core twice, so run it serially.
+    echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (--ignored, serial)"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
       --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
       --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}

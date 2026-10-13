@@ -229,6 +229,6 @@ fixture. Run with
 
 ## Further reading
 
-- [Privacy and security](../../../../gitbooks/features/privacy-and-security.md)
-- [Security architecture](../../../../gitbooks/developing/architecture/security.md)
+- [Privacy and security](../../../../docs/gitbooks/en/features/privacy-and-security.md)
+- [Security architecture](../../../../docs/gitbooks/en/developing/architecture/security.md)
 - [tinybox submodule](../../../../vendor/tinybox/README.md)

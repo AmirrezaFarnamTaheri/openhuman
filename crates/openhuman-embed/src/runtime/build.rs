@@ -171,6 +171,14 @@ impl RuntimeBuilder {
                 }
             }
         }
+        // A stateless workspace keeps nothing durable on disk: with no host
+        // backend, the documents the core keeps beside the session store (run
+        // status, cron, flows) go to memory instead of the workspace-default
+        // SQLite under `<workspace>/storage`. Installed process-wide like any
+        // storage seam, and removed with the runtime.
+        if host_seams.storage.is_none() && matches!(self.workspace, Workspace::Stateless) {
+            host_seams.storage = Some(super::StorageSource::Url("memory".into()));
+        }
         validate_storage_feature(host_seams.storage.as_ref())?;
         host_seams
             .open_storage()

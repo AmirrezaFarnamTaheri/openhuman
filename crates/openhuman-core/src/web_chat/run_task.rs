@@ -9,7 +9,6 @@ use tinyagents_harness::run_queue::RunQueue;
 
 use crate::agent::progress::AgentProgress;
 use crate::config::rpc as config_rpc;
-use tinyagents_session::turn_state::TurnStateStore;
 
 use super::ops::BudgetCorrelation;
 use super::progress_bridge::spawn_progress_bridge;
@@ -158,7 +157,7 @@ pub(crate) async fn run_chat_task(
     agent.set_on_progress(Some(progress_tx));
     agent.set_run_queue(Some(run_queue));
     agent.set_thread_id(Some(thread_id));
-    let turn_state_store = TurnStateStore::new(config.workspace_dir.clone());
+    let turn_state_store = crate::agent::session_store::turn_states_for(&config.workspace_dir);
     // Stamp the resolved agent onto the bridge metadata so the trace exporter
     // can attribute the run (`agent.id` attr / `agent.turn:<id>` trace name).
     let mut bridge_metadata = metadata.clone();
@@ -358,7 +357,7 @@ pub(crate) async fn run_chat_task(
             tinyagents_session::turn_state::TurnLifecycle::Interrupted
         };
         let now = chrono::Utc::now().to_rfc3339();
-        if let Err(err) = TurnStateStore::new(config.workspace_dir.clone())
+        if let Err(err) = crate::agent::session_store::turn_states_for(&config.workspace_dir)
             .settle_turn(thread_id, request_id, lifecycle, &now)
         {
             log::warn!(

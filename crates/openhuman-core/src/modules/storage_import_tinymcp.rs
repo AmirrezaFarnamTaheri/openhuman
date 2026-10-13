@@ -109,21 +109,22 @@ async fn import_into(
     }
 
     // The files are read on a blocking thread, from copies.
-    let (legacy_servers, legacy_audit) = tokio::task::spawn_blocking(move || -> Result<_> {
-        let servers = if clients.exists() {
-            read_servers(&clients)?
-        } else {
-            Vec::new()
-        };
-        let audit = if audit.exists() {
-            read_audit(&audit)?
-        } else {
-            Vec::new()
-        };
-        Ok((servers, audit))
-    })
-    .await
-    .context("the legacy reader panicked")??;
+    let (legacy_servers, legacy_audit) =
+        crate::core::runtime::spawn_blocking_scoped(move || -> Result<_> {
+            let servers = if clients.exists() {
+                read_servers(&clients)?
+            } else {
+                Vec::new()
+            };
+            let audit = if audit.exists() {
+                read_audit(&audit)?
+            } else {
+                Vec::new()
+            };
+            Ok((servers, audit))
+        })
+        .await
+        .context("the legacy reader panicked")??;
 
     for name in [SERVERS, SERVER_NAMES] {
         docs.ensure_collection(&CollectionSpec::new(name))

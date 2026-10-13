@@ -64,5 +64,16 @@ module_dirs=""
 for id in tinybox tinydocs tinywallet tinychannels tinymcp tinyjuice tinysearch tinyhosts tinyconnectors; do
   module_dirs="${module_dirs:+${module_dirs}:}${dest}/${id}"
 done
-echo "OPENHUMAN_MODULE_PATH=${module_dirs}${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}" > "${env_file}"
+# mcp_registry_multi_server loads TinyMCP by file, not by search path, as
+# scripts/test-rust-with-mock.sh supplies it locally.
+tinymcp_artifact="$(find "${dest}/tinymcp" -maxdepth 2 -type f \
+  \( -name libtinymcp_module.so -o -name libtinymcp_module.dylib -o -name tinymcp_module.dll \) | head -n 1)"
+if [ -z "${tinymcp_artifact}" ]; then
+  echo "::error::the tinymcp release holds no module library" >&2
+  exit 1
+fi
+{
+  echo "OPENHUMAN_MODULE_PATH=${module_dirs}${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_MODULE_PATH}"
+  echo "OPENHUMAN_TINYMCP_TEST_MODULE=${tinymcp_artifact}"
+} > "${env_file}"
 log "wrote ${env_file}"

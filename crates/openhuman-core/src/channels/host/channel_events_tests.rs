@@ -85,6 +85,7 @@ fn approval(thread_id: Option<&str>, client_id: Option<&str>) -> DomainEvent {
 }
 
 #[tokio::test]
+#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn approval_prompts_reach_every_chat_channel() {
     let ws = PathBuf::from("/tmp");
     for (channel, thread_ts, key) in [

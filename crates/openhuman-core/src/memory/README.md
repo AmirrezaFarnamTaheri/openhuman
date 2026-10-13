@@ -435,9 +435,9 @@ The UI flow is `app/test/playwright/specs/memory-v2.spec.ts`.
 
 ## Further reading
 
-- [Memory (product)](../../../../gitbooks/features/memory.md)
-- [Memory architecture](../../../../gitbooks/developing/architecture/memory.md)
-- [Memory tools](../../../../gitbooks/features/native-tools/memory-tools.md)
+- [Memory (product)](../../../../docs/gitbooks/en/features/memory.md)
+- [Memory architecture](../../../../docs/gitbooks/en/developing/architecture/memory.md)
+- [Memory tools](../../../../docs/gitbooks/en/features/native-tools/memory-tools.md)
 - [tinymemory submodule](../../../../vendor/tinymemory/README.md)
 
 ## `[components] memory`

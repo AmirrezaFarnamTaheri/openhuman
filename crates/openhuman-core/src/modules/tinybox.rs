@@ -433,6 +433,9 @@ where
     Request: Serialize + Send,
     Reply: DeserializeOwned,
 {
+    // A registry index from before the storage contract moves into the
+    // module's storage before its first call. Once per workspace, best effort.
+    super::import_legacy_tinybox(&config.workspace_dir).await;
     call_with_client(&module_client(config), member, request, confidential).await
 }
 

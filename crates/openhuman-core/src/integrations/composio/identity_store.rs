@@ -45,10 +45,9 @@ pub async fn persist_provider_profile(
         return Ok(0);
     }
 
-    let path = file_store::path(config, IDENTITIES_FILE);
     let written = rows.len();
     let (key_source, key_identifier) = (toolkit.clone(), identifier.clone());
-    file_store::update(&path, move |identities: &mut Vec<ConnectedIdentity>| {
+    file_store::update(config, IDENTITIES_FILE, move |identities: &mut Vec<ConnectedIdentity>| {
         let index = match identities
             .iter()
             .position(|id| id.source == key_source && id.identifier == key_identifier)
@@ -151,7 +150,7 @@ fn json_str<'a>(v: &'a serde_json::Value, key: &str) -> Option<&'a str> {
 ///
 /// The identities file exists but cannot be read or parsed.
 pub async fn load_connected_identities(config: &Config) -> Result<Vec<ConnectedIdentity>, String> {
-    file_store::load(&file_store::path(config, IDENTITIES_FILE)).await
+    file_store::load(config, IDENTITIES_FILE).await
 }
 
 /// Delete the stored identity for a `(source, connection_id)` pair — used on
@@ -172,8 +171,7 @@ pub async fn delete_connected_identity_facets(
     let source = keys.next().unwrap_or_default();
     let identifier = keys.next().unwrap_or_default();
 
-    let path = file_store::path(config, IDENTITIES_FILE);
-    file_store::update(&path, move |identities: &mut Vec<ConnectedIdentity>| {
+    file_store::update(config, IDENTITIES_FILE, move |identities: &mut Vec<ConnectedIdentity>| {
         let mut deleted = 0usize;
         identities.retain(|id| {
             if id.source == source && id.identifier == identifier {

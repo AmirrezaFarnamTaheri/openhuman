@@ -479,3 +479,68 @@ async fn a_checked_batch_reaches_the_driver_through_the_fenced_view() {
     assert_eq!(conflict.kind(), ErrorKind::Conflict);
     assert!(docs.get("things", "second").await.unwrap().is_none());
 }
+
+/// The fenced view must not hide what the driver can do: an expiring blob
+/// written through it is stored, reads back, and the view advertises the
+/// capability (before, `FencedBlobs` reported none and `put_expiring` fell to
+/// the trait default, `Unsupported`, on every driver).
+#[tokio::test]
+async fn fenced_blobs_forward_expiry_and_capabilities() {
+    let backend = shared();
+    let node = Node::new("node-a", &backend);
+    node.take("alice").await;
+    let scoped = node.scoped("profile:alice");
+
+    let blobs = scoped.blobs();
+    assert!(blobs.capabilities().contains(Capability::BlobTtl));
+    assert!(!blobs.capabilities().contains(Capability::PresignedUrls));
+    assert_eq!(
+        blobs.max_key_len(),
+        backend
+            .for_scope(&Scope::new("profile:alice").unwrap())
+            .unwrap()
+            .blobs()
+            .max_key_len()
+    );
+
+    blobs
+        .put_expiring("live", b"x".to_vec(), None, Duration::from_secs(3600))
+        .await
+        .unwrap();
+    assert_eq!(blobs.get("live").await.unwrap().unwrap().bytes, b"x");
+    assert!(blobs.get_stream("live").await.unwrap().is_some());
+
+    // A zero lifetime is already expired: written, never visible.
+    blobs
+        .put_expiring("gone", b"x".to_vec(), None, Duration::ZERO)
+        .await
+        .unwrap();
+    assert!(blobs.get("gone").await.unwrap().is_none());
+    assert!(blobs.get_stream("gone").await.unwrap().is_none());
+}
+
+/// An expiring write is a write: a node that lost the lease cannot make one.
+#[tokio::test]
+async fn expiring_blob_writes_are_fenced() {
+    let backend = shared();
+    let (a, b) = (Node::new("node-a", &backend), Node::new("node-b", &backend));
+    a.take("alice").await;
+    b.set_clock(TTL.as_millis() as u64 + 1);
+    b.take("alice").await;
+    a.set_clock(1_000);
+
+    let session = a.scoped("alice~default");
+    assert!(session
+        .blobs()
+        .put_expiring("k", b"x".to_vec(), None, Duration::from_secs(60))
+        .await
+        .is_err());
+    assert!(backend
+        .for_scope(&Scope::new("alice~default").unwrap())
+        .unwrap()
+        .blobs()
+        .get("k")
+        .await
+        .unwrap()
+        .is_none());
+}

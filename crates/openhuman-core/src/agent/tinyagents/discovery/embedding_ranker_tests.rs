@@ -11,7 +11,7 @@ struct BagEmbedder {
 }
 
 #[async_trait::async_trait]
-impl EmbeddingProvider for BagEmbedder {
+impl EmbeddingModel for BagEmbedder {
     fn name(&self) -> &str {
         "bag"
     }
@@ -24,7 +24,7 @@ impl EmbeddingProvider for BagEmbedder {
     fn signature(&self) -> String {
         "provider=bag;model=bag-v1;dims=3".into()
     }
-    async fn embed(&self, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
+    async fn embed(&self, texts: &[String]) -> tinyinference_embeddings::Result<Vec<Vec<f32>>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(texts
             .iter()
@@ -83,9 +83,7 @@ async fn the_ranker_ranks_through_the_provider_and_keys_its_cache_by_signature()
 
 #[test]
 fn the_none_provider_is_unusable() {
-    let none = crate::inference::embedding_host::TinyInferenceEmbeddingProvider::new(
-        tinyinference_embeddings::NoopEmbeddingModel,
-    );
+    let none = tinyinference_embeddings::NoopEmbeddingModel;
     assert!(!embedding_provider_is_usable(&none));
     let bag = BagEmbedder {
         calls: AtomicUsize::new(0),

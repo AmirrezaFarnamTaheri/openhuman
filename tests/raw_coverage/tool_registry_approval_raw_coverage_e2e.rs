@@ -499,10 +499,15 @@ async fn tool_registry_diagnostics_reports_config_and_audit_store_failures() {
         .expect_err("workspace file should prevent config load");
     assert!(err.contains("failed to load config for tool registry diagnostics"));
 
-    let broken_audit_config = Config {
+    // The write audit lives in the TinyMCP module (605ca6e841), which picks its
+    // storage provider once per process at load, so a broken workspace no
+    // longer reaches it. Fail it at the module seam instead; storage failures
+    // inside the audit are covered by tinymcp's `storage/failing.rs`.
+    let mut broken_audit_config = Config {
         workspace_dir: workspace_file,
         ..Config::default()
     };
+    broken_audit_config.modules.enabled = false;
     let diagnostics =
         openhuman_core::tools::registry::ops::diagnostics_for_config(&broken_audit_config).await;
     assert!(diagnostics.value.mcp_write_audit.enabled);
@@ -512,7 +517,7 @@ async fn tool_registry_diagnostics_reports_config_and_audit_store_failures() {
         .mcp_write_audit
         .last_error
         .as_deref()
-        .is_some_and(|error| !error.is_empty()));
+        .is_some_and(|error| error.contains("MCP module unavailable")));
 }
 
 #[tokio::test]
@@ -1011,11 +1016,15 @@ async fn approval_rpc_decision_paths_persist_always_allow_and_recent_audit() {
     let second_init = ApprovalGate::init_global(Config::default(), "session-ignored-second");
     assert_eq!(second_init.session_id(), gate.session_id());
 
-    let approval_dir = config.workspace_dir.join("approval");
-    if approval_dir.exists() {
-        std::fs::remove_dir_all(&approval_dir).expect("remove approval dir before failure branch");
+    // Approvals are documents in the workspace's default storage database
+    // (`sqlite:<workspace>/storage`, 5995128210). Drop the cached handle and
+    // block that directory, so the store's next open fails.
+    openhuman_core::storage::local::forget(&config.workspace_dir);
+    let storage_dir = config.workspace_dir.join("storage");
+    if storage_dir.exists() {
+        std::fs::remove_dir_all(&storage_dir).expect("remove storage dir before failure branch");
     }
-    std::fs::write(&approval_dir, "not a directory").expect("replace approval dir with file");
+    std::fs::write(&storage_dir, "not a directory").expect("replace storage dir with file");
 
     gate.record_execution(
         &request_id,

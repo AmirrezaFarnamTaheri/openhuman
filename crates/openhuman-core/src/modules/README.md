@@ -264,7 +264,7 @@ that configuration, never in an ordinary method call or an RPC reply.
 a record whose component is off with `LoadError::Disabled` before any claim,
 download or `dlopen`; `modules.list` reports `ModuleState::Disabled`; boot skips
 the module and `search_path::load_enabled` leaves its search-path artifact
-unopened. See [components](../../../../gitbooks/developing/components.md).
+unopened. See [components](../../../../docs/gitbooks/en/developing/components.md).
 
 ### Boot
 
@@ -311,7 +311,7 @@ download, its `dlopen`, or its resident memory.
 | [`search/mod.rs`](search/mod.rs) | `tinysearch` | `module_config` from the host's resolved search policy, and `configured_tool_specs` computed synchronously from that same configuration. |
 | [`search/proxy.rs`](search/proxy.rs) | `tinysearch` | Lazy load, private reinitialization on configuration change, and serialized `list_tools` / `execute_tool`; `refresh_loaded` after settings saves and credential changes. |
 | [`tokenjuice_host.rs`](tokenjuice_host.rs) | `tinyjuice` | The reverse direction: an `MlHost` object the host serves at the contract's `ML_HOST_NAME` / `ML_HOST_PATH` for the module's tool-less summary model call. |
-| [`storage_host.rs`](storage_host.rs), [`storage_host_linked.rs`](storage_host_linked.rs), [`storage_grants.rs`](storage_grants.rs), [`storage_import_tinymcp.rs`](storage_import_tinymcp.rs) | every module | The reverse direction for storage: serves `ai.tinyhumans.tinystorage.Storage` (objects `Documents`, `Streams`, `Blobs`, `Secrets` at `/ai/tinyhumans/tinystorage/<Object>`) from the installed storage backend. The caller is the broker-authenticated sender mapped to a registry module id; its scope is `module:<id>@<base>` (a profile's is `<profile>~module:<id>`, under the profile's lease fence); its authority is the `StorageGrant` the build declares for it (`storage_grants::declared`, empty today, so no module has storage until it declares some). The host alone runs `ensure_collection`. Every call is audited (module, scope, object, op, target, outcome; no payload). Blob streams and watches answer `unsupported` until a per-module stream and signal route exists. The objects are served by a *linked* module (`storage_host_linked.rs`, admitted with `attach_linked_with_config`) because the broker delivers the confidential `Secrets` route only to an attested recipient, which the host's own client connection is not. `storage_import_tinymcp.rs` is the one-time read-only import of tinymcp's legacy `mcp_clients.db` / `mcp_audit.db` into the module's scope, run before the module opens a data directory. |
+| [`storage_host.rs`](storage_host.rs), [`storage_host_linked.rs`](storage_host_linked.rs), [`storage_grants.rs`](storage_grants.rs), [`storage_import_tinymcp.rs`](storage_import_tinymcp.rs) | every module | The reverse direction for storage: serves `ai.tinyhumans.tinystorage.Storage` (objects `Documents`, `Streams`, `Blobs`, `Secrets` at `/ai/tinyhumans/tinystorage/<Object>`) from the installed storage backend. The caller is the broker-authenticated sender mapped to a registry module id; its scope is `module:<id>@<base>` (a profile's is `<profile>~module:<id>`, under the profile's lease fence); its authority is the `StorageGrant` the build declares for it (`storage_grants::declared`; `tinymcp`, `tinychannels`, `tinyconnectors`, `tinywallet`, `tinybox` and `tinyjuice` declare one in `storage_grant_<module>.rs`, any other module has no storage). The host alone runs `ensure_collection`. Every call is audited (module, scope, object, op, target, outcome; no payload). Blob streams and watches answer `unsupported` until a per-module stream and signal route exists. The objects are served by a *linked* module (`storage_host_linked.rs`, admitted with `attach_linked_with_config`) because the broker delivers the confidential `Secrets` route only to an attested recipient, which the host's own client connection is not. `storage_import_tinymcp.rs` is the one-time read-only import of tinymcp's legacy `mcp_clients.db` / `mcp_audit.db` into the module's scope, run before the module opens a data directory. The same shape (`storage_import_support.rs`: scope, host-only marker, write-if-absent) imports `tinyconnectors`' preference JSON files and trigger JSONL archive, `tinywallet`'s x402 `payments.jsonl`, `tinybox`'s jail `index.json` and `tinyjuice`'s `.tokenjuice/ccr` files (`storage_import_tinyconnectors.rs`, `_tinywallet.rs`, `_tinybox.rs`, `_tinyjuice.rs`), each once per directory from the host call that precedes the module's first use. |
 
 `tinybox.rs` supplies the pre-core gateway client.
 `channel_controller.rs` invokes TinyChannels' confidential controller member for
@@ -477,15 +477,15 @@ need a real module load a local build through `[[modules.overrides]]` or
 `OPENHUMAN_MODULE_SOURCE`;
 `scripts/test-rust-with-mock.sh` and CI build the pinned submodules.
 
-See also `gitbooks/developing/performance.md` for how on-demand modules keep a
+See also `docs/gitbooks/en/developing/performance.md` for how on-demand modules keep a
 minimal build small.
 
 ## Further reading
 
 - [Module sources and `[components]` (AGENTS.md)](../../../../AGENTS.md)
-- [Loadable modules](../../../../gitbooks/developing/loadable-modules.md)
+- [Loadable modules](../../../../docs/gitbooks/en/developing/loadable-modules.md)
 - [tinybus submodule](../../../../vendor/tinybus/README.md)
-- [Architecture overview](../../../../gitbooks/developing/architecture.md)
+- [Architecture overview](../../../../docs/gitbooks/en/developing/architecture.md)
 
 The connector host consumes verified release v0.14.0 (contract 1.13). The
 argument/default/filter/classification and trigger-archive adapters call bus

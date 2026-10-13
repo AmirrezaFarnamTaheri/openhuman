@@ -458,7 +458,8 @@ pub(crate) async fn has_resolvable_image(
 ) -> anyhow::Result<bool> {
     let rehydrated = crate::agent::multimodal::rehydrate_image_placeholders(&[
         tinyagents_session::transcript::TranscriptMessage::user(prompt),
-    ]);
+    ])
+    .await;
     let mut paths = parse(prompt)
         .1
         .into_iter()

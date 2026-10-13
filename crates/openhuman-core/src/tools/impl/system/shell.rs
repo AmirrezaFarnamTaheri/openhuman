@@ -1,7 +1,7 @@
 use super::shell_description::{command_param_description, shell_description};
-use super::shell_support::{command_failure, exec_result, python_utf8_env, tool_timeout_message};
 #[cfg(feature = "modules")]
 use super::shell_support::container_environment;
+use super::shell_support::{command_failure, exec_result, python_utf8_env, tool_timeout_message};
 use crate::agent::host_runtime::RuntimeAdapter;
 use crate::config::Config;
 use crate::security::{AuditLogger, CommandExecutionLog, SecurityPolicy};
@@ -187,9 +187,9 @@ impl Tool for ShellTool {
                 },
                 "timeout_secs": {
                     "type": "integer",
-                    "minimum": 1,
+                    "minimum": 0,
                     "maximum": 3600,
-                    "description": "Optional wall-clock timeout (seconds, 1..=3600) for this command before it is killed. Use a larger value for long-running work (builds, test suites, solvers). Omitted or out-of-range falls back to the configured tool timeout."
+                    "description": "Optional wall-clock timeout (seconds, up to 3600) for this command before it is killed. Use a larger value for long-running work (builds, test suites, solvers). Omitted or 0 runs without a deadline."
                 }
             },
             "required": ["command"]

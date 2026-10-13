@@ -321,8 +321,12 @@ async fn juice_off_turn_loads_no_module_and_passes_tool_output_through() {
 
     // The module was never asked for: the refusal is typed and nothing was
     // downloaded (downloads are off, so a claim would have ended in Failed).
-    let err = crate::modules::ensure_loaded_within(&config, "tinyjuice", None)
-        .await
-        .unwrap_err();
-    assert_eq!(err, crate::modules::LoadError::Disabled("juice"));
+    // The loader only exists with the `modules` feature.
+    #[cfg(feature = "modules")]
+    {
+        let err = crate::modules::ensure_loaded_within(&config, "tinyjuice", None)
+            .await
+            .unwrap_err();
+        assert_eq!(err, crate::modules::LoadError::Disabled("juice"));
+    }
 }

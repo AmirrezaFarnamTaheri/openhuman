@@ -6,10 +6,10 @@ queries and HTML extraction execute inside that module. This directory owns
 configuration, model callbacks, artifact authorization and savings attribution.
 
 Token compression is one of the ways OpenHuman keeps a turn cheap and fast
-(see [gitbooks/developing/performance.md](../../../../../gitbooks/developing/performance.md)):
+(see [docs/gitbooks/en/developing/performance.md](../../../../../docs/gitbooks/en/developing/performance.md)):
 compressing tool output before it reaches the model shrinks the prompt
 without the model ever seeing less information than it needs. See
-[gitbooks/features/token-compression.md](../../../../../gitbooks/features/token-compression.md)
+[docs/gitbooks/en/features/token-compression.md](../../../../../docs/gitbooks/en/features/token-compression.md)
 for the user-facing feature page.
 
 OpenHuman-owned files:

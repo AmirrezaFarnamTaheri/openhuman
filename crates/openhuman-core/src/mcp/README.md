@@ -91,6 +91,6 @@ the focused host tests with `cargo test -p openhuman --features modules,mcp
 mcp::`, and check that the normal graph does not include the implementation
 with `scripts/assert-shed.sh default tinymcp`.
 
-Further reading: [MCP registry](../../../../gitbooks/developing/architecture/mcp-registry.md),
-[MCP server](../../../../gitbooks/developing/mcp-server.md), and
+Further reading: [MCP registry](../../../../docs/gitbooks/en/developing/architecture/mcp-registry.md),
+[MCP server](../../../../docs/gitbooks/en/developing/mcp-server.md), and
 [`tinymcp`](../../../../vendor/tinymcp/README.md).

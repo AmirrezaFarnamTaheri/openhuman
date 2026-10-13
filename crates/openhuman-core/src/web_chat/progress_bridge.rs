@@ -1,5 +1,5 @@
 //! Forwards a running turn's `AgentProgress` stream into `WebChannelEvent`
-//! socket events and mirrors it into `TurnStateStore`. Also emits the
+//! socket events and mirrors it into the `TurnStates` port. Also emits the
 //! `inference_heartbeat` liveness beat (see [`INFERENCE_HEARTBEAT_SECS`])
 //! so a long silent prefill can't trip the frontend's ~120s silence timeout.
 
@@ -7,7 +7,7 @@ use serde_json::json;
 
 use crate::threads::turn_state::mirror::ObserveProgress;
 use crate::web_chat::{SubagentProgressDetail, WebChannelEvent};
-use tinyagents_session::turn_state::{TurnStateMirror, TurnStateStore};
+use tinyagents_session::{port::TurnStates, turn_state::TurnStateMirror};
 
 use super::event_bus::publish_web_channel_event;
 use super::types::ChatRequestMetadata;
@@ -272,7 +272,7 @@ pub(crate) fn spawn_progress_bridge(
     client_id: String,
     thread_id: String,
     request_id: String,
-    turn_state_store: TurnStateStore,
+    turn_state_store: std::sync::Arc<dyn TurnStates>,
     metadata: ChatRequestMetadata,
     config: crate::config::Config,
 ) -> ProgressBridgeHandle {

@@ -439,8 +439,8 @@ earlier are refused too.
 ## Further reading
 
 - [Parent module README](../../README.md)
-- [Cron and scheduling](../../../../gitbooks/features/native-tools/cron.md)
-- [Workflows](../../../../gitbooks/features/workflows.md)
+- [Cron and scheduling](../../../../docs/gitbooks/en/features/native-tools/cron.md)
+- [Workflows](../../../../docs/gitbooks/en/features/workflows.md)
 
 ## Relation to `[components].flows`
 

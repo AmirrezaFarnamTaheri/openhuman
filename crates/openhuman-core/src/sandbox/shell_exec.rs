@@ -108,7 +108,7 @@ pub(crate) async fn run(config: &Config, run: NativeShellRun) -> anyhow::Result<
             timeout_ms = run.timeout.as_millis() as u64,
             "[sandbox:shell] starting native shell through TinyBox"
         );
-        tokio::spawn(async move { run_owned(&config, run).await })
+        crate::core::runtime::spawn_scoped(async move { run_owned(&config, run).await })
             .await
             .map_err(|_| anyhow::anyhow!("TinyBox shell worker did not finish"))?
     }

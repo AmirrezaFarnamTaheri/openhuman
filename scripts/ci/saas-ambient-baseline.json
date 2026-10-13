@@ -589,16 +589,16 @@
   },
   {
     "rule": "ambient-config",
-    "path": "crates/openhuman-core/src/inference/http/server.rs",
-    "line": 72,
-    "text": "let config = match Config::load_or_init().await {",
+    "path": "crates/openhuman-core/src/inference/http/backend.rs",
+    "line": 90,
+    "text": "let config = Config::load_or_init().await.map_err(|e| {",
     "occurrence": 1
   },
   {
     "rule": "ambient-config",
-    "path": "crates/openhuman-core/src/inference/http/server.rs",
-    "line": 275,
-    "text": "let config = match Config::load_or_init().await {",
+    "path": "crates/openhuman-core/src/inference/http/backend.rs",
+    "line": 131,
+    "text": "let config = Config::load_or_init().await.map_err(|e| {",
     "occurrence": 2
   },
   {
@@ -625,7 +625,7 @@
   {
     "rule": "ambient-config",
     "path": "crates/openhuman-core/src/inference/provider/ops/models/catalog_listing.rs",
-    "line": 66,
+    "line": 39,
     "text": "let config = crate::config::Config::load_or_init()",
     "occurrence": 1
   },
@@ -929,13 +929,6 @@
     "line": 64,
     "text": "tokio::spawn(async move {",
     "occurrence": 1
-  },
-  {
-    "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/sandbox/native_jail.rs",
-    "line": 108,
-    "text": "tokio::spawn(async move {",
-    "occurrence": 2
   },
   {
     "rule": "ambient-context",
