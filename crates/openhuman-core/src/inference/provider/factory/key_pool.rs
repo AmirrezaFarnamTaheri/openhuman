@@ -4,6 +4,7 @@
 //! maintained in Rust, where requests actually execute. This module never
 //! exposes or logs secrets. Pool identity includes the local workspace.
 use std::collections::HashMap;
+use std::hash::{BuildHasher, Hash, Hasher, RandomState};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -12,7 +13,7 @@ const MAX_COOLDOWN: Duration = Duration::from_secs(300);
 
 #[derive(Clone)]
 struct KeyHealth {
-    value: String,
+    id: u64,
     cooldown_until: Option<Instant>,
     evicted: bool,
     successes: u64,
@@ -21,9 +22,9 @@ struct KeyHealth {
     last_used: Option<Instant>,
 }
 impl KeyHealth {
-    fn new(value: String) -> Self {
+    fn new(id: u64) -> Self {
         Self {
-            value, cooldown_until: None, evicted: false,
+            id, cooldown_until: None, evicted: false,
             successes: 0, failures: 0, active: 0, last_used: None,
         }
     }
@@ -67,6 +68,16 @@ fn registry() -> &'static Mutex<HashMap<String, Pool>> {
     POOLS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// A process-salted SipHash identifier avoids retaining a second plaintext copy
+/// of every credential in the health registry. The model instances themselves
+/// retain only the keys they need to authenticate.
+fn secret_id(value: &str) -> u64 {
+    static SALT: OnceLock<RandomState> = OnceLock::new();
+    let mut hasher = SALT.get_or_init(RandomState::new).build_hasher();
+    value.hash(&mut hasher);
+    hasher.finish()
+}
+
 /// Read a secret group from comma, semicolon, or newline-separated credentials.
 /// Empty segments are discarded and identical values are kept once.
 pub fn parse_api_keys(raw: &str) -> Vec<String> {
@@ -82,15 +93,16 @@ pub fn parse_api_keys(raw: &str) -> Vec<String> {
 
 fn sync(pool: &mut Pool, configured: &[String]) {
     if pool.keys.len() == configured.len()
-        && pool.keys.iter().zip(configured).all(|(entry, value)| entry.value == *value)
+        && pool.keys.iter().zip(configured).all(|(entry, value)| entry.id == secret_id(value))
     {
         return;
     }
     let mut previous = std::mem::take(&mut pool.keys);
     pool.keys = configured.iter().map(|value| {
-        match previous.iter().position(|entry| entry.value == *value) {
+        let id = secret_id(value);
+        match previous.iter().position(|entry| entry.id == id) {
             Some(index) => previous.remove(index),
-            None => KeyHealth::new(value.clone()),
+            None => KeyHealth::new(id),
         }
     }).collect();
     pool.next = 0;
@@ -125,7 +137,7 @@ pub fn choose_key(
     }?;
     pool.next = (index + 1) % pool.keys.len();
     pool.keys[index].last_used = Some(now);
-    Some((index, pool.keys[index].value.clone()))
+    Some((index, configured[index].clone()))
 }
 
 pub fn next_key_excluding(scope: &str, configured: &[String], excluded: &[usize]) -> Option<(usize, String)> {
@@ -138,13 +150,13 @@ pub fn next_key(scope: &str, configured: &[String]) -> Option<(usize, String)> {
 /// A lease is held through a full unary request or a stream's lifetime.
 pub fn acquire(scope: &str, key: &str) {
     let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(entry) = pools.get_mut(scope).and_then(|pool| pool.keys.iter_mut().find(|k| k.value == key)) {
+    if let Some(entry) = pools.get_mut(scope).and_then(|pool| pool.keys.iter_mut().find(|k| k.id == secret_id(key))) {
         entry.active += 1;
     }
 }
 pub fn release(scope: &str, key: &str) {
     let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(entry) = pools.get_mut(scope).and_then(|pool| pool.keys.iter_mut().find(|k| k.value == key)) {
+    if let Some(entry) = pools.get_mut(scope).and_then(|pool| pool.keys.iter_mut().find(|k| k.id == secret_id(key))) {
         entry.active = entry.active.saturating_sub(1);
     }
 }
@@ -152,8 +164,11 @@ pub fn release(scope: &str, key: &str) {
 /// Attribute outcomes to secret identity, not a positional index that may have
 /// changed after a settings update while the request was running.
 pub fn record_result_for(scope: &str, key: &str, failure: Option<KeyFailure>, retry_after_ms: Option<u64>) {
+    record_result_by_id(scope, secret_id(key), failure, retry_after_ms);
+}
+fn record_result_by_id(scope: &str, id: u64, failure: Option<KeyFailure>, retry_after_ms: Option<u64>) {
     let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let Some(entry) = pools.get_mut(scope).and_then(|pool| pool.keys.iter_mut().find(|item| item.value == key)) else { return };
+    let Some(entry) = pools.get_mut(scope).and_then(|pool| pool.keys.iter_mut().find(|item| item.id == id)) else { return };
     match failure {
         None => { entry.successes += 1; entry.cooldown_until = None; }
         Some(KeyFailure::Authentication) => { entry.failures += 1; entry.evicted = true; }
@@ -167,11 +182,11 @@ pub fn record_result_for(scope: &str, key: &str, failure: Option<KeyFailure>, re
     }
 }
 pub fn record_result(scope: &str, key_index: usize, failure: Option<KeyFailure>) {
-    let value = {
+    let id = {
         let pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        pools.get(scope).and_then(|pool| pool.keys.get(key_index)).map(|key| key.value.clone())
+        pools.get(scope).and_then(|pool| pool.keys.get(key_index)).map(|key| key.id)
     };
-    if let Some(value) = value { record_result_for(scope, &value, failure, None); }
+    if let Some(id) = id { record_result_by_id(scope, id, failure, None); }
 }
 
 /// Safe summary used by settings/diagnostics; deliberately no masked or raw keys.
@@ -239,7 +254,14 @@ pub fn reset_provider(prefix: &str) {
     for scope in scopes { reset(&scope); }
 }
 
-/// Called when credentials are replaced, to erase stale secrets and state.
+/// Drop cached health for every model of a disconnected provider, without
+/// disturbing other providers in the same workspace.
+pub fn forget_provider(prefix: &str) {
+    let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    pools.retain(|scope, _| !scope.starts_with(prefix));
+}
+
+/// Called when a model is removed or a provider is replaced.
 pub fn forget(scope: &str) {
     let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     pools.remove(scope);
