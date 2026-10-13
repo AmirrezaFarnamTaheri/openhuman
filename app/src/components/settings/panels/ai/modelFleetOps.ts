@@ -99,7 +99,7 @@ export function validModelFleetEndpoint(value: string): boolean {
   try {
     const url = new URL(trimmed);
     return (url.protocol === 'https:' || url.protocol === 'http:') &&
-      Boolean(url.hostname) && !url.username && !url.password && !url.hash;
+      Boolean(url.hostname) && !url.username && !url.password && !url.search && !url.hash;
   } catch {
     return false;
   }
