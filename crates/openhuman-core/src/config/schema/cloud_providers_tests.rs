@@ -303,3 +303,23 @@ fn image_endpoint_presets_round_trip_and_default_without_mapping() {
     assert_eq!(plain.image_endpoint, None);
     assert!(plain.model_image_endpoints.is_empty());
 }
+
+#[test]
+fn reject_invalid_image_endpoints_and_unknown_strategy() {
+    use std::collections::HashMap;
+    assert!(super::normalize_fleet_config(
+        Some("ftp://malicious.example/api".to_string()), HashMap::new(), None
+    ).is_err());
+    assert!(super::normalize_fleet_config(
+        None, HashMap::new(), Some("unknown".to_string())
+    ).is_err());
+    let mut image_models = HashMap::new();
+    image_models.insert("  vision  ".to_owned(), " https://vision.example/v1 ".to_owned());
+    let (group, models, strategy) = super::normalize_fleet_config(
+        Some(" https://images.example/v1 ".to_owned()), image_models,
+        Some("least_busy".to_string())
+    ).unwrap();
+    assert_eq!(group.as_deref(), Some("https://images.example/v1"));
+    assert_eq!(models.get("vision").map(String::as_str), Some("https://vision.example/v1"));
+    assert_eq!(strategy.as_deref(), Some("least_busy"));
+}
