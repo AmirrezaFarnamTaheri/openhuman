@@ -284,7 +284,7 @@ export const ProviderKeyDialog = ({
                       }}
                       onPaste={event => {
                         const clipboardText = event.clipboardData.getData('text');
-                        if (!/[,;\\r\\n]/.test(clipboardText)) return;
+                        if (!/[,;\r\n]/.test(clipboardText)) return;
                         const pasted = parseFleetApiKeys(clipboardText);
                         if (!pasted.length) return;
                         event.preventDefault();
