@@ -122,19 +122,20 @@ pub(crate) fn model_fleet_forget_model(config: &Config, slug: &str, model: &str)
     key_pool::forget(&scope);
 }
 
-/// Pick one credential for a non-chat control-plane /models probe.
-/// A delimited secret group must never leave the host as a single bearer.
-pub(crate) fn model_fleet_probe_key(scope: &str, raw: String) -> String {
-    let keys = key_pool::parse_api_keys(&raw);
+/// Build an ordered list for the read-only `/models` probe. Each candidate
+/// is sent in its own HTTP request: never forward a delimited credential
+/// group as one Authorization header, or infer a working key from pool size.
+pub(crate) fn model_fleet_probe_keys(scope: &str, raw: String) -> Vec<String> {
+    let mut keys = key_pool::parse_api_keys(&raw);
     if keys.is_empty() {
-        return String::new();
+        return vec![String::new()];
     }
-    if keys.len() == 1 {
-        return keys.into_iter().next().unwrap_or_default();
+    if keys.len() > 1 {
+        if let Some((index, _)) = key_pool::next_key(scope, &keys) {
+            keys.rotate_left(index);
+        }
     }
-    key_pool::next_key(scope, &keys)
-        .map(|(_, credential)| credential)
-        .unwrap_or_default()
+    keys
 }
 
 // Factory-internal helpers shared across the submodules (and their tests)
