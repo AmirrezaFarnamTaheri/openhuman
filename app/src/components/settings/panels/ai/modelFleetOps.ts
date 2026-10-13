@@ -6,6 +6,12 @@ import type { CloudProviderCreds, ModelRegistryEntry } from '../../../../utils/t
 import { BUILTIN_CLOUD_PROVIDERS } from '../builtinCloudProviders';
 import { FLEET_MODEL_PRESETS, type FleetModelPreset } from './modelFleetCatalog';
 
+/** Shared normalization with Rust's parse_api_keys; never persist a delimited
+ * value as one upstream Authorization header. */
+export function parseFleetApiKeys(raw: string): string[] {
+  return [...new Set(raw.split(/[,;\r\n]/).map(key => key.trim()).filter(Boolean))];
+}
+
 export const fleetModelKey = (provider: string, id: string) => provider + '\0' + id;
 
 export function syncModelPresets(
