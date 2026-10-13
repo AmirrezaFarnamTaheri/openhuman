@@ -21,6 +21,7 @@ import {
 } from '../../../../services/api/aiSettingsApi';
 import { openhumanUpdateLocalAiSettings } from '../../../../utils/tauriCommands/config';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
+import { parseFleetApiKeys } from './modelFleetOps';
 import {
   type AISettings,
   authStyleForSlug,
@@ -269,7 +270,8 @@ export function useProviderConnect({
               const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
               const reason = classifyProviderVerificationFailure(msg);
               const isKeyProvider = !isLocalRuntime && slug !== 'openhuman';
-              if (isKeyProvider && reason !== 'auth') {
+              const multipleKeys = isKeyProvider && parseFleetApiKeys(trimmed).length > 1;
+              if (isKeyProvider && (reason !== 'auth' || multipleKeys)) {
                 // #5339: transient / unreachable / unknown — the key is
                 // plausibly valid, so keep it and record a non-fatal advisory.
                 console.warn(
@@ -277,7 +279,9 @@ export function useProviderConnect({
                 );
                 setProviderSaveNotice({
                   slug,
-                  message: describeProviderVerificationFailure(slug, msg, t),
+                  message: multipleKeys && reason === 'auth'
+                    ? 'One API key was rejected by the model-listing probe. The other keys remain saved and can be tried by the model fleet; review the provider key health after an inference request.'
+                    : describeProviderVerificationFailure(slug, msg, t),
                 });
               } else {
                 // Auth failure (wrong key), or a local runtime that isn't up:
