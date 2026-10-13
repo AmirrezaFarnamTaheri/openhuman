@@ -7,10 +7,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use sha2::{Digest, Sha256};
+use serde::{Deserialize, Serialize};
 use tinyinference_llm::message::{ContentBlock, Message};
 use tinyinference_llm::model::{
-    ChatModel, InputModality, InputSource, ModelProfile, ModelRequest, ModelResponse,
-    ModelStream, ModelStreamItem, ProviderError,
+    ChatModel, DeferredHandle, DeferredStatus, InputModality, InputSource, ModelProfile,
+    ModelRequest, ModelResponse, ModelStream, ModelStreamItem, ProviderError,
 };
 
 use super::key_pool::{self, KeyFailure, RotationStrategy};
@@ -39,6 +41,10 @@ fn classify(status: Option<u16>, code: Option<&str>, retry_after_ms: Option<u64>
         Some(429) => KeyFailure::RateLimited,
         Some(403) if code.is_some_and(|c| {
             let c = c.to_ascii_lowercase();
+            c.contains("invalid") || c.contains("unauthorized") || c.contains("revoked")
+        }) => KeyFailure::Authentication,
+        Some(403) if code.is_some_and(|c| {
+            let c = c.to_ascii_lowercase();
             c.contains("quota") || c.contains("rate_limit") || c.contains("resource_exhausted")
         }) => KeyFailure::RateLimited,
         _ => return None,
@@ -53,6 +59,48 @@ fn model_decision(error: &tinyinference_llm::Error) -> Option<RetryDecision> {
         tinyinference_llm::Error::Provider(e) => provider_decision(e),
         _ => None,
     }
+}
+
+const FLEET_DEFERRED_METADATA_KEY: &str = "_openhuman_fleet_route_v1";
+
+#[derive(Clone, Serialize, Deserialize)]
+struct DeferredRoute {
+    version: u8,
+    key_fingerprint: String,
+    image: bool,
+}
+
+/// A domain-separated digest preserves route identity across app restarts
+/// without storing raw API keys in the provider-issued deferred handle.
+fn credential_fingerprint(secret: &str) -> String {
+    let mut digest = Sha256::new();
+    digest.update(b"openhuman-model-fleet-deferred-route-v1:");
+    digest.update(secret.as_bytes());
+    let bytes = digest.finalize();
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+fn stamp_deferred_handle(handle: &mut DeferredHandle, key: &str, image: bool) {
+    let route = DeferredRoute {
+        version: 1,
+        key_fingerprint: credential_fingerprint(key),
+        image,
+    };
+    if let Ok(value) = serde_json::to_value(route) {
+        handle.metadata.insert(FLEET_DEFERRED_METADATA_KEY.to_owned(), value);
+    }
+}
+fn decode_deferred_handle(handle: &DeferredHandle) -> tinyinference_llm::Result<DeferredRoute> {
+    let value = handle.metadata.get(FLEET_DEFERRED_METADATA_KEY)
+        .ok_or_else(|| tinyinference_llm::Error::Validation(
+            "deferred call is missing model-fleet routing metadata".into()
+        ))?;
+    let route: DeferredRoute = serde_json::from_value(value.clone())?;
+    if route.version != 1 {
+        return Err(tinyinference_llm::Error::Validation(
+            "unsupported model-fleet deferred route version".into()
+        ));
+    }
+    Ok(route)
 }
 
 struct Lease {
@@ -188,6 +236,11 @@ impl ChatModel<()> for CredentialFleetModel {
                                     })));
                                     recorded = true;
                                 }
+                                ModelStreamItem::Deferred(handle) => {
+                                    stamp_deferred_handle(handle, &lease.key, image);
+                                    lease.record(None);
+                                    recorded = true;
+                                }
                                 ModelStreamItem::Failed(_) => {
                                     lease.record(Some(RetryDecision { failure: KeyFailure::Other, after_ms: None }));
                                     recorded = true;
@@ -211,6 +264,18 @@ impl ChatModel<()> for CredentialFleetModel {
         Err(last_error.unwrap_or_else(|| tinyinference_llm::Error::Model(
             "No available API keys for this provider; check rate limits or replace invalid keys".to_string()
         )))
+    }
+
+    async fn fetch_deferred(&self, handle: &DeferredHandle) -> tinyinference_llm::Result<DeferredStatus> {
+        let route = decode_deferred_handle(handle)?;
+        let index = self.keys.iter().position(|secret|
+            credential_fingerprint(secret) == route.key_fingerprint
+        ).ok_or_else(|| tinyinference_llm::Error::Validation(
+            "the credential used for this deferred call has been removed".into()
+        ))?;
+        let mut original = handle.clone();
+        original.metadata.remove(FLEET_DEFERRED_METADATA_KEY);
+        self.route(index, route.image).fetch_deferred(&original).await
     }
 }
 
