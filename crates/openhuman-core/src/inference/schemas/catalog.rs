@@ -32,20 +32,6 @@ pub fn schemas(function: &str) -> ControllerSchema {
             inputs: vec![],
             outputs: vec![json_output("config", "Client-facing inference config payload.")],
         },
-        "model_fleet_status" => ControllerSchema {
-            namespace: "inference",
-            function: "model_fleet_status",
-            description: "Inspect redacted credential fleet health grouped by provider and model.",
-            inputs: vec![],
-            outputs: vec![json_output("providers", "Provider/model key health counts and cooldowns without secrets.")],
-        },
-        "model_fleet_reset" => ControllerSchema {
-            namespace: "inference",
-            function: "model_fleet_reset",
-            description: "Clear cooldowns and eviction flags for a configured provider's API keys.",
-            inputs: vec![required_string("slug", "Provider slug to reset.")],
-            outputs: vec![json_output("reset", "Whether the local credential fleet was reset.")],
-        },
         "update_model_settings" => ControllerSchema {
             namespace: "inference",
             function: "update_model_settings",

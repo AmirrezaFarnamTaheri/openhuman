@@ -115,10 +115,6 @@ pub async fn list_configured_models_from_config(
     let looked_up = crate::inference::provider::factory::lookup_key_for_slug(&entry.slug, config)
         .unwrap_or_default();
     let api_key = resolve_local_runtime_key(&entry.slug, looked_up, config);
-    let api_key = crate::inference::provider::factory::model_fleet_probe_key(
-        &format!("{}:{}:catalog", config.workspace_dir.display(), entry.slug),
-        api_key,
-    );
 
     let bearer_is_oauth = entry.slug == "openai"
         && crate::inference::provider::factory::openai_bearer_is_oauth(config);

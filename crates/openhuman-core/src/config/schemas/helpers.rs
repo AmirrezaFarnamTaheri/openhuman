@@ -26,15 +26,6 @@ pub(super) struct CloudProviderUpdate {
     /// Auth style: "bearer" | "anthropic" | "openhuman_jwt" | "none".
     #[serde(default)]
     pub(super) auth_style: Option<String>,
-    /// Alternate image/vision base URL for this provider.
-    #[serde(default)]
-    pub(super) image_endpoint: Option<String>,
-    /// Model-id-specific image URL overrides, keyed within the provider group.
-    #[serde(default)]
-    pub(super) model_image_endpoints: std::collections::HashMap<String, String>,
-    /// Credential strategy: round_robin | least_busy | priority_weighted.
-    #[serde(default)]
-    pub(super) rotation_strategy: Option<String>,
     /// Optional PEM CA bundle for this provider. Empty string removes it.
     #[serde(default)]
     pub(super) ca_cert_pem: Option<String>,

@@ -26,9 +26,6 @@ export type CloudProvider = {
   endpoint: string;
   authStyle: AuthStyle;
   maskedKey: string;
-  imageEndpoint?: string;
-  modelImageEndpoints?: Record<string, string>;
-  rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
   caCertPem?: string;
 };
 

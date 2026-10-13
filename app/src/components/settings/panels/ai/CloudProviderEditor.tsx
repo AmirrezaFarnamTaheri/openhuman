@@ -10,7 +10,6 @@ import Label from '../../../ui/Label';
 import { ModalShell } from '../../../ui/ModalShell';
 import TextField from '../../../ui/TextField';
 import { isAzureFoundryEndpoint, isAzureV1BaseUrl } from '../azureDeployment';
-import { parseModelImageEndpoints, validModelFleetEndpoint } from './modelFleetOps';
 import { presentProviderSetupError, ProviderSetupErrorNotice } from '../ProviderSetupErrorNotice';
 import {
   BUILTIN_RESERVED_SLUGS,
@@ -41,11 +40,6 @@ export const CloudProviderEditor = ({
   const { t } = useT();
   const [label, setLabel] = useState<string>(initial?.label ?? '');
   const [endpoint, setEndpoint] = useState(initial?.endpoint ?? '');
-  const [imageEndpoint, setImageEndpoint] = useState(initial?.imageEndpoint ?? '');
-  const [rotationStrategy, setRotationStrategy] = useState(initial?.rotationStrategy ?? 'round_robin');
-  const [modelImageMappingText, setModelImageMappingText] = useState(
-    Object.entries(initial?.modelImageEndpoints ?? {}).map(([id, url]) => id + ' = ' + url).join('\n')
-  );
   const [apiKey, setApiKey] = useState('');
   const [caCertPem, setCaCertPem] = useState(initial?.caCertPem ?? '');
   const [readingCert, setReadingCert] = useState(false);
@@ -87,16 +81,9 @@ export const CloudProviderEditor = ({
       if (slugError) {
         throw new Error(slugError);
       }
-      if (!validModelFleetEndpoint(imageEndpoint) || !validModelFleetEndpoint(endpoint)) {
-        throw new Error('Provider endpoints must be valid http(s) base URLs without embedded credentials.');
-      }
-      const imageMap = parseModelImageEndpoints(modelImageMappingText);
       await onSubmit(
         {
           id: initial?.id ?? '',
-          imageEndpoint: imageEndpoint.trim(),
-          modelImageEndpoints: imageMap,
-          rotationStrategy,
           slug,
           label: label.trim() || slug,
           endpoint: endpoint.trim(),
@@ -235,49 +222,6 @@ export const CloudProviderEditor = ({
           </div>
         )}
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="cloud-provider-image-endpoint" className="text-xs text-content-secondary">
-          Image / vision API base URL (optional)
-        </Label>
-        <TextField
-          id="cloud-provider-image-endpoint"
-          mono
-          value={imageEndpoint}
-          onChange={event => setImageEndpoint(event.target.value)}
-          placeholder="https://images.example.com/v1"
-        />
-        <p className="text-xs text-content-muted">
-          Use a separate API base for messages that contain images. Empty inherits the standard endpoint.
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="cloud-provider-image-models" className="text-xs text-content-secondary">
-          Image model endpoint overrides (model-id = URL, one per line)
-        </Label>
-        <textarea
-          id="cloud-provider-image-models"
-          value={modelImageMappingText}
-          onChange={event => setModelImageMappingText(event.target.value)}
-          rows={3}
-          spellCheck={false}
-          className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
-          placeholder="vision-model = https://images.example.com/v1"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="cloud-provider-rotation" className="text-xs text-content-secondary">
-          Multiple-key selection strategy
-        </Label>
-        <select
-          id="cloud-provider-rotation"
-          value={rotationStrategy}
-          onChange={event => setRotationStrategy(event.target.value as typeof rotationStrategy)}
-          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
-          <option value="round_robin">Round robin</option>
-          <option value="least_busy">Least busy</option>
-          <option value="priority_weighted">Priority weighted</option>
-        </select>
-      </div>
       <div>
         <Label htmlFor="cloud-provider-ca-cert" className="text-xs text-content-secondary">
           {t('settings.ai.caCertificateLabel')}
@@ -349,7 +293,7 @@ export const CloudProviderEditor = ({
         <TextField
           id="cloud-provider-api-key"
           aria-label={t('settings.ai.apiKeyFieldLabel')}
-          type="password"
+          type="text"
           mono
           autoComplete="off"
           autoCorrect="off"
