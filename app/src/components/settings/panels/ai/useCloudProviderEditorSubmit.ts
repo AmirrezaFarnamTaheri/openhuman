@@ -75,6 +75,9 @@ export function useCloudProviderEditorSubmit({
             slug: p.slug,
             label: p.label,
             endpoint: p.endpoint,
+            image_endpoint: p.imageEndpoint ?? '',
+            model_image_endpoints: p.modelImageEndpoints ?? {},
+            rotation_strategy: p.rotationStrategy ?? 'round_robin',
             ca_cert_pem: p.caCertPem ?? '',
             auth_style: p.authStyle,
           }));
