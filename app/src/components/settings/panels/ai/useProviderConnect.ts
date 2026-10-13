@@ -156,6 +156,9 @@ export function useProviderConnect({
           slug,
           label: localLabel ?? BUILTIN_PROVIDER_META[slug]?.label ?? slug,
           endpoint,
+          imageEndpoint: initialProvider?.imageEndpoint ?? initialSavedProvider?.imageEndpoint ?? '',
+          modelImageEndpoints: initialProvider?.modelImageEndpoints ?? initialSavedProvider?.modelImageEndpoints ?? {},
+          rotationStrategy: initialProvider?.rotationStrategy ?? initialSavedProvider?.rotationStrategy ?? 'round_robin',
           caCertPem: initialProvider?.caCertPem ?? initialSavedProvider?.caCertPem,
           authStyle: authStyleForSlug(slug),
           // CLI-login providers hold no API key — reflect that honestly.
