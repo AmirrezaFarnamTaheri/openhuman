@@ -1,13 +1,17 @@
 /** Model Fleet settings: opt-in preset syncing, multi-select editing, and image API routing.
  * All mutations go through the existing Settings -> Rust core persistence path.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useT } from '../../../../lib/i18n/I18nContext';
 import type { ModelRegistryEntry } from '../../../../utils/tauriCommands/config';
+import {
+  loadModelFleetStatus,
+  resetModelFleetStatus,
+  type ModelFleetStatus,
+} from '../../../../services/api/aiSettingsApi';
 import Button from '../../../ui/Button';
 import TextField from '../../../ui/TextField';
-import { BUILTIN_CLOUD_PROVIDERS } from '../builtinCloudProviders';
 import type { AISettings, CloudProvider } from './aiPanelTypes';
 import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
 import {
@@ -25,6 +29,37 @@ const keyOf = (m: ModelRegistryEntry): string => fleetModelKey(m.provider, m.id)
 export function ModelFleetPanel({ settings, persist }: Props) {
   const { t } = useT();
   const [busy, setBusy] = useState(false);
+  const [fleetHealth, setFleetHealth] = useState<ModelFleetStatus | null>(null);
+  const [healthBusy, setHealthBusy] = useState(false);
+  const [healthError, setHealthError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    void loadModelFleetStatus()
+      .then(status => { if (!cancelled) setFleetHealth(status); })
+      .catch(() => { if (!cancelled) setHealthError('Fleet health is unavailable.'); });
+    return () => { cancelled = true; };
+  }, []);
+  const refreshHealth = async () => {
+    setHealthBusy(true);
+    setHealthError('');
+    try { setFleetHealth(await loadModelFleetStatus()); }
+    catch { setHealthError('Fleet health is unavailable.'); }
+    finally { setHealthBusy(false); }
+  };
+  const resetHealth = async () => {
+    const slugs = [...selectedProviders];
+    if (slugs.length === 0) return;
+    setHealthBusy(true);
+    setHealthError('');
+    try {
+      for (const slug of slugs) await resetModelFleetStatus(slug);
+      setFleetHealth(await loadModelFleetStatus());
+    } catch (err) {
+      setHealthError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setHealthBusy(false);
+    }
+  };
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [selectedProviders, setSelectedProviders] = useState<Set<string>>(() => new Set());
@@ -164,6 +199,44 @@ export function ModelFleetPanel({ settings, persist }: Props) {
       {error && <p role="alert" className="text-xs text-coral-600">{error}</p>}
       {notice && <p role="status" className="text-xs text-content-secondary">{notice}</p>}
 
+      <div className="space-y-2 border-t border-line-subtle pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-medium text-content">
+            {t('settings.ai.fleet.health', 'Credential fleet health')}
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" size="xs"
+              disabled={healthBusy} onClick={() => void refreshHealth()}>
+              {t('settings.ai.fleet.refreshHealth', 'Refresh health')}
+            </Button>
+            <Button type="button" variant="secondary" size="xs"
+              disabled={healthBusy || selectedProviders.size === 0}
+              onClick={() => void resetHealth()} data-testid="model-fleet-reset-health">
+              {t('settings.ai.fleet.resetHealth', 'Reset selected key health')}
+            </Button>
+          </div>
+        </div>
+        {healthError && <p className="text-xs text-coral-600" role="alert">{healthError}</p>}
+        <div className="max-h-40 space-y-2 overflow-y-auto text-xs">
+          {fleetHealth?.providers.flatMap(provider => provider.models.map(model => {
+            const healthy = model.keys.filter(k => k.status === 'healthy').length;
+            const cooling = model.keys.filter(k => k.status === 'cooldown').length;
+            const evicted = model.keys.filter(k => k.status === 'evicted').length;
+            return (
+              <div key={provider.slug + ':' + model.model}
+                className="rounded-lg border border-line-subtle px-2 py-1.5 text-content-secondary">
+                <span className="font-medium text-content">{provider.slug}/{model.model}</span>
+                <span className="ml-2">{healthy} healthy, {cooling} cooling down, {evicted} evicted</span>
+                <span className="ml-2">
+                  {model.keys.reduce((sum, k) => sum + k.active_leases, 0)} active leases
+                </span>
+              </div>
+            );
+          }))}
+          {!fleetHealth?.providers.some(p => p.models.length > 0) &&
+            <p className="text-content-muted">No inference key usage recorded in this session.</p>}
+        </div>
+      </div>
       <div className="space-y-2 border-t border-line-subtle pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-sm font-medium text-content">
