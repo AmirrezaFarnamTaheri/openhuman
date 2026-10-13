@@ -411,6 +411,61 @@ impl Default for CloudProviderCreds {
     }
 }
 
+/// Normalize settings provided over either model-settings RPC surface.
+/// Reject embedded URL credentials, unsupported schemes and duplicate trimmed ids.
+pub fn normalize_fleet_config(
+    image_endpoint: Option<String>,
+    model_image_endpoints: std::collections::HashMap<String, String>,
+    rotation_strategy: Option<String>,
+) -> Result<(Option<String>, std::collections::HashMap<String, String>, Option<String>), String> {
+    fn image_url(raw: &str) -> Result<String, String> {
+        let value = raw.trim();
+        let url = reqwest::Url::parse(value)
+            .map_err(|_| "image endpoint must be an absolute HTTP(S) URL".to_string())?;
+        if !matches!(url.scheme(), "http" | "https")
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+        {
+            return Err("image endpoint must be HTTP(S), with no credentials, query or fragment".into());
+        }
+        Ok(value.to_owned())
+    }
+
+    let group = image_endpoint.as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(image_url)
+        .transpose()?;
+    if model_image_endpoints.len() > 512 {
+        return Err("too many image model endpoint overrides (maximum 512)".into());
+    }
+    let mut routes = std::collections::HashMap::new();
+    for (id, raw_url) in model_image_endpoints {
+        let id = id.trim();
+        if id.is_empty() || id.len() > 200 || id.chars().any(char::is_control) {
+            return Err("image model id must be 1-200 printable characters".into());
+        }
+        let url = image_url(&raw_url)?;
+        if routes.insert(id.to_owned(), url).is_some() {
+            return Err(format!("duplicate image model id: {id}"));
+        }
+    }
+    let strategy = rotation_strategy.as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|raw| {
+            if matches!(raw, "round_robin" | "least_busy" | "priority_weighted") {
+                Ok(raw.to_string())
+            } else {
+                Err("unknown key rotation strategy".to_string())
+            }
+        }).transpose()?;
+    Ok((group, routes, strategy))
+}
+
 /// Reserved slugs that may not be used for user-configured providers.
 /// These are sentinels in the factory's routing grammar.
 ///
