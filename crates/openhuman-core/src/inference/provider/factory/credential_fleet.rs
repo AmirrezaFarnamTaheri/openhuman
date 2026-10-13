@@ -234,6 +234,16 @@ mod tests {
         assert!(request_has_image(&image));
     }
     #[test]
+    fn deferred_route_is_keyed_to_credential_not_array_position() {
+        let mut handle = tinyinference_llm::model::DeferredHandle::new("openai", "resp_123");
+        stamp_deferred_handle(&mut handle, "secret-one", true);
+        assert!(serde_json::to_string(&handle).unwrap().find("secret-one").is_none());
+        let route = decode_deferred_handle(&handle).unwrap();
+        assert_eq!(route.key_fingerprint, credential_fingerprint("secret-one"));
+        assert!(route.image);
+    }
+
+    #[test]
     fn provider_failures_are_rerouted_conservatively() {
         assert_eq!(classify(Some(401), None, None).unwrap().failure, KeyFailure::Authentication);
         assert_eq!(classify(Some(429), None, Some(5000)).unwrap().failure, KeyFailure::RateLimited);
