@@ -295,6 +295,30 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         Err(e) => return Some(Err(e)),
     };
 
+    // Credentials are parsed once; one provider slug can own a pool of keys.
+    // No credential group is ever sent as a single upstream Authorization header.
+    let keys = if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
+        let parsed = super::key_pool::parse_api_keys(&key);
+        if parsed.is_empty() { vec![String::new()] } else { parsed }
+    } else {
+        vec![key.clone()]
+    };
+    if codex.using_oauth && keys.len() > 1 {
+        return Some(Err(anyhow::anyhow!(
+            "OpenAI Codex OAuth credentials cannot be mixed with API keys"
+        )));
+    }
+    let image_endpoint = entry.model_image_endpoints.get(&effective_model)
+        .or(entry.image_endpoint.as_ref())
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|url| !url.is_empty() && url.trim_end_matches('/') != entry.endpoint.trim_end_matches('/'));
+
+    let fleet_scope = format!("{}:{}:{}", config.workspace_dir.display(), slug, effective_model);
+    let strategy = super::key_pool::RotationStrategy::parse(
+        entry.rotation_strategy.as_deref().unwrap_or("round_robin")
+    );
+
     // Every configured cloud slug builds a crate-native model. OpenhumanJwt
     // delegates to the managed backend model; Codex OAuth routes to the
     // Responses API with its headers / UA / query; every other
@@ -334,41 +358,48 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
                         true,
                     ),
                 );
-                let model = if let Some(pem) = config
-                    .cloud_provider_ca_certs
-                    .get(&slug)
-                    .filter(|pem| !pem.is_empty())
-                {
-                    let http =
-                        match crate::util::tls::client_with_ca_bundle(pem, "provider.anthropic") {
-                            Ok(http) => http,
-                            Err(error) => return Some(Err(anyhow::anyhow!(error))),
-                        };
-                    Arc::new(
-                        tinyinference_llm::providers::anthropic::AnthropicModel::with_base_url(
-                            key.as_str(),
-                            endpoint.as_str(),
+                let build = |credential: &str, base: &str| -> anyhow::Result<Arc<dyn ChatModel<()>>> {
+                    let model: Arc<dyn ChatModel<()>> = if let Some(pem) = config
+                        .cloud_provider_ca_certs.get(&slug).filter(|pem| !pem.is_empty())
+                    {
+                        let http = crate::util::tls::client_with_ca_bundle(pem, "provider.anthropic")
+                            .map_err(anyhow::Error::msg)?;
+                        Arc::new(
+                            tinyinference_llm::providers::anthropic::AnthropicModel::with_base_url(
+                                credential, base
+                            )
+                            .with_model(&effective_model)
+                            .with_temperature_override(temperature_override)
+                            .with_temperature_unsupported_models(
+                                config.temperature_unsupported_models.iter().cloned()
+                            )
+                            .with_client(http)
                         )
-                        .with_model(effective_model.as_str())
-                        .with_temperature_override(temperature_override)
-                        .with_temperature_unsupported_models(
-                            config.temperature_unsupported_models.iter().cloned(),
-                        )
-                        .with_client(http),
-                    )
-                } else {
-                    build_anthropic_model(AnthropicConfig {
-                        endpoint: endpoint.as_str(),
-                        api_key: key.as_str(),
-                        model: effective_model.as_str(),
-                        temperature_override,
-                        temperature_unsupported_models: config
-                            .temperature_unsupported_models
-                            .as_slice(),
-                        extra_headers: &[],
-                    })
+                    } else {
+                        build_anthropic_model(AnthropicConfig {
+                            endpoint: base,
+                            api_key: credential,
+                            model: &effective_model,
+                            temperature_override,
+                            temperature_unsupported_models: &config.temperature_unsupported_models,
+                            extra_headers: &[],
+                        })
+                    };
+                    Ok(model)
                 };
-                return Some(Ok((model, effective_model)));
+                let models: Vec<Arc<dyn ChatModel<()>>> =
+                    match keys.iter().map(|value| build(value, &endpoint)).collect() {
+                        Ok(models) => models,
+                        Err(error) => return Some(Err(error)),
+                    };
+                let images = if let Some(image_url) = image_endpoint {
+                    match keys.iter().map(|value| build(value, image_url)).collect() {
+                        Ok(models) => Some(models),
+                        Err(error) => return Some(Err(error)),
+                    }
+                } else { None };
+                let chat = wrap_fleet(fleet_scope, keys, models, images, strategy);
+                return Some(Ok((chat, effective_model)));
             }
             log::debug!(
                 "[providers][chat-factory] slug={slug} auth_style=anthropic native_tools=false → OpenAI-compatible text-mode path (no prompt caching)"
@@ -430,46 +461,69 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     );
 
     let unsupported = config.temperature_unsupported_models.clone();
-    let provider_config = OpenAiConfig {
-        provider_name: slug.as_str(),
-        endpoint: endpoint.as_str(),
-        api_key: key.as_str(),
-        auth_style: auth,
-        model: effective_model.as_str(),
-        temperature_unsupported_models: unsupported.as_slice(),
-        temperature_override,
-        // Cloud OpenAI-compatible providers accept a `system` role — no merge
-        // (parity with the crate-native OpenAI model defaults).
-        merge_system_into_user: false,
-        extra_headers: extra_headers.as_slice(),
-        native_tool_calling: Some(native_tool_calling),
-        vision: None,
-        default_provider_options: openrouter_default_provider_options(&endpoint),
-        responses_api_primary,
-        responses_omit_max_output_tokens,
-        extra_query_params: extra_query_params.as_slice(),
-        user_agent: user_agent.as_deref(),
-        // OpenRouter forwards explicit `cache_control` markers to Anthropic
-        // and Gemini, which cache nothing through a Chat Completions relay
-        // without them; hosted OpenAI rejects unknown part fields, so the
-        // flag is keyed on the relay, not on by default.
-        explicit_cache_control: endpoint_is_openrouter(&endpoint),
-    };
-    let chat = if let Some(pem) = config
-        .cloud_provider_ca_certs
-        .get(&slug)
-        .filter(|pem| !pem.is_empty())
-    {
-        let http = match crate::util::tls::client_with_ca_bundle(pem, "provider.compatible") {
-            Ok(http) => http,
-            Err(error) => return Some(Err(anyhow::anyhow!(error))),
+    let build = |credential: &str, base: &str| -> anyhow::Result<Arc<dyn ChatModel<()>>> {
+        let provider_config = OpenAiConfig {
+            provider_name: slug.as_str(),
+            endpoint: base,
+            api_key: credential,
+            auth_style: auth.clone(),
+            model: &effective_model,
+            temperature_unsupported_models: unsupported.as_slice(),
+            temperature_override,
+            merge_system_into_user: false,
+            extra_headers: extra_headers.as_slice(),
+            native_tool_calling: Some(native_tool_calling),
+            vision: None,
+            default_provider_options: openrouter_default_provider_options(base),
+            responses_api_primary,
+            responses_omit_max_output_tokens,
+            extra_query_params: extra_query_params.as_slice(),
+            user_agent: user_agent.as_deref(),
+            explicit_cache_control: endpoint_is_openrouter(base),
         };
-        build_openai_model_with_http(provider_config, http)
-    } else {
-        build_openai_model(provider_config)
+        let client = if let Some(pem) =
+            config.cloud_provider_ca_certs.get(&slug).filter(|pem| !pem.is_empty())
+        {
+            let http = crate::util::tls::client_with_ca_bundle(pem, "provider.compatible")
+                .map_err(anyhow::Error::msg)?;
+            build_openai_model_with_http(provider_config, http)
+        } else {
+            build_openai_model(provider_config)
+        };
+        Ok(client)
     };
+    let models: Vec<Arc<dyn ChatModel<()>>> =
+        match keys.iter().map(|value| build(value, &endpoint)).collect() {
+            Ok(models) => models,
+            Err(error) => return Some(Err(error)),
+        };
+    let images = if let Some(image_url) = image_endpoint {
+        match keys.iter().map(|value| build(value, image_url)).collect() {
+            Ok(models) => Some(models),
+            Err(error) => return Some(Err(error)),
+        }
+    } else { None };
+    let chat = wrap_fleet(fleet_scope, keys, models, images, strategy);
     Some(Ok((chat, effective_model)))
 }
+
+/// Preserve the existing single-model path when neither rotation nor multimodal
+/// routing is configured. All other paths delegate to the same per-call wrapper.
+fn wrap_fleet(
+    scope: String,
+    keys: Vec<String>,
+    mut models: Vec<Arc<dyn ChatModel<()>>>,
+    image_models: Option<Vec<Arc<dyn ChatModel<()>>>>,
+    strategy: super::key_pool::RotationStrategy,
+) -> Arc<dyn ChatModel<()>> {
+    if models.len() == 1 && image_models.is_none() {
+        return models.remove(0);
+    }
+    Arc::new(super::credential_fleet::CredentialFleetModel::new(
+        scope, keys, models, image_models, strategy
+    ))
+}
+
 
 /// The `provider.sort` OpenRouter routing preference sent on every request to
 /// a direct (BYOK) OpenRouter endpoint.

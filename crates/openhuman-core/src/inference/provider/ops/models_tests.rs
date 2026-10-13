@@ -197,6 +197,7 @@ fn workspace_with_provider(
         endpoint: endpoint.to_string(),
         auth_style,
         default_model: None,
+    ..Default::default()
     });
     config
 }

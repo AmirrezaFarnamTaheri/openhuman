@@ -215,6 +215,7 @@ fn complete_byok_route(config: &mut Config, explicit: &ExplicitRolePins) {
                 endpoint: endpoint.clone(),
                 auth_style: AuthStyle::Bearer,
                 default_model: Some(model.clone()),
+                ..Default::default()
             });
             BYOK_INFERENCE_SLUG.to_string()
         }
@@ -262,6 +263,9 @@ pub async fn apply_model_settings(
     config: &mut Config,
     update: ModelSettingsPatch,
 ) -> Result<Outcome<serde_json::Value>, String> {
+    // Retain only provider metadata long enough to identify stale fleet scopes.
+    // Health pruning happens after a successful save, never during a rollback.
+    let previous_cloud_providers = config.cloud_providers.clone();
     if let Some(api_url) = update.api_url {
         config.api_url = if api_url.trim().is_empty() {
             None
@@ -428,6 +432,20 @@ pub async fn apply_model_settings(
     complete_byok_route(config, &explicit_role_pins);
 
     config.save().await.map_err(|e| e.to_string())?;
+    // Disconnected or retargeted providers must not retain an old fleet's
+    // health/eviction history. Running requests already own their model Arcs.
+    for previous in &previous_cloud_providers {
+        let unchanged = config.cloud_providers.iter().any(|current|
+            previous.slug == current.slug &&
+            previous.endpoint == current.endpoint &&
+            previous.auth_style == current.auth_style &&
+            previous.image_endpoint == current.image_endpoint &&
+            previous.model_image_endpoints == current.model_image_endpoints
+        );
+        if !unchanged {
+            crate::inference::provider::factory::model_fleet_forget_provider(config, &previous.slug);
+        }
+    }
     let snapshot = snapshot_config_json(config)?;
     Ok(Outcome::new(
         snapshot,

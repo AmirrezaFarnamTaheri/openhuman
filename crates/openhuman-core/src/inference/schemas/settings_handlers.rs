@@ -31,6 +31,15 @@ pub(super) struct InferenceCloudProviderUpdate {
     endpoint: String,
     #[serde(default)]
     auth_style: Option<String>,
+    /// Alternate image/vision base URL for this provider.
+    #[serde(default)]
+    image_endpoint: Option<String>,
+    /// Model-id-specific image URL overrides, keyed within the provider group.
+    #[serde(default)]
+    model_image_endpoints: std::collections::HashMap<String, String>,
+    /// Credential strategy: round_robin | least_busy | priority_weighted.
+    #[serde(default)]
+    rotation_strategy: Option<String>,
     #[serde(default)]
     ca_cert_pem: Option<String>,
     // keep until v0.66 (review after 2027-01-11): incoming RPC discriminator
@@ -109,6 +118,37 @@ pub(super) fn handle_inference_status(_params: Map<String, Value>) -> Controller
 
 pub(super) fn handle_inference_get_client_config(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move { to_json(crate::inference::rpc::inference_get_client_config().await?) })
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelFleetResetParams {
+    slug: String,
+}
+
+/// Model-fleet health and cooldowns are process-local, keyed by workspace.
+/// The response contains only counts and statuses, never raw token material.
+pub(super) fn handle_inference_model_fleet_status(
+    _params: Map<String, Value>,
+) -> ControllerFuture {
+    Box::pin(async move {
+        let config = config_rpc::load_config_with_timeout().await?;
+        let status = crate::inference::provider::factory::model_fleet_health(&config);
+        to_json(Outcome::new(status, vec![]))
+    })
+}
+
+pub(super) fn handle_inference_model_fleet_reset(
+    params: Map<String, Value>,
+) -> ControllerFuture {
+    Box::pin(async move {
+        let update = deserialize_params::<ModelFleetResetParams>(params)?;
+        let config = config_rpc::load_config_with_timeout().await?;
+        crate::inference::provider::factory::model_fleet_reset(&config, &update.slug)?;
+        to_json(Outcome::new(
+            serde_json::json!({ "reset": true, "provider": update.slug }),
+            vec![],
+        ))
+    })
 }
 
 pub(super) fn handle_inference_update_model_settings(
@@ -221,12 +261,21 @@ pub(super) fn handle_inference_update_model_settings(
                                 .label
                                 .filter(|s| !s.trim().is_empty())
                                 .unwrap_or_else(|| slug.clone());
+                            let (image_endpoint, model_image_endpoints, rotation_strategy) =
+                                crate::config::schema::cloud_providers::normalize_fleet_config(
+                                    entry.image_endpoint,
+                                    entry.model_image_endpoints,
+                                    entry.rotation_strategy,
+                                )?;
                             let provider = CloudProviderCreds {
                                 id,
                                 slug,
                                 label,
                                 endpoint,
                                 auth_style,
+                                image_endpoint,
+                                model_image_endpoints,
+                                rotation_strategy,
                                 default_model: entry.default_model,
                             };
                             Ok(provider)

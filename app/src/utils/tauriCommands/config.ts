@@ -39,6 +39,12 @@ export interface CloudProviderCreds {
   label: string;
   endpoint: string;
   auth_style: AuthStyle;
+  /** Optional image/multimodal base endpoint for this provider group. */
+  image_endpoint?: string | null;
+  /** Per-model image endpoints, keyed by provider-native model id. */
+  model_image_endpoints?: Record<string, string>;
+  /** Multi-key routing strategy; default is round_robin. */
+  rotation_strategy?: 'round_robin' | 'least_busy' | 'priority_weighted' | null;
   /** Optional PEM CA bundle trusted only for this provider. */
   ca_cert_pem?: string | null;
 }

@@ -64,6 +64,10 @@ fn builtin_cloud_provider_defaults_cover_phase_one_presets() {
             "https://api-inference.modelscope.cn/v1",
             AuthStyle::Bearer,
         ),
+        ("tokendance", "TokenDance", "https://tokendance.space/gateway/v1", AuthStyle::Bearer),
+        ("siliconflow", "SiliconFlow", "https://api.siliconflow.cn/v1", AuthStyle::Bearer),
+        ("qwen-pay-as-you-go", "Qwen Pay-As-You-Go", "https://dashscope.aliyuncs.com/compatible-mode/v1", AuthStyle::Bearer),
+        ("qwen-token-plan", "Qwen Token Plan", "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", AuthStyle::Bearer),
     ] {
         let entry = super::builtin_cloud_provider(slug).expect("builtin preset");
         assert_eq!(entry.slug, slug);
@@ -278,4 +282,44 @@ fn generated_provider_ids_sanitize_and_bound_the_slug_prefix() {
     assert!(suffix
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
+}
+
+#[test]
+fn image_endpoint_presets_round_trip_and_default_without_mapping() {
+    let entry: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "id": "a",
+        "slug": "example",
+        "endpoint": "https://api.example.test/v1",
+        "image_endpoint": "https://vision.example.test/v1",
+        "model_image_endpoints": { "my-vision": "https://models.example.test/v1" }
+    })).unwrap();
+    assert_eq!(entry.image_endpoint.as_deref(), Some("https://vision.example.test/v1"));
+    assert_eq!(entry.model_image_endpoints.get("my-vision").map(String::as_str), Some("https://models.example.test/v1"));
+    let wire = serde_json::to_value(&entry).unwrap();
+    assert_eq!(wire["model_image_endpoints"]["my-vision"], "https://models.example.test/v1");
+    let plain: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "old", "endpoint": "https://api.example.test/v1"
+    })).unwrap();
+    assert_eq!(plain.image_endpoint, None);
+    assert!(plain.model_image_endpoints.is_empty());
+}
+
+#[test]
+fn reject_invalid_image_endpoints_and_unknown_strategy() {
+    use std::collections::HashMap;
+    assert!(super::normalize_fleet_config(
+        Some("ftp://malicious.example/api".to_string()), HashMap::new(), None
+    ).is_err());
+    assert!(super::normalize_fleet_config(
+        None, HashMap::new(), Some("unknown".to_string())
+    ).is_err());
+    let mut image_models = HashMap::new();
+    image_models.insert("  vision  ".to_owned(), " https://vision.example/v1 ".to_owned());
+    let (group, models, strategy) = super::normalize_fleet_config(
+        Some(" https://images.example/v1 ".to_owned()), image_models,
+        Some("least_busy".to_string())
+    ).unwrap();
+    assert_eq!(group.as_deref(), Some("https://images.example/v1"));
+    assert_eq!(models.get("vision").map(String::as_str), Some("https://vision.example/v1"));
+    assert_eq!(strategy.as_deref(), Some("least_busy"));
 }

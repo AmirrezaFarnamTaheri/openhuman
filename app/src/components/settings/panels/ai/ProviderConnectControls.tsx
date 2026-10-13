@@ -3,7 +3,7 @@
  * and the dialog it opens to collect credentials.
  */
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 
 import { useT } from '../../../../lib/i18n/I18nContext';
 import { openUrl } from '../../../../utils/openUrl';
@@ -76,6 +76,8 @@ export const ProviderKeyDialog = ({
     initialValue ?? (isLocalRuntime ? defaultEndpointFor(slug) : '')
   );
   const [keyValue, setKeyValue] = useState<string>(initialKeyValue ?? '');
+  const [multiKeyMode, setMultiKeyMode] = useState(false);
+  const [revealKeys, setRevealKeys] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'saving' | 'oauth'>('idle');
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== 'idle';
@@ -226,25 +228,64 @@ export const ProviderKeyDialog = ({
           <Label htmlFor="provider-key-input" className="text-xs text-content-secondary">
             {fieldLabel}
           </Label>
-          <TextField
-            id="provider-key-input"
-            type={isLocalRuntime ? 'url' : 'text'}
-            mono={isLocalRuntime}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            data-form-type="other"
-            data-lpignore="true"
-            data-1p-ignore="true"
-            value={value}
-            placeholder={placeholder}
-            disabled={busy}
-            onChange={e => {
-              setValue(e.target.value);
-              setError(null);
-            }}
-          />
+          {!isLocalRuntime && !endpointKeyMode && (
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-content-secondary">
+              <input type="checkbox" checked={multiKeyMode} disabled={busy}
+                onChange={e => setMultiKeyMode(e.target.checked)} />
+              Use multiple API keys
+            </label>
+          )}
+          {!isLocalRuntime && !endpointKeyMode && multiKeyMode ? (
+            <div className="space-y-1">
+              <textarea
+              id="provider-key-input"
+              rows={4}
+              value={value}
+              placeholder="key-1\nkey-2\nkey-3"
+              disabled={busy}
+              spellCheck={false}
+              autoComplete="off"
+              style={{ WebkitTextSecurity: revealKeys ? 'none' : 'disc' } as CSSProperties}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
+              onChange={e => {
+                setValue(e.target.value);
+                setError(null);
+              }}
+            />
+              <Button type="button" variant="tertiary" size="xs"
+                disabled={busy} onClick={() => setRevealKeys(old => !old)}
+                aria-label={revealKeys ? 'Hide API keys' : 'Reveal API keys'}>
+                {revealKeys ? 'Hide keys' : 'Reveal keys'}
+              </Button>
+            </div>
+          ) : (
+            <TextField
+              id="provider-key-input"
+              type={isLocalRuntime ? 'url' : 'password'}
+              mono={isLocalRuntime}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-form-type="other"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              value={value}
+              placeholder={placeholder}
+              disabled={busy}
+              onChange={e => {
+                setValue(e.target.value);
+                setError(null);
+              }}
+            />
+          )}
+          {!isLocalRuntime && !endpointKeyMode && (
+            <p className="text-xs text-content-muted">
+              Separate keys with commas, semicolons or newlines. Each request selects
+              one available credential; invalid keys are evicted and rate-limited keys
+              temporarily cool down. All keys stay in the provider's encrypted credential store.
+            </p>
+          )}
           {/* OMLX (endpointKeyMode): render the API key field in addition to
               the endpoint field above — the runtime is OpenAI-compatible but
               gated behind a Bearer key. */}
@@ -257,7 +298,7 @@ export const ProviderKeyDialog = ({
               </Label>
               <TextField
                 id="provider-key-input-key"
-                type="text"
+                type="password"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"

@@ -38,6 +38,8 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("resolve_model"),
         schemas("status"),
         schemas("get_client_config"),
+        schemas("model_fleet_status"),
+        schemas("model_fleet_reset"),
         schemas("update_model_settings"),
         schemas("update_local_settings"),
         schemas("list_models"),
@@ -73,6 +75,14 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("get_client_config"),
             handler: handle_inference_get_client_config,
+        },
+        RegisteredController {
+            schema: schemas("model_fleet_status"),
+            handler: handle_inference_model_fleet_status,
+        },
+        RegisteredController {
+            schema: schemas("model_fleet_reset"),
+            handler: handle_inference_model_fleet_reset,
         },
         RegisteredController {
             schema: schemas("update_model_settings"),

@@ -74,6 +74,8 @@ export const CORE_RPC_METHODS = {
   inferenceAgentChatSimple: 'openhuman.inference_agent_chat_simple',
   inferenceDiagnostics: 'openhuman.inference_diagnostics',
   inferenceGetClientConfig: 'openhuman.inference_get_client_config',
+  inferenceModelFleetStatus: 'openhuman.inference_model_fleet_status',
+  inferenceModelFleetReset: 'openhuman.inference_model_fleet_reset',
   inferenceListModels: 'openhuman.inference_list_models',
   inferenceTestConnection: 'openhuman.inference_test_connection',
   inferenceTranscribe: 'openhuman.inference_transcribe',
