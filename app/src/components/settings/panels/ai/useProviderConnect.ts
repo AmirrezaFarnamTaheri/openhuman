@@ -288,7 +288,7 @@ export function useProviderConnect({
             } catch (probeErr) {
               const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
               const reason = classifyProviderVerificationFailure(msg);
-              if (isKeyProvider && reason !== 'auth') {
+              if (isKeyProvider && !groupedKeys && reason !== 'auth') {
                 // Transient / unreachable / unknown errors do not demonstrate
                 // invalid credentials, so preserve the entry with an advisory.
                 console.warn(
@@ -299,8 +299,10 @@ export function useProviderConnect({
                   message: describeProviderVerificationFailure(slug, msg, t),
                 });
               } else {
-                // No key successfully authenticated: roll back the group,
-                // never show "Connected" solely because multiple keys exist.
+                // A multi-key group must have a confirmed working key.
+                // Even a transient/unknown multi-key probe cannot prove that
+                // any key works. Roll back rather than mark it connected.
+                // For single keys, preserve the existing non-fatal handling.
                 await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
                   console.warn(`[ai-settings] rollback flush failed slug=${slug}`, rollbackErr)
                 );
