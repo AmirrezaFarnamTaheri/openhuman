@@ -126,7 +126,13 @@ impl ChatModel<()> for CredentialFleetModel {
         let mut tried = Vec::new();
         let mut last_error = None;
         while let Some((index, key)) =
-            key_pool::choose_key(&self.scope, &self.keys, &tried, self.strategy)
+            key_pool::choose_key_for_run(
+                &self.scope,
+                &self.keys,
+                &tried,
+                self.strategy,
+                request.correlation.as_ref().map(|correlation| correlation.run_id.as_str()),
+            )
         {
             tried.push(index);
             let lease = Lease::new(&self.scope, &key);
@@ -154,7 +160,13 @@ impl ChatModel<()> for CredentialFleetModel {
         let mut tried = Vec::new();
         let mut last_error = None;
         while let Some((index, key)) =
-            key_pool::choose_key(&self.scope, &self.keys, &tried, self.strategy)
+            key_pool::choose_key_for_run(
+                &self.scope,
+                &self.keys,
+                &tried,
+                self.strategy,
+                request.correlation.as_ref().map(|correlation| correlation.run_id.as_str()),
+            )
         {
             tried.push(index);
             let lease = Lease::new(&self.scope, &key);
