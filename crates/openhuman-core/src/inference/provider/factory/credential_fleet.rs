@@ -204,53 +204,22 @@ impl ChatModel<()> for CredentialFleetModel {
         )))
     }
     async fn stream(&self, state: &(), request: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+        use futures::StreamExt;
+
         let image = request_has_image(&request);
         let mut tried = Vec::new();
         let mut last_error = None;
-        while let Some((index, key)) =
-            key_pool::choose_key_for_run(
-                &self.scope,
-                &self.keys,
-                &tried,
-                self.strategy,
-                request.correlation.as_ref().map(|correlation| correlation.run_id.as_str()),
-            )
-        {
+        while let Some((index, key)) = key_pool::choose_key_for_run(
+            &self.scope,
+            &self.keys,
+            &tried,
+            self.strategy,
+            request.correlation.as_ref().map(|correlation| correlation.run_id.as_str()),
+        ) {
             tried.push(index);
             let lease = Lease::new(&self.scope, &key);
-            match self.route(index, image).stream(state, request.clone()).await {
-                Ok(stream) => {
-                    // The lease is owned by this stream's mapping closure.
-                    // It releases automatically on completion *or cancellation*.
-                    let mut recorded = false;
-                    return Ok(stream.map_items(move |item| {
-                        if !recorded {
-                            match &item {
-                                ModelStreamItem::Completed(_) => {
-                                    lease.record(None);
-                                    recorded = true;
-                                }
-                                ModelStreamItem::ProviderFailed(error) => {
-                                    lease.record(provider_decision(error).or(Some(RetryDecision {
-                                        failure: KeyFailure::Other, after_ms: None,
-                                    })));
-                                    recorded = true;
-                                }
-                                ModelStreamItem::Deferred(handle) => {
-                                    stamp_deferred_handle(handle, &lease.key, image);
-                                    lease.record(None);
-                                    recorded = true;
-                                }
-                                ModelStreamItem::Failed(_) => {
-                                    lease.record(Some(RetryDecision { failure: KeyFailure::Other, after_ms: None }));
-                                    recorded = true;
-                                }
-                                _ => {}
-                            }
-                        }
-                        item
-                    }));
-                }
+            let mut live = match self.route(index, image).stream(state, request.clone()).await {
+                Ok(stream) => stream,
                 Err(error) => {
                     let decision = model_decision(&error);
                     lease.record(Some(decision.unwrap_or(RetryDecision {
@@ -258,11 +227,84 @@ impl ChatModel<()> for CredentialFleetModel {
                     })));
                     if decision.is_none() { return Err(error); }
                     last_error = Some(error);
+                    continue;
+                }
+            };
+
+            // OpenAI-compatible stream adapters can return a stream successfully
+            // and then emit an immediate 401/429 ProviderFailed event. Peek at
+            // the pre-content preamble so callers never see an attempt that
+            // should have been routed to another healthy credential. Never
+            // replay once content, usage or a deferred handle is exposed.
+            let metadata = live.metadata().clone();
+            let mut prefix = Vec::new();
+            loop {
+                match live.next().await {
+                    Some(ModelStreamItem::Started) if prefix.len() < 4 => {
+                        prefix.push(ModelStreamItem::Started);
+                    }
+                    Some(ModelStreamItem::ProviderFailed(error))
+                        if provider_decision(&error).is_some() =>
+                    {
+                        lease.record(provider_decision(&error));
+                        last_error = Some(tinyinference_llm::Error::Provider(Box::new(error)));
+                        break;
+                    }
+                    Some(item) => {
+                        prefix.push(item);
+                        let joined = ModelStream::new(Box::pin(
+                            futures::stream::iter(prefix).chain(live)
+                        )).with_metadata(metadata);
+                        // The lease lives in the mapped stream. Dropping an
+                        // unfinished stream still releases its concurrency slot.
+                        let mut recorded = false;
+                        return Ok(joined.map_items(move |mut item| {
+                            if !recorded {
+                                match &mut item {
+                                    ModelStreamItem::Completed(_) => {
+                                        lease.record(None);
+                                        recorded = true;
+                                    }
+                                    ModelStreamItem::Deferred(handle) => {
+                                        stamp_deferred_handle(handle, &lease.key, image);
+                                        lease.record(None);
+                                        recorded = true;
+                                    }
+                                    ModelStreamItem::ProviderFailed(error) => {
+                                        lease.record(Some(provider_decision(error).unwrap_or(
+                                            RetryDecision {
+                                                failure: KeyFailure::Other,
+                                                after_ms: None,
+                                            },
+                                        )));
+                                        recorded = true;
+                                    }
+                                    ModelStreamItem::Failed(_) => {
+                                        lease.record(Some(RetryDecision {
+                                            failure: KeyFailure::Other,
+                                            after_ms: None,
+                                        }));
+                                        recorded = true;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            item
+                        }));
+                    }
+                    None => {
+                        lease.record(Some(RetryDecision {
+                            failure: KeyFailure::Other, after_ms: None,
+                        }));
+                        return Err(tinyinference_llm::Error::Model(
+                            "provider stream ended before returning content or a terminal result".into()
+                        ));
+                    }
                 }
             }
         }
         Err(last_error.unwrap_or_else(|| tinyinference_llm::Error::Model(
-            "No available API keys for this provider; check rate limits or replace invalid keys".to_string()
+            "No available API keys for this provider; check rate limits or replace invalid keys".into()
         )))
     }
 
