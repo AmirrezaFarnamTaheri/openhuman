@@ -71,6 +71,9 @@ describe('model-fleet preset management', () => {
     expect(() => parseModelImageEndpoints('x = http://a.test\nx = http://b.test')).toThrow(/Duplicate/);
     expect(() => parseModelImageEndpoints('x = ftp://a.test')).toThrow();
     expect(validModelFleetEndpoint('https://user:secret@host.test/v1')).toBe(false);
+    expect(validModelFleetEndpoint('https://api.example.test/v1?token=abc')).toBe(false);
+    expect(validModelFleetEndpoint('https://api.example.test/v1#fragment')).toBe(false);
+    expect(validModelFleetEndpoint('http://127.0.0.1:8800/v1')).toBe(true);
   });
 
   it('bulk image-endpoint edit preserves mapped model endpoints', () => {
