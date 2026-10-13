@@ -1356,6 +1356,19 @@ describe('credential-group model catalogue verification', () => {
     await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);
   });
 
+  it('rejects malformed fleet verification metadata', async () => {
+    for (const fleet_probe of [
+      { authenticated: true, checked_keys: 0, rejected_keys: 0 },
+      { authenticated: true, checked_keys: 2, rejected_keys: 2 },
+      { authenticated: true, checked_keys: 2, rejected_keys: -1 },
+      { authenticated: true, checked_keys: undefined, rejected_keys: 1 },
+      { authenticated: false, checked_keys: 2, rejected_keys: 0 },
+    ]) {
+      mockCallCoreRpc.mockResolvedValueOnce({ result: { models: [], fleet_probe } });
+      await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);
+    }
+  });
+
   it('propagates exhausted key-pool authentication failure', async () => {
     mockCallCoreRpc.mockRejectedValue(new Error('provider returned 401: invalid API key'));
     await expect(probeProviderModelFleet('openai')).rejects.toThrow(/401/);
