@@ -434,6 +434,19 @@ mod tests {
         assert_ne!(key.id, secret_id("different_token"));
     }
     #[test]
+    fn deleted_model_scope_does_not_remove_sibling_key_health() {
+        let prefix = "key-pool-test-model-prune:";
+        let a = format!("{prefix}model-a");
+        let b = format!("{prefix}model-b");
+        next_key(&a, &["a".to_owned()]);
+        next_key(&b, &["b".to_owned()]);
+        forget(&a);
+        let remaining = provider_snapshots(prefix);
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].0, "model-b");
+        forget_provider(prefix);
+    }
+    #[test]
     fn deleted_provider_scopes_are_pruned() {
         let prefix = "key-pool-test-prune:";
         next_key("key-pool-test-prune:model-a", &["a".to_owned()]);
