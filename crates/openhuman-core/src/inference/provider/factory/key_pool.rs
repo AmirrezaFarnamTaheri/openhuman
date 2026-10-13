@@ -316,6 +316,33 @@ mod tests {
         assert!(health(scope)[0].0);
     }
     #[test]
+    fn one_run_reuses_healthy_key_but_fails_over_after_rate_limit() {
+        let scope = "key-pool-test-session-affinity";
+        let keys = vec!["key-a".to_owned(), "key-b".to_owned()];
+        let (first, _) = choose_key_for_run(
+            scope, &keys, &[], RotationStrategy::RoundRobin, Some("run-1")
+        ).unwrap();
+        let (sticky, _) = choose_key_for_run(
+            scope, &keys, &[], RotationStrategy::RoundRobin, Some("run-1")
+        ).unwrap();
+        assert_eq!(first, sticky);
+        record_result(scope, first, Some(KeyFailure::RateLimited));
+        let (fallback, _) = choose_key_for_run(
+            scope, &keys, &[], RotationStrategy::RoundRobin, Some("run-1")
+        ).unwrap();
+        assert_ne!(fallback, first);
+    }
+    #[test]
+    fn weighted_scoring_prefers_unleased_successful_credentials() {
+        let fresh = KeyHealth::new(secret_id("fresh"));
+        let mut loaded = fresh.clone();
+        loaded.active = 2;
+        assert!(weighted_score(&fresh) > weighted_score(&loaded));
+        loaded.active = 0;
+        loaded.consecutive_failures = 2;
+        assert!(weighted_score(&fresh) > weighted_score(&loaded));
+    }
+    #[test]
     fn pool_retains_only_salted_key_ids_not_raw_secrets() {
         let scope = "key-pool-test-no-secrets";
         let configured = vec!["sensitive_example_token".to_owned()];
