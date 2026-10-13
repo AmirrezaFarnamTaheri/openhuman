@@ -347,3 +347,11 @@ fn additional_fork_cloud_presets_are_represented_exactly_once() {
         assert_eq!(rows[0].auth_style, AuthStyle::Bearer);
     }
 }
+
+#[test]
+fn llmtr_preset_uses_provider_native_bearer_endpoint() {
+    let preset = super::builtin_cloud_provider("llmtr").expect("LLMTR provider preset");
+    assert_eq!(preset.label, "LLMTR");
+    assert_eq!(preset.endpoint, "https://llmtr.com/v1");
+    assert_eq!(preset.auth_style, AuthStyle::Bearer);
+}
