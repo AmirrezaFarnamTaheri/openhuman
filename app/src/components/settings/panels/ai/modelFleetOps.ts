@@ -104,3 +104,26 @@ export function validModelFleetEndpoint(value: string): boolean {
     return false;
   }
 }
+
+/** Explicit model-id-to-endpoint group keys, one `model-id = https://...` per line. */
+export function parseModelImageEndpoints(input: string): Record<string, string> {
+  const endpoints: Record<string, string> = Object.create(null) as Record<string, string>;
+  for (const line of input.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const sep = line.indexOf('=');
+    if (sep < 1) throw new Error('Each image model mapping must be model-id = base URL.');
+    const id = line.slice(0, sep).trim();
+    const url = line.slice(sep + 1).trim();
+    if (!id || id.length > 200 || /[\u0000-\u001f\u007f]/.test(id)) {
+      throw new Error('Image model ids must be nonempty and at most 200 characters.');
+    }
+    if (!url || !validModelFleetEndpoint(url)) {
+      throw new Error('Each model image endpoint must be an http(s) base URL.');
+    }
+    if (Object.prototype.hasOwnProperty.call(endpoints, id)) {
+      throw new Error('Duplicate image model mapping: ' + id);
+    }
+    endpoints[id] = url;
+  }
+  return endpoints;
+}
