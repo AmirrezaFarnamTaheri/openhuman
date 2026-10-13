@@ -204,6 +204,15 @@ pub fn was_ingested(config: &Config, source_id: &str, external_id: &str) -> Resu
     docs.was_ingested(source_id, external_id)
 }
 
+/// The source's dedup ledger, keyed by external_id. A single document query
+/// replaces two point lookups for every fetched task (#7367).
+pub fn ingested_hashes(
+    config: &Config,
+    source_id: &str,
+) -> Result<std::collections::HashMap<String, String>> {
+    super::store_documents::current(config)?.ingested_hashes(source_id)
+}
+
 /// Return ingested task ids for one source. Used by reconciliation to prune
 /// ledger rows that no longer match the upstream source/filter.
 pub fn list_ingested_refs(config: &Config, source_id: &str) -> Result<Vec<IngestedTaskRef>> {
