@@ -41,7 +41,6 @@ fn classify(status: Option<u16>, code: Option<&str>, retry_after_ms: Option<u64>
             let c = c.to_ascii_lowercase();
             c.contains("quota") || c.contains("rate_limit") || c.contains("resource_exhausted")
         }) => KeyFailure::RateLimited,
-        Some(408 | 500 | 502 | 503 | 504) => KeyFailure::Other,
         _ => return None,
     };
     Some(RetryDecision { failure, after_ms: retry_after_ms })
@@ -138,7 +137,9 @@ impl ChatModel<()> for CredentialFleetModel {
                 }
                 Err(error) => {
                     let decision = model_decision(&error);
-                    lease.record(decision);
+                    lease.record(Some(decision.unwrap_or(RetryDecision {
+                        failure: KeyFailure::Other, after_ms: None,
+                    })));
                     if decision.is_none() { return Err(error); }
                     last_error = Some(error);
                 }
@@ -187,7 +188,9 @@ impl ChatModel<()> for CredentialFleetModel {
                 }
                 Err(error) => {
                     let decision = model_decision(&error);
-                    lease.record(decision);
+                    lease.record(Some(decision.unwrap_or(RetryDecision {
+                        failure: KeyFailure::Other, after_ms: None,
+                    })));
                     if decision.is_none() { return Err(error); }
                     last_error = Some(error);
                 }
