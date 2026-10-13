@@ -807,14 +807,21 @@ export async function probeProviderModelFleet(
     params: { provider_id: providerId },
   });
   const verified = response?.result?.fleet_probe;
-  if (!verified?.authenticated || !Number.isInteger(verified.checked_keys) ||
-      (verified.checked_keys ?? 0) < 1 ||
-      !Number.isInteger(verified.rejected_keys) ||
-      (verified.rejected_keys ?? -1) < 0 ||
-      (verified.rejected_keys ?? Infinity) >= (verified.checked_keys ?? 0)) {
+  const checkedKeys = verified?.checked_keys;
+  const rejectedKeys = verified?.rejected_keys;
+  if (
+    !verified?.authenticated ||
+    typeof checkedKeys !== 'number' ||
+    !Number.isInteger(checkedKeys) ||
+    checkedKeys < 1 ||
+    typeof rejectedKeys !== 'number' ||
+    !Number.isInteger(rejectedKeys) ||
+    rejectedKeys < 0 ||
+    rejectedKeys >= checkedKeys
+  ) {
     throw new Error('Credential group authentication was not confirmed by the provider catalogue.');
   }
-  return { rejectedKeys: verified.rejected_keys ?? 0 };
+  return { rejectedKeys };
 }
 
 /** Sanitized model-fleet health snapshot: never contains raw API keys. */
