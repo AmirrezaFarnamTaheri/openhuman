@@ -9,6 +9,20 @@ use crate::inference::provider::factory::access_gates::verify_session_active;
 use crate::inference::provider::fallback_diagnostics;
 use tinyinference_llm::providers::anthropic::endpoint_is_anthropic_messages;
 
+/// Use the Codex-resolved endpoint for Bearer routes, including OAuth's
+/// chatgpt.com backend. Keeping the saved generic OpenAI endpoint here silently
+/// sends Codex-specific headers and tokens to the wrong API base.
+pub(super) fn cloud_base_url<'a>(
+    entry: &'a crate::config::schema::cloud_providers::CloudProviderCreds,
+    codex: &'a tinyinference_llm::providers::openai::codex::OpenAiCodexRouting,
+) -> &'a str {
+    if entry.auth_style == AuthStyle::Bearer {
+        codex.endpoint.as_str()
+    } else {
+        entry.endpoint.as_str()
+    }
+}
+
 /// Look up a `cloud_providers` entry by slug and build the provider.
 /// The shared resolution for a `<slug>:<model>` cloud provider — the cloud
 /// `cloud_providers` entry, the effective model id (with `default_model`
@@ -441,7 +455,7 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     };
     let models: Vec<Arc<dyn ChatModel<()>>> = match keys
         .iter()
-        .map(|credential| build(credential, &entry.endpoint))
+        .map(|credential| build(credential, cloud_base_url(entry, &codex)))
         .collect()
     {
         Ok(models) => models,
