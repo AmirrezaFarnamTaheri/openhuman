@@ -286,7 +286,7 @@ pub async fn list_configured_models_from_config(
     for (position, candidate_key) in candidates.iter().enumerate() {
         let has_more = position + 1 < candidates.len();
         checked_keys += 1;
-        if is_openrouter_provider(&entry) {
+        if is_openrouter_provider(&entry.slug, &entry.endpoint) {
             match validate_openrouter_api_key(&client, &routing.endpoint, candidate_key).await {
                 Ok(()) => {}
                 Err(error) if should_retry_openrouter_key(&error, has_more) => {
