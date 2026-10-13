@@ -306,7 +306,7 @@ pub async fn list_configured_models_from_config(
                 )
                 .header(OPENAI_CODEX_ORIGINATOR_HEADER, OPENAI_CODEX_ORIGINATOR);
         }
-    
+
         request = match entry.auth_style {
             AuthStyle::Bearer => {
                 if !candidate_key.is_empty() {
@@ -322,7 +322,7 @@ pub async fn list_configured_models_from_config(
             AuthStyle::Anthropic => {
                 let mut r = request.header("anthropic-version", "2023-06-01");
                 if !candidate_key.is_empty() {
-                    r = r.header("x-api-key", &candidate_key);
+                    r = r.header("x-api-key", candidate_key.as_str());
                 }
                 r
             }
