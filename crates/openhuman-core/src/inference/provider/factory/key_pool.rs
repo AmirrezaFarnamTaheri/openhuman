@@ -215,6 +215,30 @@ pub fn reset(scope: &str) {
     }
 }
 
+/// Health views for all currently initialized models in a provider group.
+/// The model name is derived from the scope; no token identifier is exposed.
+pub fn provider_snapshots(prefix: &str) -> Vec<(String, Vec<KeyStats>)> {
+    let scopes: Vec<String> = {
+        let pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        pools.keys().filter(|name| name.starts_with(prefix)).cloned().collect()
+    };
+    let mut snapshots: Vec<_> = scopes.into_iter().map(|scope| {
+        let model = scope.strip_prefix(prefix).unwrap_or_default().to_owned();
+        (model, snapshot(&scope))
+    }).collect();
+    snapshots.sort_by(|a, b| a.0.cmp(&b.0));
+    snapshots
+}
+
+/// Clearing a provider's state revives evicted keys without changing secrets.
+pub fn reset_provider(prefix: &str) {
+    let scopes: Vec<String> = {
+        let pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        pools.keys().filter(|name| name.starts_with(prefix)).cloned().collect()
+    };
+    for scope in scopes { reset(&scope); }
+}
+
 /// Called when credentials are replaced, to erase stale secrets and state.
 pub fn forget(scope: &str) {
     let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
