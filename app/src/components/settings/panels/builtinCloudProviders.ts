@@ -233,6 +233,7 @@ export const BUILTIN_CLOUD_PROVIDERS: BuiltinCloudProvider[] = [
   { slug: 'siliconflow', label: 'SiliconFlow', endpoint: 'https://api.siliconflow.cn/v1', authStyle: 'bearer', tone: TONE.teal },
   { slug: 'qwen-pay-as-you-go', label: 'Qwen Pay-As-You-Go', endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1', authStyle: 'bearer', tone: TONE.amber },
   { slug: 'qwen-token-plan', label: 'Qwen Token Plan', endpoint: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1', authStyle: 'bearer', tone: TONE.sky },
+  { slug: 'llmtr', label: 'LLMTR', endpoint: 'https://llmtr.com/v1', authStyle: 'bearer', tone: TONE.rose, keyPlaceholder: 'llmtr-...' },
 ];
 
 // NOTE: Claude Code CLI is intentionally NOT a builtin chip. It is a
