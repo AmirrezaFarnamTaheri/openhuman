@@ -40,6 +40,7 @@
 pub(crate) mod access_gates;
 mod chat_model;
 mod cloud_slug;
+mod credential_fleet;
 mod credentials;
 mod discovery;
 mod local_runtime;
