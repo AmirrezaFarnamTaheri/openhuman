@@ -76,6 +76,50 @@ pub(crate) use turn_model::{
     create_turn_chat_model_with_native_tools_and_route,
 };
 
+/// Sanitized health state for fleet keys used by current model instances.
+/// Raw keys and stable secret digests are intentionally never returned.
+pub(crate) fn model_fleet_health(config: &Config) -> serde_json::Value {
+    let workspace = config.workspace_dir.display().to_string();
+    let providers: Vec<serde_json::Value> = config.cloud_providers.iter()
+        .filter(|p| !p.slug.is_empty() && p.slug != "openhuman")
+        .map(|p| {
+            let prefix = format!("{workspace}:{}:", p.slug);
+            let models = key_pool::provider_snapshots(&prefix);
+            serde_json::json!({
+                "slug": p.slug,
+                "models": models.into_iter().map(|(model, keys)| serde_json::json!({
+                    "model": model, "keys": keys
+                })).collect::<Vec<_>>()
+            })
+        }).collect();
+    serde_json::json!({ "providers": providers })
+}
+
+/// Reset key health after the user updates or repairs their credentials.
+/// This is explicitly scoped to a provider configured in this workspace.
+pub(crate) fn model_fleet_reset(config: &Config, slug: &str) -> Result<(), String> {
+    let slug = slug.trim();
+    if slug.is_empty() || slug == "openhuman" ||
+        !config.cloud_providers.iter().any(|entry| entry.slug == slug) {
+        return Err("provider is not configured in the current workspace".into());
+    }
+    let prefix = format!("{}:{}:", config.workspace_dir.display(), slug);
+    key_pool::reset_provider(&prefix);
+    Ok(())
+}
+
+/// Pick one credential for a non-chat control-plane /models probe.
+/// A delimited secret group must never leave the host as a single bearer.
+pub(crate) fn model_fleet_probe_key(scope: &str, raw: String) -> String {
+    let keys = key_pool::parse_api_keys(&raw);
+    if keys.len() < 2 {
+        return raw;
+    }
+    key_pool::next_key(scope, &keys)
+        .map(|(_, credential)| credential)
+        .unwrap_or_default()
+}
+
 // Factory-internal helpers shared across the submodules (and their tests)
 // through `use super::*`.
 use access_gates::{emit_inference_egress, enforce_local_only_inference};
