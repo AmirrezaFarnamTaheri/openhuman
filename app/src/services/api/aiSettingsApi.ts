@@ -785,6 +785,38 @@ export async function listProviderModels(providerId: string): Promise<ModelInfo[
   return res?.result?.models ?? [];
 }
 
+/** Confirm a multi-token credential group has at least one working key.
+ * Unlike the normal picker, connection onboarding requires explicit backend
+ * proof that /models authenticated, even if an earlier key was rejected.
+ * A missing fleet_probe marker is not evidence of successful authentication.
+ */
+export async function probeProviderModelFleet(
+  providerId: string
+): Promise<{ rejectedKeys: number }> {
+  const response = await callCoreRpc<{
+    result?: {
+      models?: ModelInfo[];
+      fleet_probe?: {
+        authenticated?: boolean;
+        checked_keys?: number;
+        rejected_keys?: number;
+      };
+    };
+  }>({
+    method: 'openhuman.inference_list_models',
+    params: { provider_id: providerId },
+  });
+  const verified = response?.result?.fleet_probe;
+  if (!verified?.authenticated || !Number.isInteger(verified.checked_keys) ||
+      (verified.checked_keys ?? 0) < 1 ||
+      !Number.isInteger(verified.rejected_keys) ||
+      (verified.rejected_keys ?? -1) < 0 ||
+      (verified.rejected_keys ?? Infinity) >= (verified.checked_keys ?? 0)) {
+    throw new Error('Credential group authentication was not confirmed by the provider catalogue.');
+  }
+  return { rejectedKeys: verified.rejected_keys ?? 0 };
+}
+
 /** Sanitized model-fleet health snapshot: never contains raw API keys. */
 export interface ModelFleetKeyHealth {
   index: number;
