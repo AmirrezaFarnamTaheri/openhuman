@@ -64,6 +64,25 @@ describe('useProviderConnect', () => {
     expect(onConnected).not.toHaveBeenCalled();
   });
 
+  it('does not claim a multi-key provider is connected when verification is inconclusive', async () => {
+    api.probeProviderModelFleet.mockRejectedValue(new Error('upstream gateway timeout'));
+    const onConnected = vi.fn();
+    const persist = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useProviderConnect({
+      draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: (_key, fallback) => fallback ?? '', onConnected,
+    }));
+    await act(async () => {
+      await expect(result.current.connectProvider({
+        slug: 'openai', value: 'unknown-1\\nunknown-2', credentialMode: 'api_key',
+      })).rejects.toThrow(/timeout/);
+    });
+    expect(api.clearCloudProviderKey).toHaveBeenCalledWith('openai');
+    expect(result.current.providerSaveNotice).toBeNull();
+    expect(persist).not.toHaveBeenCalled();
+    expect(onConnected).not.toHaveBeenCalled();
+  });
+
   it('saves a group and shows a localized advisory only after another key is verified', async () => {
     api.probeProviderModelFleet.mockResolvedValue({ rejectedKeys: 1 });
     const persist = vi.fn().mockResolvedValue(undefined);
