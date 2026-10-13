@@ -137,12 +137,21 @@ pub(super) fn handle_update_model_settings(params: Map<String, Value>) -> Contro
                                 .label
                                 .filter(|s| !s.trim().is_empty())
                                 .unwrap_or_else(|| slug.clone());
+                            let (image_endpoint, model_image_endpoints, rotation_strategy) =
+                                crate::config::schema::cloud_providers::normalize_fleet_config(
+                                    e.image_endpoint,
+                                    e.model_image_endpoints,
+                                    e.rotation_strategy,
+                                )?;
                             let entry = CloudProviderCreds {
                                 id,
                                 slug,
                                 label,
                                 endpoint,
                                 auth_style,
+                                image_endpoint,
+                                model_image_endpoints,
+                                rotation_strategy,
                                 default_model: e.default_model,
                             };
                             Ok(entry)
