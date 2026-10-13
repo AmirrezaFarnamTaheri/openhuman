@@ -34,6 +34,7 @@ import {
 } from './ai/aiPanelTypes';
 import { BackgroundLoopControls } from './ai/BackgroundLoopControls';
 import { CloudProviderEditor } from './ai/CloudProviderEditor';
+import { ModelFleetPanel } from './ai/ModelFleetPanel';
 import { CustomRoutingDialog } from './ai/CustomRoutingDialog';
 import { DefaultModelRow } from './ai/DefaultModelRow';
 import { ProviderAuthSection } from './ai/ProviderAuthSection';
@@ -247,6 +248,7 @@ const AIPanel = ({
                   addOpen={addProviderOpen}
                   onAddOpenChange={onAddProviderOpenChange}
                 />
+                {!loading && <ModelFleetPanel settings={draft} persist={persist} />}
                 {isDirty && (
                   <SaveBar
                     diffSummary={diffSummary}
