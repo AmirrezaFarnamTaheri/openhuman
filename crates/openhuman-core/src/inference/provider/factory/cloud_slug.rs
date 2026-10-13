@@ -466,7 +466,7 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             provider_name: slug.as_str(),
             endpoint: base,
             api_key: credential,
-            auth_style: auth,
+            auth_style: auth.clone(),
             model: &effective_model,
             temperature_unsupported_models: unsupported.as_slice(),
             temperature_override,
