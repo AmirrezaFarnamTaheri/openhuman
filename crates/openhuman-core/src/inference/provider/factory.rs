@@ -44,6 +44,7 @@ mod credentials;
 mod discovery;
 mod local_runtime;
 mod managed_backend;
+mod key_pool;
 mod primary_cloud;
 mod routing;
 mod subprocess_providers;
