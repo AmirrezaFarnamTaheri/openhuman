@@ -16,6 +16,7 @@
  * presentation.
  */
 import { callCoreRpc } from '../../services/coreRpcClient';
+import { CORE_RPC_METHODS } from '../../services/rpcMethods';
 import {
   authListProviderCredentials,
   type AuthProfileSummary,
@@ -782,6 +783,38 @@ export async function listProviderModels(providerId: string): Promise<ModelInfo[
     params: { provider_id: providerId },
   });
   return res?.result?.models ?? [];
+}
+
+/** Sanitized model-fleet health snapshot: never contains raw API keys. */
+export interface ModelFleetKeyHealth {
+  index: number;
+  status: 'healthy' | 'cooldown' | 'evicted';
+  successes: number;
+  failures: number;
+  active_leases: number;
+  cooldown_remaining_ms: number;
+}
+export interface ModelFleetStatus {
+  providers: Array<{
+    slug: string;
+    models: Array<{ model: string; keys: ModelFleetKeyHealth[] }>;
+  }>;
+}
+
+/** Read process-local routing health for keys used by recent calls. */
+export async function loadModelFleetStatus(): Promise<ModelFleetStatus> {
+  const response = await callCoreRpc<{ result: ModelFleetStatus }>({
+    method: CORE_RPC_METHODS.inferenceModelFleetStatus,
+  });
+  return response.result ?? { providers: [] };
+}
+
+/** Revive provider keys after replacing/repairing credentials. */
+export async function resetModelFleetStatus(slug: string): Promise<void> {
+  await callCoreRpc({
+    method: CORE_RPC_METHODS.inferenceModelFleetReset,
+    params: { slug },
+  });
 }
 
 /**
