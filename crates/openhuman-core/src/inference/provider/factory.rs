@@ -119,8 +119,11 @@ pub(crate) fn model_fleet_forget_provider(config: &Config, slug: &str) {
 /// A delimited secret group must never leave the host as a single bearer.
 pub(crate) fn model_fleet_probe_key(scope: &str, raw: String) -> String {
     let keys = key_pool::parse_api_keys(&raw);
-    if keys.len() < 2 {
-        return raw;
+    if keys.is_empty() {
+        return String::new();
+    }
+    if keys.len() == 1 {
+        return keys.into_iter().next().unwrap_or_default();
     }
     key_pool::next_key(scope, &keys)
         .map(|(_, credential)| credential)
