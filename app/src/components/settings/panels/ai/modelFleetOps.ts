@@ -122,9 +122,14 @@ export function updateSelectedGroupSettings<T extends {
 }>(
   groups: readonly T[],
   selected: ReadonlySet<string>,
-  patch: Partial<Pick<T, 'imageEndpoint' | 'rotationStrategy'>>
+  patch: {
+    imageEndpoint?: string;
+    rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
+  }
 ): T[] {
-  return groups.map(group => selected.has(group.slug) ? { ...group, ...patch } : { ...group });
+  // The settings model uses the full enum. A caller may have narrower inferred
+  // literals, but updating rotation always retains the same runtime structure.
+  return groups.map(group => selected.has(group.slug) ? { ...group, ...patch } : { ...group }) as T[];
 }
 
 /** Explicit model-id-to-endpoint group keys, one `model-id = https://...` per line. */
