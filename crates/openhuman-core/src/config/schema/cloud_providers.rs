@@ -374,6 +374,16 @@ pub struct CloudProviderCreds {
     /// Authentication header style.
     pub auth_style: AuthStyle,
 
+    /// Optional alternate OpenAI-compatible base URL for messages containing image input.
+    /// This is a provider-group default; model_image_endpoints overrides it per model id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_endpoint: Option<String>,
+
+    /// Per-model image/vision endpoints, keyed by the unmodified upstream model id.
+    /// Not credentials: every request continues to use this provider's scoped AuthService key.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub model_image_endpoints: std::collections::HashMap<String, String>,
+
     /// Default provider-native model used by BYOK routes without a model suffix.
     // keep until v0.66 (review after 2027-01-11): active BYOK routes and the
     // inference settings RPC depend on this field; replacement needs route migration.
@@ -389,6 +399,8 @@ impl Default for CloudProviderCreds {
             label: String::new(),
             endpoint: String::new(),
             auth_style: AuthStyle::Bearer,
+            image_endpoint: None,
+            model_image_endpoints: std::collections::HashMap::new(),
             default_model: None,
         }
     }
