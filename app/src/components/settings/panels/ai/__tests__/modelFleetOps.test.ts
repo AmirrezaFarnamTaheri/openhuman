@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FLEET_MODEL_PRESETS } from '../modelFleetCatalog';
 import {
   applyProviderBulkPatch, applyModelBulkPatch, syncModelPresets, syncConfiguredProviderPresets,
-  parseModelImageEndpoints, validModelFleetEndpoint,
+  parseModelImageEndpoints, parseFleetApiKeys, validModelFleetEndpoint,
 } from '../modelFleetOps';
 
 const initial = { id: 'handwritten', provider: 'custom', context_window: 24_000,
@@ -15,6 +15,12 @@ describe('model-fleet preset management', () => {
     expect(ids.size).toBe(127);
     expect(FLEET_MODEL_PRESETS.some(p => p.provider === 'tokendance')).toBe(true);
     expect(FLEET_MODEL_PRESETS.some(p => p.provider === 'qwen-token-plan')).toBe(true);
+  });
+
+  it('parses credential groups and avoids duplicate token entries', () => {
+    expect(parseFleetApiKeys('  a, b; a\nc\r\n')).toEqual(['a', 'b', 'c']);
+    expect(parseFleetApiKeys('one')).toEqual(['one']);
+    expect(parseFleetApiKeys(' , ;\n')).toEqual([]);
   });
 
   it('syncs catalog fields without removing custom models and is idempotent', () => {
