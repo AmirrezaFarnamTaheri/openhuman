@@ -298,6 +298,54 @@ mod tests {
         };
         assert!(request_has_image(&image));
     }
+    struct StubStreamModel { fail_auth: bool }
+    #[async_trait]
+    impl ChatModel<()> for StubStreamModel {
+        async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+            Err(tinyinference_llm::Error::Model("not used by stream test".into()))
+        }
+        async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+            let events = if self.fail_auth {
+                vec![
+                    ModelStreamItem::Started,
+                    ModelStreamItem::ProviderFailed(ProviderError {
+                        status: Some(429), ..Default::default()
+                    }),
+                ]
+            } else {
+                vec![
+                    ModelStreamItem::Started,
+                    ModelStreamItem::MessageDelta(tinyinference_llm::message::MessageDelta {
+                        text: "selected-second-key".into(),
+                        reasoning: String::new(),
+                        tool_call: None,
+                    }),
+                    ModelStreamItem::Failed("test stream finished".into()),
+                ]
+            };
+            Ok(ModelStream::new(Box::pin(futures::stream::iter(events))))
+        }
+    }
+    #[tokio::test]
+    async fn pre_content_rate_limit_rotates_stream_before_exposing_error() {
+        use futures::StreamExt;
+        let scope = "fleet-stream-first-429";
+        let fleet = CredentialFleetModel::new(
+            scope.into(),
+            vec!["first".into(), "second".into()],
+            vec![
+                Arc::new(StubStreamModel { fail_auth: true }),
+                Arc::new(StubStreamModel { fail_auth: false }),
+            ],
+            None,
+            RotationStrategy::RoundRobin,
+        );
+        let stream = fleet.stream(&(), ModelRequest::default()).await.unwrap();
+        let events: Vec<ModelStreamItem> = stream.collect().await;
+        assert!(matches!(events.get(1), Some(ModelStreamItem::MessageDelta(_))));
+        assert_eq!(key_pool::snapshot(scope)[0].status, "cooldown");
+    }
+
     #[test]
     fn deferred_route_is_keyed_to_credential_not_array_position() {
         let mut handle = tinyinference_llm::model::DeferredHandle::new("openai", "resp_123");
