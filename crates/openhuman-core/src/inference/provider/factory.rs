@@ -108,6 +108,13 @@ pub(crate) fn model_fleet_reset(config: &Config, slug: &str) -> Result<(), Strin
     Ok(())
 }
 
+/// Remove stale key-health scopes after a provider is deleted or its endpoint
+/// changes. No plaintext credentials are retained by the health registry.
+pub(crate) fn model_fleet_forget_provider(config: &Config, slug: &str) {
+    let prefix = format!("{}:{}:", config.workspace_dir.display(), slug);
+    key_pool::forget_provider(&prefix);
+}
+
 /// Pick one credential for a non-chat control-plane /models probe.
 /// A delimited secret group must never leave the host as a single bearer.
 pub(crate) fn model_fleet_probe_key(scope: &str, raw: String) -> String {
