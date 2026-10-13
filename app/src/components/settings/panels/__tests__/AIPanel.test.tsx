@@ -43,6 +43,8 @@ vi.mock('../../../../services/api/aiSettingsApi', async importOriginal => {
     saveAISettings: vi.fn(),
     loadLocalProviderSnapshot: vi.fn(),
     loadProviderAuthErrors: vi.fn().mockResolvedValue([]),
+  loadModelFleetStatus: vi.fn().mockResolvedValue({ providers: [] }),
+  resetModelFleetStatus: vi.fn().mockResolvedValue(undefined),
     testProviderModel: vi.fn(),
     // #5341: use the REAL classifier + describer (pure, translator-driven) instead
     // of a hand-copied third implementation that could drift from the source. The
