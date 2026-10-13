@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { FLEET_MODEL_PRESETS } from '../modelFleetCatalog';
 import {
   applyProviderBulkPatch, applyModelBulkPatch, syncModelPresets, syncConfiguredProviderPresets,
-  parseModelImageEndpoints, validModelFleetEndpoint,
+  parseModelImageEndpoints, parseFleetApiKeys, validModelFleetEndpoint, updateSelectedGroupSettings,
+  insertFleetKeysAtSelection,
 } from '../modelFleetOps';
 
 const initial = { id: 'handwritten', provider: 'custom', context_window: 24_000,
@@ -15,6 +16,34 @@ describe('model-fleet preset management', () => {
     expect(ids.size).toBe(127);
     expect(FLEET_MODEL_PRESETS.some(p => p.provider === 'tokendance')).toBe(true);
     expect(FLEET_MODEL_PRESETS.some(p => p.provider === 'qwen-token-plan')).toBe(true);
+  });
+
+  it('parses credential groups and avoids duplicate token entries', () => {
+    expect(parseFleetApiKeys('  a, b; a\nc\r\n')).toEqual(['a', 'b', 'c']);
+    expect(parseFleetApiKeys('one')).toEqual(['one']);
+    expect(parseFleetApiKeys(' , ;\n')).toEqual([]);
+  });
+
+  it('preserves an occupied key when additional keys are pasted at a cursor', () => {
+    const rows = ['original-key', 'other-key'];
+    expect(insertFleetKeysAtSelection(rows, 0, 'pasted-1\\npasted-2', 4, 4)).toEqual([
+      'original-key', 'pasted-1', 'pasted-2', 'other-key',
+    ]);
+    expect(rows).toEqual(['original-key', 'other-key']);
+  });
+
+  it('replaces the selected key when its whole value is selected', () => {
+    expect(insertFleetKeysAtSelection(['old', 'other'], 0, 'new-a;new-b', 0, 3))
+      .toEqual(['new-a', 'new-b', 'other']);
+    expect(insertFleetKeysAtSelection(['', 'other'], 0, 'new-a,new-b', 0, 0))
+      .toEqual(['new-a', 'new-b', 'other']);
+  });
+
+  it('never silently truncates credential batches over the row limit', () => {
+    const full = Array.from({ length: 128 }, (_, i) => 'key-' + i);
+    expect(() => insertFleetKeysAtSelection(full, 0, 'additional-a\\nadditional-b', 0, 0))
+      .toThrow(/128/);
+    expect(full).toHaveLength(128);
   });
 
   it('syncs catalog fields without removing custom models and is idempotent', () => {
@@ -65,6 +94,32 @@ describe('model-fleet preset management', () => {
     expect(() => parseModelImageEndpoints('x = http://a.test\nx = http://b.test')).toThrow(/Duplicate/);
     expect(() => parseModelImageEndpoints('x = ftp://a.test')).toThrow();
     expect(validModelFleetEndpoint('https://user:secret@host.test/v1')).toBe(false);
+    expect(validModelFleetEndpoint('https://api.example.test/v1?token=abc')).toBe(false);
+    expect(validModelFleetEndpoint('https://api.example.test/v1#fragment')).toBe(false);
+    expect(validModelFleetEndpoint('http://127.0.0.1:8800/v1')).toBe(true);
+  });
+
+  it('changes a key rotation strategy without clearing the existing image endpoint', () => {
+    const providers = [{
+      slug: 'openai',
+      imageEndpoint: 'https://vision.example.com/v1',
+      rotationStrategy: 'least_busy' as const,
+      modelImageEndpoints: { 'vision-model': 'https://vision-model.example.com/v1' },
+    }, {
+      slug: 'anthropic', imageEndpoint: 'https://other.example.com/v1',
+      rotationStrategy: 'round_robin' as const,
+    }];
+    const selected = new Set(['openai']);
+    const changed = updateSelectedGroupSettings(providers, selected, {
+      rotationStrategy: 'priority_weighted',
+    });
+    expect(changed[0].rotationStrategy).toBe('priority_weighted');
+    expect(changed[0].imageEndpoint).toBe('https://vision.example.com/v1');
+    expect(changed[0].modelImageEndpoints).toEqual(providers[0].modelImageEndpoints);
+    expect(changed[1]).toEqual(providers[1]);
+    const cleared = updateSelectedGroupSettings(changed, selected, { imageEndpoint: '' });
+    expect(cleared[0].imageEndpoint).toBe('');
+    expect(cleared[0].rotationStrategy).toBe('priority_weighted');
   });
 
   it('bulk image-endpoint edit preserves mapped model endpoints', () => {

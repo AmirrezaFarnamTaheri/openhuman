@@ -71,6 +71,25 @@ describe('i18n coverage', () => {
     const missing = dynamicKeys.filter(key => !(key in flat));
     expect(missing).toEqual([]);
   });
+  it.each(['en', ...LOCALES])('%s translates the multi-token connection controls', locale => {
+    const flat = locale === 'en' ? enFlat : loadLocale(locale);
+    const keys = [
+      'multiKeyMode', 'keyEntries', 'keyIndex', 'removeKeyIndex',
+      'removeKey', 'addKey', 'revealKeys', 'hideKeys',
+      'tooManyKeys', 'partialKeyVerified',
+    ];
+    for (const name of keys) {
+      const key = `settings.ai.fleet.${name}`;
+      expect(flat[key], `missing ${key} in ${locale}`).toBeTruthy();
+      if (locale !== 'en' && name !== 'keyEntries') {
+        expect(flat[key], `not localized: ${key} in ${locale}`).not.toBe(enFlat[key]);
+      }
+    }
+    for (const name of ['keyIndex', 'removeKeyIndex']) {
+      expect(flat[`settings.ai.fleet.${name}`]).toContain('{index}');
+    }
+  });
+
   it('locale tr preserves every interpolation placeholder', () => {
     const turkish = loadLocale('tr');
     const placeholders = (value: string) => (value.match(/\{+[^{}]+\}+/g) ?? []).sort();

@@ -13,6 +13,7 @@ import {
   flushCloudProviders,
   importOpenAiCodexCliAuth,
   listProviderModels,
+  probeProviderModelFleet,
   loadProviderAuthErrors,
   OPENAI_CODEX_OAUTH_MISSING_AUTH_URL,
   OPENAI_CODEX_OAUTH_MISSING_CALLBACK_URL,
@@ -21,6 +22,7 @@ import {
 } from '../../../../services/api/aiSettingsApi';
 import { openhumanUpdateLocalAiSettings } from '../../../../utils/tauriCommands/config';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
+import { parseFleetApiKeys } from './modelFleetOps';
 import {
   type AISettings,
   authStyleForSlug,
@@ -263,15 +265,32 @@ export function useProviderConnect({
             throw writeError;
           }
           if (!isCodexOAuth && !isCliLogin) {
+            const isKeyProvider = !isLocalRuntime && slug !== 'openhuman';
+            const groupedKeys = isKeyProvider && parseFleetApiKeys(trimmed).length > 1;
             try {
-              await listProviderModels(slug);
+              if (groupedKeys) {
+                // This is a *verified result* from the Rust catalog probe,
+                // which tests each candidate on 401/403 before reporting a
+                // successful group. A count of submitted keys alone proves nothing.
+                const probe = await probeProviderModelFleet(slug);
+                if (probe.rejectedKeys > 0) {
+                  setProviderSaveNotice({
+                    slug,
+                    message: t(
+                      'settings.ai.fleet.partialKeyVerified',
+                      'Some API keys were rejected, but another key was verified. Review the provider key health.'
+                    ),
+                  });
+                }
+              } else {
+                await listProviderModels(slug);
+              }
             } catch (probeErr) {
               const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
               const reason = classifyProviderVerificationFailure(msg);
-              const isKeyProvider = !isLocalRuntime && slug !== 'openhuman';
-              if (isKeyProvider && reason !== 'auth') {
-                // #5339: transient / unreachable / unknown — the key is
-                // plausibly valid, so keep it and record a non-fatal advisory.
+              if (isKeyProvider && !groupedKeys && reason !== 'auth') {
+                // Transient / unreachable / unknown errors do not demonstrate
+                // invalid credentials, so preserve the entry with an advisory.
                 console.warn(
                   `[ai-settings] provider=${slug} add-time probe non-fatal reason=${reason}`
                 );
@@ -280,8 +299,10 @@ export function useProviderConnect({
                   message: describeProviderVerificationFailure(slug, msg, t),
                 });
               } else {
-                // Auth failure (wrong key), or a local runtime that isn't up:
-                // roll both stores back and reject so the user fixes it.
+                // A multi-key group must have a confirmed working key.
+                // Even a transient/unknown multi-key probe cannot prove that
+                // any key works. Roll back rather than mark it connected.
+                // For single keys, preserve the existing non-fatal handling.
                 await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
                   console.warn(`[ai-settings] rollback flush failed slug=${slug}`, rollbackErr)
                 );

@@ -50,6 +50,20 @@ fn endpoint_hosts_models_listing(slug: &str, endpoint: &str) -> bool {
     }
 }
 
+/// Only authorization failures are informative about an individual
+/// credential; network failures and server errors are not key-specific.
+fn should_try_next_catalog_key(status: u16, has_more: bool) -> bool {
+    has_more && matches!(status, 401 | 403)
+}
+
+/// OpenRouter's /key preflight returns a sanitized error string. Only
+/// explicit HTTP auth failures permit trying another key.
+fn should_retry_openrouter_key(error: &str, has_more: bool) -> bool {
+    has_more
+        && (error.starts_with("OpenRouter key validation returned 401:")
+            || error.starts_with("OpenRouter key validation returned 403:"))
+}
+
 pub fn append_query_param(url: &str, key: &str, value: &str) -> String {
     if let Ok(mut parsed) = reqwest::Url::parse(url) {
         parsed.query_pairs_mut().append_pair(key, value);
@@ -112,16 +126,27 @@ pub async fn list_configured_models_from_config(
         ));
     }
 
+    use crate::config::schema::cloud_providers::AuthStyle;
     let looked_up = crate::inference::provider::factory::lookup_key_for_slug(&entry.slug, config)
         .unwrap_or_default();
-    let api_key = resolve_local_runtime_key(&entry.slug, looked_up, config);
-    let api_key = crate::inference::provider::factory::model_fleet_probe_key(
-        &format!("{}:{}:catalog", config.workspace_dir.display(), entry.slug),
-        api_key,
-    );
+    let raw_api_key = resolve_local_runtime_key(&entry.slug, looked_up, config);
 
     let bearer_is_oauth = entry.slug == "openai"
         && crate::inference::provider::factory::openai_bearer_is_oauth(config);
+    // Authenticate individual candidates for /models, not a combined bearer.
+    // Managed sessions and Codex OAuth are never interpreted as key groups.
+    let candidates = if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        && !bearer_is_oauth
+    {
+        crate::inference::provider::factory::model_fleet_probe_keys(
+            &format!("{}:{}:catalog", config.workspace_dir.display(), entry.slug),
+            raw_api_key,
+        )
+    } else {
+        vec![raw_api_key]
+    };
+    let api_key = candidates.first().cloned().unwrap_or_default();
+
     let routing =
         resolve_openai_codex_routing(config, &entry.slug, &entry.endpoint, &api_key, bearer_is_oauth)
             .unwrap_or_else(|err| {
@@ -145,7 +170,6 @@ pub async fn list_configured_models_from_config(
         routing.account_id.is_some()
     );
 
-    use crate::config::schema::cloud_providers::AuthStyle;
     let service_key = "providers.list_models";
     let client = if let Some(pem) = config
         .cloud_provider_ca_certs
@@ -249,80 +273,111 @@ pub async fn list_configured_models_from_config(
         );
     }
 
-    if is_openrouter_provider(&entry) {
-        validate_openrouter_api_key(&client, &routing.endpoint, &api_key).await?;
-    }
-
-    // Whether the app session token actually made it onto the wire. It is not
-    // the same question as "is `managed_token` non-empty": the credential-safety
-    // guard below can decline to attach it, and a 401 on an unauthenticated
-    // request must not be read as a stale session (review, #6206).
+    // This is a safe read-only GET: when the current key is rejected with
+    // 401/403, try only the remaining distinct credentials. A successful
+    // catalogue response is proof of at least one accepted key. Do not
+    // retry 5xx/timeouts or turn pool cardinality into an auth assertion.
+    let mut rejected_keys: usize = 0;
+    let mut checked_keys: usize = 0;
+    let mut authenticated = false;
     let mut managed_session_attached = false;
-    let mut request = client.get(&models_url);
-    if routing.using_oauth {
-        request = request
-            .header(
-                reqwest::header::USER_AGENT,
-                openai_codex_user_agent("OpenHuman", env!("CARGO_PKG_VERSION")),
-            )
-            .header(OPENAI_CODEX_ORIGINATOR_HEADER, OPENAI_CODEX_ORIGINATOR);
-    }
+    let mut successful_response = None;
 
-    request = match entry.auth_style {
-        AuthStyle::Bearer => {
-            if !api_key.is_empty() {
-                let mut r = request.header("Authorization", format!("Bearer {}", api_key));
-                if let Some(account_id) = routing.account_id.as_deref() {
-                    r = r.header(OPENAI_CODEX_ACCOUNT_HEADER, account_id);
+    for (position, candidate_key) in candidates.iter().enumerate() {
+        let has_more = position + 1 < candidates.len();
+        checked_keys += 1;
+        if is_openrouter_provider(&entry) {
+            match validate_openrouter_api_key(&client, &routing.endpoint, candidate_key).await {
+                Ok(()) => {}
+                Err(error) if should_retry_openrouter_key(&error, has_more) => {
+                    rejected_keys += 1;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+
+        let mut request = client.get(&models_url);
+        if routing.using_oauth {
+            request = request
+                .header(
+                    reqwest::header::USER_AGENT,
+                    openai_codex_user_agent("OpenHuman", env!("CARGO_PKG_VERSION")),
+                )
+                .header(OPENAI_CODEX_ORIGINATOR_HEADER, OPENAI_CODEX_ORIGINATOR);
+        }
+
+        request = match entry.auth_style {
+            AuthStyle::Bearer => {
+                if !candidate_key.is_empty() {
+                    let mut r = request.header("Authorization", format!("Bearer {}", candidate_key));
+                    if let Some(account_id) = routing.account_id.as_deref() {
+                        r = r.header(OPENAI_CODEX_ACCOUNT_HEADER, account_id);
+                    }
+                    r
+                } else {
+                    request
+                }
+            }
+            AuthStyle::Anthropic => {
+                let mut r = request.header("anthropic-version", "2023-06-01");
+                if !candidate_key.is_empty() {
+                    r = r.header("x-api-key", candidate_key.as_str());
                 }
                 r
-            } else {
-                request
             }
-        }
-        AuthStyle::Anthropic => {
-            let mut r = request.header("anthropic-version", "2023-06-01");
-            if !api_key.is_empty() {
-                r = r.header("x-api-key", &api_key);
+            AuthStyle::OpenhumanJwt => {
+                // Prefer the live session JWT resolved above; fall back to a
+                // provider-scoped key so a self-hosted entry that stores one still
+                // authenticates.
+                let token = if !managed_token.is_empty() {
+                    managed_token.as_str()
+                } else {
+                    candidate_key.as_str()
+                };
+                managed_session_attached = managed_session_attaches(&managed_token, &models_url);
+                // Never put a bearer credential on the wire in clear text. `https`
+                // or a loopback host only — loopback stays allowed so a local
+                // backend (BACKEND_URL=http://127.0.0.1:...) still works in dev.
+                if !token.is_empty() && url_is_credential_safe(&models_url) {
+                    // Managed traffic is attributed per embedding product
+                    // (OpenCompany / desktop); the generic provider client
+                    // does not carry it, so attach it explicitly.
+                    request
+                        .header("Authorization", format!("Bearer {}", token))
+                        .headers(crate::backend::attribution_headers())
+                } else if !token.is_empty() {
+                    log::warn!(
+                        "[providers][list_models] refusing to send a bearer token to a non-https, non-loopback URL"
+                    );
+                    request
+                } else {
+                    request
+                }
             }
-            r
-        }
-        AuthStyle::OpenhumanJwt => {
-            // Prefer the live session JWT resolved above; fall back to a
-            // provider-scoped key so a self-hosted entry that stores one still
-            // authenticates.
-            let token = if !managed_token.is_empty() {
-                managed_token.as_str()
-            } else {
-                api_key.as_str()
-            };
-            managed_session_attached = managed_session_attaches(&managed_token, &models_url);
-            // Never put a bearer credential on the wire in clear text. `https`
-            // or a loopback host only — loopback stays allowed so a local
-            // backend (BACKEND_URL=http://127.0.0.1:...) still works in dev.
-            if !token.is_empty() && url_is_credential_safe(&models_url) {
-                // Managed traffic is attributed per embedding product
-                // (OpenCompany / desktop); the generic provider client
-                // does not carry it, so attach it explicitly.
-                request
-                    .header("Authorization", format!("Bearer {}", token))
-                    .headers(crate::backend::attribution_headers())
-            } else if !token.is_empty() {
-                log::warn!(
-                    "[providers][list_models] refusing to send a bearer token to a non-https, non-loopback URL"
-                );
-                request
-            } else {
-                request
-            }
-        }
-        AuthStyle::None => request,
-    };
+            AuthStyle::None => request,
+        };
 
-    let response = request
-        .send()
-        .await
-        .map_err(|e| format!("[providers][list_models] HTTP request failed: {}", e))?;
+        let attempt = request
+            .send()
+            .await
+            .map_err(|e| format!("[providers][list_models] HTTP request failed: {}", e))?;
+
+        if should_try_next_catalog_key(attempt.status().as_u16(), has_more) {
+            rejected_keys += 1;
+            continue;
+        }
+
+        authenticated = matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+            && !candidate_key.is_empty()
+            && attempt.status().is_success();
+        successful_response = Some(attempt);
+        break;
+    }
+
+    let response = successful_response.ok_or_else(|| {
+        "No credential in the provider group produced a catalogue response".to_string()
+    })?;
 
     let status = response.status();
     if !status.is_success() {
@@ -434,7 +489,45 @@ pub async fn list_configured_models_from_config(
     );
 
     Ok(crate::core::Outcome::new(
-        serde_json::json!({ "models": models }),
+        serde_json::json!({
+            "models": models,
+            "fleet_probe": {
+                "authenticated": authenticated,
+                "checked_keys": checked_keys,
+                "rejected_keys": rejected_keys,
+            }
+        }),
         vec![format!("fetched {} models", models.len())],
     ))
+}
+
+#[cfg(test)]
+mod model_fleet_probe_tests {
+    use super::*;
+
+    #[test]
+    fn retries_only_auth_rejections_while_untried_credentials_remain() {
+        assert!(should_try_next_catalog_key(401, true));
+        assert!(should_try_next_catalog_key(403, true));
+        assert!(!should_try_next_catalog_key(401, false));
+        assert!(!should_try_next_catalog_key(408, true));
+        assert!(!should_try_next_catalog_key(429, true));
+        assert!(!should_try_next_catalog_key(500, true));
+    }
+
+    #[test]
+    fn openrouter_validation_tries_another_key_only_for_auth_status() {
+        assert!(should_retry_openrouter_key(
+            "OpenRouter key validation returned 401: invalid API key", true
+        ));
+        assert!(should_retry_openrouter_key(
+            "OpenRouter key validation returned 403: forbidden", true
+        ));
+        assert!(!should_retry_openrouter_key(
+            "OpenRouter key validation returned 401: invalid API key", false
+        ));
+        assert!(!should_retry_openrouter_key(
+            "OpenRouter key validation failed: connection refused", true
+        ));
+    }
 }

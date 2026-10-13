@@ -17,9 +17,12 @@ import {
   flushCloudProviders,
   importOpenAiCodexCliAuth,
   listProviderModels,
+  probeProviderModelFleet,
   loadAISettings,
   loadLocalProviderSnapshot,
   loadProviderAuthErrors,
+  loadModelFleetStatus,
+  resetModelFleetStatus,
   modelRegistryVision,
   OPENAI_CODEX_OAUTH_MISSING_AUTH_URL,
   OPENAI_CODEX_OAUTH_MISSING_CALLBACK_URL,
@@ -1282,5 +1285,92 @@ describe('verifyCloudProviderConnection', () => {
     );
 
     expect(result.message).toBe('translated empty openai');
+  });
+});
+
+describe('model fleet health RPCs', () => {
+  beforeEach(() => {
+    mockCallCoreRpc.mockReset();
+  });
+
+  it('accepts the already-unwrapped sanitized status result', async () => {
+    const snapshot = {
+      providers: [{
+        slug: 'openai',
+        models: [{
+          model: 'gpt-test',
+          keys: [{
+            index: 0,
+            status: 'healthy',
+            successes: 1,
+            failures: 0,
+            active_leases: 0,
+            cooldown_remaining_ms: 0,
+          }],
+        }],
+      }],
+    };
+    mockCallCoreRpc.mockResolvedValue(snapshot);
+    await expect(loadModelFleetStatus()).resolves.toEqual(snapshot);
+    expect(mockCallCoreRpc).toHaveBeenCalledWith({
+      method: 'openhuman.inference_model_fleet_status',
+    });
+  });
+
+  it('returns an empty snapshot when the RPC has no result', async () => {
+    mockCallCoreRpc.mockResolvedValue(null);
+    await expect(loadModelFleetStatus()).resolves.toEqual({ providers: [] });
+  });
+
+  it('resets only the selected provider slug', async () => {
+    mockCallCoreRpc.mockResolvedValue({ reset: true, provider: 'anthropic' });
+    await expect(resetModelFleetStatus('anthropic')).resolves.toBeUndefined();
+    expect(mockCallCoreRpc).toHaveBeenCalledWith({
+      method: 'openhuman.inference_model_fleet_reset',
+      params: { slug: 'anthropic' },
+    });
+  });
+});
+
+describe('credential-group model catalogue verification', () => {
+  beforeEach(() => {
+    mockCallCoreRpc.mockReset();
+  });
+
+  it('returns rejected key count only when Rust confirms an authenticated key', async () => {
+    mockCallCoreRpc.mockResolvedValue({
+      result: {
+        models: [{ id: 'gpt-example' }],
+        fleet_probe: { authenticated: true, checked_keys: 2, rejected_keys: 1 },
+      },
+    });
+    await expect(probeProviderModelFleet('openai')).resolves.toEqual({ rejectedKeys: 1 });
+    expect(mockCallCoreRpc).toHaveBeenCalledWith({
+      method: 'openhuman.inference_list_models',
+      params: { provider_id: 'openai' },
+    });
+  });
+
+  it('does not infer a good key from an unverified model catalogue response', async () => {
+    mockCallCoreRpc.mockResolvedValue({ result: { models: [] } });
+    await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);
+  });
+
+  it('rejects malformed fleet verification metadata', async () => {
+    for (const fleet_probe of [
+      { authenticated: true, checked_keys: 0, rejected_keys: 0 },
+      { authenticated: true, checked_keys: 2, rejected_keys: 2 },
+      { authenticated: true, checked_keys: 2, rejected_keys: -1 },
+      { authenticated: true, checked_keys: undefined, rejected_keys: 1 },
+      { authenticated: false, checked_keys: 2, rejected_keys: 0 },
+    ]) {
+      mockCallCoreRpc.mockResolvedValueOnce({ result: { models: [], fleet_probe } });
+      await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);
+    }
+  });
+
+  it('propagates exhausted key-pool authentication failure', async () => {
+    mockCallCoreRpc.mockRejectedValue(new Error('provider returned 401: invalid API key'));
+    await expect(probeProviderModelFleet('openai')).rejects.toThrow(/401/);
   });
 });

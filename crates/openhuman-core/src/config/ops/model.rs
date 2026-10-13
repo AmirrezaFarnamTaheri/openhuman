@@ -266,6 +266,10 @@ pub async fn apply_model_settings(
     // Retain only provider metadata long enough to identify stale fleet scopes.
     // Health pruning happens after a successful save, never during a rollback.
     let previous_cloud_providers = config.cloud_providers.clone();
+    let previous_model_ids: Vec<(String, String)> = config.model_registry
+        .iter()
+        .map(|entry| (entry.provider.clone(), entry.id.clone()))
+        .collect();
     if let Some(api_url) = update.api_url {
         config.api_url = if api_url.trim().is_empty() {
             None
@@ -444,6 +448,13 @@ pub async fn apply_model_settings(
         );
         if !unchanged {
             crate::inference::provider::factory::model_fleet_forget_provider(config, &previous.slug);
+        }
+    }
+    for (provider, model) in previous_model_ids {
+        if !config.model_registry.iter().any(|entry|
+            entry.provider == provider && entry.id == model
+        ) {
+            crate::inference::provider::factory::model_fleet_forget_model(config, &provider, &model);
         }
     }
     let snapshot = snapshot_config_json(config)?;

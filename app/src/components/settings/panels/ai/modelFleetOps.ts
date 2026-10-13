@@ -6,6 +6,51 @@ import type { CloudProviderCreds, ModelRegistryEntry } from '../../../../utils/t
 import { BUILTIN_CLOUD_PROVIDERS } from '../builtinCloudProviders';
 import { FLEET_MODEL_PRESETS, type FleetModelPreset } from './modelFleetCatalog';
 
+/** Shared normalization with Rust's parse_api_keys; never persist a delimited
+ * value as one upstream Authorization header. */
+export function parseFleetApiKeys(raw: string): string[] {
+  return [...new Set(raw.split(/[,;\r\n]/).map(key => key.trim()).filter(Boolean))];
+}
+
+/** Insert a pasted credential group without accidentally deleting the
+ * credential already in an occupied row. A collapsed selection inserts *rows*
+ * beside the existing key; a deliberate selected replacement replaces the
+ * selection. Never truncate a batch silently at the input-row cap.
+ */
+export function insertFleetKeysAtSelection(
+  rows: readonly string[],
+  rowIndex: number,
+  pastedText: string,
+  selectionStart: number,
+  selectionEnd: number,
+  limit = 128
+): string[] {
+  if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= rows.length) {
+    throw new Error('Invalid API key row');
+  }
+  const existing = rows[rowIndex] ?? '';
+  const start = Math.max(0, Math.min(existing.length, selectionStart));
+  const end = Math.max(start, Math.min(existing.length, selectionEnd));
+  const pasted = parseFleetApiKeys(pastedText);
+  if (pasted.length === 0) return [...rows];
+
+  let replacement: string[];
+  if (start === end && existing.trim()) {
+    // No explicit replacement: preserve the existing credential as a row.
+    replacement = [existing, ...pasted];
+  } else if (!existing.trim() || (start === 0 && end === existing.length)) {
+    replacement = pasted;
+  } else {
+    // The user deliberately selected text to replace inside a row.
+    replacement = parseFleetApiKeys(existing.slice(0, start) + pastedText + existing.slice(end));
+  }
+  const next = [...rows.slice(0, rowIndex), ...replacement, ...rows.slice(rowIndex + 1)];
+  if (next.length > limit) {
+    throw new Error(`A provider group supports at most ${limit} API keys.`);
+  }
+  return next;
+}
+
 export const fleetModelKey = (provider: string, id: string) => provider + '\0' + id;
 
 export function syncModelPresets(
@@ -104,6 +149,26 @@ export function validModelFleetEndpoint(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** A blank image-URL input means 'do not edit' unless Clear was clicked;
+ * applying a strategy must not silently clear the existing endpoint.
+ */
+export function updateSelectedGroupSettings<T extends {
+  slug: string;
+  imageEndpoint?: string;
+  rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
+}>(
+  groups: readonly T[],
+  selected: ReadonlySet<string>,
+  patch: {
+    imageEndpoint?: string;
+    rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
+  }
+): T[] {
+  // The settings model uses the full enum. A caller may have narrower inferred
+  // literals, but updating rotation always retains the same runtime structure.
+  return groups.map(group => selected.has(group.slug) ? { ...group, ...patch } : { ...group }) as T[];
 }
 
 /** Explicit model-id-to-endpoint group keys, one `model-id = https://...` per line. */

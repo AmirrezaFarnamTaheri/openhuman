@@ -3,7 +3,7 @@
  * and the dialog it opens to collect credentials.
  */
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 
 import { useT } from '../../../../lib/i18n/I18nContext';
 import { openUrl } from '../../../../utils/openUrl';
@@ -15,6 +15,7 @@ import OpenAiOAuthConnect from '../../oauth/OpenAiOAuthConnect';
 import { builtinCloudProvider } from '../builtinCloudProviders';
 import { presentProviderSetupError, ProviderSetupErrorNotice } from '../ProviderSetupErrorNotice';
 import { defaultEndpointFor, formatI18n, KIMI_PLATFORM_URL } from './aiPanelTypes';
+import { insertFleetKeysAtSelection, parseFleetApiKeys } from './modelFleetOps';
 
 // Connect-provider dialog — shown when the user flips a provider toggle ON.
 //
@@ -77,6 +78,13 @@ export const ProviderKeyDialog = ({
   );
   const [keyValue, setKeyValue] = useState<string>(initialKeyValue ?? '');
   const [multiKeyMode, setMultiKeyMode] = useState(false);
+  // Independent native password inputs work in every supported webview,
+  // unlike CSS-only textarea masking. The rows never leave dialog state
+  // until explicitly submitted to the existing encrypted credential store.
+  const [multiKeyRows, setMultiKeyRows] = useState<string[]>(() => {
+    const keys = parseFleetApiKeys(initialValue ?? '');
+    return keys.length ? keys : [''];
+  });
   const [revealKeys, setRevealKeys] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'saving' | 'oauth'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +108,9 @@ export const ProviderKeyDialog = ({
   const titleId = 'provider-key-dialog-title';
 
   const handleSave = async () => {
-    const trimmed = value.trim();
+    const trimmed = multiKeyMode && !endpointKeyMode && !isLocalRuntime
+      ? parseFleetApiKeys(multiKeyRows.join('\n')).join('\n')
+      : value.trim();
     const trimmedKey = keyValue.trim();
     if (!trimmed) {
       setError(
@@ -231,32 +241,98 @@ export const ProviderKeyDialog = ({
           {!isLocalRuntime && !endpointKeyMode && (
             <label className="flex cursor-pointer items-center gap-2 text-xs text-content-secondary">
               <input type="checkbox" checked={multiKeyMode} disabled={busy}
-                onChange={e => setMultiKeyMode(e.target.checked)} />
-              Use multiple API keys
+                onChange={e => {
+                  const enabled = e.target.checked;
+                  if (enabled) {
+                    const keys = parseFleetApiKeys(value);
+                    setMultiKeyRows(keys.length ? keys : ['']);
+                  } else {
+                    setValue(parseFleetApiKeys(multiKeyRows.join('\n')).join('\n'));
+                    setRevealKeys(false);
+                  }
+                  setMultiKeyMode(enabled);
+                }} />
+              {t('settings.ai.fleet.multiKeyMode', 'Use multiple API keys')}
             </label>
           )}
           {!isLocalRuntime && !endpointKeyMode && multiKeyMode ? (
-            <div className="space-y-1">
-              <textarea
-              id="provider-key-input"
-              rows={4}
-              value={value}
-              placeholder="key-1\nkey-2\nkey-3"
-              disabled={busy}
-              spellCheck={false}
-              autoComplete="off"
-              style={{ WebkitTextSecurity: revealKeys ? 'none' : 'disc' } as CSSProperties}
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
-              onChange={e => {
-                setValue(e.target.value);
-                setError(null);
-              }}
-            />
-              <Button type="button" variant="tertiary" size="xs"
-                disabled={busy} onClick={() => setRevealKeys(old => !old)}
-                aria-label={revealKeys ? 'Hide API keys' : 'Reveal API keys'}>
-                {revealKeys ? 'Hide keys' : 'Reveal keys'}
-              </Button>
+            <div className="space-y-2">
+              <div role="group" aria-label={t('settings.ai.fleet.keyEntries', 'API key entries')} className="space-y-2">
+                {multiKeyRows.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <input
+                      id={index === 0 ? 'provider-key-input' : undefined}
+                      type={revealKeys ? 'text' : 'password'}
+                      aria-label={formatI18n(t('settings.ai.fleet.keyIndex', 'API key {index}'), { index: String(index + 1) })}
+                      value={entry}
+                      placeholder={formatI18n(t('settings.ai.fleet.keyIndex', 'API key {index}'), { index: String(index + 1) })}
+                      disabled={busy}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      data-form-type="other"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
+                      onChange={event => {
+                        const nextValue = event.target.value;
+                        setMultiKeyRows(previous =>
+                          previous.map((token, i) => i === index ? nextValue : token)
+                        );
+                        setError(null);
+                      }}
+                      onPaste={event => {
+                        const clipboardText = event.clipboardData.getData('text');
+                        if (!/[,;\r\n]/.test(clipboardText)) return;
+                        if (!parseFleetApiKeys(clipboardText).length) return;
+                        event.preventDefault();
+                        const input = event.currentTarget;
+                        try {
+                          setMultiKeyRows(insertFleetKeysAtSelection(
+                            multiKeyRows,
+                            index,
+                            clipboardText,
+                            input.selectionStart ?? input.value.length,
+                            input.selectionEnd ?? input.value.length
+                          ));
+                          setError(null);
+                        } catch {
+                          setError(t(
+                            'settings.ai.fleet.tooManyKeys',
+                            'A provider group supports at most 128 API keys.'
+                          ));
+                        }
+                      }}
+                    />
+                    {multiKeyRows.length > 1 && (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="tertiary"
+                        disabled={busy}
+                        aria-label={formatI18n(t('settings.ai.fleet.removeKeyIndex', 'Remove API key {index}'), { index: String(index + 1) })}
+                        onClick={() => setMultiKeyRows(previous =>
+                          previous.filter((_, i) => i !== index)
+                        )}>
+                        {t('settings.ai.fleet.removeKey', 'Remove')}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="tertiary" size="xs"
+                  disabled={busy || multiKeyRows.length >= 128}
+                  onClick={() => setMultiKeyRows(previous => [...previous, ''])}>
+                  {t('settings.ai.fleet.addKey', 'Add another API key')}
+                </Button>
+                <Button type="button" variant="tertiary" size="xs"
+                  disabled={busy} onClick={() => setRevealKeys(previous => !previous)}
+                  aria-label={revealKeys ? t('settings.ai.fleet.hideKeys', 'Hide API keys') : t('settings.ai.fleet.revealKeys', 'Reveal API keys')}>
+                  {revealKeys ? t('settings.ai.fleet.hideKeys', 'Hide API keys') : t('settings.ai.fleet.revealKeys', 'Reveal API keys')}
+                </Button>
+              </div>
             </div>
           ) : (
             <TextField
