@@ -27,6 +27,8 @@ vi.mock('../../../../services/api/aiSettingsApi', () => ({
   saveAISettings: vi.fn(),
   loadLocalProviderSnapshot: vi.fn(),
   loadProviderAuthErrors: vi.fn().mockResolvedValue([]),
+  loadModelFleetStatus: vi.fn().mockResolvedValue({ providers: [] }),
+  resetModelFleetStatus: vi.fn().mockResolvedValue(undefined),
   testProviderModel: vi.fn(),
   modelRegistryVision: vi.fn(() => false),
   upsertModelRegistryVision: vi.fn((registry: unknown[]) => registry),
