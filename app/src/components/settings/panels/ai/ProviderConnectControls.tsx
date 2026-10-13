@@ -76,6 +76,7 @@ export const ProviderKeyDialog = ({
     initialValue ?? (isLocalRuntime ? defaultEndpointFor(slug) : '')
   );
   const [keyValue, setKeyValue] = useState<string>(initialKeyValue ?? '');
+  const [multiKeyMode, setMultiKeyMode] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'saving' | 'oauth'>('idle');
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== 'idle';
@@ -226,29 +227,54 @@ export const ProviderKeyDialog = ({
           <Label htmlFor="provider-key-input" className="text-xs text-content-secondary">
             {fieldLabel}
           </Label>
-          <TextField
-            id="provider-key-input"
-            type={isLocalRuntime ? 'url' : 'text'}
-            mono={isLocalRuntime}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            data-form-type="other"
-            data-lpignore="true"
-            data-1p-ignore="true"
-            value={value}
-            placeholder={placeholder}
-            disabled={busy}
-            onChange={e => {
-              setValue(e.target.value);
-              setError(null);
-            }}
-          />
+          {!isLocalRuntime && !endpointKeyMode && (
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-content-secondary">
+              <input type="checkbox" checked={multiKeyMode} disabled={busy}
+                onChange={e => setMultiKeyMode(e.target.checked)} />
+              Use multiple API keys
+            </label>
+          )}
+          {!isLocalRuntime && !endpointKeyMode && multiKeyMode ? (
+            <textarea
+              id="provider-key-input"
+              rows={4}
+              value={value}
+              placeholder="key-1\nkey-2\nkey-3"
+              disabled={busy}
+              spellCheck={false}
+              autoComplete="off"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
+              onChange={e => {
+                setValue(e.target.value);
+                setError(null);
+              }}
+            />
+          ) : (
+            <TextField
+              id="provider-key-input"
+              type={isLocalRuntime ? 'url' : 'password'}
+              mono={isLocalRuntime}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-form-type="other"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              value={value}
+              placeholder={placeholder}
+              disabled={busy}
+              onChange={e => {
+                setValue(e.target.value);
+                setError(null);
+              }}
+            />
+          )}
           {!isLocalRuntime && !endpointKeyMode && (
             <p className="text-xs text-content-muted">
-              Multiple API keys: separate them with commas or semicolons. OpenHuman will
-              store them under this provider and rotate the credential on model initialization.
+              Separate keys with commas, semicolons or newlines. Each request selects
+              one available credential; invalid keys are evicted and rate-limited keys
+              temporarily cool down. All keys stay in the provider's encrypted credential store.
             </p>
           )}
           {/* OMLX (endpointKeyMode): render the API key field in addition to
@@ -263,7 +289,7 @@ export const ProviderKeyDialog = ({
               </Label>
               <TextField
                 id="provider-key-input-key"
-                type="text"
+                type="password"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
