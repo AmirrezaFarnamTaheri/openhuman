@@ -293,6 +293,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             : "pnpm --filter openhuman-app compile",
         },
         {
+          // E2E specs are not included in app/tsconfig.json; typecheck them separately.
+          name: "tsc-e2e",
+          when: areas.frontend,
+          needs: ["pnpm-install"],
+          run: "pnpm --filter openhuman-app typecheck:e2e",
+        },
+        {
           name: "prettier",
           when: areas.frontend,
           needs: ["pnpm-install"],
