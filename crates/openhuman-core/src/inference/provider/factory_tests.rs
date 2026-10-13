@@ -191,3 +191,21 @@ mod crate_native_tests;
 mod egress_fallback_tests;
 #[path = "factory_route_resolution_tests.rs"]
 mod route_resolution_tests;
+
+#[test]
+fn grouped_catalog_probe_candidates_are_distinct_and_never_a_delimited_bearer() {
+    let keys = model_fleet_probe_keys(
+        "test-model-fleet-catalog-candidates",
+        " bad-key, working-key;bad-key ".to_owned(),
+    );
+    assert_eq!(keys, vec!["bad-key", "working-key"]);
+    assert!(!keys.iter().any(|value| value.contains(',') || value.contains(';')));
+}
+
+#[test]
+fn single_catalog_key_is_preserved_without_an_empty_candidate() {
+    assert_eq!(
+        model_fleet_probe_keys("test-model-fleet-catalog-single", " only-key ".into()),
+        vec!["only-key"],
+    );
+}
