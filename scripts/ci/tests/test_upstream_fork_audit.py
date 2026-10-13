@@ -62,6 +62,16 @@ class ForkAuditTests(unittest.TestCase):
         self.assertIn("alice/openhuman", report)
         self.assertIn("bob/openhuman", report)
 
+    def test_api_accepts_compare_three_dot_syntax_and_rejects_path_traversal(self):
+        from io import BytesIO
+        from unittest.mock import patch
+        api = audit.GitHubApi("test-token", 2)
+        with patch.object(audit, "urlopen", return_value=BytesIO(b'{"ahead_by":1}')):
+            result = api.get("/repos/acme/openhuman/compare/deadbeef...alice:main")
+        self.assertEqual(result["ahead_by"], 1)
+        with self.assertRaises(ValueError):
+            api.get("/repos/acme/openhuman/../../secrets")
+
     def test_atomic_checkpoint_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = pathlib.Path(tmp) / "state.json"
