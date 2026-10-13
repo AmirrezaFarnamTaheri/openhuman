@@ -384,6 +384,10 @@ pub struct CloudProviderCreds {
     #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub model_image_endpoints: std::collections::HashMap<String, String>,
 
+    /// Optional selection strategy: round_robin (default), least_busy or priority_weighted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation_strategy: Option<String>,
+
     /// Default provider-native model used by BYOK routes without a model suffix.
     // keep until v0.66 (review after 2027-01-11): active BYOK routes and the
     // inference settings RPC depend on this field; replacement needs route migration.
@@ -401,6 +405,7 @@ impl Default for CloudProviderCreds {
             auth_style: AuthStyle::Bearer,
             image_endpoint: None,
             model_image_endpoints: std::collections::HashMap::new(),
+            rotation_strategy: None,
             default_model: None,
         }
     }
