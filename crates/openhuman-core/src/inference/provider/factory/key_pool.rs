@@ -3,13 +3,14 @@
 //! Parsing mirrors Penguin's multi-key support; selection and outcomes are
 //! maintained in Rust, where requests actually execute. This module never
 //! exposes or logs secrets. Pool identity includes the local workspace.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hash, Hasher, RandomState};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const DEFAULT_COOLDOWN: Duration = Duration::from_secs(60);
 const MAX_COOLDOWN: Duration = Duration::from_secs(300);
+const SESSION_BINDING_TTL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Clone)]
 struct KeyHealth {
@@ -20,12 +21,15 @@ struct KeyHealth {
     failures: u64,
     active: usize,
     last_used: Option<Instant>,
+    consecutive_successes: u64,
+    consecutive_failures: u64,
 }
 impl KeyHealth {
     fn new(id: u64) -> Self {
         Self {
             id, cooldown_until: None, evicted: false,
             successes: 0, failures: 0, active: 0, last_used: None,
+            consecutive_successes: 0, consecutive_failures: 0,
         }
     }
     fn available(&self, now: Instant) -> bool {
@@ -37,6 +41,7 @@ impl KeyHealth {
 struct Pool {
     keys: Vec<KeyHealth>,
     next: usize,
+    sticky: HashMap<String, (u64, Instant)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,38 +111,96 @@ fn sync(pool: &mut Pool, configured: &[String]) {
         }
     }).collect();
     pool.next = 0;
+    let ids: HashSet<u64> = pool.keys.iter().map(|key| key.id).collect();
+    pool.sticky.retain(|_, (id, _)| ids.contains(id));
 }
 
 /// Select without returning a still-cooling or invalid key.
 /// `excluded` avoids accidentally retrying the same key within one request.
+/// Dynamic score from Penguin's WeightedKeyRotator: reward recent success,
+/// penalize consecutive failure and active work, never give a healthy key
+/// an entirely zero chance. Selection is proportional to these scores.
+fn weighted_score(key: &KeyHealth) -> f64 {
+    (100.0 + key.consecutive_successes as f64 * 5.0 -
+        key.consecutive_failures as f64 * 20.0).max(1.0) /
+        (1.0 + key.active as f64 * 2.0)
+}
+
 pub fn choose_key(
     scope: &str,
     configured: &[String],
     excluded: &[usize],
     strategy: RotationStrategy,
 ) -> Option<(usize, String)> {
+    choose_key_for_run(scope, configured, excluded, strategy, None)
+}
+
+/// Correlation/run affinity is TTL-bound and advisory: an evicted, cooling or
+/// already-tried key will never be selected to preserve stickiness.
+pub fn choose_key_for_run(
+    scope: &str,
+    configured: &[String],
+    excluded: &[usize],
+    strategy: RotationStrategy,
+    run_id: Option<&str>,
+) -> Option<(usize, String)> {
     let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let pool = pools.entry(scope.to_owned()).or_default();
     sync(pool, configured);
     if pool.keys.is_empty() { return None; }
     let now = Instant::now();
+    pool.sticky.retain(|_, (_, expires)| *expires > now);
     let candidates: Vec<usize> = (0..pool.keys.len())
-        .filter(|i| !excluded.contains(i) && pool.keys[*i].available(now))
+        .filter(|index| !excluded.contains(index) && pool.keys[*index].available(now))
         .collect();
-    let index = match strategy {
-        RotationStrategy::RoundRobin => (0..pool.keys.len())
-            .map(|i| (pool.next + i) % pool.keys.len())
-            .find(|i| candidates.contains(i)),
-        RotationStrategy::LeastBusy => candidates.into_iter().min_by_key(|i| {
-            (pool.keys[*i].active, pool.keys[*i].failures, pool.keys[*i].last_used)
-        }),
-        RotationStrategy::PriorityWeighted => candidates.into_iter().min_by_key(|i| {
-            (pool.keys[*i].failures.saturating_mul(2).saturating_sub(pool.keys[*i].successes), pool.keys[*i].active)
-        }),
-    }?;
-    pool.next = (index + 1) % pool.keys.len();
-    pool.keys[index].last_used = Some(now);
-    Some((index, configured[index].clone()))
+    if candidates.is_empty() { return None; }
+    let pinned = run_id.filter(|id| !id.is_empty())
+        .and_then(|id| pool.sticky.get(id))
+        .and_then(|(stored, expires)| {
+            if *expires <= now { return None; }
+            candidates.iter().copied().find(|idx| pool.keys[*idx].id == *stored)
+        });
+    let selected = if let Some(pinned) = pinned {
+        pinned
+    } else {
+        match strategy {
+            RotationStrategy::RoundRobin => (0..pool.keys.len())
+                .map(|offset| (pool.next + offset) % pool.keys.len())
+                .find(|idx| candidates.contains(idx)),
+            RotationStrategy::LeastBusy => candidates.iter().copied().min_by_key(|idx| (
+                pool.keys[*idx].active,
+                pool.keys[*idx].failures,
+                pool.keys[*idx].last_used,
+            )),
+            RotationStrategy::PriorityWeighted => {
+                let weights: Vec<f64> = candidates.iter()
+                    .map(|idx| weighted_score(&pool.keys[*idx])).collect();
+                let total: f64 = weights.iter().sum();
+                let mut ticket = rand::random::<f64>() * total;
+                let mut winner = *candidates.last()?;
+                for (idx, weight) in candidates.iter().zip(weights.iter()) {
+                    ticket -= weight;
+                    if ticket <= 0.0 {
+                        winner = *idx;
+                        break;
+                    }
+                }
+                Some(winner)
+            }
+        }?
+    };
+    pool.next = (selected + 1) % pool.keys.len();
+    pool.keys[selected].last_used = Some(now);
+    if let Some(run) = run_id.filter(|id| !id.is_empty()) {
+        // A bounded cache prevents unbounded correlation IDs in long-lived apps.
+        if pool.sticky.len() >= 512 && !pool.sticky.contains_key(run) {
+            if let Some(oldest) = pool.sticky.keys().next().cloned() {
+                pool.sticky.remove(&oldest);
+            }
+        }
+        pool.sticky.insert(run.to_owned(), (pool.keys[selected].id, now + SESSION_BINDING_TTL));
+    }
+    Some((selected, configured[selected].clone()))
 }
 
 pub fn next_key_excluding(scope: &str, configured: &[String], excluded: &[usize]) -> Option<(usize, String)> {
@@ -170,15 +233,31 @@ fn record_result_by_id(scope: &str, id: u64, failure: Option<KeyFailure>, retry_
     let mut pools = registry().lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some(entry) = pools.get_mut(scope).and_then(|pool| pool.keys.iter_mut().find(|item| item.id == id)) else { return };
     match failure {
-        None => { entry.successes += 1; entry.cooldown_until = None; }
-        Some(KeyFailure::Authentication) => { entry.failures += 1; entry.evicted = true; }
+        None => {
+            entry.successes += 1;
+            entry.consecutive_successes += 1;
+            entry.consecutive_failures = 0;
+            entry.cooldown_until = None;
+        }
+        Some(KeyFailure::Authentication) => {
+            entry.failures += 1;
+            entry.consecutive_failures += 1;
+            entry.consecutive_successes = 0;
+            entry.evicted = true;
+        }
         Some(KeyFailure::RateLimited) => {
             entry.failures += 1;
+            entry.consecutive_failures += 1;
+            entry.consecutive_successes = 0;
             let delay = Duration::from_millis(retry_after_ms.unwrap_or(DEFAULT_COOLDOWN.as_millis() as u64))
                 .min(MAX_COOLDOWN);
             entry.cooldown_until = Some(Instant::now() + delay);
         }
-        Some(KeyFailure::Other) => { entry.failures += 1; }
+        Some(KeyFailure::Other) => {
+            entry.failures += 1;
+            entry.consecutive_failures += 1;
+            entry.consecutive_successes = 0;
+        }
     }
 }
 pub fn record_result(scope: &str, key_index: usize, failure: Option<KeyFailure>) {
@@ -226,6 +305,8 @@ pub fn reset(scope: &str) {
             entry.cooldown_until = None;
             entry.successes = 0;
             entry.failures = 0;
+            entry.consecutive_failures = 0;
+            entry.consecutive_successes = 0;
         }
     }
 }
