@@ -15,7 +15,7 @@ import OpenAiOAuthConnect from '../../oauth/OpenAiOAuthConnect';
 import { builtinCloudProvider } from '../builtinCloudProviders';
 import { presentProviderSetupError, ProviderSetupErrorNotice } from '../ProviderSetupErrorNotice';
 import { defaultEndpointFor, formatI18n, KIMI_PLATFORM_URL } from './aiPanelTypes';
-import { parseFleetApiKeys } from './modelFleetOps';
+import { insertFleetKeysAtSelection, parseFleetApiKeys } from './modelFleetOps';
 
 // Connect-provider dialog — shown when the user flips a provider toggle ON.
 //
@@ -252,20 +252,20 @@ export const ProviderKeyDialog = ({
                   }
                   setMultiKeyMode(enabled);
                 }} />
-              Use multiple API keys
+              {t('settings.ai.fleet.multiKeyMode', 'Use multiple API keys')}
             </label>
           )}
           {!isLocalRuntime && !endpointKeyMode && multiKeyMode ? (
             <div className="space-y-2">
-              <div role="group" aria-label="API key entries" className="space-y-2">
+              <div role="group" aria-label={t('settings.ai.fleet.keyEntries', 'API key entries')} className="space-y-2">
                 {multiKeyRows.map((entry, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <input
                       id={index === 0 ? 'provider-key-input' : undefined}
                       type={revealKeys ? 'text' : 'password'}
-                      aria-label={`API key ${index + 1}`}
+                      aria-label={formatI18n(t('settings.ai.fleet.keyIndex', 'API key {index}'), { index: String(index + 1) })}
                       value={entry}
-                      placeholder={`API key ${index + 1}`}
+                      placeholder={formatI18n(t('settings.ai.fleet.keyIndex', 'API key {index}'), { index: String(index + 1) })}
                       disabled={busy}
                       autoComplete="off"
                       autoCorrect="off"
@@ -285,15 +285,24 @@ export const ProviderKeyDialog = ({
                       onPaste={event => {
                         const clipboardText = event.clipboardData.getData('text');
                         if (!/[,;\r\n]/.test(clipboardText)) return;
-                        const pasted = parseFleetApiKeys(clipboardText);
-                        if (!pasted.length) return;
+                        if (!parseFleetApiKeys(clipboardText).length) return;
                         event.preventDefault();
-                        setMultiKeyRows(previous => [
-                          ...previous.slice(0, index),
-                          ...pasted,
-                          ...previous.slice(index + 1),
-                        ]);
-                        setError(null);
+                        const input = event.currentTarget;
+                        try {
+                          setMultiKeyRows(insertFleetKeysAtSelection(
+                            multiKeyRows,
+                            index,
+                            clipboardText,
+                            input.selectionStart ?? input.value.length,
+                            input.selectionEnd ?? input.value.length
+                          ));
+                          setError(null);
+                        } catch {
+                          setError(t(
+                            'settings.ai.fleet.tooManyKeys',
+                            'A provider group supports at most 128 API keys.'
+                          ));
+                        }
                       }}
                     />
                     {multiKeyRows.length > 1 && (
@@ -302,11 +311,11 @@ export const ProviderKeyDialog = ({
                         size="xs"
                         variant="tertiary"
                         disabled={busy}
-                        aria-label={`Remove API key ${index + 1}`}
+                        aria-label={formatI18n(t('settings.ai.fleet.removeKeyIndex', 'Remove API key {index}'), { index: String(index + 1) })}
                         onClick={() => setMultiKeyRows(previous =>
                           previous.filter((_, i) => i !== index)
                         )}>
-                        Remove
+                        {t('settings.ai.fleet.removeKey', 'Remove')}
                       </Button>
                     )}
                   </div>
@@ -316,12 +325,12 @@ export const ProviderKeyDialog = ({
                 <Button type="button" variant="tertiary" size="xs"
                   disabled={busy || multiKeyRows.length >= 128}
                   onClick={() => setMultiKeyRows(previous => [...previous, ''])}>
-                  Add another API key
+                  {t('settings.ai.fleet.addKey', 'Add another API key')}
                 </Button>
                 <Button type="button" variant="tertiary" size="xs"
                   disabled={busy} onClick={() => setRevealKeys(previous => !previous)}
-                  aria-label={revealKeys ? 'Hide API keys' : 'Reveal API keys'}>
-                  {revealKeys ? 'Hide keys' : 'Reveal keys'}
+                  aria-label={revealKeys ? t('settings.ai.fleet.hideKeys', 'Hide API keys') : t('settings.ai.fleet.revealKeys', 'Reveal API keys')}>
+                  {revealKeys ? t('settings.ai.fleet.hideKeys', 'Hide API keys') : t('settings.ai.fleet.revealKeys', 'Reveal API keys')}
                 </Button>
               </div>
             </div>
