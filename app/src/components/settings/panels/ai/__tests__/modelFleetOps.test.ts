@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FLEET_MODEL_PRESETS } from '../modelFleetCatalog';
 import {
   applyProviderBulkPatch, applyModelBulkPatch, syncModelPresets, syncConfiguredProviderPresets,
-  parseModelImageEndpoints, parseFleetApiKeys, validModelFleetEndpoint,
+  parseModelImageEndpoints, parseFleetApiKeys, validModelFleetEndpoint, updateSelectedGroupSettings,
 } from '../modelFleetOps';
 
 const initial = { id: 'handwritten', provider: 'custom', context_window: 24_000,
@@ -74,6 +74,29 @@ describe('model-fleet preset management', () => {
     expect(validModelFleetEndpoint('https://api.example.test/v1?token=abc')).toBe(false);
     expect(validModelFleetEndpoint('https://api.example.test/v1#fragment')).toBe(false);
     expect(validModelFleetEndpoint('http://127.0.0.1:8800/v1')).toBe(true);
+  });
+
+  it('changes a key rotation strategy without clearing the existing image endpoint', () => {
+    const providers = [{
+      slug: 'openai',
+      imageEndpoint: 'https://vision.example.com/v1',
+      rotationStrategy: 'least_busy' as const,
+      modelImageEndpoints: { 'vision-model': 'https://vision-model.example.com/v1' },
+    }, {
+      slug: 'anthropic', imageEndpoint: 'https://other.example.com/v1',
+      rotationStrategy: 'round_robin' as const,
+    }];
+    const selected = new Set(['openai']);
+    const changed = updateSelectedGroupSettings(providers, selected, {
+      rotationStrategy: 'priority_weighted',
+    });
+    expect(changed[0].rotationStrategy).toBe('priority_weighted');
+    expect(changed[0].imageEndpoint).toBe('https://vision.example.com/v1');
+    expect(changed[0].modelImageEndpoints).toEqual(providers[0].modelImageEndpoints);
+    expect(changed[1]).toEqual(providers[1]);
+    const cleared = updateSelectedGroupSettings(changed, selected, { imageEndpoint: '' });
+    expect(cleared[0].imageEndpoint).toBe('');
+    expect(cleared[0].rotationStrategy).toBe('priority_weighted');
   });
 
   it('bulk image-endpoint edit preserves mapped model endpoints', () => {
