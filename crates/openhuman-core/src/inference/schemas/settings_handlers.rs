@@ -31,6 +31,15 @@ pub(super) struct InferenceCloudProviderUpdate {
     endpoint: String,
     #[serde(default)]
     auth_style: Option<String>,
+    /// Alternate image/vision base URL for this provider.
+    #[serde(default)]
+    image_endpoint: Option<String>,
+    /// Model-id-specific image URL overrides, keyed within the provider group.
+    #[serde(default)]
+    model_image_endpoints: std::collections::HashMap<String, String>,
+    /// Credential strategy: round_robin | least_busy | priority_weighted.
+    #[serde(default)]
+    rotation_strategy: Option<String>,
     #[serde(default)]
     ca_cert_pem: Option<String>,
     // keep until v0.66 (review after 2027-01-11): incoming RPC discriminator
