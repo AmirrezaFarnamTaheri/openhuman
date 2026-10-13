@@ -62,19 +62,20 @@ export function applyModelBulkPatch(
 }
 
 type ManagedFields = Pick<CloudProviderCreds, 'slug' | 'endpoint' | 'auth_style'>;
+type SyncedProvider<T extends ManagedFields> = Omit<T, 'endpoint' | 'auth_style'> & ManagedFields;
 export function syncConfiguredProviderPresets<T extends ManagedFields>(
   providers: readonly T[]
-): { providers: T[]; updated: number } {
+): { providers: Array<SyncedProvider<T>>; updated: number } {
   const catalog = new Map(BUILTIN_CLOUD_PROVIDERS.map(p => [p.slug, p]));
   let updated = 0;
-  const next = providers.map(row => {
+  const next: Array<SyncedProvider<T>> = providers.map(row => {
     const preset = catalog.get(row.slug);
     if (!preset) return { ...row };
     if (row.endpoint === preset.endpoint && row.auth_style === preset.authStyle) return { ...row };
     updated++;
     // Existing labels, API-key reference, image mapping, and rotation preferences
     // are user-owned and never overwritten by a catalog synchronization.
-    return { ...row, endpoint: preset.endpoint, auth_style: preset.authStyle };
+    return { ...row, endpoint: preset.endpoint, auth_style: preset.authStyle } as SyncedProvider<T>;
   });
   return { providers: next, updated };
 }
