@@ -55,6 +55,7 @@ impl From<&'static tinyinference_providers::builtin::BuiltinCloudProvider>
 /// provider-neutral catalog from `tinyinference-providers`
 /// ([`UPSTREAM_BUILTINS`]), mapped onto the host's [`AuthStyle`].
 pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
+    BuiltinCloudProvider { slug: "llmtr", label: "LLMTR", endpoint: "https://llmtr.com/v1", auth_style: AuthStyle::Bearer },
     BuiltinCloudProvider { slug: "tokendance", label: "TokenDance", endpoint: "https://tokendance.space/gateway/v1", auth_style: AuthStyle::Bearer },
         BuiltinCloudProvider { slug: "siliconflow", label: "SiliconFlow", endpoint: "https://api.siliconflow.cn/v1", auth_style: AuthStyle::Bearer },
         BuiltinCloudProvider { slug: "qwen-pay-as-you-go", label: "Qwen Pay-As-You-Go", endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", auth_style: AuthStyle::Bearer },
