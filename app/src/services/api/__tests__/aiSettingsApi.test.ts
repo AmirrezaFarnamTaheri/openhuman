@@ -20,6 +20,8 @@ import {
   loadAISettings,
   loadLocalProviderSnapshot,
   loadProviderAuthErrors,
+  loadModelFleetStatus,
+  resetModelFleetStatus,
   modelRegistryVision,
   OPENAI_CODEX_OAUTH_MISSING_AUTH_URL,
   OPENAI_CODEX_OAUTH_MISSING_CALLBACK_URL,
@@ -1282,5 +1284,49 @@ describe('verifyCloudProviderConnection', () => {
     );
 
     expect(result.message).toBe('translated empty openai');
+  });
+});
+
+describe('model fleet health RPCs', () => {
+  beforeEach(() => {
+    mockCallCoreRpc.mockReset();
+  });
+
+  it('accepts the already-unwrapped sanitized status result', async () => {
+    const snapshot = {
+      providers: [{
+        slug: 'openai',
+        models: [{
+          model: 'gpt-test',
+          keys: [{
+            index: 0,
+            status: 'healthy',
+            successes: 1,
+            failures: 0,
+            active_leases: 0,
+            cooldown_remaining_ms: 0,
+          }],
+        }],
+      }],
+    };
+    mockCallCoreRpc.mockResolvedValue(snapshot);
+    await expect(loadModelFleetStatus()).resolves.toEqual(snapshot);
+    expect(mockCallCoreRpc).toHaveBeenCalledWith({
+      method: 'openhuman.inference_model_fleet_status',
+    });
+  });
+
+  it('returns an empty snapshot when the RPC has no result', async () => {
+    mockCallCoreRpc.mockResolvedValue(null);
+    await expect(loadModelFleetStatus()).resolves.toEqual({ providers: [] });
+  });
+
+  it('resets only the selected provider slug', async () => {
+    mockCallCoreRpc.mockResolvedValue({ reset: true, provider: 'anthropic' });
+    await expect(resetModelFleetStatus('anthropic')).resolves.toBeUndefined();
+    expect(mockCallCoreRpc).toHaveBeenCalledWith({
+      method: 'openhuman.inference_model_fleet_reset',
+      params: { slug: 'anthropic' },
+    });
   });
 });
