@@ -115,6 +115,13 @@ pub(crate) fn model_fleet_forget_provider(config: &Config, slug: &str) {
     key_pool::forget_provider(&prefix);
 }
 
+/// Expunge an individual model's cached health after removing its registry
+/// entry. Scopes for unrelated models/providers remain intact.
+pub(crate) fn model_fleet_forget_model(config: &Config, slug: &str, model: &str) {
+    let scope = format!("{}:{}:{}", config.workspace_dir.display(), slug, model);
+    key_pool::forget(&scope);
+}
+
 /// Pick one credential for a non-chat control-plane /models probe.
 /// A delimited secret group must never leave the host as a single bearer.
 pub(crate) fn model_fleet_probe_key(scope: &str, raw: String) -> String {
