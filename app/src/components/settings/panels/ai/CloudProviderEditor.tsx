@@ -173,7 +173,9 @@ export const CloudProviderEditor = ({
       // Radix supplies all three, so re-apply that guard or an in-flight save
       // can be dismissed out from under itself.
       closePolicy={saving ? { escape: false, backdrop: false, button: false } : undefined}
-      contentClassName="space-y-3 px-4 py-3"
+      maxWidthClassName="max-w-lg"
+      panelClassName="flex max-h-[calc(100dvh-2rem)] flex-col"
+      contentClassName="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3"
       footer={
         <div className="flex items-center justify-end gap-2">
           <Button variant="secondary" size="xs" onClick={onClose} disabled={saving}>
