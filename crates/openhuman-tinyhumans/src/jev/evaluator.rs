@@ -7,7 +7,7 @@
 //! per-attempt timeout and retries the client applies, and a deadline of
 //! its own so a slow answer becomes a fallback rather than a stalled turn.
 
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::{BTreeMap, HashSet}, time::Duration};
 
 use serde_json::{json, Value};
 use tinyjevclient::{
@@ -31,6 +31,8 @@ const DEFAULT_DEADLINE: Duration = Duration::from_secs(3);
 const MAX_DECISION_RECENT_TURNS: usize = 6;
 const MAX_DECISION_TURN_CHARS: usize = 500;
 const MAX_DECISION_INTENT_CHARS: usize = 4_000;
+const MAX_DECISION_OPTIONS: usize = 64;
+const MAX_DECISION_OPTION_DESCRIPTION_CHARS: usize = 2_000;
 
 /// Evaluates `tinytools_jev` requests against Jev through `tinyjevclient`.
 #[derive(Debug, Clone)]
@@ -52,6 +54,37 @@ impl TinyJevEvaluator {
     pub fn with_deadline(mut self, deadline: Duration) -> Self {
         self.deadline = deadline;
         self
+    }
+
+    /// Enforce the option identity and context budget before remote egress.
+    /// A duplicate key would otherwise overwrite a Choice criterion in the
+    /// BTreeMap and silently change which tool System-One is choosing from.
+    fn validate(request: &JevRequest) -> Result<(), RankError> {
+        if request.options.is_empty() || request.options.len() > MAX_DECISION_OPTIONS {
+            return Err(RankError::invalid_input(
+                "System-One requires 1 to 64 distinct tool choices".to_owned()
+            ));
+        }
+        let mut keys = HashSet::with_capacity(request.options.len());
+        for option in &request.options {
+            if option.key.trim().is_empty()
+                || option.key.len() > 256
+                || option.key.chars().any(char::is_control)
+                || !keys.insert(option.key.as_str())
+            {
+                return Err(RankError::invalid_input(
+                    "System-One contains an invalid or duplicate tool option key".to_owned()
+                ));
+            }
+            if option.description.chars().take(MAX_DECISION_OPTION_DESCRIPTION_CHARS + 1).count()
+                > MAX_DECISION_OPTION_DESCRIPTION_CHARS
+            {
+                return Err(RankError::invalid_input(
+                    "System-One tool option description exceeds the decision budget".to_owned()
+                ));
+            }
+        }
+        Ok(())
     }
 
     fn build(request: &JevRequest) -> EvaluationRequest {
@@ -158,6 +191,7 @@ fn map_failure(failure: EvaluationFailure) -> RankError {
 #[async_trait::async_trait]
 impl JevEvaluator for TinyJevEvaluator {
     async fn evaluate(&self, request: &JevRequest) -> Result<JevDecision, RankError> {
+        Self::validate(request)?;
         let wire = Self::build(request);
         let result = tokio::time::timeout(self.deadline, self.client.evaluate(&wire))
             .await
