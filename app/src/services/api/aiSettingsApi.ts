@@ -374,6 +374,7 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
         JSON.stringify(n.model_image_endpoints ?? {}) !==
           JSON.stringify(p.model_image_endpoints ?? {}) ||
         n.rotation_strategy !== p.rotation_strategy ||
+        n.tool_call_codec !== p.tool_call_codec ||
         n.ca_cert_pem !== p.ca_cert_pem ||
         n.auth_style !== p.auth_style
       );
@@ -392,6 +393,7 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
           image_endpoint,
           model_image_endpoints,
           rotation_strategy,
+          tool_call_codec,
         }) => ({
           id,
           slug,
@@ -402,6 +404,7 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
           image_endpoint,
           model_image_endpoints,
           rotation_strategy,
+          tool_call_codec,
         })
       );
   }
