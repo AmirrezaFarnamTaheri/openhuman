@@ -678,3 +678,11 @@ fn the_ahead_warning_is_silent_for_released_modules_other_ids_and_release_builds
     // A release build never warns.
     assert!(pin_ahead_warning("tinydocs", ModuleSource::Source, Some("tinydocs"), false).is_none());
 }
+
+#[test]
+fn overlapping_search_path_load_uses_only_confirmed_broker_admission() {
+    let error = "module name is already loaded".to_string();
+    assert!(super::ops::loaded_or_outcome(Err(error.clone()), true).is_ok());
+    assert_eq!(super::ops::loaded_or_outcome(Err(error), false).unwrap_err(), "module name is already loaded");
+    assert!(super::ops::loaded_or_outcome(Ok(()), false).is_ok());
+}
