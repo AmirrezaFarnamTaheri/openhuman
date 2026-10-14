@@ -77,6 +77,9 @@ pub struct VoiceProviderCreds {
     pub default_stt_model: Option<String>,
     /// Default TTS voice/model for this provider (e.g. `"alloy"` for OpenAI).
     pub default_tts_voice: Option<String>,
+    /// Optional native model for OpenAI-compatible TTS (e.g. Kokoro); omitted = tts-1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_tts_model: Option<String>,
 }
 
 impl Default for VoiceProviderCreds {
@@ -92,6 +95,7 @@ impl Default for VoiceProviderCreds {
             tts_api_style: TtsApiStyle::OpenaiAudio,
             default_stt_model: None,
             default_tts_voice: None,
+            default_tts_model: None,
         }
     }
 }
@@ -109,9 +113,23 @@ pub struct BuiltinVoiceProvider {
     pub tts_api_style: TtsApiStyle,
     pub default_stt_model: Option<&'static str>,
     pub default_tts_voice: Option<&'static str>,
+    pub default_tts_model: Option<&'static str>,
 }
 
 pub const BUILTIN_VOICE_PROVIDERS: &[BuiltinVoiceProvider] = &[
+    // Explicit opt-in: no native engine or startup process is bundled.
+    // Works with Kokoro-FastAPI / mlx-audio via OpenAI-compatible audio/speech.
+    BuiltinVoiceProvider {
+        slug: "kokoro",
+        label: "Kokoro (local server)",
+        endpoint: "http://127.0.0.1:8880/v1",
+        capability: VoiceCapability::Tts,
+        stt_api_style: SttApiStyle::OpenaiAudio,
+        tts_api_style: TtsApiStyle::OpenaiAudio,
+        default_stt_model: None,
+        default_tts_voice: Some("af_bella"),
+        default_tts_model: Some("kokoro"),
+    },
     BuiltinVoiceProvider {
         slug: "deepgram",
         label: "Deepgram",
@@ -121,6 +139,7 @@ pub const BUILTIN_VOICE_PROVIDERS: &[BuiltinVoiceProvider] = &[
         tts_api_style: TtsApiStyle::OpenaiAudio,
         default_stt_model: Some("nova-2"),
         default_tts_voice: None,
+        default_tts_model: None,
     },
     BuiltinVoiceProvider {
         slug: "elevenlabs",
@@ -131,6 +150,7 @@ pub const BUILTIN_VOICE_PROVIDERS: &[BuiltinVoiceProvider] = &[
         tts_api_style: TtsApiStyle::ElevenLabs,
         default_stt_model: Some("scribe_v1"),
         default_tts_voice: Some("JBFqnCBsd6RMkjVDRZzb"),
+        default_tts_model: None,
     },
     BuiltinVoiceProvider {
         slug: "openai",
@@ -141,6 +161,7 @@ pub const BUILTIN_VOICE_PROVIDERS: &[BuiltinVoiceProvider] = &[
         tts_api_style: TtsApiStyle::OpenaiAudio,
         default_stt_model: Some("whisper-1"),
         default_tts_voice: Some("alloy"),
+        default_tts_model: None,
     },
 ];
 
