@@ -303,9 +303,9 @@ export const BUILTIN_CLOUD_PROVIDERS: BuiltinCloudProvider[] = [
     tone: TONE.teal,
   },
   {
-    slug: 'glhf',
-    label: 'glhf.chat',
-    endpoint: 'https://glhf.chat/api/openai/v1',
+    slug: 'synthetic',
+    label: 'Synthetic',
+    endpoint: 'https://api.synthetic.new/openai/v1',
     authStyle: 'bearer',
     tone: TONE.fuchsia,
   },
