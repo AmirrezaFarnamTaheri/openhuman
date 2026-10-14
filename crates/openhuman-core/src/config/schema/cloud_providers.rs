@@ -305,6 +305,7 @@ pub enum ToolCallCodec {
     #[default]
     Native,
     Qnml,
+    TaggedJson,
 }
 impl ToolCallCodec {
     pub fn is_native(&self) -> bool {
