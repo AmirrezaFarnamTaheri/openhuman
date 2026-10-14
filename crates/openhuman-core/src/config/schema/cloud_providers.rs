@@ -55,6 +55,8 @@ impl From<&'static tinyinference_providers::builtin::BuiltinCloudProvider>
 /// provider-neutral catalog from `tinyinference-providers`
 /// ([`UPSTREAM_BUILTINS`]), mapped onto the host's [`AuthStyle`].
 pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
+    // Opt-in loopback gateway; OpenHuman never forwards Codex OAuth credentials.
+    BuiltinCloudProvider { slug: "prodex", label: "Prodex Gateway", endpoint: "http://127.0.0.1:4000/v1", auth_style: AuthStyle::Bearer },
     BuiltinCloudProvider { slug: "llmtr", label: "LLMTR", endpoint: "https://llmtr.com/v1", auth_style: AuthStyle::Bearer },
     BuiltinCloudProvider { slug: "tokendance", label: "TokenDance", endpoint: "https://tokendance.space/gateway/v1", auth_style: AuthStyle::Bearer },
         BuiltinCloudProvider { slug: "siliconflow", label: "SiliconFlow", endpoint: "https://api.siliconflow.cn/v1", auth_style: AuthStyle::Bearer },
@@ -93,8 +95,8 @@ pub fn is_builtin_cloud_slug(slug: &str) -> bool {
 /// Whether a built-in cloud provider exposes the OpenAI **Responses API**
 /// (`/v1/responses`).
 ///
-/// Only OpenAI's first-party endpoint serves `/responses`; every other built-in
-/// preset (DeepSeek, Groq, Mistral, Fireworks, …) is chat-completions-only.
+/// OpenAI and the optional Prodex gateway serve `/responses`; most other
+/// built-ins (DeepSeek, Groq, Mistral, Fireworks, ...) are chat-completions-only.
 /// Enabling the chat-completions-404 → `/responses` fallback for those
 /// guarantees a second 404 against an endpoint that does not exist, which floods
 /// Sentry with an empty-body `"<provider> Responses API error:"` event
@@ -107,7 +109,7 @@ pub fn is_builtin_cloud_slug(slug: &str) -> bool {
 /// a genuine OpenAI proxy that does support `/responses`, so the factory keeps
 /// the fallback for those.
 pub fn builtin_cloud_supports_responses_api(slug: &str) -> bool {
-    matches!(slug, "openai")
+    matches!(slug, "openai" | "prodex")
 }
 
 /// Extract the lowercased authority host from an endpoint URL, dropping the
