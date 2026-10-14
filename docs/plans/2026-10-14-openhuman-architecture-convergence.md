@@ -194,3 +194,113 @@
 - Microsoft-Decision-1 request format: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-microsoft-decision
 - MCP transport versions: https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/transports/index.mdx
 - Jev model contracts require exact endpoint/provider verification due materially differing independently published API limits and URL paths.
+
+---
+
+## Added peer sources: 9Router, Jev and Conduit (15 October 2026)
+
+This extends the earlier two-report roadmap with **three actual peer archives**. The 16
+previous proxy/API peers and two convergence-evidence archives are tracked in
+the local exhaustive source-file census. Lexical symbol extraction enumerated
+19 peer projects and 4,623 archived files, but is **not** a test of behavior or
+proof of parity for each symbol.
+
+### Integration 10: Native 9Router gateway and progressive account cooldown
+
+**Observed peer contract:** `9router-master/README.md` describes an OpenAI-compatible,
+locally hosted `http://localhost:20128/v1` gateway, with `/models` and
+`/chat/completions` APIs. `open-sse/services/accountFallback.js` provides
+progressive quota lockouts and distinguishes request errors from credential
+errors. `open-sse/services/capacityAdapter.js` and `open-sse/providers/capabilities.js`
+introduce modality-aware fallback candidates.
+
+**Owned by OpenHuman:** `app/src/components/settings/panels/builtinCloudProviders.ts`,
+`crates/openhuman-core/src/inference/provider/factory/key_pool.rs`, and
+`credential_fleet.rs`.
+
+- [x] Add opt-in, loopback-only `9router` gateway preset, no default credentials
+  (commit `39bf60d`). Test unique slug and exact endpoint/key placeholder.
+- [x] Implement bounded progressive 429 cooldown across repeated per-key quota
+  errors, preserve the pre-existing first 60-second lockout, cap to five
+  minutes, honor upstream Retry-After and never shorten concurrent limits
+  (commit `40e5250`). Add Rust regression tests for streak, server override,
+  reset, and competing responses.
+- [ ] Verify exact-head Rust/Tauri + frontend CI before considering these changes released.
+- [ ] Add a *provider-pinned capability decision* before native execution.
+  Reject unknown or unsupported modality with an actionable error. A request
+  may fall back to another provider only when user billing/content-elevation
+  consent was configured. Test image/PDF/audio/video hard capabilities,
+  400/403/429 error classification, streaming post-first-token no-replay,
+  partial quota data, and explicit paid-route refusal.
+- [ ] Correlate provider-key health with user-visible quota/usage and price
+  provenance. Do not assert model entitlement from a connector's marketing
+  text or open HTTP proxy without auth.
+
+### Integration 11: Jev source search and calibrated evidence decisions
+
+**Observed peer components:** `jev-main/internal/run/{find,ask,locate,budget,hook}.go`,
+`internal/scan/{scan,index,ignore}.go`,
+`internal/calibration/{calibration,compile,drift}.go`, and
+`internal/evidence/{ledger,snapshot}.go`.
+
+**Owned by OpenHuman:** `tinytools_std::filesystem` and its host `FsGate`,
+`agent/tinyagents/middleware/tool_output.rs`, `memory/provenance.rs`,
+`agent/triage`, and permission-gated MCP tool catalog.
+
+- [ ] Separate *pre-read source candidate screening* from TinyJuice
+  *post-read result compression*; the two optimize different costs.
+  Enforce ignore files, file-size/byte-attempt ceilings, canonical workspace
+  containment, no symlink escapes and no credential-store indexing.
+  Add negative privacy tests and snapshot-drift invalidation before remote
+  source lookups can be opted into.
+- [ ] Add a finite, typed, provider-specific `choice` / `noul` / `score`
+  adapter only after pinning exact Jev API wire fixtures; test normalization,
+  uncertainty, stale-calibration abstention and tenant/model-version cache
+  boundaries. Preserve human approval for high-risk actions.
+- [ ] Audit `internal/typesafe/client.go` access-key handling and budget
+  behavior before any API use. API usage is opt-in, not silently delegated.
+
+### Integration 12: Conduit hash-anchored edits and source graph
+
+**Observed peer modules:** `crates/change/edit/src/{lib,recovery}.rs`,
+`crates/source/graph/src/{imports,queries,refresh,snapshot}.rs`,
+`crates/runtime/authz/src/`, `crates/state/scope/src/`,
+`crates/transport/mcp/src/`, and RTK/Zap/ripgrep subprojects.
+
+**Owned by OpenHuman:** `tools/impl/filesystem/gate.rs` for access,
+`tinytools_std` for the actual file write/edit implementation,
+`memory/provenance.rs` for source/forget semantics, existing MCP server
+for transport, and existing code tool output artifact pages for large results.
+
+- [ ] Design hash-fenced tool edit contracts `preview`, `commit`,
+  `pending_receipts`, `rollback` without circumventing `FsGate`.
+  Validate all targets, reject symlinks/hardlinks and canonical aliases,
+  preserve mode bits, journal originals before renames, and stop on
+  third-party conflicts rather than guessing recovery intent. Tests must
+  crash-inject at every rename boundary.
+- [ ] Use one source-identity/digest graph for incremental code-search queries
+  and Jev candidate evidence. Invalidating a source snapshot must invalidate
+  related transient context facts and citations.
+- [ ] Preserve OpenHuman native MCP permissions and TinyJuice compression.
+  Do not embed a second RTK/Zap daemon or unscoped MCP server.
+- [ ] Keep upstream license notices for RTK/Zap (Apache-2.0) and ripgrep
+  (public domain / Unlicense) rather than marking every file MIT.
+
+### Second-order release gates
+
+1. **Evidence-bound developer intelligence:** source graph + semantic search +
+   digest-anchored read/edit + artifact paging, with existing filesystem
+   permissions enforced before index and read.
+2. **Capability-aware marketplace:** quota/price/modality telemetry + account
+   rotation + *explicit* cross-provider billing/content-routing policy.
+3. **Unified receipts:** workflow/checkpoint, file-edit journal and memory
+   evidence linked by run/source scope, without parallel database ownership.
+4. **Calibrated decision layer:** typed provider adapters whose result can
+   advise triage but cannot grant permissions or skip approvals.
+5. **MCP interop:** local gateway and source tools exposed only through existing
+   stdio/HTTP boundaries and audited scopes.
+
+Each integration requires focused failing tests, implementation, exact-head CI
+verification, and an evidence-backed rejection/deferral record for
+overlapping or unsafe peer code. **Source census coverage does not mean
+feature-complete convergence.**
