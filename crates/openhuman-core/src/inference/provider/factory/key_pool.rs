@@ -221,7 +221,14 @@ pub fn choose_key_for_run(
     if let Some(run) = run_id.filter(|id| !id.is_empty()) {
         // A bounded cache prevents unbounded correlation IDs in long-lived apps.
         if pool.sticky.len() >= 512 && !pool.sticky.contains_key(run) {
-            if let Some(oldest) = pool.sticky.keys().next().cloned() {
+            // HashMap iteration order is arbitrary; evict the binding that
+            // expires first so active sessions retain their affinity.
+            if let Some(oldest) = pool
+                .sticky
+                .iter()
+                .min_by_key(|(_, (_, expires))| *expires)
+                .map(|(session, _)| session.clone())
+            {
                 pool.sticky.remove(&oldest);
             }
         }
@@ -298,7 +305,11 @@ fn record_result_by_id(
             entry.successes += 1;
             entry.consecutive_successes += 1;
             entry.consecutive_failures = 0;
-            entry.cooldown_until = None;
+            // A success from a parallel in-flight request is not evidence that
+            // another request's active 429 cooldown has been lifted.
+            entry.cooldown_until = entry
+                .cooldown_until
+                .filter(|until| *until > Instant::now());
         }
         Some(KeyFailure::Authentication) => {
             entry.failures += 1;
@@ -314,7 +325,14 @@ fn record_result_by_id(
                 retry_after_ms.unwrap_or(DEFAULT_COOLDOWN.as_millis() as u64),
             )
             .min(MAX_COOLDOWN);
-            entry.cooldown_until = Some(Instant::now() + delay);
+            let until = Instant::now() + delay;
+            // Competing 429 responses may specify different Retry-After delays.
+            // A later shorter delay must never preempt the longer deadline.
+            entry.cooldown_until = Some(
+                entry
+                    .cooldown_until
+                    .map_or(until, |previous| previous.max(until)),
+            );
         }
         Some(KeyFailure::Other) => {
             entry.failures += 1;
