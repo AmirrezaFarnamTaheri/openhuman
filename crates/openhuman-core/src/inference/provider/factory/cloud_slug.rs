@@ -59,9 +59,10 @@ pub(super) fn prodex_gateway_destinations_are_safe(
     entry: &crate::config::schema::cloud_providers::CloudProviderCreds,
 ) -> bool {
     prodex_gateway_endpoint_is_safe(&entry.endpoint)
-        && entry.image_endpoint.as_deref().is_none_or(|url| {
-            url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim())
-        })
+        && entry
+            .image_endpoint
+            .as_deref()
+            .is_none_or(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
         && entry
             .model_image_endpoints
             .values()

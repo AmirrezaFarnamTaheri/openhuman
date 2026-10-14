@@ -507,8 +507,8 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
           piperVoicePresetIds={PIPER_VOICE_PRESET_IDS}
           voiceStatus={voiceStatus}
           persistProviders={async update => {
-              await persistProviders(update);
-            }}
+            await persistProviders(update);
+          }}
           elevenlabsVoiceId={elevenlabsVoiceId}
           setElevenlabsVoiceId={setElevenlabsVoiceId}
           ttsTestBlockedByInstall={ttsTestBlockedByInstall}
