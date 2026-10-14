@@ -309,6 +309,18 @@ export const BUILTIN_CLOUD_PROVIDERS: BuiltinCloudProvider[] = [
     authStyle: 'bearer',
     tone: TONE.fuchsia,
   },
+  // 9Router's self-hosted OpenAI-compatible gateway. This is deliberately
+  // localhost-only by default, not a provider-wide OAuth token importer:
+  // accounts, quota, tiers and access rights remain owned by 9Router.
+  // Do not include a default key (the router dashboard may have separate auth).
+  {
+    slug: '9router',
+    label: '9Router (Local Gateway)',
+    endpoint: 'http://127.0.0.1:20128/v1',
+    authStyle: 'bearer',
+    tone: TONE.sky,
+    keyPlaceholder: '9Router inference API key',
+  },
   // External local gateway; its bearer token is distinct from direct-provider credentials.
   {
     slug: 'prodex',

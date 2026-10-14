@@ -28,6 +28,7 @@ describe('builtinCloudProviders', () => {
       'bearer',
     ],
     ['llmtr', 'https://llmtr.com/v1', 'bearer'],
+    ['9router', 'http://127.0.0.1:20128/v1', 'bearer'],
     ['prodex', 'http://127.0.0.1:4000/v1', 'bearer'],
   ] as const)('maps %s to its endpoint and auth style', (slug, endpoint, authStyle) => {
     expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
@@ -45,6 +46,17 @@ describe('builtinCloudProviders', () => {
   ] as const)('registers verified peer endpoint %s with bearer authentication', (slug, endpoint) => {
     expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
     expect(authStyleForBuiltinCloudProvider(slug)).toBe('bearer');
+  });
+
+  it('treats a local 9Router gateway as an optional external integration, not a saved account', () => {
+    const router = BUILTIN_CLOUD_PROVIDERS.find(provider => provider.slug === '9router');
+    expect(router).toMatchObject({
+      endpoint: 'http://127.0.0.1:20128/v1',
+      authStyle: 'bearer',
+      keyPlaceholder: '9Router inference API key',
+    });
+    expect(router).not.toHaveProperty('defaultApiKey');
+    expect(router?.endpoint).not.toMatch(/0\.0\.0\.0/);
   });
 
   it('prompts for a least-privilege inference key, not an administrator token', () => {
