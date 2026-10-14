@@ -472,6 +472,17 @@ fn qnml_codec_defaults_to_native_and_rejects_unknown_wire_formats() {
     }))
     .unwrap();
     assert_eq!(opted.tool_call_codec, ToolCallCodec::Qnml);
+    let tagged: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "tagged-gateway",
+        "endpoint": "https://compat.example/v1",
+        "tool_call_codec": "tagged_json"
+    }))
+    .unwrap();
+    assert_eq!(tagged.tool_call_codec, ToolCallCodec::TaggedJson);
+    assert_eq!(
+        serde_json::to_value(&tagged).unwrap()["tool_call_codec"],
+        "tagged_json"
+    );
     assert_eq!(
         serde_json::to_value(&opted).unwrap()["tool_call_codec"],
         "qnml"
