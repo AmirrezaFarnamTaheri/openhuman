@@ -31,7 +31,8 @@ const DEFAULT_DEADLINE: Duration = Duration::from_secs(3);
 const MAX_DECISION_RECENT_TURNS: usize = 6;
 const MAX_DECISION_TURN_CHARS: usize = 500;
 const MAX_DECISION_INTENT_CHARS: usize = 4_000;
-const MAX_DECISION_OPTIONS: usize = 64;
+const MAX_DECISION_OPTIONS: usize = 255;
+const MAX_DECISION_TOTAL_DESCRIPTION_CHARS: usize = 96_000;
 const MAX_DECISION_OPTION_DESCRIPTION_CHARS: usize = 2_000;
 
 /// Evaluates `tinytools_jev` requests against Jev through `tinyjevclient`.
@@ -62,10 +63,11 @@ impl TinyJevEvaluator {
     fn validate(request: &JevRequest) -> Result<(), RankError> {
         if request.options.is_empty() || request.options.len() > MAX_DECISION_OPTIONS {
             return Err(RankError::invalid_input(
-                "System-One requires 1 to 64 distinct tool choices".to_owned()
+                "System-One requires 1 to 255 distinct tool choices".to_owned()
             ));
         }
         let mut keys = HashSet::with_capacity(request.options.len());
+        let mut description_total = 0usize;
         for option in &request.options {
             if option.key.trim().is_empty()
                 || option.key.len() > 256
@@ -76,11 +78,17 @@ impl TinyJevEvaluator {
                     "System-One contains an invalid or duplicate tool option key".to_owned()
                 ));
             }
-            if option.description.chars().take(MAX_DECISION_OPTION_DESCRIPTION_CHARS + 1).count()
-                > MAX_DECISION_OPTION_DESCRIPTION_CHARS
-            {
+            let characters = option.description.chars()
+                .take(MAX_DECISION_OPTION_DESCRIPTION_CHARS + 1).count();
+            if characters > MAX_DECISION_OPTION_DESCRIPTION_CHARS {
                 return Err(RankError::invalid_input(
                     "System-One tool option description exceeds the decision budget".to_owned()
+                ));
+            }
+            description_total += characters;
+            if description_total > MAX_DECISION_TOTAL_DESCRIPTION_CHARS {
+                return Err(RankError::invalid_input(
+                    "System-One cumulative tool-choice description exceeds the budget".to_owned()
                 ));
             }
         }
