@@ -719,6 +719,32 @@ describe('saveAISettings', () => {
     expect(patch.cloud_providers?.[0].rotation_strategy).toBe('least_busy');
   });
 
+  it('persists and removes per-model transport overrides without changing sibling providers', async () => {
+    const prev = makeSettings();
+    const enabled = makeSettings({
+      cloudProviders: [{
+        ...prev.cloudProviders[0],
+        model_transports: { 'vendor/responses': 'responses' },
+      }],
+    });
+    await saveAISettings(prev, enabled);
+    let patch = mockOpenhumanUpdateModelSettings.mock.calls[0][0];
+    expect(patch.cloud_providers?.[0].model_transports).toEqual({
+      'vendor/responses': 'responses',
+    });
+
+    mockOpenhumanUpdateModelSettings.mockClear();
+    const disabled = makeSettings({
+      cloudProviders: [{
+        ...enabled.cloudProviders[0],
+        model_transports: {},
+      }],
+    });
+    await saveAISettings(enabled, disabled);
+    patch = mockOpenhumanUpdateModelSettings.mock.calls[0][0];
+    expect(patch.cloud_providers?.[0].model_transports).toEqual({});
+  });
+
   it('sends both providers and routing when both change', async () => {
     const prev = makeSettings({ cloudProviders: [] });
     const next = makeSettings({
