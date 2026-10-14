@@ -693,7 +693,7 @@ fn credits_gate_bypassed_with_oauth_only_credentials() {
 
 #[test]
 fn distinct_codex_logins_keep_two_encrypted_profiles_and_route_through_selected_account() {
-    use super::store::persist_openai_oauth_token_set;
+    use super::super::store::persist_openai_oauth_token_set;
     let tmp = tempdir().unwrap();
     let config = test_config(&tmp);
     let credentials = |bearer: &str| TokenSet {
@@ -727,7 +727,7 @@ fn distinct_codex_logins_keep_two_encrypted_profiles_and_route_through_selected_
 
 #[test]
 fn ambiguous_second_codex_login_cannot_overwrite_a_different_account() {
-    use super::store::persist_openai_oauth_token_set;
+    use super::super::store::persist_openai_oauth_token_set;
     let tmp = tempdir().unwrap();
     let config = test_config(&tmp);
     let token = |access: &str| TokenSet {

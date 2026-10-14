@@ -76,8 +76,6 @@ pub fn import_openai_oauth_from_codex_cli(config: &Config) -> Result<serde_json:
 
 pub fn openai_oauth_status(config: &Config) -> Result<OpenAiOAuthStatusResult, String> {
     use crate::security::credentials::profiles::AuthProfileKind;
-    use crate::security::credentials::AuthService;
-
     let profile = selected_openai_oauth_profile(config)?;
     let Some(profile) = profile else {
         return Ok(OpenAiOAuthStatusResult {
