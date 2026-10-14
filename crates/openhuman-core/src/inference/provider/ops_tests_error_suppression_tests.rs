@@ -17,6 +17,7 @@ fn list_configured_models_accepts_slug() {
         endpoint: "https://api.openai.com/v1".to_string(),
         auth_style: AuthStyle::Bearer,
         default_model: None,
+        ..Default::default()
     });
 
     // The find predicate must match on slug.

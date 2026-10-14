@@ -313,9 +313,9 @@ impl Docs {
             let mut hashes = std::collections::HashMap::with_capacity(entries.len());
             for stored in entries {
                 let id = text(&stored.doc, "external_id")
-                    .ok_or_else(|| anyhow!("ingested task missing external_id"))?;
+                    .ok_or_else(|| StorageError::serialization("ingested task missing external_id"))?;
                 let hash = text(&stored.doc, "content_hash")
-                    .ok_or_else(|| anyhow!("ingested task missing content_hash"))?;
+                    .ok_or_else(|| StorageError::serialization("ingested task missing content_hash"))?;
                 hashes.insert(id.to_string(), hash.to_string());
             }
             Ok(hashes)

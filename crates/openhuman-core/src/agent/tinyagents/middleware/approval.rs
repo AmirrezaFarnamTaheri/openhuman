@@ -75,7 +75,7 @@ pub(crate) struct ApprovalSecurityMiddleware {
     /// session refuses anyway raises an approval card first and is denied only
     /// after the human answers. A permission-refused call must fail with the
     /// permission layer's own message instead of interrupting anyone.
-    permission: Option<(crate::tools::agent_policy::ToolPolicySession, String)>,
+    permission: Option<(tinytools::ToolPolicySession, String)>,
 }
 
 impl ApprovalSecurityMiddleware {
@@ -92,7 +92,7 @@ impl ApprovalSecurityMiddleware {
     /// behaviour for paths with no session permission snapshot.
     pub(crate) fn with_session_permission(
         mut self,
-        permission: Option<(crate::tools::agent_policy::ToolPolicySession, String)>,
+        permission: Option<(tinytools::ToolPolicySession, String)>,
     ) -> Self {
         self.permission = permission;
         self

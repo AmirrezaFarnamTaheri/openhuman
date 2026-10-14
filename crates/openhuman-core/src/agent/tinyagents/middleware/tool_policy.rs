@@ -62,7 +62,7 @@ struct SessionToolPolicy {
 /// here — rather than copying the predicates — is what keeps the two gates
 /// from ever disagreeing ("two sources of truth ... is the bug").
 pub(crate) struct SessionPermissionView<'a> {
-    pub(crate) session: &'a crate::tools::agent_policy::ToolPolicySession,
+    pub(crate) session: &'a tinytools::ToolPolicySession,
     pub(crate) tool_sets: &'a [Arc<Vec<Box<dyn Tool>>>],
     pub(crate) channel: &'a str,
 }
