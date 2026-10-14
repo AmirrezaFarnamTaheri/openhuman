@@ -45,6 +45,8 @@ export interface CloudProviderCreds {
   model_image_endpoints?: Record<string, string>;
   /** Multi-key routing strategy; default is round_robin. */
   rotation_strategy?: 'round_robin' | 'least_busy' | 'priority_weighted' | null;
+  /** Native tool calls by default; opt-in QNML text-tool decoder for 2API gateways. */
+  tool_call_codec?: 'native' | 'qnml';
   /** Optional PEM CA bundle trusted only for this provider. */
   ca_cert_pem?: string | null;
 }
