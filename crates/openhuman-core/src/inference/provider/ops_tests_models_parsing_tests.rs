@@ -303,6 +303,7 @@ fn cloud_providers_entry_takes_precedence_over_local_runtime_synthesis() {
         endpoint: "https://ollama.example.com/v1".to_string(),
         auth_style: AuthStyle::Bearer,
         default_model: None,
+        ..Default::default()
     });
 
     let resolved = config

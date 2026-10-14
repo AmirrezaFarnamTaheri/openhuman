@@ -108,7 +108,7 @@ fn approval_identity_scopes_composio_dispatcher_grants_to_one_action() {
 // `requires_approval` is the last chance to keep a card from firing for a call
 // the permission layer will refuse regardless of the human's answer.
 
-use crate::tools::agent_policy::{
+use tinytools::{
     TaskProfile, TaskRiskLevel, ToolPolicyAction, ToolPolicyDecision, ToolPolicySession,
 };
 use tinyagents_harness::middleware::ApprovalResolver;
