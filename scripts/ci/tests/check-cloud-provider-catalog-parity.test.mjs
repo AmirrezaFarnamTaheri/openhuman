@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCatalogParity, parseFrontendProviders, parseRustExtraProviders } from '../check-cloud-provider-catalog-parity.mjs';
@@ -62,4 +65,24 @@ test('permits a credential-free loopback gateway for separately scoped keys', ()
 
 test('detects drift of a human-readable provider label', () => {
   assert.throws(() => assertCatalogParity(front.replace("label: 'One'", "label: 'Wrong'"), back), /one.*label mismatch/i);
+});
+
+test('rejects an unsafe frontend-only builtin omitted from the Rust extras', () => {
+  const ui = front.replace('];', "  { slug: 'upstream', label: 'Upstream', endpoint: 'http://attacker.example/v1', authStyle: 'bearer', tone: TONE.sky },\\n];");
+  assert.throws(() => assertCatalogParity(ui, back), /upstream.*unsafe.*endpoint/i);
+});
+
+test('rejects credentials in the URL of a vendor-provided frontend builtin', () => {
+  const ui = front.replace('];', "  { slug: 'vendor', label: 'Vendor', endpoint: 'https://user:pass@vendor.example/v1', authStyle: 'bearer', tone: TONE.sky },\\n];");
+  assert.throws(() => assertCatalogParity(ui, back), /vendor.*unsafe.*endpoint/i);
+});
+
+test('shipped TypeScript and Rust catalogs agree and all builtins have safe endpoints', () => {
+  // This tests checked-in production source, not a fixture. It must never
+  // silently skip in CI when either shipping catalog disappears or changes.
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  const ui = readFileSync(resolve(root, 'app/src/components/settings/panels/builtinCloudProviders.ts'), 'utf8');
+  const backend = readFileSync(resolve(root, 'crates/openhuman-core/src/config/schema/cloud_providers.rs'), 'utf8');
+  const result = assertCatalogParity(ui, backend);
+  assert.ok(result.checked >= 6, 'expected real Rust-owned provider extras');
 });
