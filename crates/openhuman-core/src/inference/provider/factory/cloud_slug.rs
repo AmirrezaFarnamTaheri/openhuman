@@ -575,7 +575,7 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
                 headers.push((OPENAI_CODEX_ACCOUNT_HEADER.to_owned(), id.to_owned()));
             }
         }
-        cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
+        let native = cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
             spec,
             auth_style: auth_style.clone(),
             key: credential,
@@ -587,7 +587,12 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             user_agent: user_agent.as_deref(),
             codex: account_route.as_ref().or(codex_route),
             http: http.clone(),
-        })
+        })?;
+        if entry.tool_call_codec == crate::config::schema::cloud_providers::ToolCallCodec::Qnml {
+            Ok(Arc::new(super::tool_markup::QnmlCompatModel::new(native)))
+        } else {
+            Ok(native)
+        }
     };
     let models: Vec<Arc<dyn ChatModel<()>>> = match keys
         .iter()
