@@ -12,12 +12,14 @@ export const BUILTIN_VOICE_PROVIDER_META: Record<
   deepgram: { label: 'Deepgram', capability: 'stt', comingSoon: true },
   elevenlabs: { label: 'ElevenLabs', capability: 'both' },
   openai: { label: 'OpenAI', capability: 'both', comingSoon: true },
+  kokoro: { label: 'Kokoro (local server)', capability: 'tts' },
 };
 
 const PROVIDER_ICON: Record<string, LucideIcon> = {
   deepgram: AudioLines,
   elevenlabs: AudioWaveform,
   openai: Sparkles,
+  kokoro: AudioWaveform,
 };
 
 interface VoicePanelProviderChipsProps {
