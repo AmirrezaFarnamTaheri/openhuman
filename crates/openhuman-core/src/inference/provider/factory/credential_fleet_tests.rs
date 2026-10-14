@@ -108,6 +108,50 @@ fn provider_failures_are_rerouted_conservatively() {
     );
     assert!(classify(Some(400), None, None).is_none());
     assert!(classify(Some(403), Some("forbidden"), None).is_none());
+    // A provider can use HTTP 403 for an invalid model or request. A broad
+    // substring match for "invalid" must NOT evict an otherwise healthy API key.
+    for code in [
+        "invalid_model",
+        "invalid_model_id",
+        "invalid_request",
+        "invalid_request_error",
+        "invalid_parameter",
+        "unauthorized_model",
+        "quota_configuration_error",
+        "rate_limit_policy_disabled",
+    ] {
+        assert!(
+            classify(Some(403), Some(code), None).is_none(),
+            "403 {code} is not evidence that another credential would succeed"
+        );
+    }
+    for code in [
+        "invalid_api_key",
+        "api_key_invalid",
+        "invalid_credentials",
+        "authentication_error",
+        "unauthorized",
+        "api_key_revoked",
+        "token_revoked",
+    ] {
+        assert_eq!(
+            classify(Some(403), Some(code), None).unwrap().failure,
+            KeyFailure::Authentication,
+            "{code} should evict only the rejected credential"
+        );
+    }
+    for code in [
+        "quota_exhausted",
+        "insufficient_quota",
+        "resource_exhausted",
+        "rate_limit_exceeded",
+    ] {
+        assert_eq!(
+            classify(Some(403), Some(code), None).unwrap().failure,
+            KeyFailure::RateLimited,
+            "{code} is a credential-scoped cooldown"
+        );
+    }
 }
 
 struct CountingRateLimitedModel {
