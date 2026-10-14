@@ -220,6 +220,37 @@ export function updateSelectedGroupSettings<
   ) as T[];
 }
 
+/** Explicit transport selection for a single upstream model id.
+ * Nothing is inferred from the provider slug or a neighboring model.
+ */
+export function parseModelTransportOverrides(
+  input: string
+): Record<string, 'auto' | 'responses'> {
+  const result = Object.create(null) as Record<string, 'auto' | 'responses'>;
+  let count = 0;
+  for (const line of input.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const split = line.indexOf('=');
+    if (split < 1) {
+      throw new Error('Each model transport must be model-id = auto or responses.');
+    }
+    const model = line.slice(0, split).trim();
+    const mode = line.slice(split + 1).trim();
+    if (!model || model.length > 200 || /\p{Cc}/u.test(model)) {
+      throw new Error('Model ids must be nonempty, printable and at most 200 characters.');
+    }
+    if (mode !== 'auto' && mode !== 'responses') {
+      throw new Error('Model transport must be auto or responses.');
+    }
+    if (Object.prototype.hasOwnProperty.call(result, model)) {
+      throw new Error('Duplicate model transport mapping: ' + model);
+    }
+    if (++count > 512) throw new Error('At most 512 model transport overrides are supported.');
+    result[model] = mode;
+  }
+  return result;
+}
+
 /** Explicit model-id-to-endpoint group keys, one `model-id = https://...` per line. */
 export function parseModelImageEndpoints(input: string): Record<string, string> {
   const endpoints: Record<string, string> = Object.create(null) as Record<string, string>;
