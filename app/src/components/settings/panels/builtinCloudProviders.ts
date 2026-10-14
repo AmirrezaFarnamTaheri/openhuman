@@ -234,6 +234,8 @@ export const BUILTIN_CLOUD_PROVIDERS: BuiltinCloudProvider[] = [
   { slug: 'qwen-pay-as-you-go', label: 'Qwen Pay-As-You-Go', endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1', authStyle: 'bearer', tone: TONE.amber },
   { slug: 'qwen-token-plan', label: 'Qwen Token Plan', endpoint: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1', authStyle: 'bearer', tone: TONE.sky },
   { slug: 'llmtr', label: 'LLMTR', endpoint: 'https://llmtr.com/v1', authStyle: 'bearer', tone: TONE.rose, keyPlaceholder: 'llmtr-...' },
+  // External local gateway; its bearer token is distinct from direct-provider credentials.
+  { slug: 'prodex', label: 'Prodex Gateway', endpoint: 'http://127.0.0.1:4000/v1', authStyle: 'bearer', tone: TONE.slate, keyPlaceholder: 'Gateway token or virtual key' },
 ];
 
 // NOTE: Claude Code CLI is intentionally NOT a builtin chip. It is a
