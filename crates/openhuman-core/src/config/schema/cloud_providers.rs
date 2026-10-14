@@ -63,6 +63,56 @@ pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
         endpoint: "http://127.0.0.1:20128/v1",
         auth_style: AuthStyle::Bearer,
     },
+    // 9Router peer-derived API-key-only upstream presets. Non-key sessions
+    // still require their own native credential/admission protocols.
+    BuiltinCloudProvider {
+        slug: "hyperbolic",
+        label: "Hyperbolic",
+        endpoint: "https://api.hyperbolic.xyz/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "chutes",
+        label: "Chutes AI",
+        endpoint: "https://llm.chutes.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "featherless",
+        label: "Featherless AI",
+        endpoint: "https://api.featherless.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "poolside",
+        label: "Poolside",
+        endpoint: "https://inference.poolside.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "morph",
+        label: "Morph",
+        endpoint: "https://api.morphllm.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "perplexity",
+        label: "Perplexity API",
+        endpoint: "https://api.perplexity.ai",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "tencent-hunyuan",
+        label: "Tencent Hunyuan",
+        endpoint: "https://api.hunyuan.cloud.tencent.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "xiaomi-mimo",
+        label: "Xiaomi MiMo (API Key)",
+        endpoint: "https://api.xiaomimimo.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
     // Opt-in loopback gateway; OpenHuman never forwards Codex OAuth credentials.
     BuiltinCloudProvider {
         slug: "prodex",

@@ -321,6 +321,65 @@ export const BUILTIN_CLOUD_PROVIDERS: BuiltinCloudProvider[] = [
     tone: TONE.sky,
     keyPlaceholder: '9Router inference API key',
   },
+  // Key-based OpenAI chat-completions providers cross-checked against the
+  // 9Router API-key registry. Each preset selects only its own direct API:
+  // no browser cookies, OAuth identity or provider-wide free entitlement.
+  {
+    slug: 'hyperbolic',
+    label: 'Hyperbolic',
+    endpoint: 'https://api.hyperbolic.xyz/v1',
+    authStyle: 'bearer',
+    tone: TONE.indigo,
+  },
+  {
+    slug: 'chutes',
+    label: 'Chutes AI',
+    endpoint: 'https://llm.chutes.ai/v1',
+    authStyle: 'bearer',
+    tone: TONE.sky,
+  },
+  {
+    slug: 'featherless',
+    label: 'Featherless AI',
+    endpoint: 'https://api.featherless.ai/v1',
+    authStyle: 'bearer',
+    tone: TONE.teal,
+  },
+  {
+    slug: 'poolside',
+    label: 'Poolside',
+    endpoint: 'https://inference.poolside.ai/v1',
+    authStyle: 'bearer',
+    tone: TONE.fuchsia,
+  },
+  {
+    slug: 'morph',
+    label: 'Morph',
+    endpoint: 'https://api.morphllm.com/v1',
+    authStyle: 'bearer',
+    tone: TONE.amber,
+  },
+  {
+    slug: 'perplexity',
+    label: 'Perplexity API',
+    endpoint: 'https://api.perplexity.ai',
+    authStyle: 'bearer',
+    tone: TONE.violet,
+  },
+  {
+    slug: 'tencent-hunyuan',
+    label: 'Tencent Hunyuan',
+    endpoint: 'https://api.hunyuan.cloud.tencent.com/v1',
+    authStyle: 'bearer',
+    tone: TONE.rose,
+  },
+  {
+    slug: 'xiaomi-mimo',
+    label: 'Xiaomi MiMo (API Key)',
+    endpoint: 'https://api.xiaomimimo.com/v1',
+    authStyle: 'bearer',
+    tone: TONE.slate,
+  },
   // External local gateway; its bearer token is distinct from direct-provider credentials.
   {
     slug: 'prodex',

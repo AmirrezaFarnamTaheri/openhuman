@@ -59,6 +59,21 @@ describe('builtinCloudProviders', () => {
     expect(router?.endpoint).not.toMatch(/0\.0\.0\.0/);
   });
 
+  it.each([
+    ['hyperbolic', 'https://api.hyperbolic.xyz/v1'],
+    ['chutes', 'https://llm.chutes.ai/v1'],
+    ['featherless', 'https://api.featherless.ai/v1'],
+    ['poolside', 'https://inference.poolside.ai/v1'],
+    ['morph', 'https://api.morphllm.com/v1'],
+    ['perplexity', 'https://api.perplexity.ai'],
+    ['tencent-hunyuan', 'https://api.hunyuan.cloud.tencent.com/v1'],
+    ['xiaomi-mimo', 'https://api.xiaomimimo.com/v1'],
+  ] as const)('maps 9Router peer API-key preset %s to an explicit secure base URL', (slug, endpoint) => {
+    expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
+    expect(authStyleForBuiltinCloudProvider(slug)).toBe('bearer');
+    expect(endpoint.startsWith('https://')).toBe(true);
+  });
+
   it('prompts for a least-privilege inference key, not an administrator token', () => {
     const gateway = BUILTIN_CLOUD_PROVIDERS.find(provider => provider.slug === 'prodex');
     expect(gateway?.keyPlaceholder).toBe('Inference-scoped virtual key');
