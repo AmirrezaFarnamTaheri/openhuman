@@ -17,6 +17,7 @@
 import createDebug from 'debug';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { validateLoopCycleSafety } from '../../../lib/flows/loopCycleSafety';
 import type { WorkflowGraph } from '../../../lib/flows/types';
 import { type FlowValidation, validateFlow } from '../../../services/api/flowsApi';
 
@@ -75,7 +76,26 @@ export function useFlowValidation(
     const requestId = ++requestIdRef.current;
     setValidating(true);
     try {
-      const result = await validateFlow(graphRef.current);
+      // Reject cycles whose execution could bypass a bounded loop before
+      // touching the remote validator. This local check also stays active
+      // when the daemon is offline; the core remains the save-time authority.
+      const graph = graphRef.current;
+      const issues = validateLoopCycleSafety(graph);
+      if (issues.length > 0) {
+        const local: FlowValidation = {
+          valid: false,
+          errors: issues.map(issue => issue.message),
+          error_details: issues.map(issue => ({
+            code: issue.code,
+            message: issue.message,
+            node_id: issue.nodeIds[0],
+          })),
+          warnings: [],
+        };
+        if (mountedRef.current && requestId === requestIdRef.current) setValidation(local);
+        return local;
+      }
+      const result = await validateFlow(graph);
       if (!mountedRef.current || requestId !== requestIdRef.current) return result;
       log(
         'validated (req=%d): valid=%s errors=%d warnings=%d',
