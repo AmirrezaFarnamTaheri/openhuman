@@ -263,3 +263,14 @@ fn prodex_gateway_rejects_remote_plaintext_and_embedded_url_credentials() {
         .expect("remote plaintext Prodex gateway must be rejected before auth lookup");
     assert!(error.to_string().contains("HTTPS"), "{error}");
 }
+
+#[test]
+fn prodex_gateway_uses_exactly_one_scoped_virtual_key() {
+    assert!(cloud_slug::prodex_has_single_virtual_key("vk-inference-one"));
+    assert!(cloud_slug::prodex_has_single_virtual_key("  vk-inference-one  "));
+    assert!(!cloud_slug::prodex_has_single_virtual_key(""));
+    assert!(!cloud_slug::prodex_has_single_virtual_key("  "));
+    assert!(!cloud_slug::prodex_has_single_virtual_key("vk-one,vk-two"));
+    assert!(!cloud_slug::prodex_has_single_virtual_key("vk-one;vk-two"));
+    assert!(!cloud_slug::prodex_has_single_virtual_key("vk-one\nvk-two"));
+}
