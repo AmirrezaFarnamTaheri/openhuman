@@ -235,11 +235,11 @@ required-features = ["storage-sqlite", "modules"]
 
 [[test]]
 # The released TinyMCP cdylib under the real host: add a server, restart the
-# core, list it (#7737). Ignored without a staged module; the Rust e2e runner
-# stages the registry-pinned release and runs it.
+# core, list it (#7737). Requires e2e-test-support and a staged TinyMCP module;
+# dedicated E2E runners stage the pinned release and run the test.
 name = "tinymcp_storage_smoke_e2e"
 path = "../../tests/tinymcp_storage_smoke_e2e.rs"
-required-features = ["storage-sqlite", "modules", "mcp"]
+required-features = ["storage-sqlite", "modules", "mcp", "e2e-test-support"]
 
 [[test]]
 name = "saas_mode_e2e"

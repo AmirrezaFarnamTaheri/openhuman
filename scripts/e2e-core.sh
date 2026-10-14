@@ -100,7 +100,7 @@ export OPENHUMAN_MODULE_PATH="$tinymcp_dir${OPENHUMAN_MODULE_PATH:+:$OPENHUMAN_M
 
 export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 cd "$REPO_ROOT"
-features="$(bash "$SCRIPT_DIR/ci/product-features.sh")$extra_features"
+features="$(bash "$SCRIPT_DIR/ci/product-features.sh")$extra_features,e2e-test-support"
 bash "$SCRIPT_DIR/ci-cancel-aware.sh" cargo test -p openhuman-cli \
   --features "$features" --test tinymcp_storage_smoke_e2e -- \
-  --ignored --test-threads=1 "$@"
+  --test-threads=1 "$@"

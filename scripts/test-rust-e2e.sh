@@ -286,25 +286,21 @@ for suite in "${SUITES[@]}"; do
     continue
   fi
   if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then
-    # Released TinyMCP cdylib under the real host and its storage backend
-    # (#7737). Ignored in a bare `cargo test` because it needs the staged
-    # module; the staging above put it on OPENHUMAN_MODULE_PATH. It spawns
-    # openhuman-core twice, so run it serially.
-    echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (--ignored, serial)"
+    # Explicit E2E feature plus staged TinyMCP: never ignore this integration
+    # test or silently omit the module-backed restart/secret-storage contract.
+    echo "[rust-e2e]   $CARGO_BIN test --test $suite (module staged, serial)"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
-      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
-      --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES,e2e-test-support" \
+      --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
     continue
   fi
   if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then
-    # Released TinyMCP cdylib under the real host and its storage backend
-    # (#7737). Ignored in a bare `cargo test` because it needs the staged
-    # module; the staging above put it on OPENHUMAN_MODULE_PATH. It spawns
-    # openhuman-core twice, so run it serially.
-    echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (--ignored, serial)"
+    # Explicit E2E feature plus staged TinyMCP: never ignore this integration
+    # test or silently omit the module-backed restart/secret-storage contract.
+    echo "[rust-e2e]   $CARGO_BIN test --test $suite (module staged, serial)"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
-      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
-      --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES,e2e-test-support" \
+      --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
     continue
   fi
   if [ "$suite" = "tinydocs_linked_e2e" ]; then
