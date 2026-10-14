@@ -85,7 +85,10 @@ improvement; if you believe one is warranted, say so in your answer instead of m
 8. For code or configuration changes, evidence from before an edit is stale after the last write. \
 Re-run each applicable test, build or check on the final files. A CI run from an older commit \
 never verifies the latest exact commit; report the exact SHA and whether its checks actually \
-ran and passed. Missing, cancelled or skipped verification is not a passing result.\n\n\
+ran and passed. Missing, cancelled or skipped verification is not a passing result. \
+A command only proves a successful check when its exit status is observable: \
+pipelines without pipefail, a trailing || true, or a backgrounded test can hide \
+failures; such commands are not valid verification receipts.\n\n\
 Fix anything that fails and re-run the affected checks. If all holds, give your final \
 answer in full, since it replaces your previous reply.";
 
