@@ -5,6 +5,7 @@
 import type {
   CloudProviderCreds,
   ModelRegistryEntry,
+  ModelTransport,
 } from '../../../../utils/tauriCommands/config';
 import { BUILTIN_CLOUD_PROVIDERS } from '../builtinCloudProviders';
 import { FLEET_MODEL_PRESETS, type FleetModelPreset } from './modelFleetCatalog';
@@ -218,6 +219,36 @@ export function updateSelectedGroupSettings<
   return groups.map(group =>
     selected.has(group.slug) ? { ...group, ...patch } : { ...group }
   ) as T[];
+}
+
+/** Explicit model-id-to-protocol mapping. Unknown models remain Auto.
+ * Keep a null-prototype object so user-provided ids cannot mutate its prototype.
+ */
+export function parseModelTransportOverrides(input: string): Record<string, ModelTransport> {
+  const routes: Record<string, ModelTransport> = Object.create(null) as Record<
+    string,
+    ModelTransport
+  >;
+  let count = 0;
+  for (const line of input.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const separator = line.indexOf('=');
+    if (separator < 1) throw new Error('Each model protocol override must be model-id = protocol.');
+    const id = line.slice(0, separator).trim();
+    const protocol = line.slice(separator + 1).trim();
+    if (!id || id.length > 200 || /\p{Cc}/u.test(id)) {
+      throw new Error('Model ids must be 1-200 printable characters.');
+    }
+    if (!['auto', 'chat_completions', 'responses'].includes(protocol)) {
+      throw new Error('Protocol must be auto, chat_completions, or responses.');
+    }
+    if (Object.prototype.hasOwnProperty.call(routes, id)) {
+      throw new Error('Duplicate model protocol override: ' + id);
+    }
+    if (++count > 512) throw new Error('At most 512 model protocol overrides are supported.');
+    routes[id] = protocol as ModelTransport;
+  }
+  return routes;
 }
 
 /** Explicit model-id-to-endpoint group keys, one `model-id = https://...` per line. */

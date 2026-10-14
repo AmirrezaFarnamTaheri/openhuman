@@ -25,6 +25,9 @@ export interface ModelRoute {
 /** Authentication header style. Matches Rust AuthStyle enum. */
 export type AuthStyle = 'bearer' | 'anthropic' | 'openhuman_jwt' | 'none';
 
+/** Wire protocol explicitly selected for one model; Auto preserves registry behavior. */
+export type ModelTransport = 'auto' | 'chat_completions' | 'responses';
+
 /**
  * Endpoint config for one cloud LLM provider (new slug-keyed shape).
  * API keys are NOT carried here — they live in `auth-profiles.json`
@@ -43,6 +46,8 @@ export interface CloudProviderCreds {
   image_endpoint?: string | null;
   /** Per-model image endpoints, keyed by provider-native model id. */
   model_image_endpoints?: Record<string, string>;
+  /** Exact per-model protocol overrides; omitted models retain native auto routing. */
+  model_transports?: Record<string, ModelTransport>;
   /** Multi-key routing strategy; default is round_robin. */
   rotation_strategy?: 'round_robin' | 'least_busy' | 'priority_weighted' | null;
   /** Native tool calls by default; opt-in QNML text-tool decoder for 2API gateways. */
