@@ -133,6 +133,10 @@ jobs:
     timeout-minutes: 60
     container:
       image: ghcr.io/tinyhumansai/openhuman_ci:latest
+      # Reap orphaned grandchildren after timeout process-group termination.
+      # Without an init as PID 1, killed descendants remain zombies and
+      # kill(pid, 0) falsely reports them alive in the shell regression.
+      options: --init
     env:
       CARGO_INCREMENTAL: "0"
       RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
