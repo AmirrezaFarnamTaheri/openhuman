@@ -395,6 +395,70 @@ async fn tagged_json_tool_choice_and_streaming_use_native_contracts() {
     assert!(forbidden.invoke(&(), no_tools).await.is_err());
 }
 
+
+#[test]
+fn tagged_gateway_request_uses_text_tool_instructions_without_native_tool_wires() {
+    use tinyinference_llm::message::Message;
+    use tinyinference_llm::model::ToolChoice;
+    let source = ModelRequest {
+        messages: vec![Message::user("Read the repo README")],
+        tools: declared(),
+        tool_choice: ToolChoice::Tool("read_file".into()),
+        prompt_fingerprint: Some("old-native-tool-prompt".into()),
+        ..Default::default()
+    };
+    let adapted = prepare_compat_request(source.clone(), ToolCallCodec::TaggedJson).unwrap();
+    assert!(adapted.tools.is_empty(), "upstream text gateway must not receive native tools");
+    assert_eq!(adapted.tool_choice, ToolChoice::None);
+    assert!(adapted.prompt_fingerprint.is_none(), "format change invalidates old cache prefix");
+    assert_eq!(source.tools.len(), 2, "the caller's typed declarations must remain intact");
+    let Some(Message::System(system)) = adapted.messages.first() else {
+        panic!("tagged protocol instructions must be a system message");
+    };
+    let ContentBlock::Text(instructions) = &system.content[0] else {
+        panic!("expected text protocol instructions");
+    };
+    assert!(instructions.contains("<tool_calls>"));
+    assert!(instructions.contains("<final_answer>"));
+    assert!(instructions.contains("read_file"));
+    assert!(!instructions.contains("shell"), "named tool choice must not expose sibling tools");
+}
+
+#[test]
+fn qnml_text_tools_use_prompt_instructions_without_native_function_call_payloads() {
+    use tinyinference_llm::message::Message;
+    let source = ModelRequest {
+        messages: vec![Message::user("Work")],
+        tools: declared(),
+        ..Default::default()
+    };
+    let adapted = prepare_compat_request(source, ToolCallCodec::Qnml).unwrap();
+    assert!(adapted.tools.is_empty());
+    let Some(Message::System(system)) = adapted.messages.first() else {
+        panic!("missing QNML protocol instruction");
+    };
+    let ContentBlock::Text(instructions) = &system.content[0] else {
+        panic!("expected text instructions");
+    };
+    assert!(instructions.contains("<|QNML|tool_calls>"));
+    assert!(instructions.contains("<|QNML|invoke"));
+    assert!(instructions.contains("read_file"));
+    assert!(instructions.contains("shell"));
+}
+
+#[test]
+fn native_provider_requests_are_left_byte_for_byte_unchanged() {
+    use tinyinference_llm::message::Message;
+    let source = ModelRequest {
+        messages: vec![Message::user("Plain text")],
+        tools: declared(),
+        ..Default::default()
+    };
+    let orig = serde_json::to_value(&source).unwrap();
+    let adapted = prepare_compat_request(source, ToolCallCodec::Native).unwrap();
+    assert_eq!(serde_json::to_value(adapted).unwrap(), orig);
+}
+
 struct FakeTaggedModel {
     body: String,
 }
