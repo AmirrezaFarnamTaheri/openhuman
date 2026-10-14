@@ -139,6 +139,8 @@ pub(super) struct VoiceProviderCredUpdate {
     pub(super) default_stt_model: Option<String>,
     #[serde(default)]
     pub(super) default_tts_voice: Option<String>,
+    #[serde(default)]
+    pub(super) default_tts_model: Option<String>,
 }
 
 /// List models/voices for a voice provider.
