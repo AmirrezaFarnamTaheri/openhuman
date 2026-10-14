@@ -586,3 +586,19 @@ fn prodex_gateway_is_a_builtin_responses_capable_bearer_provider() {
         "must not treat gateway as chat-only"
     );
 }
+
+#[test]
+fn peer_router_key_only_provider_presets_keep_transport_parity() {
+    for (slug, label, endpoint) in [
+        ("cohere", "Cohere", "https://api.cohere.ai/compatibility/v1"),
+        ("tokenrouter", "TokenRouter", "https://api.tokenrouter.io/v1"),
+        ("byteplus-modelark-ap", "BytePlus ModelArk (Asia Pacific)", "https://ark.ap-southeast.bytepluses.com/api/v3"),
+    ] {
+        let provider = super::builtin_cloud_provider(slug).expect("key-based peer preset");
+        assert_eq!(provider.label, label);
+        assert_eq!(provider.endpoint, endpoint);
+        assert_eq!(provider.auth_style, AuthStyle::Bearer);
+        assert!(!builtin_cloud_supports_responses_api(slug),
+            "unverified Responses API support must not enable that transport");
+    }
+}
