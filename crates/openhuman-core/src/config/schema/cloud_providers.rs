@@ -92,6 +92,44 @@ pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
         endpoint: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
         auth_style: AuthStyle::Bearer,
     },
+    // Verified direct OpenAI-compatible provider endpoints; capability and
+    // free-tier eligibility remain model/account-specific and must be discovered.
+    BuiltinCloudProvider {
+        slug: "aionlabs",
+        label: "Aion Labs",
+        endpoint: "https://api.aionlabs.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "sambanova",
+        label: "SambaNova",
+        endpoint: "https://api.sambanova.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "ovhcloud",
+        label: "OVHcloud AI Endpoints",
+        endpoint: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "nebius",
+        label: "Nebius Token Factory",
+        endpoint: "https://api.tokenfactory.nebius.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "llm7",
+        label: "LLM7.io",
+        endpoint: "https://api.llm7.io/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "glhf",
+        label: "glhf.chat",
+        endpoint: "https://glhf.chat/api/openai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
 ];
 
 pub static BUILTIN_CLOUD_PROVIDERS: LazyLock<Vec<BuiltinCloudProvider>> = LazyLock::new(|| {
