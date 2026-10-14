@@ -134,6 +134,7 @@ pub fn summarize_auth_profile(
             .as_ref()
             .map(|TokenSet { access_token, .. }| !access_token.trim().is_empty())
             .unwrap_or(false),
+        is_active: false,
     }
 }
 

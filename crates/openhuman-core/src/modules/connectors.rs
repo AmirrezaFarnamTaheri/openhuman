@@ -269,6 +269,11 @@ async fn ensure_routed(config: &Config, proxy: &Proxy) -> Result<(), String> {
         object.remove("offered_toolkits");
     }
 
+    // Preferences and trigger history from before the storage contract move
+    // into the module's storage before it first serves a call. Once per state
+    // directory, best effort: a failure is retried on the next call.
+    super::import_legacy_connectors(&config.workspace_dir.join("state")).await;
+
     let current = fingerprint(&route);
     if *last_route()
         .lock()

@@ -146,7 +146,7 @@ pub(in super::super) async fn run_subagent_via_graph(
     // (BYOK/custom). The expanded copy is provider-only — the persisted `history`
     // written back below keeps the original markers.
     let dispatch_history = if crate::agent::multimodal::has_image_placeholders(history) {
-        crate::agent::multimodal::rehydrate_image_placeholders(history)
+        crate::agent::multimodal::rehydrate_image_placeholders(history).await
     } else {
         history.clone()
     };

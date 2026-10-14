@@ -48,7 +48,7 @@ tested but no production assembly site constructs it today.
 ## Further reading
 
 - [Parent module (`tools`)](../README.md)
-- [Native tools overview](../../../../../gitbooks/features/native-tools/README.md)
-- [Agent harness architecture](../../../../../gitbooks/developing/architecture/agent-harness.md)
-- [Approval gate](../../../../../gitbooks/features/approval-gate.md)
+- [Native tools overview](../../../../../docs/gitbooks/en/features/native-tools/README.md)
+- [Agent harness architecture](../../../../../docs/gitbooks/en/developing/architecture/agent-harness.md)
+- [Approval gate](../../../../../docs/gitbooks/en/features/approval-gate.md)
 - [tinyagents submodule](../../../../../vendor/tinyagents/README.md)

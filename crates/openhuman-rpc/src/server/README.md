@@ -272,6 +272,6 @@ cargo test -p openhuman-rpc --features crash-reporting server::
 
 ## Further reading
 
-- [`gitbooks/developing/architecture.md`](../../../../gitbooks/developing/architecture.md): architecture overview.
-- [`gitbooks/developing/architecture/security.md`](../../../../gitbooks/developing/architecture/security.md): security.
+- [`docs/gitbooks/en/developing/architecture.md`](../../../../docs/gitbooks/en/developing/architecture.md): architecture overview.
+- [`docs/gitbooks/en/developing/architecture/security.md`](../../../../docs/gitbooks/en/developing/architecture/security.md): security.
 - [`crates/openhuman-rpc/README.md`](../../README.md): the openhuman-rpc crate README.

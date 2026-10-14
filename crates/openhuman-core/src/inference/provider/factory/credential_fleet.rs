@@ -7,8 +7,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tinyinference_llm::message::{ContentBlock, Message};
 use tinyinference_llm::model::{
     ChatModel, DeferredHandle, DeferredStatus, InputModality, InputSource, ModelProfile,
@@ -26,7 +26,9 @@ pub(super) fn request_has_image(request: &ModelRequest) -> bool {
             Message::Tool(m) => &m.content,
             _ => &[],
         };
-        blocks.iter().any(|block| matches!(block, ContentBlock::Image(_)))
+        blocks
+            .iter()
+            .any(|block| matches!(block, ContentBlock::Image(_)))
     })
 }
 
@@ -35,21 +37,36 @@ struct RetryDecision {
     failure: KeyFailure,
     after_ms: Option<u64>,
 }
-fn classify(status: Option<u16>, code: Option<&str>, retry_after_ms: Option<u64>) -> Option<RetryDecision> {
+fn classify(
+    status: Option<u16>,
+    code: Option<&str>,
+    retry_after_ms: Option<u64>,
+) -> Option<RetryDecision> {
     let failure = match status {
         Some(401) => KeyFailure::Authentication,
         Some(429) => KeyFailure::RateLimited,
-        Some(403) if code.is_some_and(|c| {
-            let c = c.to_ascii_lowercase();
-            c.contains("invalid") || c.contains("unauthorized") || c.contains("revoked")
-        }) => KeyFailure::Authentication,
-        Some(403) if code.is_some_and(|c| {
-            let c = c.to_ascii_lowercase();
-            c.contains("quota") || c.contains("rate_limit") || c.contains("resource_exhausted")
-        }) => KeyFailure::RateLimited,
+        Some(403)
+            if code.is_some_and(|c| {
+                let c = c.to_ascii_lowercase();
+                c.contains("invalid") || c.contains("unauthorized") || c.contains("revoked")
+            }) =>
+        {
+            KeyFailure::Authentication
+        }
+        Some(403)
+            if code.is_some_and(|c| {
+                let c = c.to_ascii_lowercase();
+                c.contains("quota") || c.contains("rate_limit") || c.contains("resource_exhausted")
+            }) =>
+        {
+            KeyFailure::RateLimited
+        }
         _ => return None,
     };
-    Some(RetryDecision { failure, after_ms: retry_after_ms })
+    Some(RetryDecision {
+        failure,
+        after_ms: retry_after_ms,
+    })
 }
 fn provider_decision(error: &ProviderError) -> Option<RetryDecision> {
     classify(error.status, error.code.as_deref(), error.retry_after_ms)
@@ -86,18 +103,24 @@ fn stamp_deferred_handle(handle: &mut DeferredHandle, key: &str, image: bool) {
         image,
     };
     if let Ok(value) = serde_json::to_value(route) {
-        handle.metadata.insert(FLEET_DEFERRED_METADATA_KEY.to_owned(), value);
+        handle
+            .metadata
+            .insert(FLEET_DEFERRED_METADATA_KEY.to_owned(), value);
     }
 }
 fn decode_deferred_handle(handle: &DeferredHandle) -> tinyinference_llm::Result<DeferredRoute> {
-    let value = handle.metadata.get(FLEET_DEFERRED_METADATA_KEY)
-        .ok_or_else(|| tinyinference_llm::Error::Validation(
-            "deferred call is missing model-fleet routing metadata".into()
-        ))?;
+    let value = handle
+        .metadata
+        .get(FLEET_DEFERRED_METADATA_KEY)
+        .ok_or_else(|| {
+            tinyinference_llm::Error::Validation(
+                "deferred call is missing model-fleet routing metadata".into(),
+            )
+        })?;
     let route: DeferredRoute = serde_json::from_value(value.clone())?;
     if route.version != 1 {
         return Err(tinyinference_llm::Error::Validation(
-            "unsupported model-fleet deferred route version".into()
+            "unsupported model-fleet deferred route version".into(),
         ));
     }
     Ok(route)
@@ -110,11 +133,15 @@ struct Lease {
 impl Lease {
     fn new(scope: &str, key: &str) -> Self {
         key_pool::acquire(scope, key);
-        Self { scope: scope.to_owned(), key: key.to_owned() }
+        Self {
+            scope: scope.to_owned(),
+            key: key.to_owned(),
+        }
     }
     fn record(&self, failure: Option<RetryDecision>) {
         key_pool::record_result_for(
-            &self.scope, &self.key,
+            &self.scope,
+            &self.key,
             failure.map(|failure| failure.failure),
             failure.and_then(|failure| failure.after_ms),
         );
@@ -145,8 +172,16 @@ impl CredentialFleetModel {
         strategy: RotationStrategy,
     ) -> Self {
         assert!(!models.is_empty() && models.len() == keys.len());
-        assert!(image_models.as_ref().is_none_or(|m| m.len() == models.len()));
-        Self { scope, keys, models, image_models, strategy }
+        assert!(image_models
+            .as_ref()
+            .is_none_or(|m| m.len() == models.len()));
+        Self {
+            scope,
+            keys,
+            models,
+            image_models,
+            strategy,
+        }
     }
     fn route(&self, idx: usize, image: bool) -> &Arc<dyn ChatModel<()>> {
         if image {
@@ -164,27 +199,38 @@ impl ChatModel<()> for CredentialFleetModel {
     }
     fn supports_input(&self, modality: InputModality, mime: &str, source: InputSource) -> bool {
         let models = self.image_models.as_ref().unwrap_or(&self.models);
-        models.first().is_some_and(|model| model.supports_input(modality, mime, source))
+        models
+            .first()
+            .is_some_and(|model| model.supports_input(modality, mime, source))
     }
     fn cache_identity(&self) -> Option<String> {
         self.models.first().and_then(|model| model.cache_identity())
     }
-    async fn invoke(&self, state: &(), request: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+    async fn invoke(
+        &self,
+        state: &(),
+        request: ModelRequest,
+    ) -> tinyinference_llm::Result<ModelResponse> {
         let image = request_has_image(&request);
         let mut tried = Vec::new();
         let mut last_error = None;
-        while let Some((index, key)) =
-            key_pool::choose_key_for_run(
-                &self.scope,
-                &self.keys,
-                &tried,
-                self.strategy,
-                request.correlation.as_ref().map(|correlation| correlation.run_id.as_str()),
-            )
-        {
+        while let Some((index, key)) = key_pool::choose_key_for_run(
+            &self.scope,
+            &self.keys,
+            &tried,
+            self.strategy,
+            request
+                .correlation
+                .as_ref()
+                .map(|correlation| correlation.run_id.as_str()),
+        ) {
             tried.push(index);
             let lease = Lease::new(&self.scope, &key);
-            match self.route(index, image).invoke(state, request.clone()).await {
+            match self
+                .route(index, image)
+                .invoke(state, request.clone())
+                .await
+            {
                 Ok(result) => {
                     lease.record(None);
                     return Ok(result);
@@ -192,9 +238,12 @@ impl ChatModel<()> for CredentialFleetModel {
                 Err(error) => {
                     let decision = model_decision(&error);
                     lease.record(Some(decision.unwrap_or(RetryDecision {
-                        failure: KeyFailure::Other, after_ms: None,
+                        failure: KeyFailure::Other,
+                        after_ms: None,
                     })));
-                    if decision.is_none() { return Err(error); }
+                    if decision.is_none() {
+                        return Err(error);
+                    }
                     last_error = Some(error);
                 }
             }
@@ -203,7 +252,11 @@ impl ChatModel<()> for CredentialFleetModel {
             "No available API keys for this provider; check rate limits or replace invalid keys".to_string()
         )))
     }
-    async fn stream(&self, state: &(), request: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+    async fn stream(
+        &self,
+        state: &(),
+        request: ModelRequest,
+    ) -> tinyinference_llm::Result<ModelStream> {
         use futures::StreamExt;
 
         let image = request_has_image(&request);
@@ -214,18 +267,28 @@ impl ChatModel<()> for CredentialFleetModel {
             &self.keys,
             &tried,
             self.strategy,
-            request.correlation.as_ref().map(|correlation| correlation.run_id.as_str()),
+            request
+                .correlation
+                .as_ref()
+                .map(|correlation| correlation.run_id.as_str()),
         ) {
             tried.push(index);
             let lease = Lease::new(&self.scope, &key);
-            let mut live = match self.route(index, image).stream(state, request.clone()).await {
+            let mut live = match self
+                .route(index, image)
+                .stream(state, request.clone())
+                .await
+            {
                 Ok(stream) => stream,
                 Err(error) => {
                     let decision = model_decision(&error);
                     lease.record(Some(decision.unwrap_or(RetryDecision {
-                        failure: KeyFailure::Other, after_ms: None,
+                        failure: KeyFailure::Other,
+                        after_ms: None,
                     })));
-                    if decision.is_none() { return Err(error); }
+                    if decision.is_none() {
+                        return Err(error);
+                    }
                     last_error = Some(error);
                     continue;
                 }
@@ -252,9 +315,9 @@ impl ChatModel<()> for CredentialFleetModel {
                     }
                     Some(item) => {
                         prefix.push(item);
-                        let joined = ModelStream::new(Box::pin(
-                            futures::stream::iter(prefix).chain(live)
-                        )).with_metadata(metadata);
+                        let joined =
+                            ModelStream::new(Box::pin(futures::stream::iter(prefix).chain(live)))
+                                .with_metadata(metadata);
                         // The lease lives in the mapped stream. Dropping an
                         // unfinished stream still releases its concurrency slot.
                         let mut recorded = false;
@@ -294,10 +357,12 @@ impl ChatModel<()> for CredentialFleetModel {
                     }
                     None => {
                         lease.record(Some(RetryDecision {
-                            failure: KeyFailure::Other, after_ms: None,
+                            failure: KeyFailure::Other,
+                            after_ms: None,
                         }));
                         return Err(tinyinference_llm::Error::Model(
-                            "provider stream ended before returning content or a terminal result".into()
+                            "provider stream ended before returning content or a terminal result"
+                                .into(),
                         ));
                     }
                 }
@@ -308,102 +373,28 @@ impl ChatModel<()> for CredentialFleetModel {
         )))
     }
 
-    async fn fetch_deferred(&self, handle: &DeferredHandle) -> tinyinference_llm::Result<DeferredStatus> {
+    async fn fetch_deferred(
+        &self,
+        handle: &DeferredHandle,
+    ) -> tinyinference_llm::Result<DeferredStatus> {
         let route = decode_deferred_handle(handle)?;
-        let index = self.keys.iter().position(|secret|
-            credential_fingerprint(secret) == route.key_fingerprint
-        ).ok_or_else(|| tinyinference_llm::Error::Validation(
-            "the credential used for this deferred call has been removed".into()
-        ))?;
+        let index = self
+            .keys
+            .iter()
+            .position(|secret| credential_fingerprint(secret) == route.key_fingerprint)
+            .ok_or_else(|| {
+                tinyinference_llm::Error::Validation(
+                    "the credential used for this deferred call has been removed".into(),
+                )
+            })?;
         let mut original = handle.clone();
         original.metadata.remove(FLEET_DEFERRED_METADATA_KEY);
-        self.route(index, route.image).fetch_deferred(&original).await
+        self.route(index, route.image)
+            .fetch_deferred(&original)
+            .await
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use tinyinference_llm::message::{ImageRef, UserMessage};
-    #[test]
-    fn image_endpoints_only_apply_when_request_contains_images() {
-        let text = ModelRequest { messages: vec![Message::user("text")], ..Default::default() };
-        assert!(!request_has_image(&text));
-        let image = ModelRequest {
-            messages: vec![Message::User(UserMessage {
-                content: vec![
-                    ContentBlock::Text("What's here?".into()),
-                    ContentBlock::Image(ImageRef { url: "data:image/png;base64,AAAA".into(), mime_type: Some("image/png".into()) }),
-                ],
-            })],
-            ..Default::default()
-        };
-        assert!(request_has_image(&image));
-    }
-    struct StubStreamModel { fail_auth: bool }
-    #[async_trait]
-    impl ChatModel<()> for StubStreamModel {
-        async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
-            Err(tinyinference_llm::Error::Model("not used by stream test".into()))
-        }
-        async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
-            let events = if self.fail_auth {
-                vec![
-                    ModelStreamItem::Started,
-                    ModelStreamItem::ProviderFailed(ProviderError {
-                        status: Some(429), ..Default::default()
-                    }),
-                ]
-            } else {
-                vec![
-                    ModelStreamItem::Started,
-                    ModelStreamItem::MessageDelta(tinyinference_llm::message::MessageDelta {
-                        text: "selected-second-key".into(),
-                        reasoning: String::new(),
-                        tool_call: None,
-                    }),
-                    ModelStreamItem::Failed("test stream finished".into()),
-                ]
-            };
-            Ok(ModelStream::new(Box::pin(futures::stream::iter(events))))
-        }
-    }
-    #[tokio::test]
-    async fn pre_content_rate_limit_rotates_stream_before_exposing_error() {
-        use futures::StreamExt;
-        let scope = "fleet-stream-first-429";
-        let fleet = CredentialFleetModel::new(
-            scope.into(),
-            vec!["first".into(), "second".into()],
-            vec![
-                Arc::new(StubStreamModel { fail_auth: true }),
-                Arc::new(StubStreamModel { fail_auth: false }),
-            ],
-            None,
-            RotationStrategy::RoundRobin,
-        );
-        let stream = fleet.stream(&(), ModelRequest::default()).await.unwrap();
-        let events: Vec<ModelStreamItem> = stream.collect().await;
-        assert!(matches!(events.get(1), Some(ModelStreamItem::MessageDelta(_))));
-        assert_eq!(key_pool::snapshot(scope)[0].status, "cooldown");
-    }
-
-    #[test]
-    fn deferred_route_is_keyed_to_credential_not_array_position() {
-        let mut handle = tinyinference_llm::model::DeferredHandle::new("openai", "resp_123");
-        stamp_deferred_handle(&mut handle, "secret-one", true);
-        assert!(serde_json::to_string(&handle).unwrap().find("secret-one").is_none());
-        let route = decode_deferred_handle(&handle).unwrap();
-        assert_eq!(route.key_fingerprint, credential_fingerprint("secret-one"));
-        assert!(route.image);
-    }
-
-    #[test]
-    fn provider_failures_are_rerouted_conservatively() {
-        assert_eq!(classify(Some(401), None, None).unwrap().failure, KeyFailure::Authentication);
-        assert_eq!(classify(Some(429), None, Some(5000)).unwrap().failure, KeyFailure::RateLimited);
-        assert_eq!(classify(Some(403), Some("quota_exhausted"), None).unwrap().failure, KeyFailure::RateLimited);
-        assert!(classify(Some(400), None, None).is_none());
-        assert!(classify(Some(403), Some("forbidden"), None).is_none());
-    }
-}
+#[path = "credential_fleet_tests.rs"]
+mod tests;

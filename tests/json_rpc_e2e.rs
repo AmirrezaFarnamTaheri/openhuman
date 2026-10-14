@@ -3491,7 +3491,8 @@ async fn json_rpc_thread_turn_state_lifecycle() {
     state.lifecycle = tinyagents_session::turn_state::TurnLifecycle::Streaming;
     state.iteration = 2;
     state.streaming_text = "partial".into();
-    tinyagents_session::turn_state::store::put(workspace_dir.clone(), &state)
+    openhuman_core::agent::session_store::turn_states_for(&workspace_dir)
+        .put(&state)
         .expect("seed snapshot");
 
     // get → present
@@ -3549,7 +3550,8 @@ async fn json_rpc_thread_turn_state_lifecycle() {
     );
     state2.lifecycle = tinyagents_session::turn_state::TurnLifecycle::Completed;
     state2.updated_at = "2999-01-01T00:00:00Z".into();
-    tinyagents_session::turn_state::store::put(workspace_dir.clone(), &state2)
+    openhuman_core::agent::session_store::turn_states_for(&workspace_dir)
+        .put(&state2)
         .expect("seed snapshot 2");
 
     // history → both turns, newest first.

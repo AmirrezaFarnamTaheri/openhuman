@@ -130,6 +130,28 @@ fn an_object_the_grant_does_not_hold_is_refused() {
 }
 
 #[test]
+fn capabilities_are_answered_for_an_object_the_grant_does_not_hold() {
+    // The module's client probes every object's capabilities when it connects
+    // (tinymcp 0.18.0 holds no blobs); refusing the probe left it without storage.
+    let documents_only = StorageGrant {
+        collections: vec![CollectionSpec::new("notes")],
+        writable: true,
+        ..StorageGrant::default()
+    };
+    assert!(authorize(&documents_only, Object::Blobs, "Capabilities", &json!(null)).is_ok());
+    // Anything else on that object is still refused.
+    assert_eq!(
+        authorize(
+            &documents_only,
+            Object::Blobs,
+            "Head",
+            &json!({"key": "files/a"})
+        ),
+        Err(Denied::Object)
+    );
+}
+
+#[test]
 fn a_read_only_grant_refuses_every_write_and_allows_the_reads() {
     let g = read_only();
     let writes = [
@@ -333,7 +355,15 @@ fn only_modules_with_a_declared_grant_have_storage() {
     for record in crate::modules::registry::ALL {
         assert_eq!(
             declared(record.id).is_some(),
-            matches!(record.id, "tinymcp" | "tinychannels"),
+            matches!(
+                record.id,
+                "tinymcp"
+                    | "tinychannels"
+                    | "tinyconnectors"
+                    | "tinywallet"
+                    | "tinybox"
+                    | "tinyjuice"
+            ),
             "{}",
             record.id
         );

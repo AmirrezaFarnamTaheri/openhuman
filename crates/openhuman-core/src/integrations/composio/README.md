@@ -198,7 +198,7 @@ Published from `ops/` via `crate::core::bus::BUS.publish` (`crate::core::events:
 ## Further reading
 
 - [Parent module README](../README.md)
-- [Third-party integrations](../../../../../gitbooks/features/integrations/README.md)
+- [Third-party integrations](../../../../../docs/gitbooks/en/features/integrations/README.md)
 - [tinyconnectors](../../../../../vendor/tinyconnectors/README.md)
 
 Connector argument preparation, calendar defaults, task-window filtering and

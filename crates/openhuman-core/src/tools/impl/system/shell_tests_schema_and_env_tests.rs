@@ -335,7 +335,9 @@ fn shell_schema_advertises_timeout_secs() {
     let schema = tool.parameters_schema();
     let timeout = &schema["properties"]["timeout_secs"];
     assert_eq!(timeout["type"], "integer");
-    assert_eq!(timeout["minimum"], 1);
+    // 0 is the documented "no deadline" value, so a schema-validating
+    // provider must accept it.
+    assert_eq!(timeout["minimum"], 0);
     assert_eq!(timeout["maximum"], 3600);
 }
 

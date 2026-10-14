@@ -20,6 +20,78 @@ use tinybox_core::shell::scan::{
 };
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
+/// Deny broad recursive scans of OS trees before running a shell command.
+///
+/// TinyBox parses the command first; inspecting its command segments avoids
+/// classifying quoted search patterns or heredoc bodies as filesystem targets.
+/// This is defense in depth, not a substitute for OS-level sandboxing.
+#[cfg(feature = "modules")]
+fn unbounded_system_scan(analysis: &crate::modules::tinybox::contract::CommandAnalysis) -> bool {
+    for segment in &analysis.segments {
+        let name = segment.normalized_name.to_ascii_lowercase();
+        let args = &segment.arguments;
+        let recursive = match name.as_str() {
+            "find" | "rg" | "fd" | "tree" => true,
+            "grep" | "ls" => args.iter().any(|value| {
+                value == "--recursive"
+                    || (value.starts_with('-')
+                        && !value.starts_with("--")
+                        && value
+                            .chars()
+                            .skip(1)
+                            .any(|letter| letter == 'R' || letter == 'r'))
+            }),
+            _ => false,
+        };
+        if !recursive {
+            continue;
+        }
+        let mut operands = args
+            .iter()
+            .map(String::as_str)
+            .filter(|value| !value.starts_with('-'));
+        let target = match name.as_str() {
+            "find" | "ls" | "tree" | "fd" => operands.find(|value| broad_system_root(value)),
+            "rg" if args.iter().any(|value| value == "--files") => {
+                operands.find(|value| broad_system_root(value))
+            }
+            "rg" | "grep" => {
+                // A lone '/' is a search pattern, not a filesystem target.
+                // With two operands, the last one is the explicit path.
+                let paths = operands.collect::<Vec<_>>();
+                (paths.len() >= 2)
+                    .then(|| paths.last().copied())
+                    .flatten()
+                    .filter(|value| broad_system_root(value))
+            }
+            _ => None,
+        };
+        if target.is_some() {
+            return true;
+        }
+    }
+    false
+}
+
+/// Only prohibit the broad tree itself, never a narrower SDK or project path.
+#[cfg(feature = "modules")]
+fn broad_system_root(raw: &str) -> bool {
+    let clean = raw.trim_matches(|ch: char| ch == '"' || ch == '\'');
+    let path = clean.trim_end_matches('/');
+    let path = if path.is_empty() { "/" } else { path };
+    matches!(
+        path,
+        "/" | "/System"
+            | "/Applications"
+            | "/Library"
+            | "/Users"
+            | "/Volumes"
+            | "/private"
+            | "~"
+            | "~/Library"
+    )
+}
+
 impl SecurityPolicy {
     /// Apply the supervised allowlist to parser facts returned by TinyBox.
     /// The module owns shell structure; this host owns the permission policy.
@@ -76,6 +148,11 @@ impl SecurityPolicy {
         analysis: &crate::modules::tinybox::contract::CommandAnalysis,
     ) -> Result<CommandClass, String> {
         self.check_protected_path_words(&analysis.literal_words)?;
+        if unbounded_system_scan(analysis) {
+            return Err(format!(
+                "{POLICY_BLOCKED_MARKER} Unbounded system search blocked. Narrow the search to a specific project or toolchain subdirectory."
+            ));
+        }
 
         let mut class = analysis
             .segments

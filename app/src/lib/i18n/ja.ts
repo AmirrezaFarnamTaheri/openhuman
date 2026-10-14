@@ -2808,7 +2808,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.revealKeys': 'API キーを表示',
   'settings.ai.fleet.hideKeys': 'API キーを非表示',
   'settings.ai.fleet.tooManyKeys': 'プロバイダーグループでは最大 128 個の API キーを設定できます。',
-  'settings.ai.fleet.partialKeyVerified': '一部の API キーは拒否されましたが、別のキーは確認できました。キーの状態を確認してください。',
+  'settings.ai.fleet.partialKeyVerified':
+    '一部の API キーは拒否されましたが、別のキーは確認できました。キーの状態を確認してください。',
   'settings.ai.apiKeyFieldLabel': 'APIキー',
   'settings.ai.apiKeyRequired': '続行するにはAPIキーを貼り付けてください。',
   'settings.ai.apiKeyStoredEncrypted': 'APIキーはこのデバイス上で暗号化されて保存されます。',

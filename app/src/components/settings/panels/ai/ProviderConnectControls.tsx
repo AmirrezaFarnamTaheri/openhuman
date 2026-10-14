@@ -108,9 +108,10 @@ export const ProviderKeyDialog = ({
   const titleId = 'provider-key-dialog-title';
 
   const handleSave = async () => {
-    const trimmed = multiKeyMode && !endpointKeyMode && !isLocalRuntime
-      ? parseFleetApiKeys(multiKeyRows.join('\n')).join('\n')
-      : value.trim();
+    const trimmed =
+      multiKeyMode && !endpointKeyMode && !isLocalRuntime
+        ? parseFleetApiKeys(multiKeyRows.join('\n')).join('\n')
+        : value.trim();
     const trimmedKey = keyValue.trim();
     if (!trimmed) {
       setError(
@@ -240,7 +241,10 @@ export const ProviderKeyDialog = ({
           </Label>
           {!isLocalRuntime && !endpointKeyMode && (
             <label className="flex cursor-pointer items-center gap-2 text-xs text-content-secondary">
-              <input type="checkbox" checked={multiKeyMode} disabled={busy}
+              <input
+                type="checkbox"
+                checked={multiKeyMode}
+                disabled={busy}
                 onChange={e => {
                   const enabled = e.target.checked;
                   if (enabled) {
@@ -251,21 +255,29 @@ export const ProviderKeyDialog = ({
                     setRevealKeys(false);
                   }
                   setMultiKeyMode(enabled);
-                }} />
+                }}
+              />
               {t('settings.ai.fleet.multiKeyMode', 'Use multiple API keys')}
             </label>
           )}
           {!isLocalRuntime && !endpointKeyMode && multiKeyMode ? (
             <div className="space-y-2">
-              <div role="group" aria-label={t('settings.ai.fleet.keyEntries', 'API key entries')} className="space-y-2">
+              <div
+                role="group"
+                aria-label={t('settings.ai.fleet.keyEntries', 'API key entries')}
+                className="space-y-2">
                 {multiKeyRows.map((entry, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <input
                       id={index === 0 ? 'provider-key-input' : undefined}
                       type={revealKeys ? 'text' : 'password'}
-                      aria-label={formatI18n(t('settings.ai.fleet.keyIndex', 'API key {index}'), { index: String(index + 1) })}
+                      aria-label={formatI18n(t('settings.ai.fleet.keyIndex', 'API key {index}'), {
+                        index: String(index + 1),
+                      })}
                       value={entry}
-                      placeholder={formatI18n(t('settings.ai.fleet.keyIndex', 'API key {index}'), { index: String(index + 1) })}
+                      placeholder={formatI18n(t('settings.ai.fleet.keyIndex', 'API key {index}'), {
+                        index: String(index + 1),
+                      })}
                       disabled={busy}
                       autoComplete="off"
                       autoCorrect="off"
@@ -278,7 +290,7 @@ export const ProviderKeyDialog = ({
                       onChange={event => {
                         const nextValue = event.target.value;
                         setMultiKeyRows(previous =>
-                          previous.map((token, i) => i === index ? nextValue : token)
+                          previous.map((token, i) => (i === index ? nextValue : token))
                         );
                         setError(null);
                       }}
@@ -289,19 +301,23 @@ export const ProviderKeyDialog = ({
                         event.preventDefault();
                         const input = event.currentTarget;
                         try {
-                          setMultiKeyRows(insertFleetKeysAtSelection(
-                            multiKeyRows,
-                            index,
-                            clipboardText,
-                            input.selectionStart ?? input.value.length,
-                            input.selectionEnd ?? input.value.length
-                          ));
+                          setMultiKeyRows(
+                            insertFleetKeysAtSelection(
+                              multiKeyRows,
+                              index,
+                              clipboardText,
+                              input.selectionStart ?? input.value.length,
+                              input.selectionEnd ?? input.value.length
+                            )
+                          );
                           setError(null);
                         } catch {
-                          setError(t(
-                            'settings.ai.fleet.tooManyKeys',
-                            'A provider group supports at most 128 API keys.'
-                          ));
+                          setError(
+                            t(
+                              'settings.ai.fleet.tooManyKeys',
+                              'A provider group supports at most 128 API keys.'
+                            )
+                          );
                         }
                       }}
                     />
@@ -311,10 +327,13 @@ export const ProviderKeyDialog = ({
                         size="xs"
                         variant="tertiary"
                         disabled={busy}
-                        aria-label={formatI18n(t('settings.ai.fleet.removeKeyIndex', 'Remove API key {index}'), { index: String(index + 1) })}
-                        onClick={() => setMultiKeyRows(previous =>
-                          previous.filter((_, i) => i !== index)
-                        )}>
+                        aria-label={formatI18n(
+                          t('settings.ai.fleet.removeKeyIndex', 'Remove API key {index}'),
+                          { index: String(index + 1) }
+                        )}
+                        onClick={() =>
+                          setMultiKeyRows(previous => previous.filter((_, i) => i !== index))
+                        }>
                         {t('settings.ai.fleet.removeKey', 'Remove')}
                       </Button>
                     )}
@@ -322,15 +341,28 @@ export const ProviderKeyDialog = ({
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <Button type="button" variant="tertiary" size="xs"
+                <Button
+                  type="button"
+                  variant="tertiary"
+                  size="xs"
                   disabled={busy || multiKeyRows.length >= 128}
                   onClick={() => setMultiKeyRows(previous => [...previous, ''])}>
                   {t('settings.ai.fleet.addKey', 'Add another API key')}
                 </Button>
-                <Button type="button" variant="tertiary" size="xs"
-                  disabled={busy} onClick={() => setRevealKeys(previous => !previous)}
-                  aria-label={revealKeys ? t('settings.ai.fleet.hideKeys', 'Hide API keys') : t('settings.ai.fleet.revealKeys', 'Reveal API keys')}>
-                  {revealKeys ? t('settings.ai.fleet.hideKeys', 'Hide API keys') : t('settings.ai.fleet.revealKeys', 'Reveal API keys')}
+                <Button
+                  type="button"
+                  variant="tertiary"
+                  size="xs"
+                  disabled={busy}
+                  onClick={() => setRevealKeys(previous => !previous)}
+                  aria-label={
+                    revealKeys
+                      ? t('settings.ai.fleet.hideKeys', 'Hide API keys')
+                      : t('settings.ai.fleet.revealKeys', 'Reveal API keys')
+                  }>
+                  {revealKeys
+                    ? t('settings.ai.fleet.hideKeys', 'Hide API keys')
+                    : t('settings.ai.fleet.revealKeys', 'Reveal API keys')}
                 </Button>
               </div>
             </div>
@@ -357,9 +389,9 @@ export const ProviderKeyDialog = ({
           )}
           {!isLocalRuntime && !endpointKeyMode && (
             <p className="text-xs text-content-muted">
-              Separate keys with commas, semicolons or newlines. Each request selects
-              one available credential; invalid keys are evicted and rate-limited keys
-              temporarily cool down. All keys stay in the provider's encrypted credential store.
+              Separate keys with commas, semicolons or newlines. Each request selects one available
+              credential; invalid keys are evicted and rate-limited keys temporarily cool down. All
+              keys stay in the provider's encrypted credential store.
             </p>
           )}
           {/* OMLX (endpointKeyMode): render the API key field in addition to

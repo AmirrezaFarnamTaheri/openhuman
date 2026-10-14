@@ -9,7 +9,7 @@ use crate::security::credentials::state_dir_from_config;
 
 use super::pending;
 use super::store::{
-    import_codex_cli_auth, persist_openai_oauth_token, OPENAI_OAUTH_PROFILE_NAME,
+    import_codex_cli_auth, persist_openai_oauth_token, selected_openai_oauth_profile,
     OPENAI_PROVIDER_KEY,
 };
 
@@ -76,11 +76,16 @@ pub fn import_openai_oauth_from_codex_cli(config: &Config) -> Result<serde_json:
 
 pub fn openai_oauth_status(config: &Config) -> Result<OpenAiOAuthStatusResult, String> {
     use crate::security::credentials::profiles::AuthProfileKind;
-    use crate::security::credentials::AuthService;
-
-    let profile = AuthService::from_config(config)
-        .get_profile(OPENAI_PROVIDER_KEY, Some(OPENAI_OAUTH_PROFILE_NAME))
-        .map_err(|error| error.to_string())?;
+    // OAuth and API-key profiles share the OpenAI provider namespace.
+    // Resolve an actual OAuth account first, but when none is authorized,
+    // preserve the previous UI contract: report the selected API-key profile
+    // as disconnected/token rather than erasing its identity.
+    let profile = match selected_openai_oauth_profile(config)? {
+        Some(oauth) => Some(oauth),
+        None => crate::security::credentials::AuthService::from_config(config)
+            .get_profile(OPENAI_PROVIDER_KEY, None)
+            .map_err(|error| error.to_string())?,
+    };
     let Some(profile) = profile else {
         return Ok(OpenAiOAuthStatusResult {
             connected: false,
@@ -111,9 +116,15 @@ pub fn openai_oauth_status(config: &Config) -> Result<OpenAiOAuthStatusResult, S
 pub async fn disconnect_openai_oauth(config: &Config) -> Result<serde_json::Value, String> {
     use crate::security::credentials::AuthService;
 
-    let removed = AuthService::from_config(config)
-        .remove_profile(OPENAI_PROVIDER_KEY, OPENAI_OAUTH_PROFILE_NAME)
-        .map_err(|error| error.to_string())?;
+    let selected = selected_openai_oauth_profile(config)?;
+    let removed = if let Some(profile) = selected {
+        AuthService::from_config(config)
+            .remove_profile(OPENAI_PROVIDER_KEY, &profile.profile_name)
+            .map_err(|error| error.to_string())?
+    } else {
+        false
+    };
     flow(config).await?.clear_pending().await;
-    Ok(serde_json::json!({ "disconnected": removed }))
+    let connected = selected_openai_oauth_profile(config)?.is_some();
+    Ok(serde_json::json!({ "disconnected": removed, "connected": connected }))
 }

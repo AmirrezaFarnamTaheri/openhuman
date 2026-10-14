@@ -297,6 +297,26 @@ pub(super) fn report_resolution_failure(id: &str, reason: &str) {
     }
 }
 
+/// A search-path preload and an explicit per-id resolution can overlap.
+/// The broker admits only one module for a bus name; a losing loader sees
+/// "already loaded" even though the exact service it wanted is ready.
+/// Only the actual broker admission list (never an error substring) may turn
+/// that raced error into success.
+fn loaded_or_outcome(outcome: Result<(), String>, admitted: bool) -> Result<(), String> {
+    match outcome {
+        Err(_) if admitted => Ok(()),
+        other => other,
+    }
+}
+
+fn is_serving(runtime: &host::ModuleRuntime, bus_name: &str) -> bool {
+    runtime
+        .host()
+        .list()
+        .iter()
+        .any(|info| info.manifest.bus_name.as_str() == bus_name)
+}
+
 /// Do the actual work of getting `record` serving.
 async fn resolve(config: &Config, record: &'static ModuleRecord) -> Result<(), String> {
     let runtime = host::runtime().await.map_err(|_| {
@@ -308,12 +328,7 @@ async fn resolve(config: &Config, record: &'static ModuleRecord) -> Result<(), S
 
     // Already serving — a module loaded from the search path at boot, or by an
     // earlier explicit `modules.load_local`.
-    if runtime
-        .host()
-        .list()
-        .iter()
-        .any(|info| info.manifest.bus_name.as_str() == record.bus_name)
-    {
+    if is_serving(runtime, record.bus_name) {
         return Ok(());
     }
 
@@ -347,13 +362,15 @@ async fn resolve(config: &Config, record: &'static ModuleRecord) -> Result<(), S
         ModuleSource::LocalFile | ModuleSource::Source => {
             if let Some(path) = plan.artifact {
                 let module_config = module_config(config, record.id);
-                return blocking(move || load_local(runtime, &path, record.id, module_config))
-                    .await;
+                let result =
+                    blocking(move || load_local(runtime, &path, record.id, module_config)).await;
+                return loaded_or_outcome(result, is_serving(runtime, record.bus_name));
             }
         }
         ModuleSource::Linked => {
             let module_config = module_config(config, record.id);
-            return blocking(move || load_linked(runtime, record.id, module_config)).await;
+            let result = blocking(move || load_linked(runtime, record.id, module_config)).await;
+            return loaded_or_outcome(result, is_serving(runtime, record.bus_name));
         }
         ModuleSource::Release => {}
     }
@@ -372,7 +389,9 @@ async fn resolve(config: &Config, record: &'static ModuleRecord) -> Result<(), S
     })
     .await
     .unwrap_or(false);
-    if found_on_search_path {
+    // Concurrent module resolutions each scan the *entire* search path. A
+    // sibling may admit this module while our own scan reports a duplicate.
+    if found_on_search_path || is_serving(runtime, record.bus_name) {
         return Ok(());
     }
 
@@ -408,7 +427,7 @@ async fn resolve(config: &Config, record: &'static ModuleRecord) -> Result<(), S
             prune_stale_versions(&root, record.id, record.version);
             Ok(())
         }
-        Err(reason) => Err(reason),
+        Err(reason) => loaded_or_outcome(Err(reason), is_serving(runtime, record.bus_name)),
     }
 }
 

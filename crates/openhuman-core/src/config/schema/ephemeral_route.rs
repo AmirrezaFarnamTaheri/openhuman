@@ -145,6 +145,7 @@ pub fn apply(config: &mut crate::config::Config, route: EphemeralRoute) {
         endpoint: route.endpoint.clone(),
         auth_style: AuthStyle::Bearer,
         default_model: Some(model.clone()),
+        ..Default::default()
     });
 
     let provider_string = format!("{EPHEMERAL_ROUTE_SLUG}:{model}");

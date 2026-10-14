@@ -529,3 +529,58 @@ fn write_to_not_yet_existing_path_in_workspace_still_allowed() {
 }
 
 // -- auto_approve defaults ----------------------------------------
+
+#[cfg(feature = "modules")]
+#[test]
+fn shell_analysis_rejects_unbounded_system_scans_even_when_policy_disabled() {
+    use crate::modules::tinybox::contract::{CommandAnalysis, CommandSegment};
+    let policy = SecurityPolicy {
+        enabled: false,
+        ..SecurityPolicy::default()
+    };
+    let check = |name: &str, args: &[&str]| {
+        let segment = CommandSegment {
+            source: format!("{name} {}", args.join(" ")),
+            command: format!("{name} {}", args.join(" ")),
+            basename: name.to_string(),
+            normalized_name: name.to_string(),
+            arguments: args.iter().map(|s| (*s).to_string()).collect(),
+            class: CommandClass::Read,
+            leading_env_assignment: false,
+            dangerous_env_prefix: false,
+            executor: false,
+        };
+        let mut words = vec![name.to_string()];
+        words.extend(args.iter().map(|s| (*s).to_string()));
+        let facts = CommandAnalysis {
+            segments: vec![segment],
+            hidden_execution: false,
+            redirection: false,
+            expansion: false,
+            tee: false,
+            background: false,
+            literal_words: words,
+        };
+        policy.check_gated_command_analysis(&facts)
+    };
+    for (cmd, args) in [
+        ("find", vec!["/", "-name", "*.rs"]),
+        ("find", vec!["-L", "/System", "-name", "*.h"]),
+        ("rg", vec!["pattern", "/"]),
+        ("rg", vec!["--files", "/Applications"]),
+        ("grep", vec!["-R", "pattern", "/Library"]),
+        ("ls", vec!["-laR", "/Users"]),
+    ] {
+        assert!(check(cmd, &args).is_err(), "{cmd} {args:?}");
+    }
+    for (cmd, args) in [
+        ("find", vec!["/usr/include", "-name", "stddef.h"]),
+        ("find", vec!["./src", "-name", "*.rs"]),
+        ("rg", vec!["pattern", "./src"]),
+        ("rg", vec!["/", "./src"]),
+        ("ls", vec!["-la", "/Library"]),
+        ("ls", vec!["-R", "./src"]),
+    ] {
+        assert!(check(cmd, &args).is_ok(), "{cmd} {args:?}");
+    }
+}

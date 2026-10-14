@@ -703,4 +703,21 @@
 #                      so the importer is net zero. Re-measured on this branch
 #                      with dep-sim --cut-nothing: 326 packages / 302 names / 2
 #                      native builds on Linux. No size claim.
-flows:326:302:2
+# 328/304/2 2026-10-14  Unified upstream-sync pin compatibility on PR #6.
+#                      Linux CI's exact `cargo tree -p openhuman -e normal
+#                      --no-default-features --features flows` profile now
+#                      resolves 328 packages / 304 distinct names / 2 native.
+#                      This is +2 packages/names over the October 13 baseline.
+#                      Global Cargo.lock still contains 932 package records and
+#                      the SAME set of 824 crate names as `main`: upstream
+#                      package and feature-edge updates make two previously
+#                      locked crates reachable in `flows`; no new external
+#                      projects entered the lockfile and the native set remains
+#                      libsqlite3-sys and ring. The pinned TinyFlows imports
+#                      remain required to read legacy flow/cron state and the
+#                      inference contract remains required for model routing.
+#                      This is an explicitly reviewed compatibility exception,
+#                      NOT a dependency shed and NOT a claim of faster builds.
+#                      Further reachable-graph shedding must lower BOTH this
+#                      floor and dep-sim's independent calibration together.
+flows:328:304:2

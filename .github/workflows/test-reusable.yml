@@ -133,6 +133,10 @@ jobs:
     timeout-minutes: 60
     container:
       image: ghcr.io/tinyhumansai/openhuman_ci:latest
+      # Reap orphaned grandchildren after timeout process-group termination.
+      # Without an init as PID 1, killed descendants remain zombies and
+      # kill(pid, 0) falsely reports them alive in the shell regression.
+      options: --init
     env:
       CARGO_INCREMENTAL: "0"
       RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
@@ -178,6 +182,16 @@ jobs:
           bash scripts/ci/self-hosted/install-test-modules.sh \
             "$module_root" "$module_root/modules.env"
           cat "$module_root/modules.env" >> "$GITHUB_ENV"
+          # The container process runs as root, but GitHub supplies a
+          # runner-owned /github/home. TinyBus refuses a native module whose
+          # release cache traverses that other user's HOME (correctly).
+          # Keep the production ownership gate intact and give module
+          # regression tests an isolated, current-uid-owned cache instead.
+          module_cache="/opt/openhuman-test-cache/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$module_cache"
+          chmod 0700 "$module_cache"
+          test "$(stat -c %u "$module_cache")" = "$(id -u)"
+          echo "XDG_CACHE_HOME=$module_cache" >> "$GITHUB_ENV"
       - name: Test core crate (openhuman)
         # This script uses Bash-only process substitution below. Reusable
         # workflows do not inherit the caller's `defaults.run.shell`, and
@@ -303,6 +317,9 @@ jobs:
       CARGO_BUILD_JOBS: "1"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
+      - name: Allow deep nested submodule fixtures on Windows
+        shell: pwsh
+        run: git config --global core.longpaths true
       - name: Checkout code
         uses: actions/checkout@v7
         with:

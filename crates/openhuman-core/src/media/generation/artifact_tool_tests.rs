@@ -96,11 +96,16 @@ async fn files_a_single_generated_artifact() {
 
     // Original staged file is gone (moved).
     assert!(!staging.join("stub-0.png").exists());
-    // Artifact metadata + file both landed under the artifacts root.
-    let artifact_dir = workspace.join("artifacts").join(artifact_id);
-    assert!(artifact_dir.join("meta.json").exists());
-    let meta_raw = std::fs::read_to_string(artifact_dir.join("meta.json")).unwrap();
-    assert!(meta_raw.contains("\"image\""));
+    // Artifact metadata is persisted through the workspace document store
+    // (not necessarily as a legacy artifacts/<id>/meta.json sidecar).
+    let saved = crate::agent::artifacts::store::get_artifact(&workspace, artifact_id)
+        .await
+        .expect("saved artifact metadata must be retrievable");
+    assert!(matches!(saved.kind, ArtifactKind::Image));
+    assert!(
+        saved.file.is_some(),
+        "finalized artifact must reference its output"
+    );
 }
 
 #[tokio::test]
@@ -130,11 +135,11 @@ async fn files_every_artifact_when_n_greater_than_one() {
     for entry in artifacts {
         let id = entry["artifact_id"].as_str().expect("artifact_id set");
         assert!(ids.insert(id.to_string()), "artifact ids must be unique");
-        assert!(workspace
-            .join("artifacts")
-            .join(id)
-            .join("meta.json")
-            .exists());
+        let saved = crate::agent::artifacts::store::get_artifact(&workspace, id)
+            .await
+            .expect("every generated artifact has persistent metadata");
+        assert!(matches!(saved.kind, ArtifactKind::Image));
+        assert!(saved.file.is_some());
     }
 }
 

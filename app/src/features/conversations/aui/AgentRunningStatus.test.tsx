@@ -66,6 +66,48 @@ describe('AgentRunningStatus', () => {
     expect(screen.getByTestId('agent-running-status-thinking')).toHaveClass('[&>div>span]:size-1');
     expect(screen.queryByTestId('agent-running-status-tasks')).not.toBeInTheDocument();
   });
+
+  it('preserves thinking start across unmount and remount on thread switch', () => {
+    const { unmount } = render(
+      <Provider store={buildStore()}>
+        <AssistantUiRuntimeProvider>
+          <AgentRunningStatus />
+        </AssistantUiRuntimeProvider>
+      </Provider>
+    );
+    unmount();
+
+    render(
+      <Provider store={buildStore()}>
+        <AssistantUiRuntimeProvider>
+          <AgentRunningStatus />
+        </AssistantUiRuntimeProvider>
+      </Provider>
+    );
+    expect(screen.getByTestId('agent-running-status-thinking')).toBeInTheDocument();
+  });
+
+  it('resets thinking timer when a new request starts', () => {
+    const store1 = buildStore({ liveRequestIdByThread: { [THREAD_ID]: 'req-1' } });
+    const { rerender } = render(
+      <Provider store={store1}>
+        <AssistantUiRuntimeProvider>
+          <AgentRunningStatus />
+        </AssistantUiRuntimeProvider>
+      </Provider>
+    );
+    expect(screen.getByTestId('agent-running-status-thinking')).toBeInTheDocument();
+
+    const store2 = buildStore({ liveRequestIdByThread: { [THREAD_ID]: 'req-2' } });
+    rerender(
+      <Provider store={store2}>
+        <AssistantUiRuntimeProvider>
+          <AgentRunningStatus />
+        </AssistantUiRuntimeProvider>
+      </Provider>
+    );
+    expect(screen.getByTestId('agent-running-status-thinking')).toBeInTheDocument();
+  });
 });
 
 function renderStatus(chatRuntime?: Record<string, unknown>) {

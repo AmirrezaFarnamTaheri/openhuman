@@ -16,7 +16,6 @@ use std::sync::{
 };
 use tempfile::TempDir;
 use tinyinference_core::sanitize::{sanitize_api_error, MAX_API_ERROR_CHARS};
-use tinyinference_llm::providers::openai::codex::openai_codex_client_version;
 
 #[derive(Clone)]
 struct ModelProbeState {
@@ -119,7 +118,7 @@ async fn configure_openrouter_workspace(tmp: &TempDir, endpoint: String, token: 
         endpoint,
         auth_style: AuthStyle::Bearer,
         default_model: None,
-    ..Default::default()
+        ..Default::default()
     });
     config.save().await.expect("save config");
 
@@ -185,7 +184,7 @@ async fn configure_generic_workspace(tmp: &TempDir, endpoint: String) -> Config 
         endpoint,
         auth_style: AuthStyle::None,
         default_model: None,
-    ..Default::default()
+        ..Default::default()
     });
     config.save().await.expect("save config");
     config

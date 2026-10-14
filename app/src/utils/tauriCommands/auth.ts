@@ -69,14 +69,15 @@ export async function openhumanDecryptSecret(ciphertext: string): Promise<Comman
 export interface AuthProfileSummary {
   id: string;
   provider: string;
-  profile_name: string;
+  profileName: string;
   kind: 'token' | 'oauth';
-  account_id?: string | null;
-  workspace_id?: string | null;
-  has_token?: boolean;
-  metadata?: Record<string, string>;
-  created_at?: string;
-  updated_at?: string;
+  accountId: string | null;
+  workspaceId: string | null;
+  metadataKeys: string[];
+  updatedAt: string;
+  hasToken: boolean;
+  hasTokenSet: boolean;
+  isActive: boolean;
 }
 
 /**
@@ -114,5 +115,16 @@ export async function authListProviderCredentials(
   return await callCoreRpc<CommandResponse<AuthProfileSummary[]>>({
     method: 'openhuman.auth_list_provider_credentials',
     params: provider ? { provider } : {},
+  });
+}
+
+/** Change the active named account without moving or exposing secret material. */
+export async function authActivateProviderCredentials(args: {
+  provider: string;
+  profile: string;
+}): Promise<CommandResponse<AuthProfileSummary>> {
+  return await callCoreRpc<CommandResponse<AuthProfileSummary>>({
+    method: 'openhuman.auth_activate_provider_credentials',
+    params: args,
   });
 }

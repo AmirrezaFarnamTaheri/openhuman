@@ -32,6 +32,22 @@ test("CI lanes run the complete frontend suite", () => {
   assert.match(workflow, /test:coverage/);
 });
 
+test("CI lanes typecheck the e2e specs in hosted and self-hosted profiles", () => {
+  assert.match(commands, /pnpm --filter openhuman-app typecheck:e2e/);
+  for (const profile of ["hosted", "ex63"]) {
+    const off = buildPlan({
+      profile,
+      areas: Object.fromEntries(Object.keys(AREA_ENV).map((key) => [key, false])),
+      env: { CI_SCRATCH_DIR: "/scratch" },
+    });
+    const check = off.lanes
+      .flatMap((lane) => lane.checks)
+      .find((candidate) => candidate.name === "tsc-e2e");
+    assert.ok(check, profile + ": expected an E2E typecheck lane");
+    assert.equal(check.when, false, profile + ": skip E2E typecheck without frontend changes");
+  }
+});
+
 test("CI lanes run the complete Rust suite", () => {
   assert.match(commands, /bash scripts\/ci\/rust-coverage\.sh/);
   assert.doesNotMatch(commands, /rust-core-src|rust-core-full/);

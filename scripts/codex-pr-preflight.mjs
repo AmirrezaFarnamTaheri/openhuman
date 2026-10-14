@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 
-const REQUIRED_FILES = ['AGENTS.md', 'gitbooks/developing/README.md', 'Cargo.toml', 'app/package.json'];
+const REQUIRED_FILES = ['AGENTS.md', 'docs/gitbooks/en/developing/README.md', 'Cargo.toml', 'app/package.json'];
 const APP_PATTERNS = [/^app\//, /^docs\//];
 const ROOT_RUST_PATTERNS = [/^src\//, /^tests\//, /^Cargo\.toml$/, /^Cargo\.lock$/];
 const TAURI_PATTERNS = [/^crates\/openhuman-app\//];

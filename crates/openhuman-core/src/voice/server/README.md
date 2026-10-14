@@ -43,6 +43,6 @@ agent-tool surface for voice generally lives in `voice/schemas/` and
 ## Further reading
 
 - [Parent module (`voice`)](../README.md)
-- [Voice tools](../../../../../gitbooks/features/native-tools/voice.md)
+- [Voice tools](../../../../../docs/gitbooks/en/features/native-tools/voice.md)
 - [tinyvoice submodule](../../../../../vendor/tinyvoice/README.md)
-- [Chat](../../../../../gitbooks/features/chat.md)
+- [Chat](../../../../../docs/gitbooks/en/features/chat.md)

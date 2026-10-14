@@ -16,10 +16,9 @@ use crate::core::runtime::CoreContext;
 /// opens.
 pub(crate) fn recover_workspace(id: &ProfileId, workspace_dir: &std::path::Path) {
     let now = chrono::Utc::now().to_rfc3339();
-    match tinyagents_session::turn_state::store::mark_all_interrupted(
-        workspace_dir.to_path_buf(),
-        &now,
-    ) {
+    match crate::agent::session_store::default_turn_states_for(workspace_dir)
+        .mark_all_interrupted(&now)
+    {
         Ok(0) => {}
         Ok(turns) => log::info!("[profiles] profile={id} recovered {turns} interrupted turn(s)"),
         Err(error) => log::warn!("[profiles] profile={id} turn recovery failed: {error}"),

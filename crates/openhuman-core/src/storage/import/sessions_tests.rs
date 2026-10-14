@@ -5,7 +5,7 @@ use sha2::Digest as _;
 use std::collections::BTreeMap;
 use tempfile::TempDir;
 use tinyagents_session::transcript::{write_transcript, TranscriptMessage, TranscriptMeta};
-use tinyagents_session::turn_state::{TurnState, TurnStateStore};
+use tinyagents_session::turn_state::TurnState;
 
 fn workspace() -> (TempDir, Config) {
     let dir = TempDir::new().unwrap();
@@ -79,14 +79,20 @@ fn legacy_workspace(config: &Config) {
     )
     .unwrap();
 
-    TurnStateStore::new(config.workspace_dir.clone())
-        .put(&TurnState::started(
-            "thread-1",
-            "req-1",
-            4,
-            "2026-01-01T00:00:00Z",
-        ))
-        .unwrap();
+    // The classic file layout: turn_states/<hex(thread)>/<hex(request)>.json.
+    let snapshot = TurnState::started("thread-1", "req-1", 4, "2026-01-01T00:00:00Z");
+    let thread_dir = config
+        .workspace_dir
+        .join("memory")
+        .join("conversations")
+        .join("turn_states")
+        .join(hex::encode("thread-1"));
+    std::fs::create_dir_all(&thread_dir).unwrap();
+    std::fs::write(
+        thread_dir.join(format!("{}.json", hex::encode("req-1"))),
+        serde_json::to_vec(&snapshot).unwrap(),
+    )
+    .unwrap();
 
     let db = config.workspace_dir.join(SESSIONS_DB);
     std::fs::create_dir_all(db.parent().unwrap()).unwrap();

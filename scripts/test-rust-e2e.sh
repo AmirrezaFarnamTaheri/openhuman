@@ -172,6 +172,10 @@ fi
 # them with Cargo's default feature set makes the runner fail before a test can
 # execute. Keep this list in the same canonical source as `pnpm test:rust`.
 PRODUCT_FEATURES="$(bash "$REPO_ROOT/scripts/ci/product-features.sh")"
+# scripts/e2e-core.sh adds a storage driver (storage-mongodb) the product set lacks.
+if [ -n "${OPENHUMAN_E2E_EXTRA_FEATURES:-}" ]; then
+  PRODUCT_FEATURES="$PRODUCT_FEATURES,$OPENHUMAN_E2E_EXTRA_FEATURES"
+fi
 
 module_target="$(bash "$SCRIPT_DIR/ci/native-test-module-platform.sh")"
 IFS=$'\t' read -r module_ext module_platform <<< "$module_target"
@@ -279,6 +283,24 @@ for suite in "${SUITES[@]}"; do
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
       --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
       --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+    continue
+  fi
+  if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then
+    # Explicit E2E feature plus staged TinyMCP: never ignore this integration
+    # test or silently omit the module-backed restart/secret-storage contract.
+    echo "[rust-e2e]   $CARGO_BIN test --test $suite (module staged, serial)"
+    bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
+      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES,e2e-test-support" \
+      --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+    continue
+  fi
+  if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then
+    # Explicit E2E feature plus staged TinyMCP: never ignore this integration
+    # test or silently omit the module-backed restart/secret-storage contract.
+    echo "[rust-e2e]   $CARGO_BIN test --test $suite (module staged, serial)"
+    bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
+      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES,e2e-test-support" \
+      --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
     continue
   fi
   if [ "$suite" = "tinydocs_linked_e2e" ]; then

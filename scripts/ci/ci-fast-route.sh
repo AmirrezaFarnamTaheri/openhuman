@@ -9,6 +9,15 @@
 #
 # Env: GH_TOKEN, REPO, HEAD_SHA, AUTHOR, ACTOR, ASSOCIATION.
 set -euo pipefail
+# A fork never has access to tinyhumansai's private EX63 runner group.
+# OWNER association in a personal fork is not membership in upstream's runner group.
+# Route fork PRs to GitHub-hosted lanes without polling an unavailable EX63 job.
+if [ "${REPO}" != "tinyhumansai/openhuman" ]; then
+  echo "[ci][route] fork repository=${REPO}; using GitHub-hosted lanes"
+  echo "outsider=true" >> "$GITHUB_OUTPUT"
+  echo "source=fallback" >> "$GITHUB_OUTPUT"
+  exit 0
+fi
 # ci-fast.yml decides who is an org member: it runs from main with
 # the CI_MEMBERSHIP_TOKEN secret, so it also sees private members.
 # Fork `pull_request` runs get no secrets and see those members only

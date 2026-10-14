@@ -1,0 +1,44 @@
+name: Peer fleet offline contracts
+
+on:
+  push:
+    branches: [main, feat/prodex-convergence]
+    paths:
+      - '.github/workflows/peer-fleet-contracts.yml'
+      - 'packages/peer-fleet/**'
+      - 'scripts/ci/audit-peer-archives.py'
+      - 'scripts/ci/classify-peer-census.py'
+      - 'scripts/ci/tests/test_peer_*.py'
+  pull_request:
+    paths:
+      - '.github/workflows/peer-fleet-contracts.yml'
+      - 'packages/peer-fleet/**'
+      - 'scripts/ci/audit-peer-archives.py'
+      - 'scripts/ci/classify-peer-census.py'
+      - 'scripts/ci/tests/test_peer_*.py'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Verify native scripts
+        run: |
+          node --check packages/peer-fleet/catalog.mjs
+          node --check packages/peer-fleet/quota.mjs
+          node --check packages/peer-fleet/routing.mjs
+          node --check packages/peer-fleet/presets.mjs
+          node --check packages/peer-fleet/refresh.mjs
+          node --check packages/peer-fleet/widgets.mjs
+          node --check packages/peer-fleet/convergence.mjs
+      - name: Run all peer fleet contracts
+        run: node --test packages/peer-fleet/test/*.test.mjs
+      - name: Run Python peer archive census regression contracts
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/ci/tests -p 'test_peer_*.py' -v

@@ -1,8 +1,18 @@
 use super::*;
-use tinyskills::{FileCatalogStore, Validators};
+use tinyskills::Validators;
 
 fn catalog(fetched_at: u64) -> StoredCatalog {
     StoredCatalog::new(Vec::new(), fetched_at, Validators::default(), 0)
+}
+
+/// Writes `<dir>/<registry>.json` the way tinyskills' removed
+/// `FileCatalogStore` did: the serialized [`StoredCatalog`].
+fn write_legacy(dir: &Path, registry: &str, catalog: &StoredCatalog) {
+    std::fs::write(
+        dir.join(format!("{registry}.json")),
+        serde_json::to_vec(catalog).unwrap(),
+    )
+    .unwrap();
 }
 
 #[tokio::test]
@@ -24,10 +34,7 @@ async fn a_saved_catalog_is_read_back_without_writing_a_catalog_file() {
 #[tokio::test]
 async fn a_legacy_catalog_file_is_imported_once_and_left_in_place() {
     let tmp = tempfile::tempdir().unwrap();
-    FileCatalogStore::new(tmp.path())
-        .save("hermes", &catalog(11))
-        .await
-        .unwrap();
+    write_legacy(tmp.path(), "hermes", &catalog(11));
     let legacy = tmp.path().join("hermes.json");
     let before = std::fs::read(&legacy).unwrap();
     let store = HostCatalogStore::new(tmp.path());
@@ -62,10 +69,7 @@ async fn an_unusable_legacy_file_reads_as_an_empty_cache() {
 async fn a_symlinked_legacy_file_is_not_followed() {
     let tmp = tempfile::tempdir().unwrap();
     let elsewhere = tempfile::tempdir().unwrap();
-    FileCatalogStore::new(elsewhere.path())
-        .save("hermes", &catalog(5))
-        .await
-        .unwrap();
+    write_legacy(elsewhere.path(), "hermes", &catalog(5));
     std::os::unix::fs::symlink(
         elsewhere.path().join("hermes.json"),
         tmp.path().join("hermes.json"),

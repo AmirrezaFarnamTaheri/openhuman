@@ -169,5 +169,5 @@ SQL cascade). With no backend configured (the desktop default)
 ## Further reading
 
 - [Parent module README](../README.md)
-- [Triggers](../../../../../gitbooks/features/integrations/triggers.md)
-- [Goals and todos](../../../../../gitbooks/features/goals-and-todos.md)
+- [Triggers](../../../../../docs/gitbooks/en/features/integrations/triggers.md)
+- [Goals and todos](../../../../../docs/gitbooks/en/features/goals-and-todos.md)

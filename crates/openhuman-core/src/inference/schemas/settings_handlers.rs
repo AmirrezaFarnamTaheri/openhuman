@@ -127,9 +127,7 @@ struct ModelFleetResetParams {
 
 /// Model-fleet health and cooldowns are process-local, keyed by workspace.
 /// The response contains only counts and statuses, never raw token material.
-pub(super) fn handle_inference_model_fleet_status(
-    _params: Map<String, Value>,
-) -> ControllerFuture {
+pub(super) fn handle_inference_model_fleet_status(_params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let config = config_rpc::load_config_with_timeout().await?;
         let status = crate::inference::provider::factory::model_fleet_health(&config);
@@ -137,9 +135,7 @@ pub(super) fn handle_inference_model_fleet_status(
     })
 }
 
-pub(super) fn handle_inference_model_fleet_reset(
-    params: Map<String, Value>,
-) -> ControllerFuture {
+pub(super) fn handle_inference_model_fleet_reset(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let update = deserialize_params::<ModelFleetResetParams>(params)?;
         let config = config_rpc::load_config_with_timeout().await?;

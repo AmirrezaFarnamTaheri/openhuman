@@ -155,15 +155,12 @@ async fn a_preference_still_in_the_legacy_file_gates_execution() {
     let mut config = Config::default();
     config.workspace_dir = tmp.path().join("workspace");
     config.config_path = tmp.path().join("config.toml");
-    let legacy = crate::integrations::composio::file_store::path(
+    crate::integrations::composio::file_store::save(
         &config,
         crate::integrations::composio::file_store::USER_SCOPES_FILE,
-    );
-    std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-    std::fs::write(
-        &legacy,
-        serde_json::json!({"gmail": {"read": true, "write": false, "admin": false}}).to_string(),
+        &serde_json::json!({"gmail": {"read": true, "write": false, "admin": false}}),
     )
+    .await
     .unwrap();
 
     let decision = evaluate_tool_visibility(&config, "GMAIL_SEND_EMAIL").await;

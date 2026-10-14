@@ -245,3 +245,75 @@ fn remove_profile_namespace_fallback_removes_namespaced_profile() {
     let profile = service.get_profile("deepseek", None).unwrap();
     assert!(profile.is_none());
 }
+
+#[test]
+fn removing_an_active_provider_account_reselects_the_same_credential_kind() {
+    use crate::security::credentials::profiles::{AuthProfilesStore, TokenSet};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let store = AuthProfilesStore::new(tmp.path(), false);
+    let make_oauth = |name: &str| {
+        AuthProfile::new_oauth(
+            "provider:openai",
+            name,
+            TokenSet {
+                access_token: format!("access-{name}"),
+                refresh_token: Some(format!("refresh-{name}")),
+                id_token: None,
+                expires_at: None,
+                token_type: None,
+                scope: None,
+            },
+        )
+    };
+    let a = make_oauth("oauth");
+    let b = make_oauth("oauth-secondary");
+    store.upsert_profile(a.clone(), true).unwrap();
+    store.upsert_profile(b.clone(), false).unwrap();
+    store
+        .upsert_profile(
+            AuthProfile::new_token("provider:openai", "api-key", "secret".into()),
+            false,
+        )
+        .unwrap();
+    let auth = AuthService::new(tmp.path(), false);
+    assert!(auth.remove_profile("provider:openai", "oauth").unwrap());
+    let active = auth.get_profile("provider:openai", None).unwrap().unwrap();
+    assert_eq!(
+        active.id, b.id,
+        "selected OAuth account must not fall back to an API key"
+    );
+    let snapshot = auth.load_profiles().unwrap();
+    assert!(snapshot.profiles.contains_key(&b.id));
+    assert!(!snapshot.profiles.contains_key(&a.id));
+    assert_eq!(snapshot.profiles.len(), 2);
+}
+
+#[test]
+fn removing_an_app_session_never_auto_signs_into_another_session() {
+    let tmp = tempfile::tempdir().unwrap();
+    let auth = AuthService::new(tmp.path(), false);
+    auth.store_provider_token(
+        APP_SESSION_PROVIDER,
+        "first",
+        "jwt-a",
+        Default::default(),
+        true,
+    )
+    .unwrap();
+    auth.store_provider_token(
+        APP_SESSION_PROVIDER,
+        "second",
+        "jwt-b",
+        Default::default(),
+        false,
+    )
+    .unwrap();
+    auth.remove_profile(APP_SESSION_PROVIDER, "first").unwrap();
+    assert!(auth
+        .load_profiles()
+        .unwrap()
+        .active_profiles
+        .get(APP_SESSION_PROVIDER)
+        .is_none());
+}

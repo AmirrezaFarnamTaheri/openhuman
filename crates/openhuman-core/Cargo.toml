@@ -92,9 +92,10 @@ tinyflows-copilot = { path = "../../vendor/tinyflows/crates/tinyflows-copilot", 
 # Reads the stores tinyflows hosts used before storage moved onto the ports
 # (`flows.db`, `jobs.db`, `checkpoints.db`, drafts) and copies them into the
 # port-backed stores, read-only (`storage::import`). It needs the engine and the
-# catalog, so it rides the `flows` gate; a build without `flows` imports no
-# legacy cron jobs.
-tinyflows-import = { path = "../../vendor/tinyflows/crates/tinyflows-import", optional = true }
+# catalog, so those importers ride the `flows` gate (`tinyflows-import/engine`,
+# `store`, `catalog`); the `schedule` importer is always on, so a build without
+# `flows` still imports legacy cron jobs.
+tinyflows-import = { path = "../../vendor/tinyflows/crates/tinyflows-import", default-features = false, features = ["schedule"] }
 # TinyAgents — Rust LLM orchestration framework (LangGraph/LangChain-style):
 # durable state graphs, agent-loop harness, model/tool registries, REPL +
 # `.rag` workflow language. openhuman's agent engine + orchestration run on this
@@ -615,9 +616,9 @@ default = ["media", "skills", "flows", "mcp", "channels", "http-server", "schedu
 #
 # `web_chat`'s event payload types (`WebChannelEvent`, `TurnUsagePayload`, …)
 # stay compiled in BOTH builds, since ~10 always-on domains construct them.
-# Likewise `inference::http::types` and `EXTERNAL_OPENAI_COMPAT_PROVIDER` stay
+# Likewise `EXTERNAL_OPENAI_COMPAT_PROVIDER` stays
 # compiled for the server's auth policy.
-http-server = ["dep:axum"]
+http-server = ["dep:axum", "tinyinference-llm/server-http"]
 # The public inference gate is retained for host feature compatibility.
 # Native permission probes execute through the TinyComputer module.
 inference = ["modules"]
@@ -748,7 +749,7 @@ media = ["tinyagents-harness/media"]
 # runtime `DomainSet::flows` flag (#4796): the feature narrows the compile-time
 # surface, `DomainSet` gates it at runtime.
 # NOTE: this gate does NOT drop `tinyagents` itself — 26+ domains consume it.
-flows = ["modules", "dep:tinyflows", "dep:tinyflows-catalog", "dep:tinyflows-copilot", "dep:tinyflows-import", "tinyflows-drivers/catalog"]
+flows = ["modules", "dep:tinyflows", "dep:tinyflows-catalog", "dep:tinyflows-copilot", "tinyflows-import/engine", "tinyflows-import/store", "tinyflows-import/catalog", "tinyflows-drivers/catalog"]
 # Skills domains: `openhuman::skills` (metadata/discovery/install),
 # `openhuman::skill_runtime` (SKILL.md execution + the skill_executor agent),
 # and `openhuman::skill_registry` (remote catalogs + the skill_setup agent).

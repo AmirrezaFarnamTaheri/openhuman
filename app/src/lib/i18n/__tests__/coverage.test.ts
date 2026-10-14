@@ -74,9 +74,16 @@ describe('i18n coverage', () => {
   it.each(['en', ...LOCALES])('%s translates the multi-token connection controls', locale => {
     const flat = locale === 'en' ? enFlat : loadLocale(locale);
     const keys = [
-      'multiKeyMode', 'keyEntries', 'keyIndex', 'removeKeyIndex',
-      'removeKey', 'addKey', 'revealKeys', 'hideKeys',
-      'tooManyKeys', 'partialKeyVerified',
+      'multiKeyMode',
+      'keyEntries',
+      'keyIndex',
+      'removeKeyIndex',
+      'removeKey',
+      'addKey',
+      'revealKeys',
+      'hideKeys',
+      'tooManyKeys',
+      'partialKeyVerified',
     ];
     for (const name of keys) {
       const key = `settings.ai.fleet.${name}`;

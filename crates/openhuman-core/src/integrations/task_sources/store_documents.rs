@@ -299,6 +299,31 @@ impl Docs {
         })
     }
 
+    /// Load one source's dedup ledger with a single query rather than 2*N
+    /// independent storage reads in a fetch of N tasks (upstream #7367).
+    /// Malformed rows remain errors: silently dropping them could incorrectly
+    /// categorize a previously ingested task as new.
+    pub(super) fn ingested_hashes(
+        &self,
+        source_id: &str,
+    ) -> Result<std::collections::HashMap<String, String>> {
+        let query = Query::filter(Filter::eq("source_id", source_id));
+        self.0.run(|docs| async move {
+            let entries = docs.query_all(INGESTED, &query).await?;
+            let mut hashes = std::collections::HashMap::with_capacity(entries.len());
+            for stored in entries {
+                let id = text(&stored.doc, "external_id").ok_or_else(|| {
+                    StorageError::serialization("ingested task missing external_id")
+                })?;
+                let hash = text(&stored.doc, "content_hash").ok_or_else(|| {
+                    StorageError::serialization("ingested task missing content_hash")
+                })?;
+                hashes.insert(id.to_string(), hash.to_string());
+            }
+            Ok(hashes)
+        })
+    }
+
     pub(super) fn list_ingested_refs(&self, source_id: &str) -> Result<Vec<IngestedTaskRef>> {
         let query = Query::filter(Filter::eq("source_id", source_id))
             .sort(Sort::asc("ingested_ms"))

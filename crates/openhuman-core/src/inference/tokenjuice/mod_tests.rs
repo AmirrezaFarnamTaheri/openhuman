@@ -342,6 +342,8 @@ fn juice_off_drops_handles_summaries_and_companion_tools() {
     assert!(companion_tool_names("orchestrator", &off).is_empty());
 }
 
+// The module listing only exists with the `modules` feature.
+#[cfg(feature = "modules")]
 #[tokio::test]
 async fn juice_off_install_never_touches_the_module() {
     let off = juice_off();

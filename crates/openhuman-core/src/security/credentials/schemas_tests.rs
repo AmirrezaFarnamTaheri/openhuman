@@ -38,6 +38,7 @@ fn every_known_schema_key_returns_a_non_unknown_schema() {
         "auth_get_session_token",
         "auth_store_provider_credentials",
         "auth_remove_provider_credentials",
+        "auth_activate_provider_credentials",
         "auth_list_provider_credentials",
     ];
     for k in keys {
@@ -195,4 +196,33 @@ fn to_json_emits_logs_and_result_envelope() {
     );
     assert_eq!(v["logs"][0], "my-log");
     assert_eq!(v["result"]["ok"], true);
+}
+
+#[test]
+fn activate_provider_schema_requires_a_provider_and_a_named_profile() {
+    let s = schemas("auth_activate_provider_credentials");
+    assert!(s
+        .inputs
+        .iter()
+        .any(|field| field.name == "provider" && field.required));
+    assert!(s
+        .inputs
+        .iter()
+        .any(|field| field.name == "profile" && field.required));
+}
+
+#[test]
+fn provider_summary_json_uses_camel_case_without_exposing_secret_material() {
+    let profile = crate::security::credentials::profiles::AuthProfile::new_token(
+        "provider:google",
+        "work",
+        "sk-confidential".to_owned(),
+    );
+    let summary = crate::security::credentials::session_support::summarize_auth_profile(&profile);
+    let json = serde_json::to_value(summary).unwrap();
+    assert_eq!(json["profileName"], "work");
+    assert_eq!(json["hasToken"], true);
+    assert_eq!(json["isActive"], false);
+    assert!(json.get("profile_name").is_none());
+    assert!(!json.to_string().contains("sk-confidential"));
 }

@@ -286,7 +286,7 @@ pub async fn list_configured_models_from_config(
     for (position, candidate_key) in candidates.iter().enumerate() {
         let has_more = position + 1 < candidates.len();
         checked_keys += 1;
-        if is_openrouter_provider(&entry) {
+        if is_openrouter_provider(&entry.slug, &entry.endpoint) {
             match validate_openrouter_api_key(&client, &routing.endpoint, candidate_key).await {
                 Ok(()) => {}
                 Err(error) if should_retry_openrouter_key(&error, has_more) => {
@@ -310,7 +310,8 @@ pub async fn list_configured_models_from_config(
         request = match entry.auth_style {
             AuthStyle::Bearer => {
                 if !candidate_key.is_empty() {
-                    let mut r = request.header("Authorization", format!("Bearer {}", candidate_key));
+                    let mut r =
+                        request.header("Authorization", format!("Bearer {}", candidate_key));
                     if let Some(account_id) = routing.account_id.as_deref() {
                         r = r.header(OPENAI_CODEX_ACCOUNT_HEADER, account_id);
                     }
@@ -502,32 +503,5 @@ pub async fn list_configured_models_from_config(
 }
 
 #[cfg(test)]
-mod model_fleet_probe_tests {
-    use super::*;
-
-    #[test]
-    fn retries_only_auth_rejections_while_untried_credentials_remain() {
-        assert!(should_try_next_catalog_key(401, true));
-        assert!(should_try_next_catalog_key(403, true));
-        assert!(!should_try_next_catalog_key(401, false));
-        assert!(!should_try_next_catalog_key(408, true));
-        assert!(!should_try_next_catalog_key(429, true));
-        assert!(!should_try_next_catalog_key(500, true));
-    }
-
-    #[test]
-    fn openrouter_validation_tries_another_key_only_for_auth_status() {
-        assert!(should_retry_openrouter_key(
-            "OpenRouter key validation returned 401: invalid API key", true
-        ));
-        assert!(should_retry_openrouter_key(
-            "OpenRouter key validation returned 403: forbidden", true
-        ));
-        assert!(!should_retry_openrouter_key(
-            "OpenRouter key validation returned 401: invalid API key", false
-        ));
-        assert!(!should_retry_openrouter_key(
-            "OpenRouter key validation failed: connection refused", true
-        ));
-    }
-}
+#[path = "catalog_listing_tests.rs"]
+mod model_fleet_probe_tests;

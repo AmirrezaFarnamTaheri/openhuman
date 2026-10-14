@@ -17,17 +17,17 @@ import {
   flushCloudProviders,
   importOpenAiCodexCliAuth,
   listProviderModels,
-  probeProviderModelFleet,
   loadAISettings,
   loadLocalProviderSnapshot,
-  loadProviderAuthErrors,
   loadModelFleetStatus,
-  resetModelFleetStatus,
+  loadProviderAuthErrors,
   modelRegistryVision,
   OPENAI_CODEX_OAUTH_MISSING_AUTH_URL,
   OPENAI_CODEX_OAUTH_MISSING_CALLBACK_URL,
   parseProviderString,
+  probeProviderModelFleet,
   type ProviderRef,
+  resetModelFleetStatus,
   saveAISettings,
   serializeProviderRef,
   setCloudProviderKey,
@@ -1295,20 +1295,26 @@ describe('model fleet health RPCs', () => {
 
   it('accepts the already-unwrapped sanitized status result', async () => {
     const snapshot = {
-      providers: [{
-        slug: 'openai',
-        models: [{
-          model: 'gpt-test',
-          keys: [{
-            index: 0,
-            status: 'healthy',
-            successes: 1,
-            failures: 0,
-            active_leases: 0,
-            cooldown_remaining_ms: 0,
-          }],
-        }],
-      }],
+      providers: [
+        {
+          slug: 'openai',
+          models: [
+            {
+              model: 'gpt-test',
+              keys: [
+                {
+                  index: 0,
+                  status: 'healthy',
+                  successes: 1,
+                  failures: 0,
+                  active_leases: 0,
+                  cooldown_remaining_ms: 0,
+                },
+              ],
+            },
+          ],
+        },
+      ],
     };
     mockCallCoreRpc.mockResolvedValue(snapshot);
     await expect(loadModelFleetStatus()).resolves.toEqual(snapshot);

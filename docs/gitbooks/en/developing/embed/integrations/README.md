@@ -8,6 +8,7 @@ icon: code
 An embedded runtime composes the capabilities its host supplies. Start with the adapter your application needs:
 
 - [OpenAI-compatible providers and BYOK](openai-compatible.md)
+- [Prodex Gateway (optional multi-provider routing)](prodex-gateway.md)
 - [TinyHumans managed inference](tinyhumans-managed.md)
 - [Local models](local-models.md)
 - [MCP servers](mcp.md)

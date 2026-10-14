@@ -82,6 +82,7 @@ const STORAGE_E2E_TARGETS = [
   "storage_agent_scopes_e2e",
   "storage_delegation_e2e",
   "storage_default_import_e2e",
+  "storage_desktop_upgrade_e2e",
   "cli_storage_url_e2e",
 ];
 const STORAGE_LIB_FILTERS = [
@@ -160,9 +161,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
   const modulesDir = ex63
     ? `${scratch}/test-modules`
     : "/opt/openhuman-test-modules/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}";
-  const modulesEnvFile = "ci-out/test-modules.env";
-  const withModules = (cmd) =>
-    `set -a && . ${modulesEnvFile} && set +a && ${cmd}`;
+  // EX63 lanes share one workspace and can run concurrently. Each lane's
+  // native fixture directory and env-file are separate: the installer removes
+  // and recreates per-module directories, which must never race another lane.
+  const laneModuleDir = (lane) => `${modulesDir}/${lane}`;
+  const laneModuleEnv = (lane) => `ci-out/test-modules-${lane}.env`;
+  const withModules = (cmd, lane) =>
+    `set -a && . ${laneModuleEnv(lane)} && set +a && ${cmd}`;
 
   // Not run on pull requests: the core doctests (an uninstrumented core build
   // of their own) and the TinyJuice host-module regression (one test against
@@ -292,6 +297,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             : "pnpm --filter openhuman-app compile",
         },
         {
+          // E2E specs are not included in app/tsconfig.json; typecheck them separately.
+          name: "tsc-e2e",
+          when: areas.frontend,
+          needs: ["pnpm-install"],
+          run: "pnpm --filter openhuman-app typecheck:e2e",
+        },
+        {
           name: "prettier",
           when: areas.frontend,
           needs: ["pnpm-install"],
@@ -374,7 +386,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         {
           name: "test-modules",
           when: core,
-          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${modulesDir}" ${modulesEnvFile}`,
+          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir("rust-cov")}" ${laneModuleEnv("rust-cov")}`,
         },
         {
           name: "rust-core-coverage",
@@ -393,7 +405,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             OH_COV_TUI: "1",
             ...(ex63 ? { OH_COV_RUNNER: "nextest" } : {}),
           },
-          run: withModules("bash scripts/ci/rust-coverage.sh"),
+          run: withModules("bash scripts/ci/rust-coverage.sh", "rust-cov"),
         },
       ],
     },
@@ -437,9 +449,15 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           run: "bash scripts/ci-cancel-aware.sh cargo doc -p openhuman-embed --no-deps",
         },
         {
+          name: "test-modules",
+          when: core,
+          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir("rust-lint")}" ${laneModuleEnv("rust-lint")}`,
+        },
+        {
           name: "embed-offline-examples",
           when: core,
-          run: "node scripts/run-embed-examples.mjs",
+          needs: ["test-modules"],
+          run: withModules("node scripts/run-embed-examples.mjs", "rust-lint"),
         },
         {
           name: "tinyhumans-clippy",
@@ -471,13 +489,16 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           // module host while keeping web3 disabled, so its wallet callback
           // gate is exercised rather than silently selecting zero tests.
           // MCP resources do not touch test_support; introspection stays
-          // scoped to avoid tests that require the complete product.
+          // scoped to avoid tests that require the complete product. The
+          // wallet grant's ungated tests sit beside a web3-gated one, so they
+          // run here with web3 off (check-gated-test-allowlist.sh).
           name: "gate-contract-tests-features",
           when: gateSmoke,
           run:
             "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features" +
             " --features modules,mcp,e2e-test-support --lib --" +
-            " modules::host:: modules::registry:: mcp::server::resources:: test_support::introspect::",
+            " modules::host:: modules::registry:: modules::storage_grant_tinywallet::" +
+            " mcp::server::resources:: test_support::introspect::",
         },
         {
           name: "kernel-floor",
@@ -535,18 +556,29 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
       env: { ...rustEnv, ...sccache, RUST_MIN_STACK: "16777216" },
       checks: [
         {
+          name: "test-modules",
+          when: areas.storage,
+          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir("storage-drivers")}" ${laneModuleEnv("storage-drivers")}`,
+        },
+        {
           name: "storage-e2e",
           when: areas.storage,
-          run:
+          needs: ["test-modules"],
+          run: withModules(
             `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS}` +
             STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join(""),
+            "storage-drivers"
+          ),
         },
         {
           name: "storage-lib-tests",
           when: areas.storage,
-          run:
+          needs: ["test-modules"],
+          run: withModules(
             `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
             STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join(""),
+            "storage-drivers"
+          ),
         },
         {
           name: "storage-session-store-tests",

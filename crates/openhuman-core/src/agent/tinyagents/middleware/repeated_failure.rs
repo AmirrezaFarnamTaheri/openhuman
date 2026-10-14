@@ -418,6 +418,16 @@ impl Middleware<(), crate::agent::tinyagents::host::OpenHumanRunContext>
             self.stop.record_refusal();
             return Ok(());
         }
+        // The memory budget refusing a call past its cap is the host's own
+        // limit (`memory::tool_budget`), not a failure: a parallel batch of
+        // memory calls past the cap must not halt the run (#7717).
+        if crate::memory::tools::is_budget_refusal(result) {
+            tracing::debug!(
+                tool = tool_name,
+                "[tinyagents::mw] skipping memory budget refusal in failure ladder"
+            );
+            return Ok(());
+        }
         let step = self.step.fetch_add(1, Ordering::SeqCst) + 1;
 
         // Body-level failure signal: `validate_workflow` / `dry_run_workflow`

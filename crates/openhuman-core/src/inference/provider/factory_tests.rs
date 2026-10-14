@@ -60,7 +60,7 @@ fn openai_entry(id: &str, slug: &str) -> CloudProviderCreds {
         endpoint: "https://api.openai.com/v1".to_string(),
         auth_style: AuthStyle::Bearer,
         default_model: Some("gpt-4o".to_string()),
-    ..Default::default()
+        ..Default::default()
     }
 }
 
@@ -72,7 +72,7 @@ fn anthropic_entry(id: &str, slug: &str) -> CloudProviderCreds {
         endpoint: "https://api.anthropic.com/v1".to_string(),
         auth_style: AuthStyle::Anthropic,
         default_model: Some("claude-sonnet-4-6".to_string()),
-    ..Default::default()
+        ..Default::default()
     }
 }
 
@@ -84,7 +84,7 @@ fn nvidia_nim_entry(id: &str, default_model: Option<&str>) -> CloudProviderCreds
         endpoint: "https://integrate.api.nvidia.com/v1".to_string(),
         auth_style: AuthStyle::Bearer,
         default_model: default_model.map(ToString::to_string),
-    ..Default::default()
+        ..Default::default()
     }
 }
 
@@ -143,7 +143,7 @@ fn deepseek_entry(id: &str) -> CloudProviderCreds {
         endpoint: "https://api.deepseek.com/v1".to_string(),
         auth_style: AuthStyle::Bearer,
         default_model: Some("deepseek-chat".to_string()),
-    ..Default::default()
+        ..Default::default()
     }
 }
 
@@ -199,7 +199,9 @@ fn grouped_catalog_probe_candidates_are_distinct_and_never_a_delimited_bearer() 
         " bad-key, working-key;bad-key ".to_owned(),
     );
     assert_eq!(keys, vec!["bad-key", "working-key"]);
-    assert!(!keys.iter().any(|value| value.contains(',') || value.contains(';')));
+    assert!(!keys
+        .iter()
+        .any(|value| value.contains(',') || value.contains(';')));
 }
 
 #[test]
@@ -208,4 +210,210 @@ fn single_catalog_key_is_preserved_without_an_empty_candidate() {
         model_fleet_probe_keys("test-model-fleet-catalog-single", " only-key ".into()),
         vec!["only-key"],
     );
+}
+
+#[test]
+fn cloud_fleet_build_uses_resolved_codex_endpoint_without_retargeting_anthropic() {
+    use tinyinference_llm::providers::openai::codex::OpenAiCodexRouting;
+    let openai = openai_entry("oa", "openai");
+    let oauth = OpenAiCodexRouting {
+        endpoint: "https://chatgpt.com/backend-api/codex".into(),
+        using_oauth: true,
+        account_id: Some("acct-1".into()),
+    };
+    assert_eq!(
+        cloud_slug::cloud_base_url(&openai, &oauth),
+        "https://chatgpt.com/backend-api/codex"
+    );
+    let usual = OpenAiCodexRouting::standard("https://api.openai.com/v1");
+    assert_eq!(
+        cloud_slug::cloud_base_url(&openai, &usual),
+        "https://api.openai.com/v1"
+    );
+    let claude = anthropic_entry("an", "anthropic");
+    assert_eq!(
+        cloud_slug::cloud_base_url(&claude, &oauth),
+        "https://api.anthropic.com/v1"
+    );
+}
+
+#[test]
+fn prodex_gateway_rejects_remote_plaintext_and_embedded_url_credentials() {
+    for (url, accepted) in [
+        ("http://127.0.0.1:4000/v1", true),
+        ("http://localhost:4000/v1", true),
+        ("http://[::1]:4000/v1", true),
+        ("https://gateway.example.com/v1", true),
+        ("http://gateway.example.com/v1", false),
+        ("http://127.0.0.1.attacker.example/v1", false),
+        ("http://user:password@127.0.0.1:4000/v1", false),
+        ("http://127.0.0.1:4000/v1?api_key=secret", false),
+        ("https://gateway.example.com/v1#fragment", false),
+        ("file:///tmp/gateway", false),
+    ] {
+        assert_eq!(
+            cloud_slug::prodex_gateway_endpoint_is_safe(url),
+            accepted,
+            "{url} must respect gateway egress security"
+        );
+    }
+    let mut unsafe_provider = openai_entry("p_prodex", "prodex");
+    unsafe_provider.endpoint = "http://gateway.example.com/v1".into();
+    let config = config_with_providers(vec![unsafe_provider]);
+    let error = cloud_slug::resolve_cloud_slug("chat", "prodex", "prodex-fast", &config)
+        .err()
+        .expect("remote plaintext Prodex gateway must be rejected before auth lookup");
+    assert!(error.to_string().contains("HTTPS"), "{error}");
+}
+
+#[test]
+fn prodex_gateway_uses_exactly_one_scoped_virtual_key() {
+    assert!(cloud_slug::prodex_has_single_virtual_key(
+        "vk-inference-one"
+    ));
+    assert!(cloud_slug::prodex_has_single_virtual_key(
+        "  vk-inference-one  "
+    ));
+    assert!(!cloud_slug::prodex_has_single_virtual_key(""));
+    assert!(!cloud_slug::prodex_has_single_virtual_key("  "));
+    assert!(!cloud_slug::prodex_has_single_virtual_key("vk-one,vk-two"));
+    assert!(!cloud_slug::prodex_has_single_virtual_key("vk-one;vk-two"));
+    assert!(!cloud_slug::prodex_has_single_virtual_key("vk-one\nvk-two"));
+}
+
+#[test]
+fn prodex_gateway_rejects_unsafe_default_and_model_image_destinations() {
+    for url in [
+        "http://remote.example/v1",
+        "http://127.0.0.1.attacker.example/v1",
+        "https://user:secret@example.com/v1",
+        "https://example.com/v1?token=secret",
+        "file:///tmp/elsewhere",
+    ] {
+        for model_override in [false, true] {
+            let mut entry = openai_entry("p_prodex_images", "prodex");
+            entry.endpoint = "http://127.0.0.1:4000/v1".into();
+            if model_override {
+                entry
+                    .model_image_endpoints
+                    .insert("unused-image-model".into(), url.into());
+            } else {
+                entry.image_endpoint = Some(url.into());
+            }
+            let config = config_with_providers(vec![entry]);
+            let err = cloud_slug::resolve_cloud_slug("chat", "prodex", "test-model", &config)
+                .err()
+                .expect("unsafe image URL must fail before any credential lookup");
+            assert!(err.to_string().contains("HTTPS"), "{url}: {err}");
+        }
+    }
+}
+
+#[test]
+fn prodex_gateway_allows_safe_image_destinations() {
+    let mut entry = openai_entry("p_prodex_images", "prodex");
+    entry.endpoint = "http://127.0.0.1:4000/v1".into();
+    entry.image_endpoint = Some("https://images.example.com/v1".into());
+    entry
+        .model_image_endpoints
+        .insert("vision".into(), "http://[::1]:4001/v1".into());
+    assert!(
+        cloud_slug::prodex_gateway_destinations_are_safe(&entry),
+        "TLS and loopback destinations are safe for a scoped gateway key"
+    );
+    entry
+        .model_image_endpoints
+        .insert("another-model".into(), "http://remote.example/v1".into());
+    assert!(!cloud_slug::prodex_gateway_destinations_are_safe(&entry));
+}
+
+#[test]
+fn named_token_accounts_join_native_provider_rotation_without_cross_provider_leaks() {
+    let tmp = TempDir::new().unwrap();
+    let config = config_with_providers_in_tempdir(
+        &tmp,
+        vec![
+            openai_entry("g", "google"),
+            anthropic_entry("a", "anthropic"),
+        ],
+    );
+    let auth = AuthService::from_config(&config);
+    for (slug, account, key, active) in [
+        ("google", "work", "g-key-work", true),
+        ("google", "personal", "g-key-personal", false),
+        ("anthropic", "work", "anthropic-secret", true),
+    ] {
+        auth.store_provider_token(
+            &format!("provider:{slug}"),
+            account,
+            key,
+            Default::default(),
+            active,
+        )
+        .unwrap();
+    }
+    let keys =
+        super::credentials::lookup_token_account_fleet("google", &config, "g-key-work", false)
+            .unwrap();
+    assert_eq!(keys, vec!["g-key-work", "g-key-personal"]);
+    assert!(!keys.iter().any(|key| key.contains("anthropic")));
+    assert_eq!(
+        super::credentials::lookup_token_account_fleet(
+            "anthropic",
+            &config,
+            "anthropic-secret",
+            false,
+        )
+        .unwrap(),
+        vec!["anthropic-secret"]
+    );
+}
+
+#[test]
+fn named_token_accounts_never_join_oauth_or_delegated_gateway_routes() {
+    let tmp = TempDir::new().unwrap();
+    let config = config_with_providers_in_tempdir(&tmp, vec![openai_entry("a", "openai")]);
+    let auth = AuthService::from_config(&config);
+    auth.store_provider_token(
+        "provider:openai",
+        "personal",
+        "api-token",
+        Default::default(),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        super::credentials::lookup_token_account_fleet("openai", &config, "oauth-bearer", true,)
+            .unwrap(),
+        vec!["oauth-bearer"]
+    );
+    assert_eq!(
+        super::credentials::lookup_token_account_fleet(
+            "prodex",
+            &config,
+            "single-virtual-key",
+            false,
+        )
+        .unwrap(),
+        vec!["single-virtual-key"]
+    );
+}
+
+#[test]
+fn grouped_legacy_keys_and_named_tokens_are_deduplicated() {
+    let tmp = TempDir::new().unwrap();
+    let config = config_with_providers_in_tempdir(&tmp, vec![openai_entry("a", "google")]);
+    let auth = AuthService::from_config(&config);
+    auth.store_provider_token(
+        "provider:google",
+        "work",
+        "first;third;second",
+        Default::default(),
+        true,
+    )
+    .unwrap();
+    let keys =
+        super::credentials::lookup_token_account_fleet("google", &config, "first,second", false)
+            .unwrap();
+    assert_eq!(keys, vec!["first", "second", "third"]);
 }

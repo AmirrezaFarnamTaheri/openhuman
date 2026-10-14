@@ -102,7 +102,6 @@ pub(super) fn marked(
 
 /// `(found, written, skipped)` of a `tinyflows-import` report; problems are logged by
 /// id only, never with record content.
-#[cfg(feature = "flows")]
 fn counts(domain: &str, report: &tinyflows_import::ImportReport) -> (usize, usize, usize) {
     for problem in report.problems() {
         tracing::warn!(
@@ -182,7 +181,6 @@ pub fn import_flows(
 ///
 /// When the legacy file exists but cannot be read, or the backend fails. The
 /// legacy file is untouched either way.
-#[cfg(feature = "flows")]
 pub fn import_cron(
     backend: &Arc<dyn StorageBackend>,
     scope: &Scope,
@@ -234,15 +232,24 @@ fn agent_cron_dirs(workspace: &Path) -> Vec<(String, PathBuf)> {
 }
 
 /// Imports every tinyflows legacy store of `config`'s workspace into
-/// `backend`: the flow catalog and checkpoints, the workspace's cron jobs and
-/// each agent's. One [`Report`] per store; a failure in one does not stop the
-/// rest.
-#[cfg(feature = "flows")]
+/// `backend`: the flow catalog and checkpoints (only in a build with `flows`),
+/// the workspace's cron jobs and each agent's. One [`Report`] per store; a
+/// failure in one does not stop the rest. The cron importer needs only the
+/// `schedule` reader, so a build without `flows` still keeps its cron jobs.
 pub fn run_with(backend: &Arc<dyn StorageBackend>, config: &Config) -> Vec<Report> {
-    let mut reports = vec![finish(
+    let mut reports = Vec::new();
+    #[cfg(feature = "flows")]
+    reports.push(finish(
         FLOWS_DOMAIN,
         import_flows(backend, &Scope::local(), config),
-    )];
+    ));
+    #[cfg(not(feature = "flows"))]
+    if config.workspace_dir.join("flows").exists() {
+        tracing::warn!(
+            target: "openhuman::storage_import",
+            "[storage::import] built without `flows`; the legacy flow catalog is not imported"
+        );
+    }
     reports.push(finish(
         CRON_DOMAIN,
         import_cron(backend, &Scope::local(), config, &config.workspace_dir, ""),
@@ -255,21 +262,6 @@ pub fn run_with(backend: &Arc<dyn StorageBackend>, config: &Config) -> Vec<Repor
         ));
     }
     reports
-}
-
-/// Without `flows` there is no reader for the tinyflows formats; say so
-/// instead of silently dropping cron jobs.
-#[cfg(not(feature = "flows"))]
-pub fn run_with(_backend: &Arc<dyn StorageBackend>, config: &Config) -> Vec<Report> {
-    if legacy_jobs_db(&config.workspace_dir).is_file()
-        || !agent_cron_dirs(&config.workspace_dir).is_empty()
-    {
-        tracing::warn!(
-            target: "openhuman::storage_import",
-            "[storage::import] built without `flows`; the legacy cron databases are not imported"
-        );
-    }
-    Vec::new()
 }
 
 pub(super) fn finish(domain: &'static str, outcome: Result<Outcome>) -> Report {
@@ -304,3 +296,7 @@ pub(super) fn finish(domain: &'static str, outcome: Result<Outcome>) -> Report {
 #[cfg(all(test, feature = "flows"))]
 #[path = "tinyflows_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tinyflows_cron_tests.rs"]
+mod cron_tests;

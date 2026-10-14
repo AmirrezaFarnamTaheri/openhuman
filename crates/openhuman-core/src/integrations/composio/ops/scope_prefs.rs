@@ -5,8 +5,8 @@
 //! forwarder the `composio.{get,set}_user_scopes` handlers, the agent's scope
 //! gate and the flows capability gate read through.
 //!
-//! Before the module owned the rows the host kept them in
-//! `<workspace>/integrations/composio_user_scopes.json`. [`migrate_legacy`]
+//! Before the module owned the rows the host kept them in the
+//! `composio_user_scopes.json` state value. [`migrate_legacy`]
 //! moves any rows still there into the module (once per workspace, on the
 //! first read or write) and then empties that file, so a preference a user
 //! chose before the move still decides what the agent may run.
@@ -65,8 +65,7 @@ async fn migrate_legacy(config: &Config) {
     {
         return;
     }
-    let path = file_store::path(config, USER_SCOPES_FILE);
-    let rows = match file_store::load::<LegacyScopeFile>(&path).await {
+    let rows = match file_store::load::<LegacyScopeFile>(config, USER_SCOPES_FILE).await {
         Ok(rows) => rows,
         Err(error) => {
             // Unreadable is not "no rows": keep the file and try again later.
@@ -91,11 +90,12 @@ async fn migrate_legacy(config: &Config) {
         }
     }
     if !rows.is_empty() {
-        let cleared = file_store::update(&path, |prefs: &mut LegacyScopeFile| {
-            prefs.clear();
-            ((), true)
-        })
-        .await;
+        let cleared =
+            file_store::update(config, USER_SCOPES_FILE, |prefs: &mut LegacyScopeFile| {
+                prefs.clear();
+                ((), true)
+            })
+            .await;
         if let Err(error) = cleared {
             tracing::warn!(%error, "{LOG} legacy pref file could not be emptied");
             return;

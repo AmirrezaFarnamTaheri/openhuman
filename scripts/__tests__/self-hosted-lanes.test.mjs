@@ -268,6 +268,7 @@ test("the storage area arms only the storage-drivers lane, with the sqlite and f
     assert.deepEqual(
       on.filter((id) => !id.startsWith("static:")),
       [
+        "storage-drivers:test-modules",
         "storage-drivers:storage-e2e",
         "storage-drivers:storage-lib-tests",
         "storage-drivers:storage-session-store-tests",
@@ -289,7 +290,7 @@ test("the storage area arms only the storage-drivers lane, with the sqlite and f
     );
     const lane = plan.lanes.find((l) => l.name === "storage-drivers");
     assert.equal(lane.active, true, profile);
-    for (const check of lane.checks) {
+    for (const check of lane.checks.filter((c) => c.name !== "test-modules")) {
       assert.match(
         check.run,
         /--features (?:session-store,)?storage-sqlite,storage-file(?:\s|$)/,
@@ -737,4 +738,38 @@ test("process-static scan uses cancellation supervision in both profiles", () =>
       "bash scripts/ci-cancel-aware.sh node scripts/ci/check-process-statics.mjs",
     );
   }
+});
+
+test("each module-backed lane stages and sources native fixtures before executing", () => {
+  for (const plan of plans()) {
+    for (const [laneName, runner] of [
+      ["storage-drivers", "storage-lib-tests"],
+      ["storage-drivers", "storage-e2e"],
+      ["rust-lint", "embed-offline-examples"],
+    ]) {
+      const lane = plan.lanes.find((entry) => entry.name === laneName);
+      const install = lane.checks.find((check) => check.name === "test-modules");
+      const check = lane.checks.find((entry) => entry.name === runner);
+      assert.ok(install.when, laneName + ": native fixtures must be installed");
+      assert.match(install.run, /install-test-modules\.sh/);
+      assert.ok(check.needs.includes("test-modules"), runner + ": fixture dependency");
+      assert.ok(
+        check.run.includes(". ci-out/test-modules-" + laneName + ".env"),
+        runner + ": native module paths must reach Rust process"
+      );
+    }
+  }
+});
+
+test("concurrent EX63 Rust lanes never share mutable native-module folders", () => {
+  const plan = buildPlan({ profile: "ex63", areas: ALL, env: EX63_ENV });
+  const modulePaths = [];
+  for (const laneName of ["rust-cov", "rust-lint", "storage-drivers"]) {
+    const lane = plan.lanes.find((entry) => entry.name === laneName);
+    const install = lane.checks.find((check) => check.name === "test-modules");
+    assert.match(install.run, new RegExp("test-modules/" + laneName));
+    assert.match(install.run, new RegExp("test-modules-" + laneName + "\\.env"));
+    modulePaths.push(install.run);
+  }
+  assert.equal(new Set(modulePaths).size, 3);
 });

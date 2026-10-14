@@ -527,6 +527,23 @@ fn openai_oauth_status_reports_token_profile_as_disconnected() {
 }
 
 #[test]
+fn openai_oauth_status_reports_active_nonlegacy_token_account_as_disconnected() {
+    let tmp = tempdir().unwrap();
+    let config = test_config(&tmp);
+    let store = AuthProfilesStore::new(tmp.path(), false);
+    store
+        .upsert_profile(
+            AuthProfile::new_token(OPENAI_PROVIDER_KEY, "work", "sk-api-key".into()),
+            true,
+        )
+        .unwrap();
+    let status = openai_oauth_status(&config).unwrap();
+    assert!(!status.connected);
+    assert_eq!(status.auth_method.as_deref(), Some("token"));
+    assert_eq!(status.profile_id.as_deref(), Some("provider:openai:work"),);
+}
+
+#[test]
 fn lookup_key_for_slug_prefers_api_key_over_oauth_for_openai() {
     let tmp = tempdir().unwrap();
     let config = test_config(&tmp);

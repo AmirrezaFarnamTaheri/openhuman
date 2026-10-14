@@ -1,0 +1,73 @@
+name: Upstream fork-ahead census
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Continues incomplete default-branch inventories after this workflow lands on main.
+    - cron: '19 */2 * * *'
+  push:
+    branches:
+      - sync/upstream-2026-10-14
+    paths:
+      - scripts/ci/upstream_fork_audit.py
+      - scripts/ci/tests/test_upstream_fork_audit.py
+      - .github/workflows/fork-ahead-census.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: github.repository == 'AmirrezaFarnamTaheri/openhuman'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Unit-test the fork census before using the GitHub API
+        run: python3 -m unittest discover -s scripts/ci/tests -p 'test_upstream_fork_audit.py' -v
+      - name: Restore most recent checkpoint for this branch
+        uses: actions/cache/restore@v4
+        with:
+          path: .fork-audit
+          key: upstream-fork-census-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            upstream-fork-census-${{ github.ref_name }}-
+      - name: Run a bounded, resumable fork census
+        id: scan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/ci/upstream_fork_audit.py --budget 800
+          rc=$?
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+          if [[ -f .fork-audit/FORK_AHEAD_REPORT.md ]]; then
+            cat .fork-audit/FORK_AHEAD_REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ "$rc" != "0" && "$rc" != "2" ]]; then
+            exit "$rc"
+          fi
+          echo "Incomplete audits exit 2; rerun to resume from the saved checkpoint." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+      - name: Save checkpoint for next workflow run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .fork-audit
+          key: upstream-fork-census-${{ github.ref_name }}-${{ github.run_id }}
+      - name: Publish auditable results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-ahead-census-${{ github.run_id }}
+          path: .fork-audit
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90

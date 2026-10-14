@@ -205,15 +205,12 @@ async fn composio_list_tools_honours_a_preference_still_in_the_legacy_file() {
     let base = start_mock_backend(app).await;
     let tmp = tempfile::tempdir().unwrap();
     let config = config_with_backend(&tmp, base);
-    let legacy = crate::integrations::composio::file_store::path(
+    crate::integrations::composio::file_store::save(
         &config,
         crate::integrations::composio::file_store::USER_SCOPES_FILE,
-    );
-    std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-    std::fs::write(
-        &legacy,
-        json!({"gmail": {"read": true, "write": false, "admin": false}}).to_string(),
+        &json!({"gmail": {"read": true, "write": false, "admin": false}}),
     )
+    .await
     .unwrap();
 
     let outcome = composio_list_tools(&config, Some(vec!["gmail".into()]), None).await;

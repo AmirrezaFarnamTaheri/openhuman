@@ -147,6 +147,10 @@ async fn boot_migrates_legacy_files_into_the_chosen_folder() {
         tool_call_id: None,
     };
     save_artifact_meta(&cfg.workspace_dir, &meta).await.unwrap();
+    // The DB-backed metadata store no longer creates legacy artifact file
+    // folders as an incidental side-effect of writing meta.json. Construct
+    // the *legacy* source path explicitly; that is what migration moves.
+    std::fs::create_dir_all(cfg.workspace_dir.join("artifacts/legacy")).unwrap();
     std::fs::write(
         cfg.workspace_dir.join("artifacts/legacy/plan.docx"),
         b"plan",

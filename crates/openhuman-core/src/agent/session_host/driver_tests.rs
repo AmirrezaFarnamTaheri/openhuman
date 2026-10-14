@@ -268,3 +268,91 @@ fn recorded_declarations_allow_missing_executors_without_authorizing_fresh_names
     assert!(error.error.to_string().contains("invented_tool"));
     assert!(!error.error.to_string().contains("retired_tool"));
 }
+
+/// A Stop keeps the prompt and every round the provider accepted (#7715), and
+/// nothing past the last answered request: not streamed text, and not a tool
+/// call or result still in flight, which would replay as a dangling call.
+#[test]
+fn stopped_turn_hands_back_only_its_accepted_rounds() {
+    let request = || vec![Message::user("earlier"), Message::user("stop me")];
+    let cases: [(&str, Vec<Message>, usize, &[&str]); 3] = [
+        (
+            "mid-stream text",
+            vec![
+                Message::user("stop me"),
+                Message::tool("call-1", "committed 6b75a4c"),
+                Message::assistant("streamed, never accepted"),
+            ],
+            2,
+            &["stop me", "committed 6b75a4c"],
+        ),
+        (
+            "during a tool call",
+            vec![
+                Message::user("stop me"),
+                Message::assistant("response that requested the tool"),
+                Message::tool("call-2", "half-written output"),
+            ],
+            1,
+            &["stop me"],
+        ),
+        // Before the first model call the snapshot is empty: keep the request.
+        (
+            "before the first model call",
+            vec![],
+            0,
+            &["earlier", "stop me"],
+        ),
+    ];
+    for (case, messages, accepted_len, expected) in cases {
+        let snapshot = Arc::new(std::sync::Mutex::new(
+            crate::agent::tinyagents::TranscriptSnapshot {
+                messages,
+                accepted_len,
+                request_base_len: 1,
+                model_calls: 2,
+                ..Default::default()
+            },
+        ));
+        let sidecar = sidecar();
+        let failure = driver_cancelled_with_snapshot(
+            &snapshot,
+            &sidecar,
+            std::time::Duration::from_millis(7),
+            request(),
+        );
+        assert_eq!(failure.error, RuntimeError::Cancelled, "{case}");
+        let partial = failure.partial.expect(case);
+        let texts: Vec<String> = partial.history.iter().map(|m| m.text()).collect();
+        assert_eq!(texts, expected, "{case}");
+        assert!(partial.interrupted, "{case}");
+        assert!(partial.partial.is_none(), "{case}: the mirror owns display");
+        assert_eq!(sidecar.lock().unwrap().model_calls, 2, "{case}");
+    }
+}
+
+/// A turn out of time skips the model repair (#7716); the required block is
+/// then synthesized once and becomes the durable final row.
+#[test]
+fn synthesized_block_is_appended_once_and_replaces_the_final_row() {
+    let contract = tinyagents_harness::config::RequiredOutput {
+        block_key: "result".into(),
+        required_keys: vec!["status".into()],
+    };
+    let mut output = "Done.".to_string();
+    let mut history = vec![Message::user("go"), Message::assistant("Done.")];
+
+    append_synthesized_block(&mut output, &mut history, &contract);
+    assert!(tinyagents_harness::config::output_satisfies_contract(
+        &output, &contract
+    ));
+    assert_eq!(
+        history.len(),
+        2,
+        "the final row is replaced, not duplicated"
+    );
+
+    let once = output.clone();
+    append_synthesized_block(&mut output, &mut history, &contract);
+    assert_eq!(output, once, "a satisfied output is left alone");
+}

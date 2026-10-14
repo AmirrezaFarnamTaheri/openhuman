@@ -371,7 +371,8 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
         n.label !== p.label ||
         n.endpoint !== p.endpoint ||
         n.image_endpoint !== p.image_endpoint ||
-        JSON.stringify(n.model_image_endpoints ?? {}) !== JSON.stringify(p.model_image_endpoints ?? {}) ||
+        JSON.stringify(n.model_image_endpoints ?? {}) !==
+          JSON.stringify(p.model_image_endpoints ?? {}) ||
         n.rotation_strategy !== p.rotation_strategy ||
         n.ca_cert_pem !== p.ca_cert_pem ||
         n.auth_style !== p.auth_style
@@ -380,17 +381,29 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
   ) {
     patch.cloud_providers = next.cloudProviders
       .filter(p => !['', 'cloud', 'openhuman', 'pid'].includes(p.slug.trim()))
-      .map(({ id, slug, label, endpoint, auth_style, ca_cert_pem, image_endpoint, model_image_endpoints, rotation_strategy }) => ({
-        id,
-        slug,
-        label,
-        endpoint,
-        auth_style,
-        ca_cert_pem,
-        image_endpoint,
-        model_image_endpoints,
-        rotation_strategy,
-      }));
+      .map(
+        ({
+          id,
+          slug,
+          label,
+          endpoint,
+          auth_style,
+          ca_cert_pem,
+          image_endpoint,
+          model_image_endpoints,
+          rotation_strategy,
+        }) => ({
+          id,
+          slug,
+          label,
+          endpoint,
+          auth_style,
+          ca_cert_pem,
+          image_endpoint,
+          model_image_endpoints,
+          rotation_strategy,
+        })
+      );
   }
 
   for (const w of ROUTABLE_WORKLOADS) {
@@ -796,16 +809,9 @@ export async function probeProviderModelFleet(
   const response = await callCoreRpc<{
     result?: {
       models?: ModelInfo[];
-      fleet_probe?: {
-        authenticated?: boolean;
-        checked_keys?: number;
-        rejected_keys?: number;
-      };
+      fleet_probe?: { authenticated?: boolean; checked_keys?: number; rejected_keys?: number };
     };
-  }>({
-    method: 'openhuman.inference_list_models',
-    params: { provider_id: providerId },
-  });
+  }>({ method: 'openhuman.inference_list_models', params: { provider_id: providerId } });
   const verified = response?.result?.fleet_probe;
   const checkedKeys = verified?.checked_keys;
   const rejectedKeys = verified?.rejected_keys;
@@ -834,10 +840,7 @@ export interface ModelFleetKeyHealth {
   cooldown_remaining_ms: number;
 }
 export interface ModelFleetStatus {
-  providers: Array<{
-    slug: string;
-    models: Array<{ model: string; keys: ModelFleetKeyHealth[] }>;
-  }>;
+  providers: Array<{ slug: string; models: Array<{ model: string; keys: ModelFleetKeyHealth[] }> }>;
 }
 
 /** Read process-local routing health for keys used by recent calls. */
@@ -850,10 +853,7 @@ export async function loadModelFleetStatus(): Promise<ModelFleetStatus> {
 
 /** Revive provider keys after replacing/repairing credentials. */
 export async function resetModelFleetStatus(slug: string): Promise<void> {
-  await callCoreRpc({
-    method: CORE_RPC_METHODS.inferenceModelFleetReset,
-    params: { slug },
-  });
+  await callCoreRpc({ method: CORE_RPC_METHODS.inferenceModelFleetReset, params: { slug } });
 }
 
 /**

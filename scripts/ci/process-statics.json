@@ -28,5 +28,55 @@
     "category": "B",
     "reason": "Holds only unit mutexes. The key is the workspace directory plus the acting memory identity, so different scopes never share or wait on a lock and no tenant data is stored.",
     "verification": "tinymemes/service_tests.rs: foreground_remixes_share_a_lock_per_workspace_and_never_across_workspaces"
+  },
+  {
+    "file": "crates/openhuman-core/src/agent/multimodal.rs",
+    "scope": "",
+    "name": "MEMORY",
+    "type": "OnceLock<BlobAttachmentStash>",
+    "count": 1,
+    "category": "B",
+    "reason": "Process-local in-memory attachment fallback only for the CLI/direct/test path without init_attachments_dir; the host path uses the initialized workspace-backed stash instead. Avoids persisting bytes or credentials on disk and is never selected for initialized service workspaces.",
+    "verification": "agent/multimodal.rs: stash() selects workspace-scoped attachment_stash_for(workspace) when ATTACHMENTS_DIR is initialized; memory_stash() is the explicitly ephemeral uninitialized fallback. Never expose a shared fallback for multi-tenant services."
+  },
+  {
+    "file": "crates/openhuman-core/src/config/schema/cloud_providers.rs",
+    "scope": "",
+    "name": "BUILTIN_CLOUD_PROVIDERS",
+    "type": "LazyLock<Vec<BuiltinCloudProvider>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Immutable process-wide provider preset definitions converted from upstream builtin declarations plus host-owned presets. Contains no account, workspace, token or user data.",
+    "verification": "config/schema/cloud_providers_tests.rs: built-in provider contracts; cloud_providers.rs constructs the table solely from constants."
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/auth_error_registry.rs",
+    "scope": "",
+    "name": "REG",
+    "type": "OnceLock<ProviderAuthErrorRegistry>",
+    "count": 1,
+    "category": "B",
+    "reason": "Single-process suppression of repeated provider credential errors by provider slug; contains transient in-memory error states but no credential bytes. API consumers must keep this single-user diagnostic state out of multi-tenant authorization decisions.",
+    "verification": "inference/auth_error_registry.rs records and clears failed episodes by provider; no authenticated token values are stored in this structure."
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/context_window.rs",
+    "scope": "",
+    "name": "RESOLVER",
+    "type": "OnceLock<ContextWindowResolver>",
+    "count": 1,
+    "category": "B",
+    "reason": "Process-wide model context-window estimate cache keyed by provider/model; holds numeric token-window hints rather than user prompts, tokens or individual messages.",
+    "verification": "inference/context_window.rs: remembered_window(provider, model) delegates to tinyinference-llm resolver; no credentials are passed to the cache."
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/mod.rs",
+    "scope": "",
+    "name": "DONE",
+    "type": "std::sync::OnceLock<ImportedSet>",
+    "count": 1,
+    "category": "B",
+    "reason": "Deduplicates successful legacy module imports per importer type, module-scope identity and absolute data directory, using an async gate. A cancelled or failed import is not cached.",
+    "verification": "modules/mod.rs: import_once caches (kind, module_id, directory) only after a settled successful import."
   }
 ]

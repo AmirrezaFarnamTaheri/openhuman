@@ -225,6 +225,23 @@ path = "../../tests/storage_default_import_e2e.rs"
 required-features = ["storage-sqlite"]
 
 [[test]]
+# Builds a whole pre-storage desktop workspace (every legacy per-domain DB and
+# JSON/JSONL file the importers read), imports it on each driver and checks the
+# result is lossless with the legacy files untouched. Its own binary: it
+# installs a storage backend into the process-wide slot.
+name = "storage_desktop_upgrade_e2e"
+path = "../../tests/storage_desktop_upgrade_e2e.rs"
+required-features = ["storage-sqlite", "modules"]
+
+[[test]]
+# The released TinyMCP cdylib under the real host: add a server, restart the
+# core, list it (#7737). Requires e2e-test-support and a staged TinyMCP module;
+# dedicated E2E runners stage the pinned release and run the test.
+name = "tinymcp_storage_smoke_e2e"
+path = "../../tests/tinymcp_storage_smoke_e2e.rs"
+required-features = ["storage-sqlite", "modules", "mcp", "e2e-test-support"]
+
+[[test]]
 name = "saas_mode_e2e"
 path = "../../tests/saas_mode_e2e.rs"
 

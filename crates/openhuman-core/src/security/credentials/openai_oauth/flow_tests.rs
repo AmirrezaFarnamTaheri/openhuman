@@ -67,3 +67,6 @@ fn test_oauth_config(token_url: &str) -> OAuthConfig {
 mod bearer_token_tests;
 #[path = "flow_tests_lifecycle_tests.rs"]
 mod lifecycle_tests;
+
+#[path = "flow_tests_multi_account_tests.rs"]
+mod multi_account_tests;

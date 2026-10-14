@@ -34,9 +34,9 @@ import {
 } from './ai/aiPanelTypes';
 import { BackgroundLoopControls } from './ai/BackgroundLoopControls';
 import { CloudProviderEditor } from './ai/CloudProviderEditor';
-import { ModelFleetPanel } from './ai/ModelFleetPanel';
 import { CustomRoutingDialog } from './ai/CustomRoutingDialog';
 import { DefaultModelRow } from './ai/DefaultModelRow';
+import { ModelFleetPanel } from './ai/ModelFleetPanel';
 import { ProviderAuthSection } from './ai/ProviderAuthSection';
 import { ProviderKeyDialog } from './ai/ProviderConnectControls';
 import { SaveBar } from './ai/SaveBar';

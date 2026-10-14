@@ -33,6 +33,7 @@
 //! - [`managed_backend`] — the managed OpenHuman backend model.
 //! - [`local_runtime`] — Ollama / LM Studio / MLX / OMLX / local-openai.
 //! - [`cloud_slug`] — `<slug>:<model>` BYOK cloud providers.
+//! - [`cloud_spec`] — normalized provider registry construction.
 //! - [`subprocess_providers`] — Claude Agent SDK and Claude Code CLI.
 //! - [`chat_model`] — the one-shot `create_chat_model*` entry points.
 //! - [`turn_model`] — the per-turn `create_turn_chat_model*` entry points.
@@ -40,12 +41,13 @@
 pub(crate) mod access_gates;
 mod chat_model;
 mod cloud_slug;
+mod cloud_spec;
 mod credential_fleet;
 mod credentials;
 mod discovery;
+mod key_pool;
 mod local_runtime;
 mod managed_backend;
-mod key_pool;
 mod primary_cloud;
 mod routing;
 mod subprocess_providers;
@@ -80,7 +82,9 @@ pub(crate) use turn_model::{
 /// Raw keys and stable secret digests are intentionally never returned.
 pub(crate) fn model_fleet_health(config: &Config) -> serde_json::Value {
     let workspace = config.workspace_dir.display().to_string();
-    let providers: Vec<serde_json::Value> = config.cloud_providers.iter()
+    let providers: Vec<serde_json::Value> = config
+        .cloud_providers
+        .iter()
         .filter(|p| !p.slug.is_empty() && p.slug != "openhuman")
         .map(|p| {
             let prefix = format!("{workspace}:{}:", p.slug);
@@ -91,7 +95,8 @@ pub(crate) fn model_fleet_health(config: &Config) -> serde_json::Value {
                     "model": model, "keys": keys
                 })).collect::<Vec<_>>()
             })
-        }).collect();
+        })
+        .collect();
     serde_json::json!({ "providers": providers })
 }
 
@@ -99,8 +104,13 @@ pub(crate) fn model_fleet_health(config: &Config) -> serde_json::Value {
 /// This is explicitly scoped to a provider configured in this workspace.
 pub(crate) fn model_fleet_reset(config: &Config, slug: &str) -> Result<(), String> {
     let slug = slug.trim();
-    if slug.is_empty() || slug == "openhuman" ||
-        !config.cloud_providers.iter().any(|entry| entry.slug == slug) {
+    if slug.is_empty()
+        || slug == "openhuman"
+        || !config
+            .cloud_providers
+            .iter()
+            .any(|entry| entry.slug == slug)
+    {
         return Err("provider is not configured in the current workspace".into());
     }
     let prefix = format!("{}:{}:", config.workspace_dir.display(), slug);
@@ -154,13 +164,13 @@ use local_runtime::{
 pub(crate) use managed_backend::make_openhuman_backend_model_for_thread;
 use managed_backend::{resolve_managed_backend, resolve_managed_backend_with_model_override};
 use primary_cloud::{legacy_inference_slug, resolve_primary_cloud_provider_string};
-use routing::split_model_and_temperature;
 use subprocess_providers::{
     prepare_claude_agent_sdk_chat_model, try_create_claude_agent_sdk_chat_model,
     try_create_claude_agent_sdk_chat_model_from_string, try_create_claude_code_chat_model,
     try_create_claude_code_chat_model_from_string,
 };
 use tiers::{is_abstract_tier_model, managed_default_model};
+use tinyinference_providers::route::split_model_and_temperature;
 
 /// Test-only seam: inject a mock [`ChatModel`] so e2e tests can drive the
 /// autonomous run paths (for example `spawn_workflow_run_background`)

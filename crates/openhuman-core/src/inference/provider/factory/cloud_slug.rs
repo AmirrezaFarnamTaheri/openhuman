@@ -7,12 +7,75 @@ use crate::inference::provider::factory::access_gates::verify_backend_session_ac
 #[cfg(not(test))]
 use crate::inference::provider::factory::access_gates::verify_session_active;
 use crate::inference::provider::fallback_diagnostics;
-use tinyinference_llm::providers::anthropic::{
-    build_anthropic_model, endpoint_is_anthropic_messages, AnthropicConfig,
-};
-use tinyinference_llm::providers::openai::{
-    build_openai_model, build_openai_model_with_http, endpoint_is_openrouter, OpenAiConfig,
-};
+use tinyinference_llm::providers::anthropic::endpoint_is_anthropic_messages;
+
+/// Use the Codex-resolved endpoint for Bearer routes, including OAuth's
+/// chatgpt.com backend. Keeping the saved generic OpenAI endpoint here silently
+/// sends Codex-specific headers and tokens to the wrong API base.
+pub(super) fn cloud_base_url<'a>(
+    entry: &'a crate::config::schema::cloud_providers::CloudProviderCreds,
+    codex: &'a tinyinference_llm::providers::openai::codex::OpenAiCodexRouting,
+) -> &'a str {
+    if entry.auth_style == AuthStyle::Bearer {
+        codex.endpoint.as_str()
+    } else {
+        entry.endpoint.as_str()
+    }
+}
+
+/// A bearer key for an independently deployed gateway must not travel over
+/// remote cleartext HTTP or be mixed into URL userinfo/query/fragment fields.
+/// Localhost HTTP is allowed for separately installed development gateways.
+pub(super) fn prodex_gateway_endpoint_is_safe(endpoint: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(endpoint) else {
+        return false;
+    };
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || url.host_str().is_none()
+    {
+        return false;
+    }
+    match url.scheme() {
+        "https" => true,
+        "http" => {
+            let hostname = url.host_str().unwrap_or_default();
+            let unbracketed = hostname.trim_start_matches('[').trim_end_matches(']');
+            unbracketed.eq_ignore_ascii_case("localhost")
+                || unbracketed
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback())
+        }
+        _ => false,
+    }
+}
+
+/// Validate *all* destinations that could receive the Prodex virtual key.
+/// Image-model overrides share its credential and must respect the same TLS/loopback
+/// and URL-userinfo policy, even if not selected by the current model.
+pub(super) fn prodex_gateway_destinations_are_safe(
+    entry: &crate::config::schema::cloud_providers::CloudProviderCreds,
+) -> bool {
+    prodex_gateway_endpoint_is_safe(&entry.endpoint)
+        && entry
+            .image_endpoint
+            .as_deref()
+            .is_none_or(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
+        && entry
+            .model_image_endpoints
+            .values()
+            .all(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
+}
+
+/// The downstream gateway owns provider/account selection and sticky retry
+/// affinity. A second OpenHuman key fleet for this slug would fragment quota
+/// accounting and might send a provider continuation to another gateway key.
+pub(super) fn prodex_has_single_virtual_key(raw: &str) -> bool {
+    let keys = super::key_pool::parse_api_keys(raw);
+    keys.len() == 1 && !keys[0].trim().is_empty()
+}
 
 /// Look up a `cloud_providers` entry by slug and build the provider.
 /// The shared resolution for a `<slug>:<model>` cloud provider — the cloud
@@ -49,6 +112,14 @@ pub(super) fn resolve_cloud_slug<'a>(
             known.join(", ")
         )
     })?;
+
+    // The gateway virtual key is not a general cloud API token. Never send it
+    // to remote HTTP or allow the endpoint to carry URL-embedded credentials.
+    if slug == "prodex" && !prodex_gateway_destinations_are_safe(entry) {
+        anyhow::bail!(
+            "[chat-factory] Prodex gateway endpoints require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
+        );
+    }
 
     // Resolve effective model: use provided model if non-empty, else fall back
     // to the entry's legacy default_model (if any), else empty → error.
@@ -295,37 +366,87 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         Err(e) => return Some(Err(e)),
     };
 
+    // A Codex subscription bearer is scoped to the official Responses API.
+    // Never forward that bearer to user-configured image endpoints, even if
+    // those settings were saved while an API-key profile was active.
+    if codex.using_oauth
+        && (entry
+            .image_endpoint
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+            || entry
+                .model_image_endpoints
+                .values()
+                .any(|value| !value.trim().is_empty()))
+    {
+        return Some(Err(anyhow::anyhow!(
+            "Codex OAuth credentials cannot be sent to alternate image endpoints"
+        )));
+    }
+    let codex_accounts = if codex.using_oauth {
+        match crate::security::credentials::openai_oauth::lookup_openai_oauth_fleet(config) {
+            Ok(accounts) => accounts,
+            Err(error) => return Some(Err(anyhow::anyhow!(error))),
+        }
+    } else {
+        Vec::new()
+    };
+
     // Credentials are parsed once; one provider slug can own a pool of keys.
     // No credential group is ever sent as a single upstream Authorization header.
-    let keys = if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
-        let parsed = super::key_pool::parse_api_keys(&key);
-        if parsed.is_empty() { vec![String::new()] } else { parsed }
+    let keys = if codex.using_oauth {
+        if codex_accounts.is_empty() {
+            vec![key.clone()]
+        } else {
+            codex_accounts
+                .iter()
+                .map(|account| account.access_token.clone())
+                .collect()
+        }
+    } else if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
+        match super::credentials::lookup_token_account_fleet(&slug, config, &key, false) {
+            Ok(found) if !found.is_empty() => found,
+            Ok(_) => vec![String::new()],
+            Err(error) => return Some(Err(error)),
+        }
     } else {
         vec![key.clone()]
     };
-    if codex.using_oauth && keys.len() > 1 {
+    if slug == "prodex" && !prodex_has_single_virtual_key(&key) {
+        return Some(Err(anyhow::anyhow!(
+            "Prodex Gateway requires exactly one inference-scoped virtual key; rotate upstream provider accounts in Prodex"
+        )));
+    }
+    if codex.using_oauth && keys.len() > 1 && keys.len() != codex_accounts.len() {
         return Some(Err(anyhow::anyhow!(
             "OpenAI Codex OAuth credentials cannot be mixed with API keys"
         )));
     }
-    let image_endpoint = entry.model_image_endpoints.get(&effective_model)
+    let image_endpoint = entry
+        .model_image_endpoints
+        .get(&effective_model)
         .or(entry.image_endpoint.as_ref())
         .map(String::as_str)
         .map(str::trim)
-        .filter(|url| !url.is_empty() && url.trim_end_matches('/') != entry.endpoint.trim_end_matches('/'));
+        .filter(|url| {
+            !url.is_empty() && url.trim_end_matches('/') != entry.endpoint.trim_end_matches('/')
+        });
 
-    let fleet_scope = format!("{}:{}:{}", config.workspace_dir.display(), slug, effective_model);
+    let fleet_scope = format!(
+        "{}:{}:{}",
+        config.workspace_dir.display(),
+        slug,
+        effective_model
+    );
     let strategy = super::key_pool::RotationStrategy::parse(
-        entry.rotation_strategy.as_deref().unwrap_or("round_robin")
+        entry.rotation_strategy.as_deref().unwrap_or("round_robin"),
     );
 
-    // Every configured cloud slug builds a crate-native model. OpenhumanJwt
-    // delegates to the managed backend model; Codex OAuth routes to the
-    // Responses API with its headers / UA / query; every other
-    // Bearer/Anthropic/None slug uses Chat Completions (its primary path — the
-    // legacy host's rare 404 → `/v1/responses` fallback for non-codex slugs is
-    // not replicated).
-    let mut endpoint = entry.endpoint.clone();
+    // Every configured cloud slug builds a crate-native model through the
+    // registry (`cloud_spec`). OpenhumanJwt delegates to the managed backend
+    // model; Codex OAuth routes to the Responses API with its headers / UA /
+    // query; every other Bearer/Anthropic/None slug uses Chat Completions (or
+    // the Anthropic Messages adapter for a first-party native-tools endpoint).
     let mut extra_headers: Vec<(String, String)> = config
         .ephemeral_route
         .as_ref()
@@ -337,76 +458,24 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         .unwrap_or_default();
     let mut extra_query_params: Vec<(String, String)> = Vec::new();
     let mut user_agent: Option<String> = None;
-    let mut responses_api_primary = false;
-    let mut responses_omit_max_output_tokens = false;
+    let mut codex_route: Option<&tinyinference_llm::providers::openai::codex::OpenAiCodexRouting> =
+        None;
 
-    let auth = match entry.auth_style {
-        AuthStyle::Anthropic => {
+    let anthropic_native = entry.auth_style == AuthStyle::Anthropic
+        && native_tool_calling
+        && endpoint_is_anthropic_messages(&entry.endpoint);
+    match entry.auth_style {
+        AuthStyle::Anthropic if !anthropic_native => {
             // Anthropic's OpenAI-compatibility endpoint does not support prompt
-            // caching (and reports `prompt_tokens_details` as always empty), so
-            // a BYOK Claude key served through Chat Completions re-billed the
-            // whole prefix on every call. Native tool calling is the normal
-            // case and routes to the crate's Messages API adapter, which
-            // places `cache_control` breakpoints. Text mode (prompt-guided
-            // tools) is only implemented on the Chat Completions adapter, so
-            // that rare case keeps the compat path.
-            if native_tool_calling && endpoint_is_anthropic_messages(&endpoint) {
-                crate::security::egress::emit_external_transfer(
-                    crate::security::egress::EgressDescriptor::inference(
-                        &slug,
-                        &effective_model,
-                        true,
-                    ),
-                );
-                let build = |credential: &str, base: &str| -> anyhow::Result<Arc<dyn ChatModel<()>>> {
-                    let model: Arc<dyn ChatModel<()>> = if let Some(pem) = config
-                        .cloud_provider_ca_certs.get(&slug).filter(|pem| !pem.is_empty())
-                    {
-                        let http = crate::util::tls::client_with_ca_bundle(pem, "provider.anthropic")
-                            .map_err(anyhow::Error::msg)?;
-                        Arc::new(
-                            tinyinference_llm::providers::anthropic::AnthropicModel::with_base_url(
-                                credential, base
-                            )
-                            .with_model(&effective_model)
-                            .with_temperature_override(temperature_override)
-                            .with_temperature_unsupported_models(
-                                config.temperature_unsupported_models.iter().cloned()
-                            )
-                            .with_client(http)
-                        )
-                    } else {
-                        build_anthropic_model(AnthropicConfig {
-                            endpoint: base,
-                            api_key: credential,
-                            model: &effective_model,
-                            temperature_override,
-                            temperature_unsupported_models: &config.temperature_unsupported_models,
-                            extra_headers: &[],
-                        })
-                    };
-                    Ok(model)
-                };
-                let models: Vec<Arc<dyn ChatModel<()>>> =
-                    match keys.iter().map(|value| build(value, &endpoint)).collect() {
-                        Ok(models) => models,
-                        Err(error) => return Some(Err(error)),
-                    };
-                let images = if let Some(image_url) = image_endpoint {
-                    match keys.iter().map(|value| build(value, image_url)).collect() {
-                        Ok(models) => Some(models),
-                        Err(error) => return Some(Err(error)),
-                    }
-                } else { None };
-                let chat = wrap_fleet(fleet_scope, keys, models, images, strategy);
-                return Some(Ok((chat, effective_model)));
-            }
+            // caching, so native tool calling routes to the Messages adapter
+            // (which places `cache_control` breakpoints). Text mode
+            // (prompt-guided tools) is only implemented on the Chat
+            // Completions adapter, so that rare case keeps the compat path.
             log::debug!(
                 "[providers][chat-factory] slug={slug} auth_style=anthropic native_tools=false → OpenAI-compatible text-mode path (no prompt caching)"
             );
-            CompatAuthStyle::Anthropic
         }
-        AuthStyle::None => CompatAuthStyle::None,
+        AuthStyle::Anthropic | AuthStyle::None => {}
         AuthStyle::OpenhumanJwt => {
             #[cfg(not(test))]
             if let Err(error) = verify_backend_session_active(config) {
@@ -426,7 +495,6 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         }
         AuthStyle::Bearer => {
             // The codex routing may re-target the endpoint (OAuth backend).
-            endpoint = codex.endpoint.clone();
             if let Some(account_id) = codex.account_id.as_deref() {
                 extra_headers.push((
                     OPENAI_CODEX_ACCOUNT_HEADER.to_string(),
@@ -445,12 +513,10 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
                 ));
                 extra_query_params
                     .push(("client_version".to_string(), openai_codex_client_version()));
-                responses_api_primary = true;
-                responses_omit_max_output_tokens = true;
             }
-            CompatAuthStyle::Bearer
+            codex_route = Some(&codex);
         }
-    };
+    }
 
     // Egress spine (privacy epic S2, #4436): committed to a BYOK cloud slug here
     // — past the managed/bespoke returns and the access
@@ -460,50 +526,89 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         crate::security::egress::EgressDescriptor::inference(&slug, &effective_model, true),
     );
 
-    let unsupported = config.temperature_unsupported_models.clone();
+    let http = match config
+        .cloud_provider_ca_certs
+        .get(&slug)
+        .filter(|pem| !pem.is_empty())
+    {
+        Some(pem) => {
+            let label = if anthropic_native {
+                "provider.anthropic"
+            } else {
+                "provider.compatible"
+            };
+            match crate::util::tls::client_with_ca_bundle(pem, label) {
+                Ok(http) => Some(http),
+                Err(error) => return Some(Err(anyhow::anyhow!(error))),
+            }
+        }
+        None => None,
+    };
+    let auth_style = cloud_spec::registry_auth_style(entry.auth_style)
+        .expect("managed JWT entries returned above");
+
+    // Keep the upstream native ProviderRegistry adapter for every credential.
+    // CredentialFleetModel independently selects a healthy key for each call;
+    // it never forwards a delimited credential group to any single provider.
     let build = |credential: &str, base: &str| -> anyhow::Result<Arc<dyn ChatModel<()>>> {
-        let provider_config = OpenAiConfig {
-            provider_name: slug.as_str(),
-            endpoint: base,
-            api_key: credential,
-            auth_style: auth.clone(),
-            model: &effective_model,
-            temperature_unsupported_models: unsupported.as_slice(),
+        let mut spec = cloud_spec::cloud_provider_spec(entry, &effective_model);
+        spec.base_url = base.to_string();
+        // Each OAuth model has the account-id header that belongs to its own
+        // access token. Reusing the active account's header for every key would
+        // cause cross-account requests and broken failover.
+        let account = if codex.using_oauth {
+            codex_accounts.iter().find(|a| a.access_token == credential)
+        } else {
+            None
+        };
+        let mut headers = extra_headers.clone();
+        let account_route = account.map(|identity| {
+            tinyinference_llm::providers::openai::codex::OpenAiCodexRouting {
+                endpoint: codex.endpoint.clone(),
+                using_oauth: true,
+                account_id: identity.account_id.clone(),
+            }
+        });
+        if codex.using_oauth {
+            headers.retain(|(name, _)| !name.eq_ignore_ascii_case(OPENAI_CODEX_ACCOUNT_HEADER));
+            if let Some(id) = account.and_then(|identity| identity.account_id.as_deref()) {
+                headers.push((OPENAI_CODEX_ACCOUNT_HEADER.to_owned(), id.to_owned()));
+            }
+        }
+        cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
+            spec,
+            auth_style: auth_style.clone(),
+            key: credential,
             temperature_override,
-            merge_system_into_user: false,
-            extra_headers: extra_headers.as_slice(),
-            native_tool_calling: Some(native_tool_calling),
-            vision: None,
-            default_provider_options: openrouter_default_provider_options(base),
-            responses_api_primary,
-            responses_omit_max_output_tokens,
+            temperature_unsupported_models: config.temperature_unsupported_models.as_slice(),
+            native_tool_calling,
+            extra_headers: headers.as_slice(),
             extra_query_params: extra_query_params.as_slice(),
             user_agent: user_agent.as_deref(),
-            explicit_cache_control: endpoint_is_openrouter(base),
-        };
-        let client = if let Some(pem) =
-            config.cloud_provider_ca_certs.get(&slug).filter(|pem| !pem.is_empty())
-        {
-            let http = crate::util::tls::client_with_ca_bundle(pem, "provider.compatible")
-                .map_err(anyhow::Error::msg)?;
-            build_openai_model_with_http(provider_config, http)
-        } else {
-            build_openai_model(provider_config)
-        };
-        Ok(client)
+            codex: account_route.as_ref().or(codex_route),
+            http: http.clone(),
+        })
     };
-    let models: Vec<Arc<dyn ChatModel<()>>> =
-        match keys.iter().map(|value| build(value, &endpoint)).collect() {
-            Ok(models) => models,
-            Err(error) => return Some(Err(error)),
-        };
-    let images = if let Some(image_url) = image_endpoint {
-        match keys.iter().map(|value| build(value, image_url)).collect() {
+    let models: Vec<Arc<dyn ChatModel<()>>> = match keys
+        .iter()
+        .map(|credential| build(credential, cloud_base_url(entry, &codex)))
+        .collect()
+    {
+        Ok(models) => models,
+        Err(error) => return Some(Err(error)),
+    };
+    let image_models: Option<Vec<Arc<dyn ChatModel<()>>>> = match image_endpoint {
+        Some(endpoint) => match keys
+            .iter()
+            .map(|credential| build(credential, endpoint))
+            .collect()
+        {
             Ok(models) => Some(models),
             Err(error) => return Some(Err(error)),
-        }
-    } else { None };
-    let chat = wrap_fleet(fleet_scope, keys, models, images, strategy);
+        },
+        None => None,
+    };
+    let chat = wrap_fleet(fleet_scope, keys, models, image_models, strategy);
     Some(Ok((chat, effective_model)))
 }
 
@@ -520,32 +625,10 @@ fn wrap_fleet(
         return models.remove(0);
     }
     Arc::new(super::credential_fleet::CredentialFleetModel::new(
-        scope, keys, models, image_models, strategy
+        scope,
+        keys,
+        models,
+        image_models,
+        strategy,
     ))
-}
-
-
-/// The `provider.sort` OpenRouter routing preference sent on every request to
-/// a direct (BYOK) OpenRouter endpoint.
-pub(crate) const OPENROUTER_PROVIDER_SORT: &str = "price";
-
-/// Baked request options for a direct OpenRouter endpoint, `None` for every
-/// other OpenAI-compatible host.
-///
-/// OpenRouter's default routing is a health-aware load balance weighted toward
-/// the cheaper endpoints of a model's pool, which spreads consecutive turns
-/// across endpoints. DeepSeek- and Z.AI-family prefix caches live per endpoint,
-/// so every hop re-pays the whole prefill. `provider.sort` orders the pool and
-/// disables the balancing (not the fallback: `allow_fallbacks` stays on and
-/// `order` is never set, so a request still moves down the sorted list when an
-/// endpoint errors), and `price` is the stable choice — cheapest first, dearer
-/// only on failure. Stickiness itself comes from the harness's derived
-/// `prompt_cache_key` (`tap-<prefix fingerprint>`), which OpenRouter honours as
-/// its sticky-routing key; measured on `z-ai/glm-5.3-flash` the same endpoint
-/// served 5/5 calls with it. The hosted backend applies the same sort
-/// server-side (tinyhumansai/backend#1370), so managed and direct routing agree.
-/// https://openrouter.ai/docs/features/provider-routing
-pub(crate) fn openrouter_default_provider_options(endpoint: &str) -> Option<serde_json::Value> {
-    endpoint_is_openrouter(endpoint)
-        .then(|| serde_json::json!({ "provider": { "sort": OPENROUTER_PROVIDER_SORT } }))
 }

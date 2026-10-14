@@ -440,12 +440,12 @@ Integration coverage is in [`tests/agent_harness_e2e.rs`](../../../../tests/agen
 `tests/in_process/agent_*.rs`, aggregated into the `in_process_all` target.
 
 Related docs:
-[agent harness architecture](../../../../gitbooks/developing/architecture/agent-harness.md),
-[agent observability](../../../../gitbooks/developing/agent-observability.md).
+[agent harness architecture](../../../../docs/gitbooks/en/developing/architecture/agent-harness.md),
+[agent observability](../../../../docs/gitbooks/en/developing/agent-observability.md).
 
 ## Further reading
 
 - [Parent module README](../../README.md)
-- [Deep architecture reference](../../../../gitbooks/developing/architecture.md)
-- [The orchestrator](../../../../gitbooks/features/orchestration.md)
+- [Deep architecture reference](../../../../docs/gitbooks/en/developing/architecture.md)
+- [The orchestrator](../../../../docs/gitbooks/en/features/orchestration.md)
 - [tinyagents](../../../../vendor/tinyagents/README.md)

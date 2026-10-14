@@ -23,9 +23,17 @@ describe('providerIcons', () => {
     expect(providerIcon('a-provider-that-does-not-exist', 'h-4 w-4')).toBeNull();
   });
 
-  it('returns a rendered mark for every built-in and local provider', () => {
-    for (const slug of [...BUILTIN_CLOUD_PROVIDER_SLUGS, ...NON_CLOUD_SLUGS]) {
+  it('renders every bundled mark, but leaves unsupported brands to the caller swatch', () => {
+    for (const slug of PROVIDER_ICON_SLUGS) {
       expect(providerIcon(slug, 'h-4 w-4'), slug).toHaveProperty('type');
+    }
+    // A newly-added provider is deliberately not given a misleading generic
+    // brand mark; ProviderListRow renders its lettered fallback swatch.
+    const unknownBrands = [...BUILTIN_CLOUD_PROVIDER_SLUGS, ...NON_CLOUD_SLUGS].filter(
+      slug => !PROVIDER_ICON_SLUGS.includes(slug)
+    );
+    for (const slug of unknownBrands) {
+      expect(providerIcon(slug, 'h-4 w-4'), slug).toBeNull();
     }
   });
 });

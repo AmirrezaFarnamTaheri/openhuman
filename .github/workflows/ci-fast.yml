@@ -71,7 +71,7 @@ jobs:
   lanes:
     name: Lanes
     needs: route
-    if: needs.route.outputs.member == 'true'
+    if: github.repository == 'tinyhumansai/openhuman' && needs.route.outputs.member == 'true'
     uses: ./.github/workflows/ci-lanes.yml
     with:
       profile: ex63

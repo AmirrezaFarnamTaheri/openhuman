@@ -2359,7 +2359,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.revealKeys': 'API 키 표시',
   'settings.ai.fleet.hideKeys': 'API 키 숨기기',
   'settings.ai.fleet.tooManyKeys': '제공업체 그룹당 최대 128개의 API 키를 사용할 수 있습니다.',
-  'settings.ai.fleet.partialKeyVerified': '일부 API 키는 거부되었지만 다른 키는 검증되었습니다. 키 상태를 확인하세요.',
+  'settings.ai.fleet.partialKeyVerified':
+    '일부 API 키는 거부되었지만 다른 키는 검증되었습니다. 키 상태를 확인하세요.',
   'settings.ai.apiKeyFieldLabel': 'API 키 필드 라벨',
   'settings.ai.apiKeyRequired': '계속하려면 API 키를 붙여넣어 주세요.',
   'settings.ai.apiKeyStoredEncrypted': 'API 키가 암호화되어 저장됨',

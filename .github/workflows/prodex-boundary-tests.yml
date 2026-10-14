@@ -1,0 +1,39 @@
+name: Prodex boundary checks
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/prodex-boundary-tests.yml'
+      - 'scripts/ci/audit-peer-commits.py'
+      - 'scripts/ci/prodex-*'
+      - 'scripts/ci/tests/**'
+  push:
+    branches: [main, feat/prodex-convergence]
+    paths:
+      - '.github/workflows/prodex-boundary-tests.yml'
+      - 'scripts/ci/audit-peer-commits.py'
+      - 'scripts/ci/prodex-*'
+      - 'scripts/ci/tests/**'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-contract-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check scripts/ci/prodex-catalog-overlay.mjs
+          node --check scripts/ci/prodex-gateway-smoke.mjs
+      - name: Test Prodex catalog and gateway boundaries (no credentials needed)
+        run: node --test scripts/ci/tests/prodex-*.test.mjs
+      - name: Test exhaustive peer Git census (offline)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v

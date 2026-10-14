@@ -22,10 +22,21 @@ describe('builtinCloudProviders', () => {
     ['tokendance', 'https://tokendance.space/gateway/v1', 'bearer'],
     ['siliconflow', 'https://api.siliconflow.cn/v1', 'bearer'],
     ['qwen-pay-as-you-go', 'https://dashscope.aliyuncs.com/compatible-mode/v1', 'bearer'],
-    ['qwen-token-plan', 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1', 'bearer'],
+    [
+      'qwen-token-plan',
+      'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+      'bearer',
+    ],
+    ['llmtr', 'https://llmtr.com/v1', 'bearer'],
+    ['prodex', 'http://127.0.0.1:4000/v1', 'bearer'],
   ] as const)('maps %s to its endpoint and auth style', (slug, endpoint, authStyle) => {
     expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
     expect(authStyleForBuiltinCloudProvider(slug)).toBe(authStyle);
+  });
+
+  it('prompts for a least-privilege inference key, not an administrator token', () => {
+    const gateway = BUILTIN_CLOUD_PROVIDERS.find(provider => provider.slug === 'prodex');
+    expect(gateway?.keyPlaceholder).toBe('Inference-scoped virtual key');
   });
 
   it('contains the full phase one provider set', () => {
@@ -50,6 +61,8 @@ describe('builtinCloudProviders', () => {
         'vercel-ai-gateway',
         'sumopod',
         'modelscope',
+        'llmtr',
+        'prodex',
       ])
     );
   });
