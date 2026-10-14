@@ -11,7 +11,7 @@
 
 ## Global Constraints
 
-- The 15 `NodeKind` variants in `app/src/lib/flows/types.ts` mirror native TinyFlows. Do not add `decision`, `map` or `reduce` in only the React palette: the Rust engine, migrations, serializer, executor, validation, handles and resume tests must all recognize them first.
+- The canvas originally exposed 15 editable kinds, but pinned TinyFlows commit `6447612` already implements native `scatter`, `gather`, `spawn`, `gate`, `approval`, `shell` and `void`. The canvas now exposes native `scatter` and `gather` as its 16th/17th kinds. Do not invent frontend-only `decision`, `map` or `reduce` kinds: the Rust executor, migrations, validation, permissions, resume and UI must agree.
 - `crates/openhuman-core/src/flows/ops.rs` already owns durable run rows, drop-guard settlement, approval TTL, reconciliation and TinyFlows checkpointing. Do not introduce parallel `workflow_runs` and `subagent_leases` databases.
 - A database transaction can atomically reserve a key and commit a local result; it cannot guarantee exactly-once external side effects without target-provided idempotency keys or an outbox/reconciliation protocol. Never use `INSERT OR REPLACE` to claim exactly-once execution.
 - `crates/openhuman-core/src/memory/engine.rs` owns user/tenant/agent root scopes. Every graph fact, retrieval and deletion must inherit that root and provenance; no global unscoped memory tables or background exfiltration.
@@ -37,7 +37,7 @@
 **Interfaces:** `validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue[]`, consuming TinyFlows-compatible node IDs/kinds/config and edge endpoints/ports. Emits structured code, implicated nodes and an explanatory message; blocks unsafe cycles locally even when daemon validation is delayed.
 
 - [x] Reproduce the SCC flaw: an inner `a → b → a` cycle still exists after removing a bounded loop controller from the same SCC.
-- [x] Implement iterative SCC decomposition and a residual Kahn acyclicity check; reject controllers missing or multiple per cyclic SCC, external side entry, `done` returning to its SCC and caps outside 1–100; missing cap uses native default 25.
+- [x] Implement iterative SCC decomposition and a residual Kahn acyclicity check; require cycles to cross at least one loop controller **or** have a native trigger-level `recursion_limit`/`max_node_visits` bound, and permit multiple controllers as upstream does. Enforce the additional canvas restrictions for side entry, `done` re-entry, and caps outside 1–100 (native itself permits any positive iteration cap). Missing cap uses native default 25.
 - [x] Integrate error visibility into canvas and form cap.
 - [x] Run isolated Node+TypeScript harness: 11 loop assertions including a 14k-node chain pass.
 - [ ] Run `cd app && pnpm test:unit app/src/lib/flows/loopCycleSafety.test.ts app/src/components/flows/canvas/nodeConfig/__tests__/loopFieldsBounds.test.tsx` and `pnpm format:check:prettier` on the exact head; record results.
@@ -66,6 +66,24 @@
 - [x] Delay the expensive `formatJson` pass until JSON mode is explicitly selected; JSON mode still exposes the complete result.
 - [ ] Run focused Vitest, format and inspect 10K-item run in the desktop app for layout and memory. Consider row virtualization only if incremental pagination fails the UX benchmark.
 
+### Task 3a: Native scatter/gather workflow authoring
+
+**Files:**
+- Modify: `app/src/lib/flows/types.ts`, `nodeKindMeta.ts`, `nodeKindIcons.tsx`, `nodeSummary.ts`
+- Modify: `app/src/components/flows/canvas/nodeConfig/nodeConfigForms.tsx`
+- Create: `app/src/components/flows/canvas/nodeConfig/parallelFields.tsx`
+- Create: `app/src/lib/i18n/parallelFlowTranslations.ts`
+- Update: `app/src/lib/i18n/I18nContext.tsx`, `scripts/i18n-coverage.ts`, `scripts/i18n-find-english.ts`
+
+**Interfaces:** native `scatter`/`gather` discriminators and the pinned TinyFlows `path`, `lanes` (ceiling 256), `from` (upstream lane-terminal node IDs), `release` (all/any/first_n/quorum/timeout_partial), `n`, `on_lane_error` and `max_polls`. No separate MapNode/ReduceNode or scheduler.
+
+- [x] Expose native kinds in palette, icon/tile maps, card summaries and TypeScript model. New scatters default to eight lanes.
+- [x] Provide typed controls and localize every control in all sixteen supported languages.
+- [x] Add regression tests for source IDs, release thresholds, palette, and serialization round-trips.
+- [ ] Run focused/full Vitest, exact-head TypeScript and locale audits.
+- [ ] Execute a real scatter → lane task → gather graph on host, asserting input-ordered results and failed-lane policy. No claimed engine readiness based solely on UI.
+- [ ] Evaluate auto-completion of gather's `from` IDs from wire edges without altering valid imported graphs.
+
 ---
 
 ## Remaining Independently Testable Deliverables
@@ -79,7 +97,7 @@
 
 **Interfaces:** consumes `tinyflows::model::WorkflowGraph` and emits structured `tinyflows_catalog::FlowValidationError` with the same stable codes used by the canvas. `flows_validate`, the create/update/import path, and run/resume compatibility gates must all invoke the same pure safety predicate.
 
-- [ ] Add a Rust regression: one SCC has exactly one loop, but a subcycle does not pass through it. Assert native validation and save both reject without side effects; similarly test self-loop, side entry, `done` back-edge and cap bounds.
+- [ ] Add a Rust regression: an SCC has a loop but a subcycle bypasses every controller *and* no trigger-level bound exists. Assert native validation/save reject without side effects; also test multi-controller cycles, explicit positive trigger visit budgets, self-loops and the additional UI policy separately.
 - [ ] Implement iterative SCC and residual DAG checks in the native graph policy/compatibility owner. Ensure the checked graph is the **migrated** graph, and saved descendants and resume paths use the same policy.
 - [ ] Run `cargo test -p openhuman-core` with repository feature profile plus the hosted Rust/storage matrix. Keep the JS guard as fast UX feedback, not the sole security authority.
 - [ ] Validate imported workflows containing legacy loop configurations, and migrate only where the current engine can faithfully execute them.
