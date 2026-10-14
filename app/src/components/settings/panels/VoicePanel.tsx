@@ -315,11 +315,11 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
           } catch {
             throw new Error('Kokoro endpoint must be a valid HTTP(S) URL ending in /v1.');
           }
-          const host = url.hostname.replace(/^\\[|\\]$/g, '').toLowerCase();
-          const loopback = host === 'localhost' || host === '::1' || /^127(?:\\.\\d{1,3}){3}$/.test(host);
+          const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+          const loopback = host === 'localhost' || host === '::1' || /^127(?:\.\d{1,3}){3}$/.test(host);
           const secure = url.protocol === 'https:' || (url.protocol === 'http:' && loopback);
           if (!secure || url.username || url.password || url.search || url.hash ||
-              !url.pathname.replace(/\\/+$/, '').endsWith('/v1') ||
+              !url.pathname.replace(/\/+$/, '').endsWith('/v1') ||
               !model || !voice || model.length > 128 || voice.length > 128) {
             throw new Error('Kokoro needs HTTPS or loopback HTTP /v1 plus a valid model and voice.');
           }
