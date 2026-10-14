@@ -19,6 +19,15 @@ pub fn connector_provenance_policy() -> tinymemory_api::ProvenancePolicy {
         "imap:",
         "meeting:",
         "web:",
+        "repo:",
+        "source:",
+        "code:",
+        "github:",
+        "gitlab:",
+        "conduit:",
+        "jev:",
+        "typesafe:",
+        "9router:",
     ];
     tinymemory_api::ProvenancePolicy::new(connector_prefixes)
 }
