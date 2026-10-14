@@ -320,3 +320,64 @@ fn prodex_gateway_allows_safe_image_destinations() {
     );
     assert!(!cloud_slug::prodex_gateway_destinations_are_safe(&entry));
 }
+
+#[test]
+fn named_token_accounts_join_native_provider_rotation_without_cross_provider_leaks() {
+    let tmp = TempDir::new().unwrap();
+    let config = config_with_providers_in_tempdir(&tmp, vec![
+        openai_entry("g", "google"), anthropic_entry("a", "anthropic"),
+    ]);
+    let auth = AuthService::from_config(&config);
+    for (slug, account, key, active) in [
+        ("google", "work", "g-key-work", true),
+        ("google", "personal", "g-key-personal", false),
+        ("anthropic", "work", "anthropic-secret", true),
+    ] {
+        auth.store_provider_token(
+            &format!("provider:{slug}"), account, key,
+            Default::default(), active,
+        ).unwrap();
+    }
+    let keys = super::credentials::lookup_token_account_fleet(
+        "google", &config, "g-key-work", false,
+    ).unwrap();
+    assert_eq!(keys, vec!["g-key-work", "g-key-personal"]);
+    assert!(!keys.iter().any(|key| key.contains("anthropic")));
+    assert_eq!(
+        super::credentials::lookup_token_account_fleet(
+            "anthropic", &config, "anthropic-secret", false,
+        ).unwrap(), vec!["anthropic-secret"]
+    );
+}
+
+#[test]
+fn named_token_accounts_never_join_oauth_or_delegated_gateway_routes() {
+    let tmp = TempDir::new().unwrap();
+    let config = config_with_providers_in_tempdir(&tmp, vec![openai_entry("a", "openai")]);
+    let auth = AuthService::from_config(&config);
+    auth.store_provider_token("provider:openai", "personal", "api-token",
+        Default::default(), false).unwrap();
+    assert_eq!(
+        super::credentials::lookup_token_account_fleet(
+            "openai", &config, "oauth-bearer", true,
+        ).unwrap(), vec!["oauth-bearer"]
+    );
+    assert_eq!(
+        super::credentials::lookup_token_account_fleet(
+            "prodex", &config, "single-virtual-key", false,
+        ).unwrap(), vec!["single-virtual-key"]
+    );
+}
+
+#[test]
+fn grouped_legacy_keys_and_named_tokens_are_deduplicated() {
+    let tmp = TempDir::new().unwrap();
+    let config = config_with_providers_in_tempdir(&tmp, vec![openai_entry("a", "google")]);
+    let auth = AuthService::from_config(&config);
+    auth.store_provider_token("provider:google", "work", "first;third;second",
+        Default::default(), true).unwrap();
+    let keys = super::credentials::lookup_token_account_fleet(
+        "google", &config, "first,second", false,
+    ).unwrap();
+    assert_eq!(keys, vec!["first", "second", "third"]);
+}

@@ -367,8 +367,13 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     // Credentials are parsed once; one provider slug can own a pool of keys.
     // No credential group is ever sent as a single upstream Authorization header.
     let keys = if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
-        let parsed = super::key_pool::parse_api_keys(&key);
-        if parsed.is_empty() { vec![String::new()] } else { parsed }
+        match super::credentials::lookup_token_account_fleet(
+            &slug, config, &key, codex.using_oauth,
+        ) {
+            Ok(found) if !found.is_empty() => found,
+            Ok(_) => vec![String::new()],
+            Err(error) => return Some(Err(error)),
+        }
     } else {
         vec![key.clone()]
     };

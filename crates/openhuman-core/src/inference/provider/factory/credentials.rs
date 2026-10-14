@@ -160,6 +160,51 @@ pub fn lookup_key_for_slug(slug: &str, config: &Config) -> anyhow::Result<String
     Ok(String::new())
 }
 
+/// Include separately stored, *named* API-token profiles in this provider's
+/// native per-request credential pool. Profile names and keys never cross
+/// provider boundaries. An OAuth subscription is NOT an API key: it must
+/// retain its own refreshed bearer and account-specific routing metadata.
+///
+/// The preferred credential keeps precedence for existing workspaces. Legacy
+/// comma/newline-delimited groups continue to work unchanged.
+pub(super) fn lookup_token_account_fleet(
+    slug: &str,
+    config: &Config,
+    preferred: &str,
+    using_oauth: bool,
+) -> anyhow::Result<Vec<String>> {
+    use crate::security::credentials::profiles::AuthProfileKind;
+    let mut keys = super::key_pool::parse_api_keys(preferred);
+    // Prodex has its own upstream account rotation; passing multiple virtual
+    // keys breaks continuation affinity. Ephemeral routes must not inherit
+    // disk-backed secrets, and Codex OAuth bearers need per-account headers.
+    if using_oauth || slug == "prodex"
+        || slug == crate::config::schema::EPHEMERAL_ROUTE_SLUG
+    {
+        return Ok(keys);
+    }
+    let expected = auth_key_for_slug(slug);
+    let auth = AuthService::from_config(config);
+    let data = auth.load_profiles().map_err(|_| {
+        anyhow::anyhow!("[chat-factory] named provider credentials are unavailable")
+    })?;
+    for profile in data.profiles.values() {
+        if profile.kind != AuthProfileKind::Token
+            || (profile.provider != expected && profile.provider != slug)
+        {
+            continue;
+        }
+        if let Some(raw) = profile.token.as_deref() {
+            for key in super::key_pool::parse_api_keys(raw) {
+                if !keys.contains(&key) {
+                    keys.push(key);
+                }
+            }
+        }
+    }
+    Ok(keys)
+}
+
 /// Return a safe-to-log representation of a URL endpoint: `scheme://host` only.
 pub fn redact_endpoint(url: &str) -> String {
     let trimmed = url.trim();
