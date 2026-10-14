@@ -7,6 +7,7 @@ import {
   insertFleetKeysAtSelection,
   parseFleetApiKeys,
   parseModelImageEndpoints,
+  parseModelTransportOverrides,
   syncConfiguredProviderPresets,
   syncModelPresets,
   updateSelectedGroupSettings,
@@ -166,6 +167,24 @@ describe('model-fleet preset management', () => {
       expect(parseModelImageEndpoints('vision = ' + url)).toEqual({ vision: url });
     }
     expect(validModelFleetImageEndpoint('')).toBe(true);
+  });
+
+  it('parses exact model transport overrides and rejects malformed or duplicated rows', () => {
+    expect(parseModelTransportOverrides(
+      'vendor/response = responses\nvendor/chat = chat_completions'
+    )).toEqual({
+      'vendor/response': 'responses',
+      'vendor/chat': 'chat_completions',
+    });
+    expect(parseModelTransportOverrides('')).toEqual({});
+    expect(() => parseModelTransportOverrides('x = responses\nx = auto')).toThrow(/Duplicate/);
+    expect(() => parseModelTransportOverrides('x = invalid')).toThrow(/Protocol/);
+    expect(() => parseModelTransportOverrides('  = responses')).toThrow();
+    expect(() => parseModelTransportOverrides('x =')).toThrow();
+    expect(() => parseModelTransportOverrides('x = responses\ny')).toThrow();
+    expect(() => parseModelTransportOverrides(
+      Array.from({ length: 513 }, (_, i) => 'model-' + i + ' = responses').join('\n')
+    )).toThrow(/512/);
   });
 
   it('changes a key rotation strategy without clearing the existing image endpoint', () => {

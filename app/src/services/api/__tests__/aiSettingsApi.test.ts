@@ -719,6 +719,29 @@ describe('saveAISettings', () => {
     expect(patch.cloud_providers?.[0].rotation_strategy).toBe('least_busy');
   });
 
+  it('persists per-model protocol overrides and removes them on explicit reset', async () => {
+    const prev = makeSettings();
+    const mixed = makeSettings({
+      cloudProviders: [{
+        ...prev.cloudProviders[0],
+        model_transports: { 'response-model': 'responses' },
+      }],
+    });
+    await saveAISettings(prev, mixed);
+    expect(mockOpenhumanUpdateModelSettings.mock.calls[0][0].cloud_providers?.[0]).toMatchObject({
+      model_transports: { 'response-model': 'responses' },
+      slug: prev.cloudProviders[0].slug,
+      endpoint: prev.cloudProviders[0].endpoint,
+    });
+    mockOpenhumanUpdateModelSettings.mockClear();
+    const reset = makeSettings({
+      cloudProviders: [{ ...mixed.cloudProviders[0], model_transports: {} }],
+    });
+    await saveAISettings(mixed, reset);
+    expect(mockOpenhumanUpdateModelSettings.mock.calls[0][0].cloud_providers?.[0]
+      .model_transports).toEqual({});
+  });
+
   it('sends both providers and routing when both change', async () => {
     const prev = makeSettings({ cloudProviders: [] });
     const next = makeSettings({

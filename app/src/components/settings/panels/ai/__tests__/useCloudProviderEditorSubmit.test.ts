@@ -74,6 +74,42 @@ describe('useCloudProviderEditorSubmit', () => {
     expect(onDone).toHaveBeenCalledOnce();
   });
 
+  it('retains per-model protocol selection in eager provider flush and saved configuration', async () => {
+    api.flushCloudProviders.mockResolvedValue(undefined);
+    const persist = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new',
+      draft: EMPTY_SETTINGS,
+      saved: EMPTY_SETTINGS,
+      persist,
+      t: key => key,
+      onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await result.current({
+        id: '',
+        slug: 'mixed',
+        label: 'Mixed protocol gateway',
+        endpoint: 'https://router.example/v1',
+        authStyle: 'bearer',
+        maskedKey: '',
+        modelTransports: { 'response-model': 'responses', 'chat-model': 'chat_completions' },
+      }, '', { skipProbe: true });
+    });
+    expect(api.flushCloudProviders).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        slug: 'mixed',
+        model_transports: { 'response-model': 'responses', 'chat-model': 'chat_completions' },
+      }),
+    ]));
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({
+      cloudProviders: [expect.objectContaining({
+        slug: 'mixed',
+        modelTransports: { 'response-model': 'responses', 'chat-model': 'chat_completions' },
+      })],
+    }));
+  });
+
   it('validates the provider CA before persisting a new key', async () => {
     api.flushCloudProviders.mockRejectedValue(new Error('invalid CA bundle'));
     const { result } = renderHook(() =>
