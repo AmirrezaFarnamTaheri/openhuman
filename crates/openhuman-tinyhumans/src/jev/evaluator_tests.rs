@@ -128,3 +128,27 @@ fn system_one_short_intent_and_context_are_not_flagged_partial() {
     assert!(wire.state.get("request_truncated").is_none());
     assert!(wire.state.get("context_truncated").is_none());
 }
+
+
+#[test]
+fn jev_choice_cannot_silently_collapse_duplicate_option_keys() {
+    let mut input = request(None);
+    input.options.push(JevOption {
+        key: "SLACK_SEND_MESSAGE".into(),
+        description: "different tool with same key".into(),
+    });
+    assert!(TinyJevEvaluator::validate(&input).is_err());
+}
+
+#[test]
+fn jev_rejects_excessive_option_catalog_or_oversized_descriptions_before_egress() {
+    let mut input = request(None);
+    input.options = (0..65).map(|i| JevOption {
+        key: format!("option_{i}"),
+        description: "tool candidate".into(),
+    }).collect();
+    assert!(TinyJevEvaluator::validate(&input).is_err());
+    input = request(None);
+    input.options[0].description = "unbounded".repeat(700);
+    assert!(TinyJevEvaluator::validate(&input).is_err());
+}
