@@ -202,7 +202,7 @@ describe('useCloudProviderEditorSubmit', () => {
         expect.objectContaining({ endpoint: 'https://old.example/v1', ca_cert_pem: 'old CA' }),
       ])
     );
-    expect(api.listProviderModels).not.toHaveBeenCalled();
+    expect(api.listProviderModels).toHaveBeenCalledWith('private-provider', 'replacement-key');
   });
 
   it('does not delete the replacement credential on failed edit verification', async () => {
@@ -226,10 +226,11 @@ describe('useCloudProviderEditorSubmit', () => {
       await expect(result.current(
         { ...existing, endpoint: 'https://new.example/v1' },
         'new-replacement-key'
-      )).rejects.toThrow(/previous key cannot be restored automatically/i);
+      )).rejects.toThrow(/Could not reach/i);
     });
     expect(api.flushCloudProviders).toHaveBeenCalledTimes(2);
-    expect(api.setCloudProviderKey).toHaveBeenCalledWith('existing', 'new-replacement-key');
+    expect(api.listProviderModels).toHaveBeenCalledWith('existing', 'new-replacement-key');
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
     expect(api.clearCloudProviderKey).not.toHaveBeenCalled();
     expect(persist).not.toHaveBeenCalled();
   });
@@ -248,7 +249,9 @@ describe('useCloudProviderEditorSubmit', () => {
         endpoint: 'https://api.example/v1', authStyle: 'bearer', maskedKey: '',
       }, 'temporary-key')).rejects.toThrow('Could not reach');
     });
-    expect(api.clearCloudProviderKey).toHaveBeenCalledWith('new-provider');
+    expect(api.listProviderModels).toHaveBeenCalledWith('new-provider', 'temporary-key');
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+    expect(api.clearCloudProviderKey).not.toHaveBeenCalled();
     expect(persist).not.toHaveBeenCalled();
   });
 
@@ -295,5 +298,48 @@ describe('useCloudProviderEditorSubmit', () => {
     );
     expect(api.setCloudProviderKey).not.toHaveBeenCalled();
     expect(api.listProviderModels).not.toHaveBeenCalled();
+  });
+
+  it('validates a replacement before saving any new secret or committing settings', async () => {
+    const stages: string[] = [];
+    api.flushCloudProviders.mockImplementation(async () => {
+      stages.push('flush');
+    });
+    api.listProviderModels.mockImplementation(async () => {
+      stages.push('probe');
+      return [];
+    });
+    api.setCloudProviderKey.mockImplementation(async () => {
+      stages.push('store');
+    });
+    const previous = {
+      id: 'p_existing',
+      slug: 'existing',
+      label: 'Existing account',
+      endpoint: 'https://old.example/v1',
+      authStyle: 'bearer' as const,
+      maskedKey: '••••stored',
+    };
+    const saved = { ...EMPTY_SETTINGS, cloudProviders: [previous] };
+    const persist = vi.fn().mockImplementation(async () => {
+      stages.push('persist');
+    });
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: previous,
+      draft: saved,
+      saved,
+      persist,
+      t: key => key,
+      onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await result.current({
+        ...previous,
+        endpoint: 'https://new.example/v1',
+      }, 'replacement-key');
+    });
+    expect(stages).toEqual(['flush', 'probe', 'persist', 'store']);
+    expect(api.listProviderModels).toHaveBeenCalledWith('existing', 'replacement-key');
+    expect(api.setCloudProviderKey).toHaveBeenCalledWith('existing', 'replacement-key');
   });
 });

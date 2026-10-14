@@ -797,10 +797,17 @@ export async function flushCloudProviders(providers: CloudProviderCreds[]): Prom
  * config has been persisted to disk (i.e. before the user clicks Save).
  * Throws on error so callers can surface retry UI.
  */
-export async function listProviderModels(providerId: string): Promise<ModelInfo[]> {
+/** An optional candidate is used only for this read-only probe; never stored. */
+export async function listProviderModels(
+  providerId: string,
+  candidateApiKey?: string
+): Promise<ModelInfo[]> {
   const res = await callCoreRpc<{ result: { models: ModelInfo[] } }>({
     method: 'openhuman.inference_list_models',
-    params: { provider_id: providerId },
+    params: {
+      provider_id: providerId,
+      ...(candidateApiKey ? { candidate_api_key: candidateApiKey } : {}),
+    },
   });
   return res?.result?.models ?? [];
 }

@@ -6,7 +6,6 @@
 import { useCallback } from 'react';
 
 import {
-  clearCloudProviderKey,
   flushCloudProviders,
   listProviderModels,
   setCloudProviderKey,
@@ -46,16 +45,6 @@ export function useCloudProviderEditorSubmit({
         maskedKey: maskKeyLabel(apiKey ? true : next.maskedKey.startsWith('••••')),
       };
 
-      // A verified key replacement overwrites the existing encrypted default
-      // credential. The client cannot recover the previous secret after that
-      // write; a failed /models probe must not also erase the replacement key.
-      const replacingExistingCredential =
-        Boolean(apiKey) &&
-        saved.cloudProviders.some(
-          provider =>
-            provider.slug === upserted.slug && (provider.maskedKey ?? '').startsWith('••••')
-        );
-
       // Snapshot the prior persisted cloud_providers list so we can restore
       // it if the live probe fails.
       const priorWireProviders = saved.cloudProviders.map(p => ({
@@ -72,93 +61,83 @@ export function useCloudProviderEditorSubmit({
         auth_style: p.authStyle,
       }));
 
-      // Live verification — flush the new cloud_providers list and call
-      // `/models` through the Rust controller. Flush first so Rust validates
-      // the CA bundle before a new or replacement credential is persisted.
-      if (upserted.slug !== 'openhuman') {
-        const list =
-          editing === 'new' || !editing
-            ? [...draft.cloudProviders, upserted]
-            : draft.cloudProviders.map(p => (p.id === editing.id ? upserted : p));
-        const nextWireProviders = list
-          .filter(p => !['', 'cloud', 'openhuman', 'pid'].includes(p.slug))
-          .map(p => ({
-            id: p.id,
-            slug: p.slug,
-            label: p.label,
-            endpoint: p.endpoint,
-            image_endpoint: p.imageEndpoint ?? '',
-            model_image_endpoints: p.modelImageEndpoints ?? {},
-            model_transports: p.modelTransports ?? {},
-            rotation_strategy: p.rotationStrategy ?? 'round_robin',
-            tool_call_codec: p.toolCallCodec ?? 'native',
-            ca_cert_pem: p.caCertPem ?? '',
-            auth_style: p.authStyle,
-          }));
-        try {
-          await flushCloudProviders(nextWireProviders);
-          // The provider must be configured before probing, and its CA has now
-          // passed Rust-side validation. Let key-write failures surface inline.
-          if (apiKey) {
-            await setCloudProviderKey(upserted.slug, apiKey);
-          }
-        } catch (writeError) {
-          // A flush may have applied before a transport error, so restore the
-          // previous list for either a failed flush or a failed key write.
-          await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
-            console.warn(
-              `[ai-settings] rollback flush after provider write failure slug=${upserted.slug}`,
-              rollbackErr
-            )
-          );
-          throw writeError;
-        }
-        // `skipProbe` is the user's explicit "add it anyway" after a failed
-        // verification. A provider whose `/models` listing is absent or
-        // auth-shaped differently (Azure's classic `api-version` surface is
-        // both) is still perfectly usable for inference (#5213).
+      // The provider is provisionally flushed only so the native probe can
+      // resolve its CA certificate, endpoint and auth style. The current API
+      // key remains in encrypted storage until the candidate has passed.
+      const list =
+        editing === 'new' || !editing
+          ? [...draft.cloudProviders, upserted]
+          : draft.cloudProviders.map(p => (p.id === editing.id ? upserted : p));
+      if (upserted.slug === 'openhuman') {
+        await persist({ ...draft, cloudProviders: list });
+        onDone();
+        return;
+      }
+
+      const nextWireProviders = list
+        .filter(p => !['', 'cloud', 'openhuman', 'pid'].includes(p.slug))
+        .map(p => ({
+          id: p.id,
+          slug: p.slug,
+          label: p.label,
+          endpoint: p.endpoint,
+          image_endpoint: p.imageEndpoint ?? '',
+          model_image_endpoints: p.modelImageEndpoints ?? {},
+          model_transports: p.modelTransports ?? {},
+          rotation_strategy: p.rotationStrategy ?? 'round_robin',
+          tool_call_codec: p.toolCallCodec ?? 'native',
+          ca_cert_pem: p.caCertPem ?? '',
+          auth_style: p.authStyle,
+        }));
+
+      let settingsPersisted = false;
+      try {
+        await flushCloudProviders(nextWireProviders);
+        // A candidate credential is sent for this one-shot native read-only
+        // probe but is neither persisted nor mixed with the saved key fleet.
+        // Failed probes therefore leave the previous encrypted key untouched.
         if (!opts?.skipProbe) {
           try {
-            await listProviderModels(upserted.slug);
+            await listProviderModels(upserted.slug, apiKey || undefined);
           } catch (probeErr) {
-            // Roll back both stores. Failures are LOGGED, never swallowed:
-            // a silently failed key-clear orphans the key on disk (#5339).
-            await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
-              console.warn(`[ai-settings] rollback flush failed slug=${upserted.slug}`, rollbackErr)
-            );
-            // Only a *new* credential can be safely undone by removing it.
-            // An edited provider's previous encrypted token was overwritten;
-            // clearing the replacement here would leave the account with no
-            // usable credential at all. Surface that non-atomic boundary until
-            // the backend supports an atomic probe-and-replace transaction.
-            if (apiKey && !replacingExistingCredential) {
-              await clearCloudProviderKey(upserted.slug).catch(rollbackErr =>
-                console.warn(
-                  `[ai-settings] rollback clearCloudProviderKey failed slug=${upserted.slug}`,
-                  rollbackErr
-                )
-              );
-            }
             const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
             console.warn('[ai-settings] provider /models probe failed', {
               slug: upserted.slug,
               summary: presentProviderSetupError(msg, t).summary,
             });
-            const warning = replacingExistingCredential
-              ? ' Your previous key cannot be restored automatically; the replacement API key remains stored. Re-enter the previous key if needed.'
-              : '';
-            throw new ProviderProbeError(`Could not reach ${upserted.label}: ${msg}.${warning}`);
+            throw new ProviderProbeError(`Could not reach ${upserted.label}: ${msg}.`);
           }
         }
-      }
 
-      const list =
-        editing === 'new' || !editing
-          ? [...draft.cloudProviders, upserted]
-          : draft.cloudProviders.map(p => (p.id === editing.id ? upserted : p));
-      await persist({ ...draft, cloudProviders: list });
+        // Persist the provider and other settings first. A failed settings
+        // write must not overwrite a working credential; the AuthService key
+        // replacement is the last irreversible operation in this flow.
+        await persist({ ...draft, cloudProviders: list });
+        settingsPersisted = true;
+        if (apiKey) {
+          await setCloudProviderKey(upserted.slug, apiKey);
+        }
+      } catch (error) {
+        await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
+          console.warn(
+            `[ai-settings] rollback provider settings failed slug=${upserted.slug}`,
+            rollbackErr
+          )
+        );
+        if (settingsPersisted) {
+          // Restore the editor's saved/draft snapshot after a failed key-store
+          // write. This keeps the UI consistent with the reverted provider.
+          await persist(saved).catch(rollbackErr =>
+            console.warn(
+              `[ai-settings] rollback provider editor state failed slug=${upserted.slug}`,
+              rollbackErr
+            )
+          );
+        }
+        throw error;
+      }
       onDone();
     },
-    [editing, draft, saved.cloudProviders, persist, t, onDone]
+    [editing, draft, saved, persist, t, onDone]
   );
 }
