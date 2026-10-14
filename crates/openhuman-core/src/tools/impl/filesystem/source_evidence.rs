@@ -58,7 +58,7 @@ impl SourceEvidenceTool {
 impl Tool for SourceEvidenceTool {
     fn name(&self) -> &str { "source_evidence" }
     fn description(&self) -> &str {
-        "Opt-in, read-only source search and content-hash evidence in the active workspace.          Scan source files with a bounded optional query; verify a file digest before reading          line-numbered excerpts. No source is sent to a remote model by this tool."
+        "Opt-in read-only source evidence in the active workspace. Scan with a          bounded literal query; graph local imports; verify hashes before          reading line-numbered excerpts. The tool makes no network requests,          but outputs may be included in context sent to the active model."
     }
     fn permission_level(&self) -> PermissionLevel { PermissionLevel::ReadOnly }
     fn parameters_schema(&self) -> Value {
