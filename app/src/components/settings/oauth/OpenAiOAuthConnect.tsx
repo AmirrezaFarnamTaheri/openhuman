@@ -136,7 +136,8 @@ const OpenAiOAuthConnect = ({
     setError(null);
     try {
       const response = await callCoreRpc<{ result: { connected?: boolean } }>({
-        method: 'openhuman.inference_openai_oauth_disconnect', params: {},
+        method: 'openhuman.inference_openai_oauth_disconnect',
+        params: {},
       });
       console.debug('[ai-settings:openai-oauth] disconnect succeeded');
       await onDisconnected?.();
@@ -173,46 +174,63 @@ const OpenAiOAuthConnect = ({
       {connected ? (
         <>
           {allowDisconnect && (
-          <button
-            type="button"
-            data-testid={`${testIdPrefix}-disconnect`}
-            disabled={busy}
-            onClick={() => void handleDisconnect()}
-            className="self-start rounded-lg border border-line-strong bg-surface px-3 py-2 text-xs font-medium text-content-secondary hover:bg-surface-hover disabled:opacity-50">
-            {t('settings.ai.openaiOauthDisconnect')}
-          </button>
+            <button
+              type="button"
+              data-testid={`${testIdPrefix}-disconnect`}
+              disabled={busy}
+              onClick={() => void handleDisconnect()}
+              className="self-start rounded-lg border border-line-strong bg-surface px-3 py-2 text-xs font-medium text-content-secondary hover:bg-surface-hover disabled:opacity-50">
+              {t('settings.ai.openaiOauthDisconnect')}
+            </button>
           )}
           {allowDisconnect && (
             <div className="flex flex-col gap-2">
-              <button type="button" disabled={busy} data-testid={testIdPrefix + '-add-account'}
+              <button
+                type="button"
+                disabled={busy}
+                data-testid={testIdPrefix + '-add-account'}
                 onClick={() => void handleStart()}
                 className="self-start text-xs font-medium text-primary-600 underline disabled:opacity-50">
                 Sign in another ChatGPT account
               </button>
-              <button type="button" disabled={busy}
+              <button
+                type="button"
+                disabled={busy}
                 data-testid={testIdPrefix + '-manage-accounts'}
                 onClick={() => setManageAccounts(previous => !previous)}
                 className="self-start text-xs font-medium text-content-secondary underline disabled:opacity-50">
                 {manageAccounts ? 'Hide accounts' : 'Manage ChatGPT accounts'}
               </button>
               {manageAccounts && (
-                <CodexOAuthAccountManager onActivated={async () => {
-                  await onCompleted?.();
-                  await refreshStatus();
-                }} />
+                <CodexOAuthAccountManager
+                  onActivated={async () => {
+                    await onCompleted?.();
+                    await refreshStatus();
+                  }}
+                />
               )}
               {awaitingCallback && (
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-[11px] text-content-muted">{t('settings.ai.openaiOauthCallbackHint')}</p>
-                  <input aria-label={t('settings.ai.openaiOauthCallbackPlaceholder')}
+                  <p className="text-[11px] text-content-muted">
+                    {t('settings.ai.openaiOauthCallbackHint')}
+                  </p>
+                  <input
+                    aria-label={t('settings.ai.openaiOauthCallbackPlaceholder')}
                     data-testid={testIdPrefix + '-callback-input'}
-                    type="text" autoComplete="off" spellCheck={false}
-                    value={callbackUrl} onChange={event => {
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={callbackUrl}
+                    onChange={event => {
                       setCallbackUrl(event.target.value);
                       setError(null);
                     }}
-                    className="rounded-lg border border-line-strong bg-surface px-3 py-2 text-xs text-content" />
-                  <button type="button" disabled={busy} data-testid={testIdPrefix + '-complete'}
+                    className="rounded-lg border border-line-strong bg-surface px-3 py-2 text-xs text-content"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy}
+                    data-testid={testIdPrefix + '-complete'}
                     onClick={() => void handleComplete()}
                     className="self-start text-xs font-medium text-primary-600 underline disabled:opacity-50">
                     {t('settings.ai.openaiOauthFinish')}

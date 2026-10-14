@@ -2247,7 +2247,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.revealKeys': '显示 API 密钥',
   'settings.ai.fleet.hideKeys': '隐藏 API 密钥',
   'settings.ai.fleet.tooManyKeys': '每个提供商组最多支持 128 个 API 密钥。',
-  'settings.ai.fleet.partialKeyVerified': '部分 API 密钥被拒绝，但至少有一个密钥已通过验证。请检查提供商密钥状态。',
+  'settings.ai.fleet.partialKeyVerified':
+    '部分 API 密钥被拒绝，但至少有一个密钥已通过验证。请检查提供商密钥状态。',
   'settings.ai.apiKeyFieldLabel': 'API 密钥',
   'settings.ai.apiKeyRequired': '请粘贴你的 API 密钥以继续。',
   'settings.ai.apiKeyStoredEncrypted': 'API 密钥已加密存储',

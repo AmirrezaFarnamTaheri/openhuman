@@ -1,7 +1,10 @@
 use super::*;
 #[test]
 fn split_deduplicates_and_discards_blanks() {
-    assert_eq!(parse_api_keys(" key-a, key-b;key-a\nkey-c\r\n"), vec!["key-a", "key-b", "key-c"]);
+    assert_eq!(
+        parse_api_keys(" key-a, key-b;key-a\nkey-c\r\n"),
+        vec!["key-a", "key-b", "key-c"]
+    );
 }
 #[test]
 fn routes_around_cooldown_and_revoked_keys() {
@@ -49,16 +52,31 @@ fn one_run_reuses_healthy_key_but_fails_over_after_rate_limit() {
     let scope = "key-pool-test-session-affinity";
     let keys = vec!["key-a".to_owned(), "key-b".to_owned()];
     let (first, _) = choose_key_for_run(
-        scope, &keys, &[], RotationStrategy::RoundRobin, Some("run-1")
-    ).unwrap();
+        scope,
+        &keys,
+        &[],
+        RotationStrategy::RoundRobin,
+        Some("run-1"),
+    )
+    .unwrap();
     let (sticky, _) = choose_key_for_run(
-        scope, &keys, &[], RotationStrategy::RoundRobin, Some("run-1")
-    ).unwrap();
+        scope,
+        &keys,
+        &[],
+        RotationStrategy::RoundRobin,
+        Some("run-1"),
+    )
+    .unwrap();
     assert_eq!(first, sticky);
     record_result(scope, first, Some(KeyFailure::RateLimited));
     let (fallback, _) = choose_key_for_run(
-        scope, &keys, &[], RotationStrategy::RoundRobin, Some("run-1")
-    ).unwrap();
+        scope,
+        &keys,
+        &[],
+        RotationStrategy::RoundRobin,
+        Some("run-1"),
+    )
+    .unwrap();
     assert_ne!(fallback, first);
 }
 #[test]

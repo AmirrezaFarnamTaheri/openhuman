@@ -266,7 +266,8 @@ pub async fn apply_model_settings(
     // Retain only provider metadata long enough to identify stale fleet scopes.
     // Health pruning happens after a successful save, never during a rollback.
     let previous_cloud_providers = config.cloud_providers.clone();
-    let previous_model_ids: Vec<(String, String)> = config.model_registry
+    let previous_model_ids: Vec<(String, String)> = config
+        .model_registry
         .iter()
         .map(|entry| (entry.provider.clone(), entry.id.clone()))
         .collect();
@@ -439,22 +440,29 @@ pub async fn apply_model_settings(
     // Disconnected or retargeted providers must not retain an old fleet's
     // health/eviction history. Running requests already own their model Arcs.
     for previous in &previous_cloud_providers {
-        let unchanged = config.cloud_providers.iter().any(|current|
-            previous.slug == current.slug &&
-            previous.endpoint == current.endpoint &&
-            previous.auth_style == current.auth_style &&
-            previous.image_endpoint == current.image_endpoint &&
-            previous.model_image_endpoints == current.model_image_endpoints
-        );
+        let unchanged = config.cloud_providers.iter().any(|current| {
+            previous.slug == current.slug
+                && previous.endpoint == current.endpoint
+                && previous.auth_style == current.auth_style
+                && previous.image_endpoint == current.image_endpoint
+                && previous.model_image_endpoints == current.model_image_endpoints
+        });
         if !unchanged {
-            crate::inference::provider::factory::model_fleet_forget_provider(config, &previous.slug);
+            crate::inference::provider::factory::model_fleet_forget_provider(
+                config,
+                &previous.slug,
+            );
         }
     }
     for (provider, model) in previous_model_ids {
-        if !config.model_registry.iter().any(|entry|
-            entry.provider == provider && entry.id == model
-        ) {
-            crate::inference::provider::factory::model_fleet_forget_model(config, &provider, &model);
+        if !config
+            .model_registry
+            .iter()
+            .any(|entry| entry.provider == provider && entry.id == model)
+        {
+            crate::inference::provider::factory::model_fleet_forget_model(
+                config, &provider, &model,
+            );
         }
     }
     let snapshot = snapshot_config_json(config)?;

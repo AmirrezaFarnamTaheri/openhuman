@@ -285,7 +285,10 @@ fn generated_provider_ids_sanitize_and_bound_the_slug_prefix() {
 fn builtin_table_is_the_upstream_catalog_plus_the_managed_route() {
     use tinyinference_providers::builtin::BUILTIN_CLOUD_PROVIDERS as UPSTREAM;
     let host = &*BUILTIN_CLOUD_PROVIDERS;
-    assert_eq!(host.len(), UPSTREAM.len() + 1 + super::EXTRA_CLOUD_PROVIDERS.len());
+    assert_eq!(
+        host.len(),
+        UPSTREAM.len() + 1 + super::EXTRA_CLOUD_PROVIDERS.len()
+    );
     assert_eq!(host[0].slug, "openhuman");
     assert_eq!(host[0].auth_style, AuthStyle::OpenhumanJwt);
     for (mapped, upstream) in host[1..1 + UPSTREAM.len()].iter().zip(UPSTREAM) {
@@ -308,14 +311,28 @@ fn image_endpoint_presets_round_trip_and_default_without_mapping() {
         "endpoint": "https://api.example.test/v1",
         "image_endpoint": "https://vision.example.test/v1",
         "model_image_endpoints": { "my-vision": "https://models.example.test/v1" }
-    })).unwrap();
-    assert_eq!(entry.image_endpoint.as_deref(), Some("https://vision.example.test/v1"));
-    assert_eq!(entry.model_image_endpoints.get("my-vision").map(String::as_str), Some("https://models.example.test/v1"));
+    }))
+    .unwrap();
+    assert_eq!(
+        entry.image_endpoint.as_deref(),
+        Some("https://vision.example.test/v1")
+    );
+    assert_eq!(
+        entry
+            .model_image_endpoints
+            .get("my-vision")
+            .map(String::as_str),
+        Some("https://models.example.test/v1")
+    );
     let wire = serde_json::to_value(&entry).unwrap();
-    assert_eq!(wire["model_image_endpoints"]["my-vision"], "https://models.example.test/v1");
+    assert_eq!(
+        wire["model_image_endpoints"]["my-vision"],
+        "https://models.example.test/v1"
+    );
     let plain: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
         "slug": "old", "endpoint": "https://api.example.test/v1"
-    })).unwrap();
+    }))
+    .unwrap();
     assert_eq!(plain.image_endpoint, None);
     assert!(plain.model_image_endpoints.is_empty());
 }
@@ -324,26 +341,45 @@ fn image_endpoint_presets_round_trip_and_default_without_mapping() {
 fn reject_invalid_image_endpoints_and_unknown_strategy() {
     use std::collections::HashMap;
     assert!(super::normalize_fleet_config(
-        Some("ftp://malicious.example/api".to_string()), HashMap::new(), None
-    ).is_err());
-    assert!(super::normalize_fleet_config(
-        None, HashMap::new(), Some("unknown".to_string())
-    ).is_err());
+        Some("ftp://malicious.example/api".to_string()),
+        HashMap::new(),
+        None
+    )
+    .is_err());
+    assert!(
+        super::normalize_fleet_config(None, HashMap::new(), Some("unknown".to_string())).is_err()
+    );
     let mut image_models = HashMap::new();
-    image_models.insert("  vision  ".to_owned(), " https://vision.example/v1 ".to_owned());
+    image_models.insert(
+        "  vision  ".to_owned(),
+        " https://vision.example/v1 ".to_owned(),
+    );
     let (group, models, strategy) = super::normalize_fleet_config(
-        Some(" https://images.example/v1 ".to_owned()), image_models,
-        Some("least_busy".to_string())
-    ).unwrap();
+        Some(" https://images.example/v1 ".to_owned()),
+        image_models,
+        Some("least_busy".to_string()),
+    )
+    .unwrap();
     assert_eq!(group.as_deref(), Some("https://images.example/v1"));
-    assert_eq!(models.get("vision").map(String::as_str), Some("https://vision.example/v1"));
+    assert_eq!(
+        models.get("vision").map(String::as_str),
+        Some("https://vision.example/v1")
+    );
     assert_eq!(strategy.as_deref(), Some("least_busy"));
 }
 
 #[test]
 fn additional_fork_cloud_presets_are_represented_exactly_once() {
-    for slug in ["tokendance", "siliconflow", "qwen-pay-as-you-go", "qwen-token-plan"] {
-        let rows: Vec<_> = BUILTIN_CLOUD_PROVIDERS.iter().filter(|p| p.slug == slug).collect();
+    for slug in [
+        "tokendance",
+        "siliconflow",
+        "qwen-pay-as-you-go",
+        "qwen-token-plan",
+    ] {
+        let rows: Vec<_> = BUILTIN_CLOUD_PROVIDERS
+            .iter()
+            .filter(|p| p.slug == slug)
+            .collect();
         assert_eq!(rows.len(), 1, "{slug} must have one canonical preset");
         assert_eq!(rows[0].auth_style, AuthStyle::Bearer);
     }
@@ -359,12 +395,21 @@ fn llmtr_preset_uses_provider_native_bearer_endpoint() {
 
 #[test]
 fn prodex_gateway_is_a_builtin_responses_capable_bearer_provider() {
-    let rows: Vec<_> = BUILTIN_CLOUD_PROVIDERS.iter().filter(|provider| provider.slug == "prodex").collect();
+    let rows: Vec<_> = BUILTIN_CLOUD_PROVIDERS
+        .iter()
+        .filter(|provider| provider.slug == "prodex")
+        .collect();
     assert_eq!(rows.len(), 1, "one canonical Prodex entry");
     let preset = rows[0];
     assert_eq!(preset.label, "Prodex Gateway");
     assert_eq!(preset.endpoint, "http://127.0.0.1:4000/v1");
     assert_eq!(preset.auth_style, AuthStyle::Bearer);
-    assert!(builtin_cloud_supports_responses_api("prodex"), "gateway provides /v1/responses");
-    assert!(!endpoint_host_is_chat_completions_only(preset.endpoint), "must not treat gateway as chat-only");
+    assert!(
+        builtin_cloud_supports_responses_api("prodex"),
+        "gateway provides /v1/responses"
+    );
+    assert!(
+        !endpoint_host_is_chat_completions_only(preset.endpoint),
+        "must not treat gateway as chat-only"
+    );
 }

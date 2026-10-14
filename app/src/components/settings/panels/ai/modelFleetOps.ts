@@ -2,14 +2,24 @@
  * All writes go through the existing OpenHuman encrypted-credential and
  * core-owned config paths; no secrets ever enter this catalog.
  */
-import type { CloudProviderCreds, ModelRegistryEntry } from '../../../../utils/tauriCommands/config';
+import type {
+  CloudProviderCreds,
+  ModelRegistryEntry,
+} from '../../../../utils/tauriCommands/config';
 import { BUILTIN_CLOUD_PROVIDERS } from '../builtinCloudProviders';
 import { FLEET_MODEL_PRESETS, type FleetModelPreset } from './modelFleetCatalog';
 
 /** Shared normalization with Rust's parse_api_keys; never persist a delimited
  * value as one upstream Authorization header. */
 export function parseFleetApiKeys(raw: string): string[] {
-  return [...new Set(raw.split(/[,;\r\n]/).map(key => key.trim()).filter(Boolean))];
+  return [
+    ...new Set(
+      raw
+        .split(/[,;\r\n]/)
+        .map(key => key.trim())
+        .filter(Boolean)
+    ),
+  ];
 }
 
 /** Insert a pasted credential group without accidentally deleting the
@@ -79,13 +89,14 @@ export function syncModelPresets(
       added++;
     } else {
       const existing = next[idx];
-      if (existing && (
-        existing.vision !== entry.vision ||
-        (existing.context_window ?? 0) !== entry.context_window ||
-        (existing.cost_per_1m_input ?? 0) !== entry.cost_per_1m_input ||
-        (existing.cost_per_1m_cached_input ?? 0) !== entry.cost_per_1m_cached_input ||
-        existing.cost_per_1m_output !== entry.cost_per_1m_output
-      )) {
+      if (
+        existing &&
+        (existing.vision !== entry.vision ||
+          (existing.context_window ?? 0) !== entry.context_window ||
+          (existing.cost_per_1m_input ?? 0) !== entry.cost_per_1m_input ||
+          (existing.cost_per_1m_cached_input ?? 0) !== entry.cost_per_1m_cached_input ||
+          existing.cost_per_1m_output !== entry.cost_per_1m_output)
+      ) {
         next[idx] = { ...existing, ...entry };
         updated++;
       }
@@ -97,9 +108,16 @@ export function syncModelPresets(
 export function applyModelBulkPatch(
   models: readonly ModelRegistryEntry[],
   selected: ReadonlySet<string>,
-  patch: Partial<Pick<ModelRegistryEntry,
-    'vision' | 'context_window' | 'cost_per_1m_input' |
-    'cost_per_1m_cached_input' | 'cost_per_1m_output'>>
+  patch: Partial<
+    Pick<
+      ModelRegistryEntry,
+      | 'vision'
+      | 'context_window'
+      | 'cost_per_1m_input'
+      | 'cost_per_1m_cached_input'
+      | 'cost_per_1m_output'
+    >
+  >
 ): ModelRegistryEntry[] {
   return models.map(model =>
     selected.has(fleetModelKey(model.provider, model.id)) ? { ...model, ...patch } : { ...model }
@@ -132,9 +150,11 @@ export function applyProviderBulkPatch<T extends { slug: string }>(
 ): T[] {
   const mutable: Partial<CloudProviderCreds> = {
     ...(patch.image_endpoint !== undefined ? { image_endpoint: patch.image_endpoint } : {}),
-    ...(patch.rotation_strategy !== undefined ? { rotation_strategy: patch.rotation_strategy } : {}),
+    ...(patch.rotation_strategy !== undefined
+      ? { rotation_strategy: patch.rotation_strategy }
+      : {}),
   };
-  return providers.map(row => selected.has(row.slug) ? { ...row, ...mutable } : { ...row });
+  return providers.map(row => (selected.has(row.slug) ? { ...row, ...mutable } : { ...row }));
 }
 
 /** Reject confusing URL forms and embedded credentials. Loopback HTTP is valid
@@ -144,8 +164,14 @@ export function validModelFleetEndpoint(value: string): boolean {
   if (!trimmed) return true; // Blank clears the override.
   try {
     const url = new URL(trimmed);
-    return (url.protocol === 'https:' || url.protocol === 'http:') &&
-      Boolean(url.hostname) && !url.username && !url.password && !url.search && !url.hash;
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
   } catch {
     return false;
   }
@@ -154,11 +180,13 @@ export function validModelFleetEndpoint(value: string): boolean {
 /** A blank image-URL input means 'do not edit' unless Clear was clicked;
  * applying a strategy must not silently clear the existing endpoint.
  */
-export function updateSelectedGroupSettings<T extends {
-  slug: string;
-  imageEndpoint?: string;
-  rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
-}>(
+export function updateSelectedGroupSettings<
+  T extends {
+    slug: string;
+    imageEndpoint?: string;
+    rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
+  },
+>(
   groups: readonly T[],
   selected: ReadonlySet<string>,
   patch: {
@@ -168,7 +196,9 @@ export function updateSelectedGroupSettings<T extends {
 ): T[] {
   // The settings model uses the full enum. A caller may have narrower inferred
   // literals, but updating rotation always retains the same runtime structure.
-  return groups.map(group => selected.has(group.slug) ? { ...group, ...patch } : { ...group }) as T[];
+  return groups.map(group =>
+    selected.has(group.slug) ? { ...group, ...patch } : { ...group }
+  ) as T[];
 }
 
 /** Explicit model-id-to-endpoint group keys, one `model-id = https://...` per line. */

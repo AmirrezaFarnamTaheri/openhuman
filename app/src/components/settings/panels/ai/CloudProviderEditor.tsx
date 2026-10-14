@@ -10,7 +10,6 @@ import Label from '../../../ui/Label';
 import { ModalShell } from '../../../ui/ModalShell';
 import TextField from '../../../ui/TextField';
 import { isAzureFoundryEndpoint, isAzureV1BaseUrl } from '../azureDeployment';
-import { parseModelImageEndpoints, validModelFleetEndpoint } from './modelFleetOps';
 import { presentProviderSetupError, ProviderSetupErrorNotice } from '../ProviderSetupErrorNotice';
 import {
   BUILTIN_RESERVED_SLUGS,
@@ -20,6 +19,7 @@ import {
   ProviderProbeError,
   slugifyCustomProviderName,
 } from './aiPanelTypes';
+import { parseModelImageEndpoints, validModelFleetEndpoint } from './modelFleetOps';
 
 export const CloudProviderEditor = ({
   initial,
@@ -42,9 +42,13 @@ export const CloudProviderEditor = ({
   const [label, setLabel] = useState<string>(initial?.label ?? '');
   const [endpoint, setEndpoint] = useState(initial?.endpoint ?? '');
   const [imageEndpoint, setImageEndpoint] = useState(initial?.imageEndpoint ?? '');
-  const [rotationStrategy, setRotationStrategy] = useState(initial?.rotationStrategy ?? 'round_robin');
+  const [rotationStrategy, setRotationStrategy] = useState(
+    initial?.rotationStrategy ?? 'round_robin'
+  );
   const [modelImageMappingText, setModelImageMappingText] = useState(
-    Object.entries(initial?.modelImageEndpoints ?? {}).map(([id, url]) => id + ' = ' + url).join('\n')
+    Object.entries(initial?.modelImageEndpoints ?? {})
+      .map(([id, url]) => id + ' = ' + url)
+      .join('\n')
   );
   const [apiKey, setApiKey] = useState('');
   const [caCertPem, setCaCertPem] = useState(initial?.caCertPem ?? '');
@@ -88,7 +92,9 @@ export const CloudProviderEditor = ({
         throw new Error(slugError);
       }
       if (!validModelFleetEndpoint(imageEndpoint) || !validModelFleetEndpoint(endpoint)) {
-        throw new Error('Provider endpoints must be valid http(s) base URLs without embedded credentials.');
+        throw new Error(
+          'Provider endpoints must be valid http(s) base URLs without embedded credentials.'
+        );
       }
       const imageMap = parseModelImageEndpoints(modelImageMappingText);
       await onSubmit(
@@ -247,7 +253,8 @@ export const CloudProviderEditor = ({
           placeholder="https://images.example.com/v1"
         />
         <p className="text-xs text-content-muted">
-          Use a separate API base for messages that contain images. Empty inherits the standard endpoint.
+          Use a separate API base for messages that contain images. Empty inherits the standard
+          endpoint.
         </p>
       </div>
       <div className="space-y-2">

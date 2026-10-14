@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '../../../../test/test-utils';
 import {
-  authActivateProviderCredentials, authListProviderCredentials, authRemoveProviderCredentials,
+  authActivateProviderCredentials,
+  authListProviderCredentials,
+  authRemoveProviderCredentials,
 } from '../../../../utils/tauriCommands/auth';
 import { CodexOAuthAccountManager } from '../CodexOAuthAccountManager';
 
@@ -31,10 +33,18 @@ describe('Codex OAuth account selector', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(authListProviderCredentials).mockResolvedValue({
-      result: [account('oauth', true), account('oauth-another', false), {...account('api-key', false), kind: 'token'}],
+      result: [
+        account('oauth', true),
+        account('oauth-another', false),
+        { ...account('api-key', false), kind: 'token' },
+      ],
     } as never);
-    vi.mocked(authActivateProviderCredentials).mockResolvedValue({ result: account('oauth-another', true) } as never);
-    vi.mocked(authRemoveProviderCredentials).mockResolvedValue({ result: { removed: true } } as never);
+    vi.mocked(authActivateProviderCredentials).mockResolvedValue({
+      result: account('oauth-another', true),
+    } as never);
+    vi.mocked(authRemoveProviderCredentials).mockResolvedValue({
+      result: { removed: true },
+    } as never);
   });
 
   it('renders only OAuth accounts with the selected status from the sanitized RPC', async () => {
@@ -50,9 +60,12 @@ describe('Codex OAuth account selector', () => {
     renderWithProviders(<CodexOAuthAccountManager onActivated={onActivated} />);
     const rows = await screen.findAllByTestId('codex-oauth-account-row');
     fireEvent.click(rows[1].querySelector('button')!);
-    await waitFor(() => expect(authActivateProviderCredentials).toHaveBeenCalledWith({
-      provider: 'provider:openai', profile: 'oauth-another',
-    }));
+    await waitFor(() =>
+      expect(authActivateProviderCredentials).toHaveBeenCalledWith({
+        provider: 'provider:openai',
+        profile: 'oauth-another',
+      })
+    );
     expect(onActivated).toHaveBeenCalledOnce();
   });
 
@@ -62,9 +75,12 @@ describe('Codex OAuth account selector', () => {
     fireEvent.click(screen.getAllByText('Remove')[0]);
     expect(authRemoveProviderCredentials).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Confirm remove'));
-    await waitFor(() => expect(authRemoveProviderCredentials).toHaveBeenCalledWith({
-      provider: 'provider:openai', profile: 'oauth',
-    }));
+    await waitFor(() =>
+      expect(authRemoveProviderCredentials).toHaveBeenCalledWith({
+        provider: 'provider:openai',
+        profile: 'oauth',
+      })
+    );
     expect(rows.length).toBe(2);
   });
 });

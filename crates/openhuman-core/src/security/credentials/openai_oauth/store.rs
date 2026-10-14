@@ -89,13 +89,18 @@ pub(super) fn persist_openai_oauth_token_set(
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty());
     let store = auth_profiles_store(config);
-    let existing = store.load().map_err(|_| "Could not read Codex account profiles".to_string())?;
-    let oauth_profiles: Vec<&AuthProfile> = existing.profiles.values()
+    let existing = store
+        .load()
+        .map_err(|_| "Could not read Codex account profiles".to_string())?;
+    let oauth_profiles: Vec<&AuthProfile> = existing
+        .profiles
+        .values()
         .filter(|p| p.provider == OPENAI_PROVIDER_KEY && p.kind == AuthProfileKind::OAuth)
         .collect();
 
     let name = if let Some(ref account_id) = account_id {
-        oauth_profiles.iter()
+        oauth_profiles
+            .iter()
             .find(|p| p.metadata.get("account_id") == Some(account_id))
             .map(|p| p.profile_name.clone())
             .unwrap_or_else(|| {
@@ -112,14 +117,20 @@ pub(super) fn persist_openai_oauth_token_set(
         // Without an upstream account identifier we cannot safely establish
         // that this login belongs to an existing account; silently replacing
         // its refresh token would destroy the first user's session.
-        return Err("Codex account identity is missing; reconnect with an identifiable account".into());
+        return Err(
+            "Codex account identity is missing; reconnect with an identifiable account".into(),
+        );
     };
 
     let mut profile = AuthProfile::new_oauth(OPENAI_PROVIDER_KEY, &name, token_set);
     if let Some(account_id) = account_id {
-        profile.metadata.insert("account_id".to_string(), account_id);
+        profile
+            .metadata
+            .insert("account_id".to_string(), account_id);
     }
-    store.upsert_profile(profile.clone(), true).map_err(|e| e.to_string())?;
+    store
+        .upsert_profile(profile.clone(), true)
+        .map_err(|e| e.to_string())?;
     Ok(profile)
 }
 
@@ -130,8 +141,13 @@ pub(super) fn selected_openai_oauth_profile(
 ) -> Result<Option<AuthProfile>, String> {
     use crate::security::credentials::profiles::AuthProfileKind;
     let auth = AuthService::from_config(config);
-    let active = auth.get_profile(OPENAI_PROVIDER_KEY, None).map_err(|e| e.to_string())?;
-    if active.as_ref().is_some_and(|p| p.kind == AuthProfileKind::OAuth) {
+    let active = auth
+        .get_profile(OPENAI_PROVIDER_KEY, None)
+        .map_err(|e| e.to_string())?;
+    if active
+        .as_ref()
+        .is_some_and(|p| p.kind == AuthProfileKind::OAuth)
+    {
         return Ok(active);
     }
     if let Some(legacy) = auth
@@ -142,9 +158,13 @@ pub(super) fn selected_openai_oauth_profile(
         return Ok(Some(legacy));
     }
     let data = auth.load_profiles().map_err(|e| e.to_string())?;
-    Ok(data.profiles.values().find(|profile| {
-        profile.provider == OPENAI_PROVIDER_KEY && profile.kind == AuthProfileKind::OAuth
-    }).cloned())
+    Ok(data
+        .profiles
+        .values()
+        .find(|profile| {
+            profile.provider == OPENAI_PROVIDER_KEY && profile.kind == AuthProfileKind::OAuth
+        })
+        .cloned())
 }
 
 fn codex_cli_auth_path() -> Result<PathBuf, String> {
@@ -274,7 +294,9 @@ fn credentials_from_oauth_profile(
     config: &Config,
     mut profile: AuthProfile,
 ) -> Result<Option<OpenAiOAuthCredentials>, String> {
-    let Some(mut token_set) = profile.token_set.clone() else { return Ok(None); };
+    let Some(mut token_set) = profile.token_set.clone() else {
+        return Ok(None);
+    };
     let skew = Duration::minutes(2);
     if token_set.is_expiring_within(std::time::Duration::from_secs(
         skew.num_seconds().unsigned_abs(),
@@ -292,7 +314,8 @@ fn credentials_from_oauth_profile(
                         .map_err(|_| "Codex account selection unavailable".to_string())?;
                     let keep_active = selected.as_ref().is_some_and(|p| p.id == profile.id);
                     if auth_profiles_store(config)
-                        .upsert_profile(profile.clone(), keep_active).is_err()
+                        .upsert_profile(profile.clone(), keep_active)
+                        .is_err()
                     {
                         log::warn!("{LOG_PREFIX} refreshed Codex token was not persisted");
                     }
@@ -310,11 +333,18 @@ fn credentials_from_oauth_profile(
         }
     }
     let access = token_set.access_token.trim();
-    if access.is_empty() { return Ok(None); }
+    if access.is_empty() {
+        return Ok(None);
+    }
     Ok(Some(OpenAiOAuthCredentials {
         access_token: access.to_string(),
-        account_id: profile.metadata.get("account_id").map(String::as_str)
-            .map(str::trim).filter(|value| !value.is_empty()).map(str::to_string)
+        account_id: profile
+            .metadata
+            .get("account_id")
+            .map(String::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
             .or_else(|| openai_account_id_from_access_token(access)),
     }))
 }
@@ -333,35 +363,47 @@ pub fn lookup_openai_oauth_credentials(
 /// while standby accounts rotate only after each token is independently
 /// refreshed and validated for non-blank bearer state.
 /// OAuth accounts never mix with API-key profiles.
-pub fn lookup_openai_oauth_fleet(
-    config: &Config,
-) -> Result<Vec<OpenAiOAuthCredentials>, String> {
+pub fn lookup_openai_oauth_fleet(config: &Config) -> Result<Vec<OpenAiOAuthCredentials>, String> {
     use crate::security::credentials::profiles::AuthProfileKind;
     let auth = AuthService::from_config(config);
     let selected = selected_openai_oauth_profile(config)?.map(|p| p.id);
-    let snapshot = auth.load_profiles().map_err(|_| "Codex account list is unavailable".to_string())?;
-    let mut profiles: Vec<AuthProfile> = snapshot.profiles.values()
+    let snapshot = auth
+        .load_profiles()
+        .map_err(|_| "Codex account list is unavailable".to_string())?;
+    let mut profiles: Vec<AuthProfile> = snapshot
+        .profiles
+        .values()
         .filter(|p| p.provider == OPENAI_PROVIDER_KEY && p.kind == AuthProfileKind::OAuth)
-        .cloned().collect();
+        .cloned()
+        .collect();
     profiles.sort_by(|a, b| {
-        (selected.as_ref() != Some(&a.id)).cmp(&(selected.as_ref() != Some(&b.id)))
+        (selected.as_ref() != Some(&a.id))
+            .cmp(&(selected.as_ref() != Some(&b.id)))
             .then_with(|| a.profile_name.cmp(&b.profile_name))
     });
     let mut accounts = Vec::new();
     let mut first_failure = None;
     for profile in profiles {
         match credentials_from_oauth_profile(config, profile) {
-            Ok(Some(account)) if !accounts.iter().any(|p: &OpenAiOAuthCredentials| p.access_token == account.access_token) => {
+            Ok(Some(account))
+                if !accounts
+                    .iter()
+                    .any(|p: &OpenAiOAuthCredentials| p.access_token == account.access_token) =>
+            {
                 accounts.push(account);
-            },
-            Ok(_) => {},
+            }
+            Ok(_) => {}
             Err(error) => {
-                if first_failure.is_none() { first_failure = Some(error); }
+                if first_failure.is_none() {
+                    first_failure = Some(error);
+                }
             }
         }
     }
     if accounts.is_empty() {
-        if let Some(error) = first_failure { return Err(error); }
+        if let Some(error) = first_failure {
+            return Err(error);
+        }
     }
     Ok(accounts)
 }

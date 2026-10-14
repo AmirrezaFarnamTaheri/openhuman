@@ -62,9 +62,10 @@ pub(super) fn prodex_gateway_destinations_are_safe(
         && entry.image_endpoint.as_deref().map_or(true, |url| {
             url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim())
         })
-        && entry.model_image_endpoints.values().all(|url| {
-            url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim())
-        })
+        && entry
+            .model_image_endpoints
+            .values()
+            .all(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
 }
 
 /// The downstream gateway owns provider/account selection and sticky retry
@@ -367,10 +368,16 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     // A Codex subscription bearer is scoped to the official Responses API.
     // Never forward that bearer to user-configured image endpoints, even if
     // those settings were saved while an API-key profile was active.
-    if codex.using_oauth && (
-        entry.image_endpoint.as_deref().is_some_and(|value| !value.trim().is_empty())
-        || entry.model_image_endpoints.values().any(|value| !value.trim().is_empty())
-    ) {
+    if codex.using_oauth
+        && (entry
+            .image_endpoint
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+            || entry
+                .model_image_endpoints
+                .values()
+                .any(|value| !value.trim().is_empty()))
+    {
         return Some(Err(anyhow::anyhow!(
             "Codex OAuth credentials cannot be sent to alternate image endpoints"
         )));
@@ -390,12 +397,13 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         if codex_accounts.is_empty() {
             vec![key.clone()]
         } else {
-            codex_accounts.iter().map(|account| account.access_token.clone()).collect()
+            codex_accounts
+                .iter()
+                .map(|account| account.access_token.clone())
+                .collect()
         }
     } else if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
-        match super::credentials::lookup_token_account_fleet(
-            &slug, config, &key, false,
-        ) {
+        match super::credentials::lookup_token_account_fleet(&slug, config, &key, false) {
             Ok(found) if !found.is_empty() => found,
             Ok(_) => vec![String::new()],
             Err(error) => return Some(Err(error)),
@@ -413,15 +421,24 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             "OpenAI Codex OAuth credentials cannot be mixed with API keys"
         )));
     }
-    let image_endpoint = entry.model_image_endpoints.get(&effective_model)
+    let image_endpoint = entry
+        .model_image_endpoints
+        .get(&effective_model)
         .or(entry.image_endpoint.as_ref())
         .map(String::as_str)
         .map(str::trim)
-        .filter(|url| !url.is_empty() && url.trim_end_matches('/') != entry.endpoint.trim_end_matches('/'));
+        .filter(|url| {
+            !url.is_empty() && url.trim_end_matches('/') != entry.endpoint.trim_end_matches('/')
+        });
 
-    let fleet_scope = format!("{}:{}:{}", config.workspace_dir.display(), slug, effective_model);
+    let fleet_scope = format!(
+        "{}:{}:{}",
+        config.workspace_dir.display(),
+        slug,
+        effective_model
+    );
     let strategy = super::key_pool::RotationStrategy::parse(
-        entry.rotation_strategy.as_deref().unwrap_or("round_robin")
+        entry.rotation_strategy.as_deref().unwrap_or("round_robin"),
     );
 
     // Every configured cloud slug builds a crate-native model through the
@@ -540,15 +557,17 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         // cause cross-account requests and broken failover.
         let account = if codex.using_oauth {
             codex_accounts.iter().find(|a| a.access_token == credential)
-        } else { None };
+        } else {
+            None
+        };
         let mut headers = extra_headers.clone();
-        let account_route = account.map(|identity|
+        let account_route = account.map(|identity| {
             tinyinference_llm::providers::openai::codex::OpenAiCodexRouting {
                 endpoint: codex.endpoint.clone(),
                 using_oauth: true,
                 account_id: identity.account_id.clone(),
             }
-        );
+        });
         if codex.using_oauth {
             headers.retain(|(name, _)| !name.eq_ignore_ascii_case(OPENAI_CODEX_ACCOUNT_HEADER));
             if let Some(id) = account.and_then(|identity| identity.account_id.as_deref()) {
@@ -590,7 +609,6 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     };
     let chat = wrap_fleet(fleet_scope, keys, models, image_models, strategy);
     Some(Ok((chat, effective_model)))
-
 }
 
 /// Preserve the existing single-model path when neither rotation nor multimodal
@@ -606,6 +624,10 @@ fn wrap_fleet(
         return models.remove(0);
     }
     Arc::new(super::credential_fleet::CredentialFleetModel::new(
-        scope, keys, models, image_models, strategy
+        scope,
+        keys,
+        models,
+        image_models,
+        strategy,
     ))
 }

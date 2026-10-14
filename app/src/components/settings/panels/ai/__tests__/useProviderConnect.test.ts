@@ -43,18 +43,24 @@ describe('useProviderConnect', () => {
     api.probeProviderModelFleet.mockRejectedValue(new Error('provider returned 401: unauthorized'));
     const persist = vi.fn().mockResolvedValue(undefined);
     const onConnected = vi.fn();
-    const { result } = renderHook(() => useProviderConnect({
-      draft: EMPTY_SETTINGS,
-      saved: EMPTY_SETTINGS,
-      persist,
-      t: (_key, fallback) => fallback ?? '',
-      onConnected,
-    }));
+    const { result } = renderHook(() =>
+      useProviderConnect({
+        draft: EMPTY_SETTINGS,
+        saved: EMPTY_SETTINGS,
+        persist,
+        t: (_key, fallback) => fallback ?? '',
+        onConnected,
+      })
+    );
 
     await act(async () => {
-      await expect(result.current.connectProvider({
-        slug: 'openai', value: 'rejected-1\nrejected-2', credentialMode: 'api_key',
-      })).rejects.toThrow(/401/);
+      await expect(
+        result.current.connectProvider({
+          slug: 'openai',
+          value: 'rejected-1\nrejected-2',
+          credentialMode: 'api_key',
+        })
+      ).rejects.toThrow(/401/);
     });
     expect(api.probeProviderModelFleet).toHaveBeenCalledWith('openai');
     expect(api.listProviderModels).not.toHaveBeenCalled();
@@ -68,14 +74,23 @@ describe('useProviderConnect', () => {
     api.probeProviderModelFleet.mockRejectedValue(new Error('upstream gateway timeout'));
     const onConnected = vi.fn();
     const persist = vi.fn().mockResolvedValue(undefined);
-    const { result } = renderHook(() => useProviderConnect({
-      draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
-      persist, t: (_key, fallback) => fallback ?? '', onConnected,
-    }));
+    const { result } = renderHook(() =>
+      useProviderConnect({
+        draft: EMPTY_SETTINGS,
+        saved: EMPTY_SETTINGS,
+        persist,
+        t: (_key, fallback) => fallback ?? '',
+        onConnected,
+      })
+    );
     await act(async () => {
-      await expect(result.current.connectProvider({
-        slug: 'openai', value: 'unknown-1\nunknown-2', credentialMode: 'api_key',
-      })).rejects.toThrow(/timeout/);
+      await expect(
+        result.current.connectProvider({
+          slug: 'openai',
+          value: 'unknown-1\nunknown-2',
+          credentialMode: 'api_key',
+        })
+      ).rejects.toThrow(/timeout/);
     });
     expect(api.clearCloudProviderKey).toHaveBeenCalledWith('openai');
     expect(result.current.providerSaveNotice).toBeNull();
@@ -88,12 +103,14 @@ describe('useProviderConnect', () => {
     const persist = vi.fn().mockResolvedValue(undefined);
     const onConnected = vi.fn();
     const t = vi.fn((key: string, fallback?: string) => fallback ?? key);
-    const { result } = renderHook(() => useProviderConnect({
-      draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS, persist, t, onConnected,
-    }));
+    const { result } = renderHook(() =>
+      useProviderConnect({ draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS, persist, t, onConnected })
+    );
     await act(async () => {
       await result.current.connectProvider({
-        slug: 'openai', value: 'rejected-1\nworking-2', credentialMode: 'api_key',
+        slug: 'openai',
+        value: 'rejected-1\nworking-2',
+        credentialMode: 'api_key',
       });
     });
     expect(persist).toHaveBeenCalledTimes(1);
@@ -106,15 +123,20 @@ describe('useProviderConnect', () => {
   it('saves a fully valid credential group without claiming an invalid key', async () => {
     api.probeProviderModelFleet.mockResolvedValue({ rejectedKeys: 0 });
     const onConnected = vi.fn();
-    const { result } = renderHook(() => useProviderConnect({
-      draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
-      persist: vi.fn().mockResolvedValue(undefined),
-      t: (_key, fallback) => fallback ?? '',
-      onConnected,
-    }));
+    const { result } = renderHook(() =>
+      useProviderConnect({
+        draft: EMPTY_SETTINGS,
+        saved: EMPTY_SETTINGS,
+        persist: vi.fn().mockResolvedValue(undefined),
+        t: (_key, fallback) => fallback ?? '',
+        onConnected,
+      })
+    );
     await act(async () => {
       await result.current.connectProvider({
-        slug: 'openai', value: 'working-1\nworking-2', credentialMode: 'api_key',
+        slug: 'openai',
+        value: 'working-1\nworking-2',
+        credentialMode: 'api_key',
       });
     });
     expect(result.current.providerSaveNotice).toBeNull();

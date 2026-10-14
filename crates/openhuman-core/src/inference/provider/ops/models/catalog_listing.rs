@@ -310,7 +310,8 @@ pub async fn list_configured_models_from_config(
         request = match entry.auth_style {
             AuthStyle::Bearer => {
                 if !candidate_key.is_empty() {
-                    let mut r = request.header("Authorization", format!("Bearer {}", candidate_key));
+                    let mut r =
+                        request.header("Authorization", format!("Bearer {}", candidate_key));
                     if let Some(account_id) = routing.account_id.as_deref() {
                         r = r.header(OPENAI_CODEX_ACCOUNT_HEADER, account_id);
                     }

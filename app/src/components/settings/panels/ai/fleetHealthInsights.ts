@@ -61,12 +61,28 @@ export function summarizeFleetHealth(snapshot: ModelFleetStatus | null): FleetHe
       }
     }
   }
-  const status = keyCount === 0 ? 'unobserved'
-    : healthy === 0 ? 'unavailable'
-      : cooling + evicted > 0 ? 'degraded' : 'ready';
+  const status =
+    keyCount === 0
+      ? 'unobserved'
+      : healthy === 0
+        ? 'unavailable'
+        : cooling + evicted > 0
+          ? 'degraded'
+          : 'ready';
   const attempts = successCount + failureCount;
-  const observedSuccessRate = attempts > 0
-    ? Math.round((successCount / attempts) * 100) : null;
-  return {providerCount, modelCount, keyCount, healthy, cooling, evicted,
-    activeLeases, nextRecoveryMs, successCount, failureCount, observedSuccessRate, status};
+  const observedSuccessRate = attempts > 0 ? Math.round((successCount / attempts) * 100) : null;
+  return {
+    providerCount,
+    modelCount,
+    keyCount,
+    healthy,
+    cooling,
+    evicted,
+    activeLeases,
+    nextRecoveryMs,
+    successCount,
+    failureCount,
+    observedSuccessRate,
+    status,
+  };
 }

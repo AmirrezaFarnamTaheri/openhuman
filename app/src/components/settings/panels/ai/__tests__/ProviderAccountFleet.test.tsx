@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderWithProviders } from '../../../../../test/test-utils';
 import {
-  authActivateProviderCredentials, authListProviderCredentials, authRemoveProviderCredentials,
+  authActivateProviderCredentials,
+  authListProviderCredentials,
+  authRemoveProviderCredentials,
   authStoreProviderCredentials,
 } from '../../../../../utils/tauriCommands/auth';
-import { ProviderAccountFleet } from '../ProviderAccountFleet';
 import type { CloudProvider } from '../aiPanelTypes';
+import { ProviderAccountFleet } from '../ProviderAccountFleet';
 
 vi.mock('../../../../../utils/tauriCommands/auth', () => ({
   authListProviderCredentials: vi.fn(),
@@ -17,23 +19,39 @@ vi.mock('../../../../../utils/tauriCommands/auth', () => ({
 }));
 
 const google: CloudProvider = {
-  id: 'google-1', slug: 'google', label: 'Google Gemini',
+  id: 'google-1',
+  slug: 'google',
+  label: 'Google Gemini',
   endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai',
-  authStyle: 'bearer', maskedKey: '',
+  authStyle: 'bearer',
+  maskedKey: '',
 };
 
 describe('ProviderAccountFleet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(authListProviderCredentials).mockResolvedValue({ result: [{
-      id: 'provider:google:work', provider: 'provider:google', profileName: 'work',
-      kind: 'token', accountId: null, workspaceId: null, metadataKeys: [],
-      updatedAt: '2026-10-14T00:00:00Z', hasToken: true, hasTokenSet: false,
-      isActive: true,
-    }] } as never);
+    vi.mocked(authListProviderCredentials).mockResolvedValue({
+      result: [
+        {
+          id: 'provider:google:work',
+          provider: 'provider:google',
+          profileName: 'work',
+          kind: 'token',
+          accountId: null,
+          workspaceId: null,
+          metadataKeys: [],
+          updatedAt: '2026-10-14T00:00:00Z',
+          hasToken: true,
+          hasTokenSet: false,
+          isActive: true,
+        },
+      ],
+    } as never);
     vi.mocked(authStoreProviderCredentials).mockResolvedValue({ result: {} } as never);
     vi.mocked(authActivateProviderCredentials).mockResolvedValue({ result: {} } as never);
-    vi.mocked(authRemoveProviderCredentials).mockResolvedValue({ result: { removed: true } } as never);
+    vi.mocked(authRemoveProviderCredentials).mockResolvedValue({
+      result: { removed: true },
+    } as never);
   });
 
   it('renders as a closed native disclosure and loads sanitized camelCase account summaries', async () => {
@@ -51,11 +69,18 @@ describe('ProviderAccountFleet', () => {
     fireEvent.click(screen.getByTestId('model-fleet-accounts-toggle'));
     await screen.findByText('work');
     fireEvent.change(screen.getByLabelText('New account label'), { target: { value: 'personal' } });
-    fireEvent.change(screen.getByLabelText('New account API key'), { target: { value: 'secret-test' } });
+    fireEvent.change(screen.getByLabelText('New account API key'), {
+      target: { value: 'secret-test' },
+    });
     fireEvent.click(screen.getByText('Add account'));
-    await waitFor(() => expect(authStoreProviderCredentials).toHaveBeenCalledWith({
-      provider: 'provider:google', profile: 'personal', token: 'secret-test', setActive: false,
-    }));
+    await waitFor(() =>
+      expect(authStoreProviderCredentials).toHaveBeenCalledWith({
+        provider: 'provider:google',
+        profile: 'personal',
+        token: 'secret-test',
+        setActive: false,
+      })
+    );
     expect(screen.queryByText('secret-test')).not.toBeInTheDocument();
   });
 

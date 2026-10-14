@@ -56,12 +56,42 @@ impl From<&'static tinyinference_providers::builtin::BuiltinCloudProvider>
 /// ([`UPSTREAM_BUILTINS`]), mapped onto the host's [`AuthStyle`].
 pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
     // Opt-in loopback gateway; OpenHuman never forwards Codex OAuth credentials.
-    BuiltinCloudProvider { slug: "prodex", label: "Prodex Gateway", endpoint: "http://127.0.0.1:4000/v1", auth_style: AuthStyle::Bearer },
-    BuiltinCloudProvider { slug: "llmtr", label: "LLMTR", endpoint: "https://llmtr.com/v1", auth_style: AuthStyle::Bearer },
-    BuiltinCloudProvider { slug: "tokendance", label: "TokenDance", endpoint: "https://tokendance.space/gateway/v1", auth_style: AuthStyle::Bearer },
-        BuiltinCloudProvider { slug: "siliconflow", label: "SiliconFlow", endpoint: "https://api.siliconflow.cn/v1", auth_style: AuthStyle::Bearer },
-        BuiltinCloudProvider { slug: "qwen-pay-as-you-go", label: "Qwen Pay-As-You-Go", endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", auth_style: AuthStyle::Bearer },
-        BuiltinCloudProvider { slug: "qwen-token-plan", label: "Qwen Token Plan", endpoint: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", auth_style: AuthStyle::Bearer },
+    BuiltinCloudProvider {
+        slug: "prodex",
+        label: "Prodex Gateway",
+        endpoint: "http://127.0.0.1:4000/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "llmtr",
+        label: "LLMTR",
+        endpoint: "https://llmtr.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "tokendance",
+        label: "TokenDance",
+        endpoint: "https://tokendance.space/gateway/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "siliconflow",
+        label: "SiliconFlow",
+        endpoint: "https://api.siliconflow.cn/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "qwen-pay-as-you-go",
+        label: "Qwen Pay-As-You-Go",
+        endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "qwen-token-plan",
+        label: "Qwen Token Plan",
+        endpoint: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        auth_style: AuthStyle::Bearer,
+    },
 ];
 
 pub static BUILTIN_CLOUD_PROVIDERS: LazyLock<Vec<BuiltinCloudProvider>> = LazyLock::new(|| {
@@ -315,12 +345,15 @@ pub fn normalize_fleet_config(
             || url.query().is_some()
             || url.fragment().is_some()
         {
-            return Err("image endpoint must be HTTP(S), with no credentials, query or fragment".into());
+            return Err(
+                "image endpoint must be HTTP(S), with no credentials, query or fragment".into(),
+            );
         }
         Ok(value.to_owned())
     }
 
-    let group = image_endpoint.as_deref()
+    let group = image_endpoint
+        .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(image_url)
@@ -339,7 +372,8 @@ pub fn normalize_fleet_config(
             return Err(format!("duplicate image model id: {id}"));
         }
     }
-    let strategy = rotation_strategy.as_deref()
+    let strategy = rotation_strategy
+        .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|raw| {
@@ -348,7 +382,8 @@ pub fn normalize_fleet_config(
             } else {
                 Err("unknown key rotation strategy".to_string())
             }
-        }).transpose()?;
+        })
+        .transpose()?;
     Ok((group, routes, strategy))
 }
 

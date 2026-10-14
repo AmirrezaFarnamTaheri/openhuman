@@ -29,8 +29,9 @@ describe('providerIcons', () => {
     }
     // A newly-added provider is deliberately not given a misleading generic
     // brand mark; ProviderListRow renders its lettered fallback swatch.
-    const unknownBrands = [...BUILTIN_CLOUD_PROVIDER_SLUGS, ...NON_CLOUD_SLUGS]
-      .filter(slug => !PROVIDER_ICON_SLUGS.includes(slug));
+    const unknownBrands = [...BUILTIN_CLOUD_PROVIDER_SLUGS, ...NON_CLOUD_SLUGS].filter(
+      slug => !PROVIDER_ICON_SLUGS.includes(slug)
+    );
     for (const slug of unknownBrands) {
       expect(providerIcon(slug, 'h-4 w-4'), slug).toBeNull();
     }

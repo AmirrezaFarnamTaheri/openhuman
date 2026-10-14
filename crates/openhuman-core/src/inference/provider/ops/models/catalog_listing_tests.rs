@@ -13,15 +13,19 @@ fn retries_only_auth_rejections_while_untried_credentials_remain() {
 #[test]
 fn openrouter_validation_tries_another_key_only_for_auth_status() {
     assert!(should_retry_openrouter_key(
-        "OpenRouter key validation returned 401: invalid API key", true
+        "OpenRouter key validation returned 401: invalid API key",
+        true
     ));
     assert!(should_retry_openrouter_key(
-        "OpenRouter key validation returned 403: forbidden", true
+        "OpenRouter key validation returned 403: forbidden",
+        true
     ));
     assert!(!should_retry_openrouter_key(
-        "OpenRouter key validation returned 401: invalid API key", false
+        "OpenRouter key validation returned 401: invalid API key",
+        false
     ));
     assert!(!should_retry_openrouter_key(
-        "OpenRouter key validation failed: connection refused", true
+        "OpenRouter key validation failed: connection refused",
+        true
     ));
 }

@@ -118,7 +118,7 @@ async fn configure_openrouter_workspace(tmp: &TempDir, endpoint: String, token: 
         endpoint,
         auth_style: AuthStyle::Bearer,
         default_model: None,
-    ..Default::default()
+        ..Default::default()
     });
     config.save().await.expect("save config");
 
@@ -184,7 +184,7 @@ async fn configure_generic_workspace(tmp: &TempDir, endpoint: String) -> Config 
         endpoint,
         auth_style: AuthStyle::None,
         default_model: None,
-    ..Default::default()
+        ..Default::default()
     });
     config.save().await.expect("save config");
     config

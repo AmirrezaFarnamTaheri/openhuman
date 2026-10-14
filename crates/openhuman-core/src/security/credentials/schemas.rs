@@ -296,8 +296,11 @@ fn handle_auth_activate_provider_credentials(params: Map<String, Value>) -> Cont
         let payload = deserialize_params::<AuthActivateProviderCredentialsParams>(params)?;
         to_json(
             crate::security::credentials::rpc::activate_provider_credentials(
-                &config, &payload.provider, &payload.profile
-            ).await?,
+                &config,
+                &payload.provider,
+                &payload.profile,
+            )
+            .await?,
         )
     })
 }

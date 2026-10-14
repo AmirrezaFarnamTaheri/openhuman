@@ -178,9 +178,7 @@ pub(super) fn lookup_token_account_fleet(
     // Prodex has its own upstream account rotation; passing multiple virtual
     // keys breaks continuation affinity. Ephemeral routes must not inherit
     // disk-backed secrets, and Codex OAuth bearers need per-account headers.
-    if using_oauth || slug == "prodex"
-        || slug == crate::config::schema::EPHEMERAL_ROUTE_SLUG
-    {
+    if using_oauth || slug == "prodex" || slug == crate::config::schema::EPHEMERAL_ROUTE_SLUG {
         return Ok(keys);
     }
     let expected = auth_key_for_slug(slug);

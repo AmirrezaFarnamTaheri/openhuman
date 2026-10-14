@@ -64,9 +64,7 @@ describe('ProviderKeyDialog multi-token security', () => {
     const keyOne = within(entries).getByLabelText('API key 1') as HTMLInputElement;
     fireEvent.change(keyOne, { target: { value: 'existing-secret' } });
     keyOne.setSelectionRange(4, 4);
-    fireEvent.paste(keyOne, {
-      clipboardData: { getData: () => 'new-secret-a\nnew-secret-b' },
-    });
+    fireEvent.paste(keyOne, { clipboardData: { getData: () => 'new-secret-a\nnew-secret-b' } });
     expect(within(entries).getByLabelText('API key 1')).toHaveValue('existing-secret');
     expect(within(entries).getByLabelText('API key 2')).toHaveValue('new-secret-a');
     expect(within(entries).getByLabelText('API key 3')).toHaveValue('new-secret-b');

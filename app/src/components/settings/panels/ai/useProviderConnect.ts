@@ -13,16 +13,15 @@ import {
   flushCloudProviders,
   importOpenAiCodexCliAuth,
   listProviderModels,
-  probeProviderModelFleet,
   loadProviderAuthErrors,
   OPENAI_CODEX_OAUTH_MISSING_AUTH_URL,
   OPENAI_CODEX_OAUTH_MISSING_CALLBACK_URL,
+  probeProviderModelFleet,
   type ProviderAuthError,
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
 import { openhumanUpdateLocalAiSettings } from '../../../../utils/tauriCommands/config';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
-import { parseFleetApiKeys } from './modelFleetOps';
 import {
   type AISettings,
   authStyleForSlug,
@@ -31,6 +30,7 @@ import {
   defaultEndpointFor,
   maskKeyLabel,
 } from './aiPanelTypes';
+import { parseFleetApiKeys } from './modelFleetOps';
 
 const normalizeProviderSlug = (slug: string) => slug.trim().toLowerCase();
 const isProviderSlug = (candidate: string, slug: string) =>
@@ -158,9 +158,14 @@ export function useProviderConnect({
           slug,
           label: localLabel ?? BUILTIN_PROVIDER_META[slug]?.label ?? slug,
           endpoint,
-          imageEndpoint: initialProvider?.imageEndpoint ?? initialSavedProvider?.imageEndpoint ?? '',
-          modelImageEndpoints: initialProvider?.modelImageEndpoints ?? initialSavedProvider?.modelImageEndpoints ?? {},
-          rotationStrategy: initialProvider?.rotationStrategy ?? initialSavedProvider?.rotationStrategy ?? 'round_robin',
+          imageEndpoint:
+            initialProvider?.imageEndpoint ?? initialSavedProvider?.imageEndpoint ?? '',
+          modelImageEndpoints:
+            initialProvider?.modelImageEndpoints ?? initialSavedProvider?.modelImageEndpoints ?? {},
+          rotationStrategy:
+            initialProvider?.rotationStrategy ??
+            initialSavedProvider?.rotationStrategy ??
+            'round_robin',
           caCertPem: initialProvider?.caCertPem ?? initialSavedProvider?.caCertPem,
           authStyle: authStyleForSlug(slug),
           // CLI-login providers hold no API key — reflect that honestly.

@@ -3,9 +3,13 @@
  */
 export function validateNamedProviderAccount(raw: string): string {
   const value = raw.trim();
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,47}$/.test(value) ||
-      ['default', 'oauth'].includes(value.toLowerCase())) {
-    throw new Error('Use 1-48 letters, numbers, dashes or underscores; default/oauth are reserved.');
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9_-]{0,47}$/.test(value) ||
+    ['default', 'oauth'].includes(value.toLowerCase())
+  ) {
+    throw new Error(
+      'Use 1-48 letters, numbers, dashes or underscores; default/oauth are reserved.'
+    );
   }
   return value;
 }
@@ -17,6 +21,9 @@ export function validateAccountApiKey(raw: string): string {
   return value;
 }
 export function accountFleetEligible(slug: string, authStyle: string): boolean {
-  return slug !== 'prodex' && slug !== 'openhuman' &&
-    (authStyle === 'bearer' || authStyle === 'anthropic');
+  return (
+    slug !== 'prodex' &&
+    slug !== 'openhuman' &&
+    (authStyle === 'bearer' || authStyle === 'anthropic')
+  );
 }

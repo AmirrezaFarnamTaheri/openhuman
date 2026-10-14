@@ -14,6 +14,5 @@ pub use flow::{
 };
 pub use store::{
     lookup_openai_bearer_token, lookup_openai_oauth_credentials, lookup_openai_oauth_fleet,
-    OPENAI_OAUTH_PROFILE_NAME,
-    OPENAI_PROVIDER_KEY,
+    OPENAI_OAUTH_PROFILE_NAME, OPENAI_PROVIDER_KEY,
 };

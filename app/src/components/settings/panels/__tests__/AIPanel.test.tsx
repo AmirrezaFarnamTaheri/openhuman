@@ -43,8 +43,8 @@ vi.mock('../../../../services/api/aiSettingsApi', async importOriginal => {
     saveAISettings: vi.fn(),
     loadLocalProviderSnapshot: vi.fn(),
     loadProviderAuthErrors: vi.fn().mockResolvedValue([]),
-  loadModelFleetStatus: vi.fn().mockResolvedValue({ providers: [] }),
-  resetModelFleetStatus: vi.fn().mockResolvedValue(undefined),
+    loadModelFleetStatus: vi.fn().mockResolvedValue({ providers: [] }),
+    resetModelFleetStatus: vi.fn().mockResolvedValue(undefined),
     testProviderModel: vi.fn(),
     // #5341: use the REAL classifier + describer (pure, translator-driven) instead
     // of a hand-copied third implementation that could drift from the source. The
@@ -1118,7 +1118,9 @@ describe('AIPanel', () => {
       renderWithProviders(<AIPanel />);
       await openProviderConnectDialog('deepseek');
       const dialog = await screen.findByRole('dialog', { name: /Connect DeepSeek/i });
-      fireEvent.change(within(dialog).getByLabelText(/^API key$/i), { target: { value: 'sk-bad' } });
+      fireEvent.change(within(dialog).getByLabelText(/^API key$/i), {
+        target: { value: 'sk-bad' },
+      });
       fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
 
       await waitFor(() =>

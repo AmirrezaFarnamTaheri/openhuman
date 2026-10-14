@@ -133,13 +133,9 @@ impl AuthProfilesStore {
         data.active_profiles
             .retain(|_, active| active != profile_id);
         if was_active && provider.starts_with("provider:") {
-            if let Some(next) = data
-                .profiles
-                .values()
-                .find(|profile| {
-                    profile.provider == *provider && profile.kind == removed_profile.kind
-                })
-            {
+            if let Some(next) = data.profiles.values().find(|profile| {
+                profile.provider == *provider && profile.kind == removed_profile.kind
+            }) {
                 data.active_profiles
                     .insert(provider.clone(), next.id.clone());
             }

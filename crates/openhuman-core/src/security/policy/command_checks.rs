@@ -26,9 +26,7 @@ use tinytools::status::POLICY_BLOCKED_MARKER;
 /// classifying quoted search patterns or heredoc bodies as filesystem targets.
 /// This is defense in depth, not a substitute for OS-level sandboxing.
 #[cfg(feature = "modules")]
-fn unbounded_system_scan(
-    analysis: &crate::modules::tinybox::contract::CommandAnalysis,
-) -> bool {
+fn unbounded_system_scan(analysis: &crate::modules::tinybox::contract::CommandAnalysis) -> bool {
     for segment in &analysis.segments {
         let name = segment.normalized_name.to_ascii_lowercase();
         let args = &segment.arguments;
@@ -38,7 +36,10 @@ fn unbounded_system_scan(
                 value == "--recursive"
                     || (value.starts_with('-')
                         && !value.starts_with("--")
-                        && value.chars().skip(1).any(|letter| letter == 'R' || letter == 'r'))
+                        && value
+                            .chars()
+                            .skip(1)
+                            .any(|letter| letter == 'R' || letter == 'r'))
             }),
             _ => false,
         };
@@ -80,8 +81,14 @@ fn broad_system_root(raw: &str) -> bool {
     let path = if path.is_empty() { "/" } else { path };
     matches!(
         path,
-        "/" | "/System" | "/Applications" | "/Library" | "/Users"
-            | "/Volumes" | "/private" | "~" | "~/Library"
+        "/" | "/System"
+            | "/Applications"
+            | "/Library"
+            | "/Users"
+            | "/Volumes"
+            | "/private"
+            | "~"
+            | "~/Library"
     )
 }
 

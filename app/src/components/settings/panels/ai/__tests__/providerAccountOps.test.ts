@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { accountFleetEligible, validateAccountApiKey, validateNamedProviderAccount } from '../providerAccountOps';
+
+import {
+  accountFleetEligible,
+  validateAccountApiKey,
+  validateNamedProviderAccount,
+} from '../providerAccountOps';
 
 describe('named account contract', () => {
   it('rejects reserved, traversal and oversized names', () => {
     expect(validateNamedProviderAccount(' work-2 ')).toBe('work-2');
-    for (const value of ['default','oauth','../other','x'.repeat(49)]) {
+    for (const value of ['default', 'oauth', '../other', 'x'.repeat(49)]) {
       expect(() => validateNamedProviderAccount(value)).toThrow();
     }
   });

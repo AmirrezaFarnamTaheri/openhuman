@@ -99,9 +99,13 @@ async fn files_a_single_generated_artifact() {
     // Artifact metadata is persisted through the workspace document store
     // (not necessarily as a legacy artifacts/<id>/meta.json sidecar).
     let saved = crate::agent::artifacts::store::get_artifact(&workspace, artifact_id)
-        .await.expect("saved artifact metadata must be retrievable");
+        .await
+        .expect("saved artifact metadata must be retrievable");
     assert!(matches!(saved.kind, ArtifactKind::Image));
-    assert!(saved.file.is_some(), "finalized artifact must reference its output");
+    assert!(
+        saved.file.is_some(),
+        "finalized artifact must reference its output"
+    );
 }
 
 #[tokio::test]
@@ -132,7 +136,8 @@ async fn files_every_artifact_when_n_greater_than_one() {
         let id = entry["artifact_id"].as_str().expect("artifact_id set");
         assert!(ids.insert(id.to_string()), "artifact ids must be unique");
         let saved = crate::agent::artifacts::store::get_artifact(&workspace, id)
-            .await.expect("every generated artifact has persistent metadata");
+            .await
+            .expect("every generated artifact has persistent metadata");
         assert!(matches!(saved.kind, ArtifactKind::Image));
         assert!(saved.file.is_some());
     }

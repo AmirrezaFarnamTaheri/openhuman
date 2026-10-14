@@ -108,11 +108,11 @@ fn approval_identity_scopes_composio_dispatcher_grants_to_one_action() {
 // `requires_approval` is the last chance to keep a card from firing for a call
 // the permission layer will refuse regardless of the human's answer.
 
+use tinyagents_harness::middleware::ApprovalResolver;
+use tinytools::PermissionLevel;
 use tinytools::{
     TaskProfile, TaskRiskLevel, ToolPolicyAction, ToolPolicyDecision, ToolPolicySession,
 };
-use tinyagents_harness::middleware::ApprovalResolver;
-use tinytools::PermissionLevel;
 
 /// An external-effect tool at a chosen permission level, so the ceiling branch
 /// of the permission view can be exercised (`FakeTool` sits at the `ReadOnly`
