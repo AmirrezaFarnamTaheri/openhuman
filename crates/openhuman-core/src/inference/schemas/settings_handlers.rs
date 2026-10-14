@@ -344,3 +344,42 @@ where
 {
     Value::deserialize(deserializer).map(Some)
 }
+
+#[cfg(test)]
+mod provider_protocol_update_tests {
+    use super::*;
+    use crate::config::schema::cloud_providers::{ModelTransport, ToolCallCodec};
+
+    #[test]
+    fn provider_settings_rpc_accepts_tool_codec_and_exact_model_protocol() {
+        let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "mixed-protocol",
+            "endpoint": "https://mixed.example/v1",
+            "tool_call_codec": "qnml",
+            "model_transports": { "vendor/responses-model": "responses" }
+        }))
+        .expect("valid model protocol settings");
+        assert_eq!(input.tool_call_codec, ToolCallCodec::Qnml);
+        assert_eq!(
+            input.model_transports.get("vendor/responses-model"),
+            Some(&ModelTransport::Responses)
+        );
+    }
+
+    #[test]
+    fn provider_settings_rpc_preserves_legacy_tool_and_transport_defaults() {
+        let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "old",
+            "endpoint": "https://legacy.example/v1"
+        }))
+        .unwrap();
+        assert_eq!(input.tool_call_codec, ToolCallCodec::Native);
+        assert!(input.model_transports.is_empty());
+        assert!(serde_json::from_value::<InferenceCloudProviderUpdate>(serde_json::json!({
+            "slug": "bad",
+            "endpoint": "https://router.example/v1",
+            "model_transports": { "m": "unsupported" }
+        }))
+        .is_err());
+    }
+}
