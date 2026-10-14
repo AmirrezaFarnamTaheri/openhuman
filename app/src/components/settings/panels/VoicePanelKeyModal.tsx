@@ -12,7 +12,12 @@ interface VoicePanelKeyModalProps {
   pendingKeyValue: string;
   setPendingKeyValue: (value: string) => void;
   isSavingPendingKey: boolean;
-  handleEnableExternalProvider: (slug: string, apiKey: string) => Promise<void>;
+  handleEnableExternalProvider: (
+    slug: string,
+    apiKey: string,
+    nativeTts?: { endpoint: string; model: string; voice: string }
+  ) => Promise<void>;
+  existingKokoro?: { endpoint: string; default_tts_model?: string | null; default_tts_voice: string | null };
   ttsVoice: string;
   setTtsVoice: (value: string) => void;
   piperVoicePresets: ReadonlyArray<{ id: string; label: string }>;
@@ -36,6 +41,7 @@ const VoicePanelKeyModal = ({
   setPendingKeyValue,
   isSavingPendingKey,
   handleEnableExternalProvider,
+  existingKokoro,
   ttsVoice,
   setTtsVoice,
   piperVoicePresets,
@@ -59,6 +65,12 @@ const VoicePanelKeyModal = ({
   // dialog's `testRequestIdRef`.
   const testRequestIdRef = useRef(0);
   const isPiper = pendingKeySlug === 'piper';
+  const isKokoro = pendingKeySlug === 'kokoro';
+  const [kokoroEndpoint, setKokoroEndpoint] = useState(
+    existingKokoro?.endpoint || 'http://127.0.0.1:8880/v1'
+  );
+  const [kokoroModel, setKokoroModel] = useState(existingKokoro?.default_tts_model || 'kokoro');
+  const [kokoroVoice, setKokoroVoice] = useState(existingKokoro?.default_tts_voice || 'af_bella');
 
   const close = () => {
     if (isSavingPendingKey) return;
@@ -75,7 +87,7 @@ const VoicePanelKeyModal = ({
           ? `${t('voice.modal.title')} ${t('voice.providers.chip.piper')}`
           : `${t('voice.modal.title')} ${BUILTIN_VOICE_PROVIDER_META[pendingKeySlug]?.label ?? pendingKeySlug}`
       }
-      subtitle={isPiper ? t('voice.modal.piperDesc') : t('voice.modal.desc')}
+      subtitle={isPiper ? t('voice.modal.piperDesc') : isKokoro ? 'Connect a local OpenAI-compatible speech server. No API key required.' : t('voice.modal.desc')}
       onClose={close}
       maxWidthClassName="max-w-md"
       contentClassName="px-5 py-4 space-y-4"
@@ -105,6 +117,26 @@ const VoicePanelKeyModal = ({
               }}
               disabled={!pendingLocalProviderReady || isSavingProviders}>
               {t('voice.modal.enable')}
+            </Button>
+          </div>
+        ) : isKokoro ? (
+          <div className="flex items-center justify-between pt-2">
+            <Button type="button" variant="secondary" size="xs" onClick={close}
+              disabled={isSavingPendingKey}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="xs"
+              data-testid="kokoro-save-and-enable"
+              disabled={!kokoroEndpoint.trim() || !kokoroModel.trim() || !kokoroVoice.trim() || isSavingPendingKey}
+              onClick={() => void handleEnableExternalProvider('kokoro', '', {
+                endpoint: kokoroEndpoint,
+                model: kokoroModel,
+                voice: kokoroVoice,
+              })}>
+              {isSavingPendingKey ? t('common.loading') : t('voice.modal.enable')}
             </Button>
           </div>
         ) : (
@@ -225,6 +257,43 @@ const VoicePanelKeyModal = ({
                 {piperReady ? t('voice.providers.piperFound') : t('voice.providers.piperNotFound')}
               </span>
             </div>
+          </>
+        ) : isKokoro ? (
+          <>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-content-muted">Local TTS endpoint</span>
+              <SettingsTextField
+                id="kokoro-endpoint-url"
+                data-testid="kokoro-endpoint-url"
+                type="url"
+                value={kokoroEndpoint}
+                onChange={e => setKokoroEndpoint(e.target.value)}
+                placeholder="http://127.0.0.1:8880/v1"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-content-muted">TTS model</span>
+              <SettingsTextField
+                id="kokoro-model-id"
+                data-testid="kokoro-model-id"
+                value={kokoroModel}
+                onChange={e => setKokoroModel(e.target.value)}
+                placeholder="kokoro"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-content-muted">Voice ID</span>
+              <SettingsTextField
+                id="kokoro-voice-id"
+                data-testid="kokoro-voice-id"
+                value={kokoroVoice}
+                onChange={e => setKokoroVoice(e.target.value)}
+                placeholder="af_bella"
+              />
+            </label>
+            <p className="text-xs text-content-muted">
+              Start Kokoro-FastAPI or mlx-audio separately. HTTPS is required for remote endpoints; only loopback HTTP is accepted.
+            </p>
           </>
         ) : (
           <>
