@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { assertFullCatalogParity, parseVendorProviders } from '../check-cloud-provider-catalog-parity.mjs';
 
 const ui = `export const BUILTIN_CLOUD_PROVIDERS = [
@@ -48,4 +53,30 @@ test('vendor URL security is validated even when matched by UI', () => {
 });
 test('missing vendor catalog fails closed (no false full parity)', () => {
   assert.throws(() => assertFullCatalogParity(ui, host, 'missing upstream registry'), /could not find.*vendor/i);
+});
+
+
+test('CLI finds source files relative to script location, not the caller cwd', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'openhuman-parity-cli-'));
+  try {
+    const scriptPath = resolve(repo, 'scripts/ci/check-cloud-provider-catalog-parity.mjs');
+    const sourcePath = fileURLToPath(new URL('../check-cloud-provider-catalog-parity.mjs', import.meta.url));
+    const sources = [
+      [scriptPath, readFileSync(sourcePath, 'utf8')],
+      [resolve(repo, 'app/src/components/settings/panels/builtinCloudProviders.ts'), ui],
+      [resolve(repo, 'crates/openhuman-core/src/config/schema/cloud_providers.rs'), host],
+      [resolve(repo, 'vendor/tinyagents/vendor/tinyinference/crates/tinyinference-providers/src/builtin.rs'), vendor],
+    ];
+    for (const [path, source] of sources) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, source);
+    }
+    const run = spawnSync(process.execPath, [scriptPath], {
+      cwd: tmpdir(), encoding: 'utf8', timeout: 3000,
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /provider catalog parity OK: 2 Rust providers/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
 });
