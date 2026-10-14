@@ -36,7 +36,9 @@ pub(super) const TODO_TOOL: &str = "todo";
 /// do not treat generic shell/read-only calls as proof of mutation.
 const VERIFY_AFTER_TOOL: &[&str] = &[
     "file_write", "edit_file", "apply_patch",
-    "spawn_subagent", "spawn_parallel_agents", "run_workflow",
+    "spawn_subagent", "spawn_parallel_agents", "spawn_async_subagent",
+    "spawn_worker_thread", "continue_subagent", "steer_subagent",
+    "delegate", "git_operations", "run_workflow",
 ];
 
 /// Opening words of the check, also how tests recognise it on a transcript.
