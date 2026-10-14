@@ -577,6 +577,7 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         }
         let native = cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
             spec,
+            transport: entry.model_transport(&effective_model),
             auth_style: auth_style.clone(),
             key: credential,
             temperature_override,

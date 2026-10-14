@@ -313,6 +313,18 @@ impl ToolCallCodec {
     }
 }
 
+/// Wire protocol selected for one concrete model. Auto preserves the
+/// registry's existing Codex/Anthropic/Chat Completions routing. Overrides are
+/// exact model-id matches, not provider-wide guesses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelTransport {
+    #[default]
+    Auto,
+    ChatCompletions,
+    Responses,
+}
+
 /// Endpoint config for one cloud LLM provider.
 ///
 /// **Note on secrets**: API keys are NOT stored on this struct. They live in
@@ -357,6 +369,11 @@ pub struct CloudProviderCreds {
     #[serde(default, skip_serializing_if = "ToolCallCodec::is_native")]
     pub tool_call_codec: ToolCallCodec,
 
+    /// Explicit per-model transport. Unlisted model ids retain Auto routing;
+    /// no metadata or free-tier provider list can silently flip protocol.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub model_transports: std::collections::HashMap<String, ModelTransport>,
+
 
     /// Default provider-native model used by BYOK routes without a model suffix.
     // keep until v0.66 (review after 2027-01-11): active BYOK routes and the
@@ -377,8 +394,17 @@ impl Default for CloudProviderCreds {
             model_image_endpoints: std::collections::HashMap::new(),
             rotation_strategy: None,
             tool_call_codec: ToolCallCodec::Native,
+            model_transports: std::collections::HashMap::new(),
             default_model: None,
         }
+    }
+}
+
+impl CloudProviderCreds {
+    /// The exact model's configured protocol, or registry behavior for
+    /// unknown models. No provider-name or endpoint heuristics are applied.
+    pub fn model_transport(&self, model: &str) -> ModelTransport {
+        self.model_transports.get(model).copied().unwrap_or_default()
     }
 }
 
