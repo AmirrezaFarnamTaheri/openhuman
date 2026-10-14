@@ -296,6 +296,22 @@ impl AuthStyle {
     }
 }
 
+/// How an explicit 2API-style provider returns tool calls. The native wire
+/// format stays the default; QNML markup decoding requires user opt-in and
+/// validates every call against the request's native tool declarations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolCallCodec {
+    #[default]
+    Native,
+    Qnml,
+}
+impl ToolCallCodec {
+    pub fn is_native(&self) -> bool {
+        *self == Self::Native
+    }
+}
+
 /// Endpoint config for one cloud LLM provider.
 ///
 /// **Note on secrets**: API keys are NOT stored on this struct. They live in
@@ -335,6 +351,11 @@ pub struct CloudProviderCreds {
     /// Optional selection strategy: round_robin (default), least_busy or priority_weighted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotation_strategy: Option<String>,
+    /// Opt-in parsing for Qwen/QNML text-encoded tool calls exposed by some
+    /// independent 2API gateways. Never alters native function-call output.
+    #[serde(default, skip_serializing_if = "ToolCallCodec::is_native")]
+    pub tool_call_codec: ToolCallCodec,
+
 
     /// Default provider-native model used by BYOK routes without a model suffix.
     // keep until v0.66 (review after 2027-01-11): active BYOK routes and the
@@ -354,6 +375,7 @@ impl Default for CloudProviderCreds {
             image_endpoint: None,
             model_image_endpoints: std::collections::HashMap::new(),
             rotation_strategy: None,
+            tool_call_codec: ToolCallCodec::Native,
             default_model: None,
         }
     }
