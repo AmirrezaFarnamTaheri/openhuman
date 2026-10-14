@@ -19,7 +19,7 @@ import {
   ProviderProbeError,
   slugifyCustomProviderName,
 } from './aiPanelTypes';
-import { parseModelImageEndpoints, validModelFleetEndpoint, validModelFleetImageEndpoint } from './modelFleetOps';
+import { parseModelImageEndpoints, parseModelTransportOverrides, validModelFleetEndpoint, validModelFleetImageEndpoint } from './modelFleetOps';
 
 export const CloudProviderEditor = ({
   initial,
@@ -51,6 +51,11 @@ export const CloudProviderEditor = ({
   const [modelImageMappingText, setModelImageMappingText] = useState(
     Object.entries(initial?.modelImageEndpoints ?? {})
       .map(([id, url]) => id + ' = ' + url)
+      .join('\n')
+  );
+  const [modelTransportMappingText, setModelTransportMappingText] = useState(
+    Object.entries(initial?.modelTransports ?? {})
+      .map(([id, mode]) => id + ' = ' + mode)
       .join('\n')
   );
   const [apiKey, setApiKey] = useState('');
@@ -105,11 +110,13 @@ export const CloudProviderEditor = ({
         );
       }
       const imageMap = parseModelImageEndpoints(modelImageMappingText);
+      const modelTransports = parseModelTransportOverrides(modelTransportMappingText);
       await onSubmit(
         {
           id: initial?.id ?? '',
           imageEndpoint: imageEndpoint.trim(),
           modelImageEndpoints: imageMap,
+          modelTransports,
           rotationStrategy,
           toolCallCodec,
           slug,
@@ -279,6 +286,26 @@ export const CloudProviderEditor = ({
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
           placeholder="vision-model = https://images.example.com/v1"
         />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="cloud-provider-model-transports" className="text-xs text-content-secondary">
+          Model-specific API protocols (optional)
+        </Label>
+        <textarea
+          id="cloud-provider-model-transports"
+          value={modelTransportMappingText}
+          onChange={event => setModelTransportMappingText(event.target.value)}
+          rows={3}
+          spellCheck={false}
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
+          placeholder="vendor/model-id = responses"
+        />
+        <p className="text-xs text-content-muted">
+          Use <code>model-id = responses</code> only for models known to support the OpenAI
+          Responses API. Unlisted models use the existing automatic transport; enter
+          <code>model-id = auto</code> to reset a model. This setting never enables
+          another model or account automatically.
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-rotation" className="text-xs text-content-secondary">
