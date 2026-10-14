@@ -268,13 +268,42 @@ fn enforce_tool_choice(
     }
 }
 
+/// A gateway may produce native tool_calls even when using an explicit
+/// text-tool codec. Native does not mean trusted: these are untrusted model
+/// output and must obey the exact same request declaration/schema boundary as
+/// decoded QNML or tagged JSON. Reject, never silently discard, invalid calls.
+fn validate_native_tool_calls(
+    calls: &[ToolCall],
+    declared: &[ToolSchema],
+) -> tinyinference_llm::Result<()> {
+    if calls.len() > MAX_TOOL_CALLS {
+        return Err(invalid("too many native tool calls"));
+    }
+    let mut ids = HashSet::new();
+    for call in calls {
+        if call.id.is_empty() || !ids.insert(call.id.as_str()) {
+            return Err(invalid("empty or duplicate native tool-call id"));
+        }
+        let schema = declared
+            .iter()
+            .find(|tool| tool.name == call.name)
+            .ok_or_else(|| invalid("native tool not declared by request"))?;
+        schema.validate_call(call)?;
+    }
+    Ok(())
+}
+
 /// Honors native tool_calls if already present: compatibility never overrides
 /// a proper provider wire response, and never changes user-visible plain text.
 pub(super) fn rewrite_qnml_response(
     mut response: ModelResponse,
     declared: &[ToolSchema],
 ) -> tinyinference_llm::Result<ModelResponse> {
-    if declared.is_empty() || !response.message.tool_calls.is_empty() {
+    if !response.message.tool_calls.is_empty() {
+        validate_native_tool_calls(&response.message.tool_calls, declared)?;
+        return Ok(response);
+    }
+    if declared.is_empty() {
         return Ok(response);
     }
     let text_indices: Vec<_> = response
@@ -367,11 +396,11 @@ impl ChatModel<()> for TextToolCompatModel {
         // QNML has no text-only terminal grammar; keep streaming those turns.
         // Tagged JSON has <final_answer> blocks even without tools, so it
         // buffers that explicit provider mode to avoid exposing protocol tags.
-        if declared.is_empty() && self.codec == ToolCallCodec::Qnml {
-            return self.inner.stream(state, request).await;
-        }
         let codec = self.codec;
         let prepared = prepare_compat_request(request, self.codec)?;
+        if declared.is_empty() && codec == ToolCallCodec::Qnml {
+            return self.inner.stream(state, prepared).await;
+        }
         let mut original = self.inner.stream(state, prepared).await?;
         let metadata = original.metadata().clone();
         let terminal = async move {

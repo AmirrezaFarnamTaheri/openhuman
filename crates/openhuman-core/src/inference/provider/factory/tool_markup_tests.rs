@@ -110,6 +110,44 @@ fn response(text: String) -> ModelResponse {
 }
 
 #[test]
+fn both_text_codecs_reject_undeclared_and_invalid_native_tool_calls() {
+    for codec in [ToolCallCodec::Qnml, ToolCallCodec::TaggedJson] {
+        let rewrite = |result| rewrite_text_codec_response(result, &declared(), codec);
+        let mut undeclared = response("native".into());
+        undeclared.message.tool_calls.push(ToolCall::new(
+            "call-unknown", "delete_database", json!({}),
+        ));
+        assert!(rewrite(undeclared).is_err(), "{codec:?} accepted an undeclared native tool");
+
+        let mut invalid_args = response("native".into());
+        invalid_args.message.tool_calls.push(ToolCall::new(
+            "call-invalid", "read_file", json!({"path": 17}),
+        ));
+        assert!(rewrite(invalid_args).is_err(), "{codec:?} accepted invalid native arguments");
+
+        let mut valid = response("native".into());
+        valid.message.tool_calls.push(ToolCall::new(
+            "call-valid", "read_file", json!({"path": "README.md"}),
+        ));
+        assert_eq!(rewrite(valid.clone()).unwrap().message, valid.message);
+
+        let mut duplicate = valid.clone();
+        duplicate.message.tool_calls.push(ToolCall::new(
+            "call-valid", "shell", json!({"command": "pwd"}),
+        ));
+        assert!(rewrite(duplicate).is_err(), "{codec:?} accepted duplicate call ids");
+
+        let mut no_declarations = valid;
+        assert!(
+            rewrite_text_codec_response(no_declarations.clone(), &[], codec).is_err(),
+            "{codec:?} accepted a native tool when tools were disabled"
+        );
+        no_declarations.message.tool_calls.clear();
+        assert!(rewrite_text_codec_response(no_declarations, &[], codec).is_ok());
+    }
+}
+
+#[test]
 fn conversion_removes_raw_tagged_markup_but_preserves_native_tool_calls() {
     let converted = rewrite_qnml_response(response(qnml_two_calls().into()), &declared()).unwrap();
     assert!(converted.message.content.is_empty(), "tool markup must not leak into visible chat");
@@ -543,6 +581,51 @@ async fn tagged_json_final_answer_never_flashes_protocol_tags_in_chat() {
     assert!(!response.message.content.iter().any(|block| {
         matches!(block, ContentBlock::Text(text) if text.contains("<final_answer>"))
     }));
+}
+
+struct RecordingTextGateway {
+    received: Arc<std::sync::Mutex<Option<ModelRequest>>>,
+}
+
+#[async_trait]
+impl ChatModel<()> for RecordingTextGateway {
+    async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+        Ok(response("unused".into()))
+    }
+
+    async fn stream(&self, _: &(), request: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+        *self.received.lock().unwrap() = Some(request);
+        Ok(ModelStream::new(Box::pin(futures::stream::iter(vec![
+            ModelStreamItem::Started,
+            ModelStreamItem::MessageDelta(MessageDelta::text("hello".into())),
+            ModelStreamItem::Completed(response("hello".into())),
+        ]))))
+    }
+}
+
+#[tokio::test]
+async fn qnml_stream_disables_wire_tool_schemas_when_tool_choice_none() {
+    use futures::StreamExt;
+    let received = Arc::new(std::sync::Mutex::new(None));
+    let adapter = qnml_adapter(Arc::new(RecordingTextGateway {
+        received: Arc::clone(&received),
+    }));
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::None,
+        ..Default::default()
+    };
+    let events: Vec<ModelStreamItem> = adapter
+        .stream(&(), request)
+        .await
+        .unwrap()
+        .collect()
+        .await;
+    assert!(events.iter().any(|event| matches!(event, ModelStreamItem::Completed(_))));
+    let guard = received.lock().unwrap();
+    let wire = guard.as_ref().expect("gateway must receive a request");
+    assert!(wire.tools.is_empty(), "native tool declarations must not be sent");
+    assert_eq!(wire.tool_choice, ToolChoice::None);
 }
 
 #[tokio::test]

@@ -15,7 +15,7 @@ use tinyinference_llm::message::ContentBlock;
 use tinyinference_llm::model::ModelResponse;
 use tinyinference_llm::tool::{ToolCall, ToolSchema};
 
-use super::{MAX_OUTPUT_BYTES, MAX_TOOL_CALLS, MAX_VALUE_BYTES};
+use super::{validate_native_tool_calls, MAX_OUTPUT_BYTES, MAX_TOOL_CALLS, MAX_VALUE_BYTES};
 
 static NEXT_TAGGED_CALL: AtomicU64 = AtomicU64::new(1);
 
@@ -162,6 +162,7 @@ pub(super) fn rewrite_tagged_json_response(
     declared: &[ToolSchema],
 ) -> tinyinference_llm::Result<ModelResponse> {
     if !response.message.tool_calls.is_empty() {
+        validate_native_tool_calls(&response.message.tool_calls, declared)?;
         return Ok(response);
     }
     let text_indices: Vec<usize> = response

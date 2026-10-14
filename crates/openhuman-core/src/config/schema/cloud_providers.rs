@@ -55,6 +55,14 @@ impl From<&'static tinyinference_providers::builtin::BuiltinCloudProvider>
 /// provider-neutral catalog from `tinyinference-providers`
 /// ([`UPSTREAM_BUILTINS`]), mapped onto the host's [`AuthStyle`].
 pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
+    // 9Router is a user-managed local OpenAI-compatible inference gateway.
+    // The gateway owns its own upstream accounts and separate API-key policy.
+    BuiltinCloudProvider {
+        slug: "9router",
+        label: "9Router (Local Gateway)",
+        endpoint: "http://127.0.0.1:20128/v1",
+        auth_style: AuthStyle::Bearer,
+    },
     // Opt-in loopback gateway; OpenHuman never forwards Codex OAuth credentials.
     BuiltinCloudProvider {
         slug: "prodex",
