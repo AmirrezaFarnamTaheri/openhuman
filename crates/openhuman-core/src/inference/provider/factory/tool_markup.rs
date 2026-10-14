@@ -179,7 +179,11 @@ fn prepare_compat_request(
             return Err(invalid("selected or required tool was not declared"));
         }
         if codec == ToolCallCodec::Qnml {
-            // Without tools the QNML provider behaves like an ordinary model.
+            // Even when the user disables tool execution, a text-only gateway
+            // may reject the native tools array. Preserve the no-tool policy
+            // while removing unused native declarations from the wire.
+            request.tools.clear();
+            request.tool_choice = ToolChoice::None;
             return Ok(request);
         }
     }
