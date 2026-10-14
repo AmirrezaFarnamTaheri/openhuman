@@ -25,6 +25,55 @@ beforeEach(() => {
 });
 
 describe('useCloudProviderEditorSubmit', () => {
+  it('persists QNML compatibility through the native verified provider editor', async () => {
+    api.flushCloudProviders.mockResolvedValue(undefined);
+    const persist = vi.fn().mockResolvedValue(undefined);
+    const onDone = vi.fn();
+    const { result } = renderHook(() =>
+      useCloudProviderEditorSubmit({
+        editing: 'new',
+        draft: EMPTY_SETTINGS,
+        saved: EMPTY_SETTINGS,
+        persist,
+        t: key => key,
+        onDone,
+      })
+    );
+
+    await act(async () => {
+      await result.current(
+        {
+          id: '',
+          slug: 'qwen-2api-local',
+          label: 'Local Qwen gateway',
+          endpoint: 'http://127.0.0.1:4000/v1',
+          authStyle: 'bearer',
+          toolCallCodec: 'qnml',
+          maskedKey: '',
+        },
+        '',
+        { skipProbe: true }
+      );
+    });
+
+    expect(api.flushCloudProviders).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          slug: 'qwen-2api-local',
+          tool_call_codec: 'qnml',
+        }),
+      ])
+    );
+    expect(persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudProviders: [
+          expect.objectContaining({ slug: 'qwen-2api-local', toolCallCodec: 'qnml' }),
+        ],
+      })
+    );
+    expect(onDone).toHaveBeenCalledOnce();
+  });
+
   it('validates the provider CA before persisting a new key', async () => {
     api.flushCloudProviders.mockRejectedValue(new Error('invalid CA bundle'));
     const { result } = renderHook(() =>
