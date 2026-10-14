@@ -2,7 +2,7 @@
 /**
  * i18n-coverage — surface missing / extra / unused / untranslated translation keys.
  *
- * Source of truth:  app/src/lib/i18n/en.ts (single file, one flat key→string map)
+ * Source of truth:  app/src/lib/i18n/en.ts plus feature-scoped fleetTranslations.ts
  * Translations:     app/src/lib/i18n/<locale>.ts (single file per locale)
  * Locale list:      app/src/lib/i18n/types.ts (Locale union)
  *
@@ -23,6 +23,8 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { fleetTranslations } from "../app/src/lib/i18n/fleetTranslations";
 
 const __filename = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(__filename), "..");
@@ -119,7 +121,7 @@ async function loadLocale(locale: Locale): Promise<Record<string, string>> {
   if (!val || typeof val !== "object") {
     throw new Error(`${p}: default export is not a translation map`);
   }
-  return val as Record<string, string>;
+  return { ...(val as Record<string, string>), ...fleetTranslations[locale] };
 }
 
 async function walkSourceFiles(dir: string, out: string[]): Promise<void> {
