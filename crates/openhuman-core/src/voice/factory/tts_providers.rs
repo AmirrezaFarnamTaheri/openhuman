@@ -150,7 +150,7 @@ fn safe_native_tts_endpoint(raw: &str) -> Result<reqwest::Url, String> {
     if url.scheme() != "https" && !(url.scheme() == "http" && loopback) {
         return Err("[voice-tts] native TTS requires HTTPS or loopback HTTP".into());
     }
-    let path = url.path().trim_end_matches('/');
+    let path = url.path().trim_end_matches('/').to_owned();
     if !path.ends_with("/v1") {
         return Err("[voice-tts] native TTS base URL must end in /v1".into());
     }
