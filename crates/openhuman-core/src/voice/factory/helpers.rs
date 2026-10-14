@@ -179,13 +179,18 @@ pub(super) fn create_tts_provider_by_slug(
         !api_key.is_empty()
     );
 
-    Ok(Box::new(ExternalTtsProvider::new(
+    let provider = ExternalTtsProvider::new(
         slug,
         effective_voice,
         &entry.endpoint,
         api_key,
         entry.tts_api_style,
-    )))
+    );
+    let provider = match entry.default_tts_model.as_deref().map(str::trim).filter(|model| !model.is_empty()) {
+        Some(model) => provider.with_native_tts_model(model)?,
+        None => provider,
+    };
+    Ok(Box::new(provider))
 }
 
 // ---------------------------------------------------------------------------
