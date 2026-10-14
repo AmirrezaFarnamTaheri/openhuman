@@ -153,3 +153,51 @@ fn explicit_transport_fails_closed_for_noncompatible_auth_or_codex_oauth() {
     invalid.transport = ModelTransport::ChatCompletions;
     assert!(build_cloud_model(invalid).is_err());
 }
+
+#[tokio::test]
+async fn explicit_model_transport_uses_the_selected_wire_path() {
+    use crate::config::schema::cloud_providers::ModelTransport;
+    use std::time::Duration;
+    use tinyinference_llm::message::Message;
+    use tinyinference_llm::model::ModelRequest;
+
+    let (sender, mut receiver) = tokio::sync::mpsc::channel::<String>(4);
+    let app = axum::Router::new().fallback(move |uri: axum::http::Uri| {
+        let sender = sender.clone();
+        async move {
+            sender.send(uri.path().to_owned()).await.unwrap();
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                axum::Json(serde_json::json!({
+                    "error": { "message": "test fixture stop", "type": "invalid_request_error" }
+                })),
+            )
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let mut creds = entry("mixed-api", &endpoint, AuthStyle::Bearer);
+    creds.model_transports.insert("use-responses".into(), ModelTransport::Responses);
+    creds.model_transports.insert("use-chat".into(), ModelTransport::ChatCompletions);
+    for (model_id, expected) in [
+        ("use-responses", "/v1/responses"),
+        ("use-chat", "/v1/chat/completions"),
+        ("unconfigured", "/v1/chat/completions"),
+    ] {
+        let model = build_cloud_model(build(&creds, model_id, "sk-test")).unwrap();
+        let _ = model.invoke(&(), ModelRequest {
+            messages: vec![Message::user("ping")],
+            ..Default::default()
+        }).await;
+        let actual = tokio::time::timeout(Duration::from_secs(5), receiver.recv())
+            .await
+            .expect("provider request did not reach local test listener")
+            .expect("listener closed unexpectedly");
+        assert_eq!(actual, expected, "model {model_id} used wrong wire API");
+    }
+    server.abort();
+}
