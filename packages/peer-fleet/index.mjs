@@ -5,3 +5,5 @@ export * from './presets.mjs';
 export * from './refresh.mjs';
 export * from './widgets.mjs';
 export * from './convergence.mjs';
+export * from './observations.mjs';
+export * from './telemetry.mjs';

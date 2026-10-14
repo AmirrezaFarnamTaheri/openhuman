@@ -14,6 +14,7 @@ import Button from '../../../ui/Button';
 import TextField from '../../../ui/TextField';
 import type { AISettings, CloudProvider } from './aiPanelTypes';
 import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
+import { summarizeFleetHealth } from './fleetHealthInsights';
 import {
   fleetModelKey, syncModelPresets, applyModelBulkPatch,
   validModelFleetEndpoint, syncConfiguredProviderPresets, updateSelectedGroupSettings,
@@ -32,6 +33,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const [fleetHealth, setFleetHealth] = useState<ModelFleetStatus | null>(null);
   const [healthBusy, setHealthBusy] = useState(false);
   const [healthError, setHealthError] = useState('');
+  const healthSummary = useMemo(() => summarizeFleetHealth(fleetHealth), [fleetHealth]);
   useEffect(() => {
     let cancelled = false;
     void loadModelFleetStatus()
@@ -219,6 +221,26 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           </div>
         </div>
         {healthError && <p className="text-xs text-coral-600" role="alert">{healthError}</p>}
+
+        <div className="rounded-lg border border-line-subtle p-2 text-xs text-content-secondary"
+          role="status" aria-live="polite" data-testid="model-fleet-health-summary">
+          {healthSummary.status === 'unobserved' ? (
+            <span>{t('settings.ai.fleet.noSamples', 'No key activity observed yet; account quota is unknown.')}</span>
+          ) : (
+            <div className="space-y-1">
+              <span className="font-medium text-content">
+                {t('settings.ai.fleet.keyHealthSummary', 'Observed key routing health (not account quota)')}
+              </span>
+              <p>{healthSummary.healthy} healthy, {healthSummary.cooling} cooling,
+                {' '}{healthSummary.evicted} evicted, {healthSummary.activeLeases} active leases
+                {' '}across {healthSummary.modelCount} models.</p>
+              {healthSummary.nextRecoveryMs !== null && <p>
+                {t('settings.ai.fleet.earliestCooldown', 'Earliest reported cooldown')}:
+                {' '}{Math.ceil(healthSummary.nextRecoveryMs / 1000)}s
+              </p>}
+            </div>
+          )}
+        </div>
         <div className="max-h-40 space-y-2 overflow-y-auto text-xs">
           {fleetHealth?.providers.flatMap(provider => provider.models.map(model => {
             const healthy = model.keys.filter(k => k.status === 'healthy').length;

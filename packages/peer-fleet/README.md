@@ -36,3 +36,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/ci/tests -p 't
 ```
 
 The workflows use offline, read-only checks. They cannot demonstrate a running OpenHuman desktop UI, real provider entitlement, production webhook, CodeRabbit thread, or successful GitHub CI run.
+
+
+## Antigravity Manager and Cockpit Tools adapters
+
+- \`observations.mjs\`: normalizes already-fetched quota DTOs into account-scoped, freshness-aware independent model and grouped windows. It never guesses account tiers from model names or treats unknown quota as exhausted.
+- \`telemetry.mjs\`: deduplicates upstream attempt diagnostics, distinguishes incomplete streams from completed output, computes qualified approximate throughput and redacts request data.
+
+Neither adapter fetches OAuth information, mutates IDE account files, runs a relay, or overrides OpenHuman/Prodex key selection. Source projects disclose CC BY-NC-SA 4.0; no upstream implementation source was copied into this independent contract layer.
