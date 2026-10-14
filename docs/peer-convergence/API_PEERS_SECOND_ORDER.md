@@ -45,6 +45,13 @@
    because inference credentials can be reused on image routes. Plain HTTP is
    retained only for explicit loopback development gateways
    (`localhost`, `127.0.0.0/8`, `::1`).
+9. An opt-in Rust QNML `ChatModel` codec now translates complete, bounded
+   Qwen/2API text tool invocations into schema-validated native `ToolCall`
+   objects, with tool-choice restrictions and buffered tool-enabled streaming.
+   Settings remain in the existing React provider editor and core config; no
+   sidecar credential store is introduced. See
+   [Native 2API compatibility](NATIVE_2API_COMPATIBILITY.md) for usage, test
+   contracts, limitations and later protocol adapters.
 
 
 Do **not** confuse unit/source assertions with live provider validation. As of this
