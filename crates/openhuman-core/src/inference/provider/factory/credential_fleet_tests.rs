@@ -154,6 +154,88 @@ fn provider_failures_are_rerouted_conservatively() {
     }
 }
 
+struct CountingForbiddenModel {
+    attempts: Arc<std::sync::atomic::AtomicUsize>,
+}
+#[async_trait]
+impl ChatModel<()> for CountingForbiddenModel {
+    async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+        self.attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Err(tinyinference_llm::Error::Provider(Box::new(ProviderError {
+            status: Some(403),
+            code: Some("invalid_model".into()),
+            ..Default::default()
+        })))
+    }
+
+    async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+        self.attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(ModelStream::new(Box::pin(futures::stream::iter(vec![
+            ModelStreamItem::Started,
+            ModelStreamItem::ProviderFailed(ProviderError {
+                status: Some(403),
+                code: Some("invalid_model".into()),
+                ..Default::default()
+            }),
+        ]))))
+    }
+}
+#[tokio::test]
+async fn invalid_model_403_does_not_evict_api_keys_or_retry_another_credential() {
+    use futures::StreamExt;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let first = Arc::new(AtomicUsize::new(0));
+    let second = Arc::new(AtomicUsize::new(0));
+    let scope = "fleet-invalid-model-403-unary";
+    let fleet = CredentialFleetModel::new(
+        scope.into(),
+        vec!["unary-first".into(), "unary-second".into()],
+        vec![
+            Arc::new(CountingForbiddenModel {
+                attempts: Arc::clone(&first),
+            }),
+            Arc::new(CountingForbiddenModel {
+                attempts: Arc::clone(&second),
+            }),
+        ],
+        None,
+        RotationStrategy::RoundRobin,
+    );
+    assert!(fleet.invoke(&(), ModelRequest::default()).await.is_err());
+    assert_eq!(first.load(Ordering::SeqCst), 1);
+    assert_eq!(second.load(Ordering::SeqCst), 0);
+    assert_eq!(key_pool::snapshot(scope)[0].status, "healthy");
+    key_pool::forget(scope);
+
+    let first = Arc::new(AtomicUsize::new(0));
+    let second = Arc::new(AtomicUsize::new(0));
+    let scope = "fleet-invalid-model-403-stream";
+    let fleet = CredentialFleetModel::new(
+        scope.into(),
+        vec!["stream-first".into(), "stream-second".into()],
+        vec![
+            Arc::new(CountingForbiddenModel {
+                attempts: Arc::clone(&first),
+            }),
+            Arc::new(CountingForbiddenModel {
+                attempts: Arc::clone(&second),
+            }),
+        ],
+        None,
+        RotationStrategy::RoundRobin,
+    );
+    let stream = fleet.stream(&(), ModelRequest::default()).await.unwrap();
+    let output: Vec<ModelStreamItem> = stream.collect().await;
+    assert_eq!(first.load(Ordering::SeqCst), 1);
+    assert_eq!(second.load(Ordering::SeqCst), 0);
+    assert!(output.iter().any(|event| matches!(event, ModelStreamItem::ProviderFailed(_))));
+    assert_eq!(key_pool::snapshot(scope)[0].status, "healthy");
+    key_pool::forget(scope);
+}
+
 struct CountingRateLimitedModel {
     attempts: Arc<std::sync::atomic::AtomicUsize>,
 }
