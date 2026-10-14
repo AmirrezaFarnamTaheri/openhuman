@@ -48,7 +48,7 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
     try {
       profile = validateNamedProviderAccount(label);
       token = validateAccountApiKey(secret);
-      if (accounts.some(row => row.profile_name === profile)) {
+      if (accounts.some(row => row.profileName === profile)) {
         throw new Error('Account label already exists.');
       }
     } catch (cause) {
@@ -139,16 +139,22 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
       <div className="space-y-1">
         {accounts.map(row => (
           <div key={row.id} className="flex items-center justify-between rounded border border-line-subtle p-2 text-xs">
-            <span>{row.profile_name === 'default' ? 'Default key' : row.profile_name}
-              <span className="ml-1 text-content-muted">({row.has_token ? 'stored' : 'missing key'})</span>
+            <span>{row.profileName === 'default' ? 'Default key' : row.profileName}
+              <span className="ml-1 text-content-muted">({row.hasToken ? 'stored' : 'missing key'})</span>
             </span>
             <div className="flex gap-2">
-              <Button type="button" variant="tertiary" size="xs" disabled={busy}
-                onClick={() => void activate(row.profile_name)}>Prefer</Button>
-              {row.profile_name !== 'default' && row.profile_name !== 'oauth' && (
+              {row.isActive ? (
+                <span aria-label="Preferred account" className="text-xs font-medium text-content-secondary">
+                  Preferred
+                </span>
+              ) : (
+                <Button type="button" variant="tertiary" size="xs" disabled={busy}
+                  onClick={() => void activate(row.profileName)}>Prefer</Button>
+              )}
+              {row.profileName !== 'default' && row.profileName !== 'oauth' && (
                 <Button type="button" variant="secondary" size="xs" disabled={busy}
-                  onClick={() => void remove(row.profile_name)}>
-                  {removeConfirmation === row.profile_name ? 'Confirm remove' : 'Remove'}
+                  onClick={() => void remove(row.profileName)}>
+                  {removeConfirmation === row.profileName ? 'Confirm remove' : 'Remove'}
                 </Button>
               )}
             </div>

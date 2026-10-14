@@ -52,10 +52,9 @@ pub async fn store_provider_credentials(
     // notify again). Credentials are keyed `provider:<slug>`; the auth-error
     // registry is keyed by the bare provider slug used by the chat factory.
     clear_provider_auth_error(&provider);
-    Ok(Outcome::single_log(
-        summarize_auth_profile(&stored),
-        "provider credentials stored",
-    ))
+    let mut summary = summarize_auth_profile(&stored);
+    summary.is_active = set_active.unwrap_or(true);
+    Ok(Outcome::single_log(summary, "provider credentials stored"))
 }
 
 /// Clear any recorded BYO provider auth error for a credentials `provider`
@@ -111,10 +110,9 @@ pub async fn activate_provider_credentials(
         .map_err(|_| "Could not load selected provider account".to_string())?
         .ok_or_else(|| "Selected provider account was not found".to_string())?;
     clear_provider_auth_error(&provider);
-    Ok(Outcome::single_log(
-        summarize_auth_profile(&stored),
-        "active provider account changed",
-    ))
+    let mut summary = summarize_auth_profile(&stored);
+    summary.is_active = true;
+    Ok(Outcome::single_log(summary, "active provider account changed"))
 }
 
 pub async fn list_provider_credentials(
@@ -136,7 +134,14 @@ pub async fn list_provider_credentials(
                 .as_ref()
                 .is_none_or(|provider| profile.provider == *provider)
         })
-        .map(summarize_auth_profile)
+        .map(|profile| {
+            let mut summary = summarize_auth_profile(profile);
+            summary.is_active = profiles
+                .active_profiles
+                .get(&profile.provider)
+                .is_some_and(|id| id == &profile.id);
+            summary
+        })
         .collect::<Vec<_>>();
     items.sort_by(|a, b| {
         a.provider
@@ -166,7 +171,14 @@ pub async fn list_provider_credentials_by_prefix(
         .values()
         .filter(|profile| profile.provider != APP_SESSION_PROVIDER)
         .filter(|profile| profile.provider.starts_with(prefix))
-        .map(summarize_auth_profile)
+        .map(|profile| {
+            let mut summary = summarize_auth_profile(profile);
+            summary.is_active = profiles
+                .active_profiles
+                .get(&profile.provider)
+                .is_some_and(|id| id == &profile.id);
+            summary
+        })
         .collect::<Vec<_>>();
     items.sort_by(|a, b| {
         a.provider
@@ -192,8 +204,13 @@ mod activation_tests {
         auth.store_provider_token("provider:google", "personal", "personal-key", Default::default(), false).unwrap();
         let result = activate_provider_credentials(&config, "provider:google", "personal").await.unwrap();
         assert_eq!(result.value.profile_name, "personal");
+        assert!(result.value.is_active);
         assert_eq!(auth.get_provider_bearer_token("provider:google", None).unwrap().as_deref(), Some("personal-key"));
         assert_eq!(auth.get_profile("provider:google", Some("work")).unwrap().unwrap().token.as_deref(), Some("work-key"));
+        let summaries = list_provider_credentials(&config, Some("provider:google".into())).await.unwrap().value;
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries.iter().filter(|p| p.is_active).count(), 1);
+        assert_eq!(summaries.iter().find(|p| p.is_active).unwrap().profile_name, "personal");
     }
 
     #[tokio::test]

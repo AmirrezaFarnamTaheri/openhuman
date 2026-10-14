@@ -44,4 +44,6 @@ pub struct AuthProfileSummary {
     pub updated_at: String,
     pub has_token: bool,
     pub has_token_set: bool,
+    #[serde(default)]
+    pub is_active: bool,
 }

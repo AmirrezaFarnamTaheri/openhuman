@@ -69,14 +69,15 @@ export async function openhumanDecryptSecret(ciphertext: string): Promise<Comman
 export interface AuthProfileSummary {
   id: string;
   provider: string;
-  profile_name: string;
+  profileName: string;
   kind: 'token' | 'oauth';
-  account_id?: string | null;
-  workspace_id?: string | null;
-  has_token?: boolean;
-  metadata?: Record<string, string>;
-  created_at?: string;
-  updated_at?: string;
+  accountId: string | null;
+  workspaceId: string | null;
+  metadataKeys: string[];
+  updatedAt: string;
+  hasToken: boolean;
+  hasTokenSet: boolean;
+  isActive: boolean;
 }
 
 /**

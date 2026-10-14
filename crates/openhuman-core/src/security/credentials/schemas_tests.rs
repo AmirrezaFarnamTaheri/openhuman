@@ -204,3 +204,17 @@ fn activate_provider_schema_requires_a_provider_and_a_named_profile() {
     assert!(s.inputs.iter().any(|field| field.name == "provider" && field.required));
     assert!(s.inputs.iter().any(|field| field.name == "profile" && field.required));
 }
+
+#[test]
+fn provider_summary_json_uses_camel_case_without_exposing_secret_material() {
+    let profile = crate::security::credentials::profiles::AuthProfile::new_token(
+        "provider:google", "work", "sk-confidential".to_owned(),
+    );
+    let summary = crate::security::credentials::session_support::summarize_auth_profile(&profile);
+    let json = serde_json::to_value(summary).unwrap();
+    assert_eq!(json["profileName"], "work");
+    assert_eq!(json["hasToken"], true);
+    assert_eq!(json["isActive"], false);
+    assert!(json.get("profile_name").is_none());
+    assert!(!json.to_string().contains("sk-confidential"));
+}
