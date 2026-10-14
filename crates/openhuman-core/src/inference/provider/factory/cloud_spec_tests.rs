@@ -24,6 +24,7 @@ fn build<'a>(entry: &CloudProviderCreds, model: &str, key: &'a str) -> CloudBuil
         user_agent: None,
         codex: None,
         http: None,
+        responses_api_primary: false,
     }
 }
 
@@ -114,4 +115,73 @@ fn prodex_gateway_discovers_models_with_the_scoped_virtual_key() {
         .headers
         .iter()
         .any(|(key, value)| { key == "Authorization" && value == "Bearer vk-scoped" }));
+}
+
+/// This is a wire-contract test: the pinned tinyinference transport must
+/// actually POST the selected endpoint. Merely storing metadata is not enough.
+async fn observed_route(responses: bool) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tinyinference_llm::message::Message;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("loopback test server");
+    let address = listener.local_addr().expect("bound address");
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("one request");
+        let mut input = vec![0u8; 16 * 1024];
+        let count = stream.read(&mut input).await.expect("request bytes");
+        let method_path = String::from_utf8_lossy(&input[..count])
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+        let _ = stream.write_all(
+            b"HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}"
+        ).await;
+        method_path
+    });
+
+    let creds = entry(
+        "mixed-gateway",
+        &format!("http://{address}/v1"),
+        AuthStyle::Bearer,
+    );
+    let mut build = build(&creds, "vendor/model", "disposable-test-key");
+    build.responses_api_primary = responses;
+    let model = build_cloud_model(build).expect("transport builds");
+    let request = tinyinference_llm::model::ModelRequest {
+        messages: vec![Message::user("hello")],
+        ..Default::default()
+    };
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        model.invoke(&(), request),
+    ).await.expect("request should finish");
+    tokio::time::timeout(std::time::Duration::from_secs(5), server)
+        .await
+        .expect("server should see a request")
+        .expect("server task should finish")
+}
+
+#[tokio::test]
+async fn explicit_responses_model_uses_responses_wire_not_chat_completions() {
+    assert!(observed_route(true).await.starts_with("POST /v1/responses "));
+}
+
+#[tokio::test]
+async fn unconfigured_model_keeps_existing_chat_completions_wire() {
+    assert!(observed_route(false).await.starts_with("POST /v1/chat/completions "));
+}
+
+#[test]
+fn responses_protocol_cannot_be_applied_to_anthropic_messages_authentication() {
+    let creds = entry(
+        "anthropic",
+        "https://api.anthropic.com/v1",
+        AuthStyle::Anthropic,
+    );
+    let mut build = build(&creds, "claude-4", "test-key");
+    build.responses_api_primary = true;
+    assert!(build_cloud_model(build).is_err());
 }
