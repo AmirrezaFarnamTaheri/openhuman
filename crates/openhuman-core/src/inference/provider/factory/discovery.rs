@@ -80,6 +80,9 @@ pub(crate) fn model_limits_request(
         user_agent: None,
         codex: Some(&resolution.codex),
         http: None,
+        // Catalog discovery is protocol-neutral. An explicit per-model wire
+        // override affects inference, not the provider's /models endpoint.
+        responses_api_primary: false,
     })
 }
 
