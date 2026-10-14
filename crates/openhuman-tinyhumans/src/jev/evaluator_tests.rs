@@ -143,7 +143,7 @@ fn jev_choice_cannot_silently_collapse_duplicate_option_keys() {
 #[test]
 fn jev_rejects_excessive_option_catalog_or_oversized_descriptions_before_egress() {
     let mut input = request(None);
-    input.options = (0..65).map(|i| JevOption {
+    input.options = (0..256).map(|i| JevOption {
         key: format!("option_{i}"),
         description: "tool candidate".into(),
     }).collect();
@@ -151,4 +151,16 @@ fn jev_rejects_excessive_option_catalog_or_oversized_descriptions_before_egress(
     input = request(None);
     input.options[0].description = "unbounded".repeat(700);
     assert!(TinyJevEvaluator::validate(&input).is_err());
+}
+
+
+#[test]
+fn system_one_preserves_valid_family_level_choices_above_shortlist_size() {
+    let mut input = request(None);
+    input.options = (0..65).map(|i| JevOption {
+        key: format!("tool_{i}"),
+        description: "normal family candidate".into(),
+    }).collect();
+    assert!(TinyJevEvaluator::validate(&input).is_ok(),
+        "family expansion may legitimately exceed the default top-20 shortlist");
 }
