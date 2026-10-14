@@ -387,6 +387,25 @@ pub fn normalize_fleet_config(
                 "image endpoint must be HTTP(S), with no credentials, query or fragment".into(),
             );
         }
+        // Model Fleet may reuse the configured provider's API key for image
+        // routes. Sending it to a remote plain-HTTP image endpoint would leak
+        // the credential in transit. Explicit loopback development gateways
+        // keep working, including IPv6 localhost.
+        if url.scheme() == "http" {
+            let host = url
+                .host_str()
+                .unwrap_or_default()
+                .trim_matches(['[', ']']);
+            let loopback = host.eq_ignore_ascii_case("localhost")
+                || host
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback());
+            if !loopback {
+                return Err(
+                    "image endpoints must use HTTPS outside loopback hosts".to_string(),
+                );
+            }
+        }
         Ok(value.to_owned())
     }
 
