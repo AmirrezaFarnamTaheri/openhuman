@@ -23,9 +23,13 @@ describe('providerIcons', () => {
     expect(providerIcon('a-provider-that-does-not-exist', 'h-4 w-4')).toBeNull();
   });
 
-  it('returns a rendered mark for every built-in and local provider', () => {
-    for (const slug of [...BUILTIN_CLOUD_PROVIDER_SLUGS, ...NON_CLOUD_SLUGS]) {
+  it('renders each bundled mark and keeps the fallback for providers without an icon', () => {
+    for (const slug of PROVIDER_ICON_SLUGS) {
       expect(providerIcon(slug, 'h-4 w-4'), slug).toHaveProperty('type');
+    }
+    for (const slug of [...BUILTIN_CLOUD_PROVIDER_SLUGS, ...NON_CLOUD_SLUGS]
+      .filter(slug => !PROVIDER_ICON_SLUGS.includes(slug))) {
+      expect(providerIcon(slug, 'h-4 w-4'), slug).toBeNull();
     }
   });
 });

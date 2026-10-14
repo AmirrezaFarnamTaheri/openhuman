@@ -274,9 +274,14 @@ describe('useComposioIntegrations', () => {
     mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
     mockListConnections.mockResolvedValue({ connections: [] });
     let tick: (() => void) | undefined;
+    // Intercept only the hook timer; Testing Library's waitFor needs its own interval.
+    const realSetInterval = window.setInterval.bind(window);
     const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
-      if (interval === 12_345 && typeof handler === 'function') tick = handler;
-      return 1234;
+      if (interval === 12_345 && typeof handler === 'function') {
+        tick = handler;
+        return 1234;
+      }
+      return realSetInterval(handler, interval);
     });
     const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
     try {
@@ -326,9 +331,14 @@ describe('useComposioIntegrations', () => {
     mockListToolkits.mockResolvedValue({ toolkits: [] });
     mockListConnections.mockResolvedValue({ connections: [] });
     let tick: (() => void) | undefined;
+    // Intercept only the hook timer; Testing Library's waitFor needs its own interval.
+    const realSetInterval = window.setInterval.bind(window);
     const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
-      if (interval === 12_345 && typeof handler === 'function') tick = handler;
-      return 1234;
+      if (interval === 12_345 && typeof handler === 'function') {
+        tick = handler;
+        return 1234;
+      }
+      return realSetInterval(handler, interval);
     });
     const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
     try {
