@@ -425,6 +425,22 @@ fn tagged_gateway_request_uses_text_tool_instructions_without_native_tool_wires(
 }
 
 #[test]
+fn qnml_disabled_tool_choice_never_sends_native_tool_schemas_to_text_only_gateway() {
+    use tinyinference_llm::model::ToolChoice;
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::None,
+        ..Default::default()
+    };
+    let adapted = prepare_compat_request(request, ToolCallCodec::Qnml).unwrap();
+    assert!(
+        adapted.tools.is_empty(),
+        "disabled tools must not appear on the native wire for text-only 2API gateways"
+    );
+    assert_eq!(adapted.tool_choice, ToolChoice::None);
+}
+
+#[test]
 fn qnml_text_tools_use_prompt_instructions_without_native_function_call_payloads() {
     use tinyinference_llm::message::Message;
     let source = ModelRequest {
