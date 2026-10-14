@@ -753,8 +753,21 @@ test("each module-backed lane stages and sources native fixtures before executin
       assert.ok(install.when, laneName + ": native fixtures must be installed");
       assert.match(install.run, /install-test-modules\.sh/);
       assert.ok(check.needs.includes("test-modules"), runner + ": fixture dependency");
-      assert.match(check.run, /source|\. ci-out\/test-modules\.env/,
+      assert.match(check.run, /\\. ci-out\\/test-modules-(?:rust-lint|storage-drivers)\\.env/,
         runner + ": native module paths must reach Rust process");
     }
   }
+});
+
+test("concurrent EX63 Rust lanes never share mutable native-module folders", () => {
+  const plan = buildPlan({ profile: "ex63", areas: ALL, env: EX63_ENV });
+  const modulePaths = [];
+  for (const laneName of ["rust-cov", "rust-lint", "storage-drivers"]) {
+    const lane = plan.lanes.find((entry) => entry.name === laneName);
+    const install = lane.checks.find((check) => check.name === "test-modules");
+    assert.match(install.run, new RegExp("test-modules/" + laneName));
+    assert.match(install.run, new RegExp("test-modules-" + laneName + "\\.env"));
+    modulePaths.push(install.run);
+  }
+  assert.equal(new Set(modulePaths).size, 3);
 });

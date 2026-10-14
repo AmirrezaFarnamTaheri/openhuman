@@ -161,9 +161,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
   const modulesDir = ex63
     ? `${scratch}/test-modules`
     : "/opt/openhuman-test-modules/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}";
-  const modulesEnvFile = "ci-out/test-modules.env";
-  const withModules = (cmd) =>
-    `set -a && . ${modulesEnvFile} && set +a && ${cmd}`;
+  // EX63 lanes share one workspace and can run concurrently. Each lane's
+  // native fixture directory and env-file are separate: the installer removes
+  // and recreates per-module directories, which must never race another lane.
+  const laneModuleDir = (lane) => `${modulesDir}/${lane}`;
+  const laneModuleEnv = (lane) => `ci-out/test-modules-${lane}.env`;
+  const withModules = (cmd, lane) =>
+    `set -a && . ${laneModuleEnv(lane)} && set +a && ${cmd}`;
 
   // Not run on pull requests: the core doctests (an uninstrumented core build
   // of their own) and the TinyJuice host-module regression (one test against
@@ -382,7 +386,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         {
           name: "test-modules",
           when: core,
-          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${modulesDir}" ${modulesEnvFile}`,
+          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir("rust-cov")}" ${laneModuleEnv("rust-cov")}`,
         },
         {
           name: "rust-core-coverage",
@@ -401,7 +405,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             OH_COV_TUI: "1",
             ...(ex63 ? { OH_COV_RUNNER: "nextest" } : {}),
           },
-          run: withModules("bash scripts/ci/rust-coverage.sh"),
+          run: withModules("bash scripts/ci/rust-coverage.sh", "rust-cov"),
         },
       ],
     },
@@ -447,13 +451,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         {
           name: "test-modules",
           when: core,
-          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${modulesDir}" ${modulesEnvFile}`,
+          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir("rust-lint")}" ${laneModuleEnv("rust-lint")}`,
         },
         {
           name: "embed-offline-examples",
           when: core,
           needs: ["test-modules"],
-          run: withModules("node scripts/run-embed-examples.mjs"),
+          run: withModules("node scripts/run-embed-examples.mjs", "rust-lint"),
         },
         {
           name: "tinyhumans-clippy",
@@ -554,7 +558,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         {
           name: "test-modules",
           when: areas.storage,
-          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${modulesDir}" ${modulesEnvFile}`,
+          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir("storage-drivers")}" ${laneModuleEnv("storage-drivers")}`,
         },
         {
           name: "storage-e2e",
@@ -562,7 +566,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           needs: ["test-modules"],
           run: withModules(
             `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS}` +
-            STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join("")
+            STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join(""),
+            "storage-drivers"
           ),
         },
         {
@@ -571,7 +576,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           needs: ["test-modules"],
           run: withModules(
             `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
-            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join("")
+            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join(""),
+            "storage-drivers"
           ),
         },
         {
