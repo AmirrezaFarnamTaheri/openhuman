@@ -11,6 +11,7 @@ import {
   syncModelPresets,
   updateSelectedGroupSettings,
   validModelFleetEndpoint,
+  validModelFleetImageEndpoint,
 } from '../modelFleetOps';
 
 const initial = {
@@ -133,7 +134,7 @@ describe('model-fleet preset management', () => {
         'model-x = https://vision.example/v1\nmodel-y = http://localhost:8000/v1'
       )
     ).toEqual({ 'model-x': 'https://vision.example/v1', 'model-y': 'http://localhost:8000/v1' });
-    expect(() => parseModelImageEndpoints('x = http://a.test\nx = http://b.test')).toThrow(
+    expect(() => parseModelImageEndpoints('x = https://a.test\nx = https://b.test')).toThrow(
       /Duplicate/
     );
     expect(() => parseModelImageEndpoints('x = ftp://a.test')).toThrow();
@@ -141,6 +142,30 @@ describe('model-fleet preset management', () => {
     expect(validModelFleetEndpoint('https://api.example.test/v1?token=abc')).toBe(false);
     expect(validModelFleetEndpoint('https://api.example.test/v1#fragment')).toBe(false);
     expect(validModelFleetEndpoint('http://127.0.0.1:8800/v1')).toBe(true);
+  });
+
+  it('blocks remote cleartext image endpoint overrides before credentials can be sent', () => {
+    expect(validModelFleetEndpoint('http://example.net/v1')).toBe(true);
+    for (const url of [
+      'http://example.net/v1',
+      'http://10.10.0.5:8000/v1',
+      'http://169.254.169.254/latest/meta-data',
+      'http://localhost.evil.test/v1',
+      'https://user:secret@images.example/v1',
+    ]) {
+      expect(validModelFleetImageEndpoint(url)).toBe(false);
+      expect(() => parseModelImageEndpoints('vision = ' + url)).toThrow();
+    }
+    for (const url of [
+      'https://images.example/v1',
+      'http://localhost:4000/v1',
+      'http://127.0.0.2:4000/v1',
+      'http://[::1]:4000/v1',
+    ]) {
+      expect(validModelFleetImageEndpoint(url)).toBe(true);
+      expect(parseModelImageEndpoints('vision = ' + url)).toEqual({ vision: url });
+    }
+    expect(validModelFleetImageEndpoint('')).toBe(true);
   });
 
   it('changes a key rotation strategy without clearing the existing image endpoint', () => {
