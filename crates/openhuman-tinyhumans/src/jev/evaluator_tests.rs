@@ -164,3 +164,15 @@ fn system_one_preserves_valid_family_level_choices_above_shortlist_size() {
     assert!(TinyJevEvaluator::validate(&input).is_ok(),
         "family expansion may legitimately exceed the default top-20 shortlist");
 }
+
+
+#[test]
+fn system_one_total_choice_description_budget_is_bounded() {
+    let mut input = request(None);
+    input.options = (0..100).map(|i| JevOption {
+        key: format!("tool_{i}"),
+        description: "x".repeat(1200),
+    }).collect();
+    assert!(TinyJevEvaluator::validate(&input).is_err(),
+        "per-option limits alone cannot bound cumulative token/context cost");
+}
