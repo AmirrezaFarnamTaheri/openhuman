@@ -277,3 +277,44 @@ fn untrusted_correlation_ids_do_not_fill_session_affinity_with_unbounded_strings
     let pools = registry().lock().unwrap();
     assert!(pools.get(scope).unwrap().sticky.is_empty());
 }
+
+#[test]
+fn quota_cooldown_exponentially_backs_off_without_overriding_server_retry_after() {
+    assert_eq!(quota_cooldown(1, None), Duration::from_secs(60));
+    assert_eq!(quota_cooldown(2, None), Duration::from_secs(120));
+    assert_eq!(quota_cooldown(3, None), Duration::from_secs(240));
+    assert_eq!(quota_cooldown(4, None), Duration::from_secs(300));
+    assert_eq!(quota_cooldown(u32::MAX, None), Duration::from_secs(300));
+    assert_eq!(quota_cooldown(3, Some(1_500)), Duration::from_millis(1_500));
+    assert_eq!(quota_cooldown(3, Some(u64::MAX)), Duration::from_secs(300));
+}
+
+#[test]
+fn repeated_rate_limits_increase_default_cooldown_without_exposing_secrets() {
+    let scope = "key-pool-test-progressive-429";
+    let key = "never-log-this-secret".to_string();
+    next_key(scope, std::slice::from_ref(&key));
+    record_result_for(scope, &key, Some(KeyFailure::RateLimited), None);
+    let first = snapshot(scope)[0].cooldown_remaining_ms;
+    assert!(first > 55_000 && first <= 60_000);
+    record_result_for(scope, &key, Some(KeyFailure::RateLimited), None);
+    let second = snapshot(scope)[0].cooldown_remaining_ms;
+    assert!(second > 115_000 && second <= 120_000);
+    reset(scope);
+    record_result_for(scope, &key, Some(KeyFailure::RateLimited), None);
+    let after_reset = snapshot(scope)[0].cooldown_remaining_ms;
+    assert!(after_reset > 55_000 && after_reset <= 60_000);
+}
+
+#[test]
+fn explicit_retry_after_is_honored_and_concurrent_shorter_limits_do_not_erase_it() {
+    let scope = "key-pool-test-progressive-429-explicit";
+    let key = "another-secret".to_string();
+    next_key(scope, std::slice::from_ref(&key));
+    record_result_for(scope, &key, Some(KeyFailure::RateLimited), Some(250_000));
+    let first = snapshot(scope)[0].cooldown_remaining_ms;
+    record_result_for(scope, &key, Some(KeyFailure::RateLimited), Some(2_000));
+    let second = snapshot(scope)[0].cooldown_remaining_ms;
+    assert!(first > 245_000 && first <= 250_000);
+    assert!(second > 244_000, "later 429 must not shorten existing cooldown");
+}

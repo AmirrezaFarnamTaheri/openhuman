@@ -10,6 +10,17 @@ use std::time::{Duration, Instant};
 
 const DEFAULT_COOLDOWN: Duration = Duration::from_secs(60);
 const MAX_COOLDOWN: Duration = Duration::from_secs(300);
+
+/// Progressive cooldown adopted from 9Router's account fallback design, while
+/// preserving OpenHuman's existing 60s first-rate-limit policy. Provider
+/// Retry-After wins when supplied and is capped to prevent years-long lockout.
+fn quota_cooldown(streak: u32, retry_after_ms: Option<u64>) -> Duration {
+    if let Some(retry_ms) = retry_after_ms {
+        return Duration::from_millis(retry_ms).min(MAX_COOLDOWN);
+    }
+    let shift = streak.saturating_sub(1).min(3);
+    DEFAULT_COOLDOWN.saturating_mul(1 << shift).min(MAX_COOLDOWN)
+}
 const SESSION_BINDING_TTL: Duration = Duration::from_secs(30 * 60);
 const MAX_STICKY_RUN_ID_BYTES: usize = 256;
 
@@ -24,6 +35,9 @@ struct KeyHealth {
     last_used: Option<Instant>,
     consecutive_successes: u64,
     consecutive_failures: u64,
+    /// Rate-limit-only streak for progressive quota backoff. General model
+    /// errors must not lengthen the next 429 cooldown.
+    consecutive_rate_limits: u32,
 }
 impl KeyHealth {
     fn new(id: u64) -> Self {
@@ -37,6 +51,7 @@ impl KeyHealth {
             last_used: None,
             consecutive_successes: 0,
             consecutive_failures: 0,
+            consecutive_rate_limits: 0,
         }
     }
     fn available(&self, now: Instant) -> bool {
@@ -343,6 +358,7 @@ fn record_result_by_id(
             entry.successes += 1;
             entry.consecutive_successes += 1;
             entry.consecutive_failures = 0;
+            entry.consecutive_rate_limits = 0;
             // A success from a parallel in-flight request is not evidence that
             // another request's active 429 cooldown has been lifted.
             entry.cooldown_until = entry
@@ -353,16 +369,15 @@ fn record_result_by_id(
             entry.failures += 1;
             entry.consecutive_failures += 1;
             entry.consecutive_successes = 0;
+            entry.consecutive_rate_limits = 0;
             entry.evicted = true;
         }
         Some(KeyFailure::RateLimited) => {
             entry.failures += 1;
             entry.consecutive_failures += 1;
             entry.consecutive_successes = 0;
-            let delay = Duration::from_millis(
-                retry_after_ms.unwrap_or(DEFAULT_COOLDOWN.as_millis() as u64),
-            )
-            .min(MAX_COOLDOWN);
+            entry.consecutive_rate_limits = entry.consecutive_rate_limits.saturating_add(1);
+            let delay = quota_cooldown(entry.consecutive_rate_limits, retry_after_ms);
             let until = Instant::now() + delay;
             // Competing 429 responses may specify different Retry-After delays.
             // A later shorter delay must never preempt the longer deadline.
@@ -376,6 +391,8 @@ fn record_result_by_id(
             entry.failures += 1;
             entry.consecutive_failures += 1;
             entry.consecutive_successes = 0;
+            // Transport and request errors are not quota signals.
+            entry.consecutive_rate_limits = 0;
         }
     }
 }
@@ -465,6 +482,7 @@ pub fn reset(scope: &str) {
             entry.failures = 0;
             entry.consecutive_failures = 0;
             entry.consecutive_successes = 0;
+            entry.consecutive_rate_limits = 0;
         }
     }
 }
