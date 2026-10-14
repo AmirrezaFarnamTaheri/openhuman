@@ -36,6 +36,7 @@ import {
 } from './composioFields';
 import { DedupForm } from './dedupFields';
 import { LoopForm } from './loopFields';
+import { GatherForm, ScatterForm } from './parallelFields';
 import { MemoryForm } from './memoryFields';
 import { NATIVE_TOOL_PREFIX, NativeToolField } from './nativeToolFields';
 import {
@@ -502,4 +503,6 @@ export const NODE_CONFIG_FORMS: Partial<Record<NodeKind, NodeConfigForm>> = {
   memory: MemoryForm,
   dedup: DedupForm,
   loop: LoopForm,
+  scatter: ScatterForm,
+  gather: GatherForm,
 };

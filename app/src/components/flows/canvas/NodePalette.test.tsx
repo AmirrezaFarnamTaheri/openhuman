@@ -41,6 +41,19 @@ describe('NodePalette', () => {
     expect(setData).toHaveBeenCalledWith(PALETTE_DND_MIME, first.key);
   });
 
+  it('offers the native scatter and gather pair with a safe initial lane budget', () => {
+    const scatter = ALL_ENTRIES.find(entry => entry.kind === 'scatter');
+    const gather = ALL_ENTRIES.find(entry => entry.kind === 'gather');
+    expect(scatter?.preset).toEqual({ lanes: 8 });
+    expect(gather).toMatchObject({ key: 'gather', kind: 'gather' });
+    const onAdd = vi.fn();
+    render(<NodePalette onAdd={onAdd} />);
+    fireEvent.click(screen.getByTestId('flow-palette-item-scatter'));
+    expect(onAdd).toHaveBeenCalledWith(scatter);
+    fireEvent.click(screen.getByTestId('flow-palette-item-gather'));
+    expect(onAdd).toHaveBeenCalledWith(gather);
+  });
+
   describe('panel variant', () => {
     it('shows the panel hint and every entry still works, still with the overlay layout absent', () => {
       const onAdd = vi.fn();

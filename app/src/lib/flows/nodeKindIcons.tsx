@@ -1,5 +1,5 @@
 /**
- * Per-kind canvas iconography for the 14 tinyflows `NodeKind`s.
+ * Per-kind canvas iconography for the 17 native workflow editor kinds.
  *
  * Split out of `nodeKindMeta.ts` on purpose: that module is deliberately
  * dependency-free (no React) so a plain palette button and a `<Handle>`-bearing
@@ -68,6 +68,8 @@ export const NODE_KIND_ICON: Record<NodeKind, IconType> = {
   memory: LuBrain,
   dedup: LuFilter,
   loop: LuRepeat,
+  scatter: LuSplit,
+  gather: LuGitMerge,
 };
 
 /**
@@ -159,6 +161,8 @@ export const NODE_KIND_TILE: Record<NodeKind, string> = {
   // Control flow that repeats — sage like the other recombining kinds, since a
   // loop head is where the body's output flows back in.
   loop: 'bg-linear-to-br from-sage-400 to-sage-700',
+  scatter: 'bg-linear-to-br from-sage-500 to-sage-700',
+  gather: 'bg-linear-to-br from-sage-400 to-sage-600',
 };
 
 /** Neutral tile for a kind this build does not recognise. See {@link nodeKindIcon}. */
