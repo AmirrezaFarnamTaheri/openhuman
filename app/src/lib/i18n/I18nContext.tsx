@@ -6,6 +6,7 @@ import bn from './bn';
 import de from './de';
 import en from './en';
 import { fleetTranslations } from './fleetTranslations';
+import { parallelFlowTranslations } from './parallelFlowTranslations';
 import es from './es';
 import fr from './fr';
 import hi from './hi';
@@ -71,7 +72,7 @@ function resolveEn(): Record<string, string> {
 const I18nContext = createContext<I18nContextValue>({
   t: (key: string, fallback?: string) => {
     const map = resolveEn();
-    return fleetTranslations.en[key] ?? map[key] ?? fallback ?? key;
+    return parallelFlowTranslations.en[key] ?? fleetTranslations.en[key] ?? map[key] ?? fallback ?? key;
   },
   locale: 'en',
 });
@@ -91,7 +92,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const t = useCallback(
     (key: string, fallback?: string): string => {
       const map = translations[locale] ?? resolveEn();
-      return fleetTranslations[locale]?.[key] ?? map[key] ?? fleetTranslations.en[key] ?? resolveEn()[key] ?? fallback ?? key;
+      return parallelFlowTranslations[locale]?.[key] ?? fleetTranslations[locale]?.[key] ?? map[key] ?? parallelFlowTranslations.en[key] ?? fleetTranslations.en[key] ?? resolveEn()[key] ?? fallback ?? key;
     },
     [locale]
   );

@@ -25,6 +25,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { fleetTranslations } from "../app/src/lib/i18n/fleetTranslations";
+import { parallelFlowTranslations } from "../app/src/lib/i18n/parallelFlowTranslations";
 
 const __filename = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(__filename), "..");
@@ -121,7 +122,7 @@ async function loadLocale(locale: Locale): Promise<Record<string, string>> {
   if (!val || typeof val !== "object") {
     throw new Error(`${p}: default export is not a translation map`);
   }
-  return { ...(val as Record<string, string>), ...fleetTranslations[locale] };
+  return { ...(val as Record<string, string>), ...fleetTranslations[locale], ...parallelFlowTranslations[locale] };
 }
 
 async function walkSourceFiles(dir: string, out: string[]): Promise<void> {
