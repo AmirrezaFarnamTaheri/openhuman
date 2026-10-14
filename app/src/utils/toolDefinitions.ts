@@ -47,6 +47,14 @@ export const TOOL_CATALOG: ToolDefinition[] = [
     rustToolNames: ['file_read', 'read_diff', 'csv_export'],
   },
   {
+    id: 'source_evidence',
+    displayName: 'Source Evidence',
+    description: 'Search code and verify line-level evidence with content hashes inside the current workspace.',
+    category: 'Files',
+    defaultEnabled: false,
+    rustToolNames: ['source_evidence'],
+  },
+  {
     id: 'file_write',
     displayName: 'Write Files',
     description: 'Create or modify files on disk.',
