@@ -399,7 +399,39 @@ impl ChatModel<()> for TextToolCompatModel {
         let codec = self.codec;
         let prepared = prepare_compat_request(request, self.codec)?;
         if declared.is_empty() && codec == ToolCallCodec::Qnml {
-            return self.inner.stream(state, prepared).await;
+            // Preserve incremental plain text, but never let a text-only
+            // gateway smuggle native tool calls into a no-tools turn.
+            // Fail as one terminal event and stop polling upstream after a
+            // rogue ToolCallDelta or terminal native tool-call response.
+            let live = self.inner.stream(state, prepared).await?;
+            let metadata = live.metadata().clone();
+            let guarded = futures::stream::unfold(
+                (live, false),
+                |(mut upstream, stopped)| async move {
+                    if stopped {
+                        return None;
+                    }
+                    let event = upstream.next().await?;
+                    let (event, terminal) = match event {
+                        ModelStreamItem::ToolCallDelta(_) => (
+                            ModelStreamItem::Failed(
+                                "gateway emitted native tool-call data while tools were disabled".into(),
+                            ),
+                            true,
+                        ),
+                        ModelStreamItem::Completed(ref response)
+                            if !response.message.tool_calls.is_empty() => (
+                            ModelStreamItem::Failed(
+                                "gateway returned native tool calls while tools were disabled".into(),
+                            ),
+                            true,
+                        ),
+                        other => (other, false),
+                    };
+                    Some((event, (upstream, terminal)))
+                },
+            );
+            return Ok(ModelStream::new(Box::pin(guarded)).with_metadata(metadata));
         }
         let mut original = self.inner.stream(state, prepared).await?;
         let metadata = original.metadata().clone();

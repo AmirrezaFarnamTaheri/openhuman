@@ -628,6 +628,47 @@ async fn qnml_stream_disables_wire_tool_schemas_when_tool_choice_none() {
     assert_eq!(wire.tool_choice, ToolChoice::None);
 }
 
+struct UnexpectedNativeToolStream;
+
+#[async_trait]
+impl ChatModel<()> for UnexpectedNativeToolStream {
+    async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+        Ok(response("unused".into()))
+    }
+
+    async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+        let mut result = response("not allowed".into());
+        result.message.tool_calls.push(ToolCall::new(
+            "attempt-1", "shell", json!({"command":"echo must-not-run"}),
+        ));
+        Ok(ModelStream::new(Box::pin(futures::stream::iter(vec![
+            ModelStreamItem::Started,
+            ModelStreamItem::Completed(result),
+        ]))))
+    }
+}
+
+#[tokio::test]
+async fn qnml_no_tools_stream_fails_closed_on_unrequested_native_calls() {
+    use futures::StreamExt;
+    let adapter = qnml_adapter(Arc::new(UnexpectedNativeToolStream));
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::None,
+        ..Default::default()
+    };
+    let events: Vec<ModelStreamItem> = adapter
+        .stream(&(), request)
+        .await
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(events.len(), 2);
+    assert!(matches!(events[0], ModelStreamItem::Started));
+    assert!(matches!(events[1], ModelStreamItem::Failed(_)));
+    assert!(!events.iter().any(|event| matches!(event, ModelStreamItem::Completed(_))));
+}
+
 #[tokio::test]
 async fn ordinary_chat_stream_still_emits_native_text_deltas() {
     use futures::StreamExt;
