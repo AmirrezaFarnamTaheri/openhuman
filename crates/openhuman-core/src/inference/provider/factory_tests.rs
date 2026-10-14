@@ -234,3 +234,32 @@ fn cloud_fleet_build_uses_resolved_codex_endpoint_without_retargeting_anthropic(
         "https://api.anthropic.com/v1"
     );
 }
+
+#[test]
+fn prodex_gateway_rejects_remote_plaintext_and_embedded_url_credentials() {
+    for (url, accepted) in [
+        ("http://127.0.0.1:4000/v1", true),
+        ("http://localhost:4000/v1", true),
+        ("http://[::1]:4000/v1", true),
+        ("https://gateway.example.com/v1", true),
+        ("http://gateway.example.com/v1", false),
+        ("http://127.0.0.1.attacker.example/v1", false),
+        ("http://user:password@127.0.0.1:4000/v1", false),
+        ("http://127.0.0.1:4000/v1?api_key=secret", false),
+        ("https://gateway.example.com/v1#fragment", false),
+        ("file:///tmp/gateway", false),
+    ] {
+        assert_eq!(
+            cloud_slug::prodex_gateway_endpoint_is_safe(url),
+            accepted,
+            "{url} must respect gateway egress security"
+        );
+    }
+    let mut unsafe_provider = openai_entry("p_prodex", "prodex");
+    unsafe_provider.endpoint = "http://gateway.example.com/v1".into();
+    let config = config_with_providers(vec![unsafe_provider]);
+    let error = cloud_slug::resolve_cloud_slug("chat", "prodex", "prodex-fast", &config)
+        .err()
+        .expect("remote plaintext Prodex gateway must be rejected before auth lookup");
+    assert!(error.to_string().contains("HTTPS"), "{error}");
+}
