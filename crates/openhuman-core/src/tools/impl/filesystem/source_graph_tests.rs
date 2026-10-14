@@ -126,3 +126,26 @@ fn dotted_typescript_stem_is_not_mistaken_for_a_known_extension() {
     assert_eq!(edge(&graph)["status"], "resolved");
     assert_eq!(edge(&graph)["to"], "src/user.service.ts");
 }
+
+
+#[test]
+fn generated_graph_json_respects_output_budget_without_broken_json() {
+    let mut docs = Vec::new();
+    for i in 0..32 {
+        let name = format!("src/{}_{}.ts", "a".repeat(125), i);
+        let mut body = String::new();
+        for j in 0..32 {
+            if i != j {
+                body.push_str(&format!("import '../src/{}_{}';\n", "a".repeat(125), j));
+            }
+        }
+        docs.push(source(&name, &body));
+    }
+    let graph = build_graph(&docs, 64, Some(&docs[0].path));
+    let json_body = graph.to_string();
+    assert!(json_body.len() <= 26_000, "unbounded graph result: {}", json_body.len());
+    let roundtrip: Value = serde_json::from_str(&json_body).unwrap();
+    assert_eq!(roundtrip["edges_complete"], false);
+    assert!(roundtrip["edges"].is_array());
+    assert!(roundtrip["nodes"].is_array());
+}
