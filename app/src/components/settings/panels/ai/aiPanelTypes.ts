@@ -28,6 +28,7 @@ export type CloudProvider = {
   maskedKey: string;
   imageEndpoint?: string;
   modelImageEndpoints?: Record<string, string>;
+  modelTransports?: Record<string, 'auto' | 'responses'>;
   rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
   toolCallCodec?: 'native' | 'qnml' | 'tagged_json';
   caCertPem?: string;
