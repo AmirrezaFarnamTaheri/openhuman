@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 const DEFAULT_COOLDOWN: Duration = Duration::from_secs(60);
 const MAX_COOLDOWN: Duration = Duration::from_secs(300);
 const SESSION_BINDING_TTL: Duration = Duration::from_secs(30 * 60);
+const MAX_STICKY_RUN_ID_BYTES: usize = 256;
 
 #[derive(Clone)]
 struct KeyHealth {
@@ -181,6 +182,12 @@ fn choose_key_for_run_impl(
     run_id: Option<&str>,
     reserve_lease: bool,
 ) -> Option<(usize, String)> {
+    // Correlation IDs are user-influenced in JSON-RPC requests. They are
+    // advisory; unsafe or oversized IDs may still select a key, but must not
+    // persist unbounded strings in the 30-minute affinity cache.
+    let run_id = run_id.filter(|id| {
+        !id.is_empty() && id.len() <= MAX_STICKY_RUN_ID_BYTES && !id.chars().any(char::is_control)
+    });
     let mut pools = registry()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
