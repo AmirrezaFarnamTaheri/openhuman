@@ -21,4 +21,4 @@ jobs:
     with:
       run_unit: true
       run_rust_core: true
-      run_rust_tauri: false
+      run_rust_tauri: true
