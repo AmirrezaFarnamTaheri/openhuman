@@ -113,7 +113,7 @@ cd "$(dirname "$0")/../.."
 # 316 -> 317: storage-file adds the first-party file driver.
 # 317 -> 318: pre-core registry vocabulary adds the pure tinycomputer-bus.
 
-# This matches the current `flows:326:302:2` entry in
+# This matches the current `flows:328:304:2` entry in
 # scripts/kernel-floor.limits; its preceding entries are historical.
 # 318 -> 313: connector implementation cut (-8) and explicit flows loader (+3).
 # 313 -> 304: current-main runtime removal and combined released module cuts.
@@ -123,6 +123,11 @@ cd "$(dirname "$0")/../.."
 # 298 -> 302 on 2026-10-13: tinyflows v0.8.14 replaces `tinyflows-sqlite` with
 # the `tinyflows-import` legacy importer (net zero by name) and the storage
 # stage re-measures the flows profile at 326 packages / 302 names / 2 native.
-EXPECTED_NAMES=302
+# 302 -> 304 (2026-10-14): CI measured two additional reachable names
+# from consolidated upstream vendor pins; Cargo.lock retains the same global
+# name set, and neither native-build count nor physical dependency ownership
+# changed. Keep this independent simulator expectation aligned with the exact
+# Linux `flows` cargo tree rather than hiding a legitimate edge delta.
+EXPECTED_NAMES=304
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"
