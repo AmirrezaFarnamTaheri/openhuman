@@ -68,7 +68,10 @@ fn candidate_paths(source: &str, spec: &str, kind: &str) -> Vec<String> {
         return vec![format!("{prefix}{spec}.rs"), format!("{prefix}{spec}/mod.rs")];
     }
     let Some(stem) = relative_target(source, spec) else { return Vec::new(); };
-    if Path::new(&stem).extension().is_some() {
+    if matches!(
+        Path::new(&stem).extension().and_then(|ext| ext.to_str()),
+        Some("ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts")
+    ) {
         vec![stem]
     } else {
         ["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts"]
