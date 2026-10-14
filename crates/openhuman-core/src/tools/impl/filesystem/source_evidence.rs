@@ -65,6 +65,7 @@ impl Tool for SourceEvidenceTool {
             "path":{"type":"string","description":"Relative path in current workspace, default '.'"},
             "query":{"type":"string","maxLength":128,"description":"Optional literal substring for scanning"},
             "max_files":{"type":"integer","minimum":1,"maximum":32},
+            "after_path":{"type":"string","maxLength":180,"description":"Return paths lexically after this previous-page path"},
             "max_edges":{"type":"integer","minimum":1,"maximum":64},
             "focus_path":{"type":"string","maxLength":180,"description":"Optional indexed path for reverse impact analysis in graph mode"},
             "expected_sha256":{"type":"string","minLength":64,"maxLength":64},
@@ -128,6 +129,11 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     let query = args.get("query").and_then(Value::as_str).unwrap_or("");
     if query.len() > 128 { anyhow::bail!("query too long"); }
     let max_files = args.get("max_files").and_then(Value::as_u64).unwrap_or(MAX_FILES as u64).clamp(1, MAX_FILES as u64) as usize;
+    let after = args.get("after_path").and_then(Value::as_str).unwrap_or("");
+    if after.len() > 180 || after.starts_with('/') || after.contains('\\') || after.chars().any(char::is_control)
+        || after.split('/').any(|part| part == ".." || (part.is_empty() && !after.is_empty())) {
+        anyhow::bail!("invalid after_path cursor");
+    }
     let mut paths = vec![(path.to_path_buf(), 0usize)];
     let mut entries: Vec<PathBuf> = Vec::new();
     let mut truncated: Option<&str> = None;
@@ -139,7 +145,9 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
         };
         if metadata.file_type().is_symlink() { continue; }
         if metadata.is_file() {
-            if !ignored(&next, false) { entries.push(next); }
+            if !ignored(&next, false) && (after.is_empty() || relative(root, &next).as_str() > after) {
+                entries.push(next);
+            }
             if entries.len() > max_files {
                 truncated = Some("max_files");
                 break;
@@ -163,7 +171,9 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     let mut total = 0usize;
     let mut generation = Sha256::new();
     let mut source_bytes = 0usize;
+    let mut last_scanned: Option<String> = None;
     for path in entries.into_iter().take(max_files) {
+        last_scanned = Some(relative(root, &path));
         let metadata = tokio::fs::symlink_metadata(&path).await?;
         if metadata.len() > MAX_FILE_BYTES {
             truncated.get_or_insert("oversize_file");
@@ -197,6 +207,7 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
         files.push(json!({"path":label,"source_hash":digest,"size_bytes":bytes.len(),"matches":matches}));
     }
     let generation = format!("{:x}",generation.finalize());
+    let next_after_path = if truncated == Some("max_files") { last_scanned } else { None };
     if graph_mode {
         let max_edges = args.get("max_edges").and_then(Value::as_u64).unwrap_or(64).clamp(1,64) as usize;
         let focus = args.get("focus_path").and_then(Value::as_str);
@@ -205,6 +216,7 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
         }
         let mut graph = build_graph(&graph_docs, max_edges, focus);
         graph["generation"] = json!(generation);
+        graph["next_after_path"] = json!(next_after_path);
         graph["scan_complete"] = json!(truncated.is_none());
         graph["truncated_reason"] = json!(truncated);
         graph["observed_bytes"] = json!(source_bytes);
@@ -214,6 +226,7 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     Ok(json!({
         "operation":"scan","generation":generation,
         "complete":truncated.is_none(),"truncated_reason":truncated,
+        "next_after_path":next_after_path,
         "observed_bytes":source_bytes, "files":files,
         "snapshot_atomic":false
     }))
