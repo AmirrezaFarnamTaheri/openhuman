@@ -13,11 +13,11 @@ use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolResult, ToolRunConte
 use crate::security::SecurityPolicy;
 use super::gate::security_scoped_to_root;
 
-const MAX_FILES: usize = 256;
+const MAX_FILES: usize = 32;
 const MAX_FILE_BYTES: u64 = 256 * 1024;
 const MAX_TOTAL_BYTES: usize = 2 * 1024 * 1024;
-const MAX_MATCHES: usize = 12;
-const MAX_LINE_CHARS: usize = 240;
+const MAX_MATCHES: usize = 3;
+const MAX_LINE_CHARS: usize = 160;
 const MAX_DEPTH: usize = 12;
 const MAX_VERIFY_LINES: usize = 80;
 const SKIP_DIRS: &[&str] = &[".git", ".svn", ".hg", "node_modules", "target", ".next", "dist", "build", ".venv", "__pycache__"];
@@ -62,7 +62,7 @@ impl Tool for SourceEvidenceTool {
             "operation":{"type":"string","enum":["scan","verify"]},
             "path":{"type":"string","description":"Relative path in current workspace, default '.'"},
             "query":{"type":"string","maxLength":128,"description":"Optional literal substring for scanning"},
-            "max_files":{"type":"integer","minimum":1,"maximum":256},
+            "max_files":{"type":"integer","minimum":1,"maximum":32},
             "expected_sha256":{"type":"string","minLength":64,"maxLength":64},
             "start_line":{"type":"integer","minimum":1},
             "end_line":{"type":"integer","minimum":1}
