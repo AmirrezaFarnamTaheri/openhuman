@@ -15,13 +15,17 @@
    **not** guarantees of free access, accepted credentials, model entitlement, quotas,
    streaming support or stable pricing.
 2. `scripts/ci/check-cloud-provider-catalog-parity.mjs` and the static CI lane
-   reject drift between Rust-extra and UI provider identity, endpoint and auth styles.
-   The guard also audits all shipped UI preset URLs for remote HTTP, embedded
-   credentials, query/fragment secret channels and unsupported schemes. It keeps
-   intentional local-loopback HTTP gateways distinct.
-3. The Rust Responses endpoint capability gate now includes Nebius alongside
-   OpenAI and Prodex. This asserts endpoint support; individual models still
-   need live capability discovery.
+   reject drift across the **full pinned vendor + Rust extras + React UI**
+   catalog (26 vendor, 12 Rust extras, 38 frontend presets at this pin),
+   including identities, endpoints, authentication methods, missing/ghost UI
+   entries, and conflicting duplicate slugs. The guard audits all shipped
+   preset URLs for remote HTTP, embedded credentials, query/fragment secret
+   channels and unsupported schemes, while allowing intentional loopback HTTP.
+   A fake-repository CLI test verifies source-root resolution independent of cwd.
+3. The Rust Responses endpoint capability gate now includes Nebius, OpenRouter
+   and xAI alongside OpenAI and Prodex. The pinned vendor knows OpenRouter and
+   xAI; official API docs confirm these endpoint families. This is **not**
+   evidence that every concrete model supports every Responses feature.
 4. Credential Fleet selection and lease reservation are atomic for requests,
    including streams, so least-busy uses in-flight concurrency rather than
    simultaneous readers observing an idle key. Legacy non-reserving selection
