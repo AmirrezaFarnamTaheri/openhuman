@@ -212,20 +212,30 @@ async fn list_configured_models_inner(
             crate::config::schema::cloud_providers::AuthStyle::Bearer
                 | crate::config::schema::cloud_providers::AuthStyle::Anthropic
         );
+        let anonymous = candidate.is_empty()
+            && entry.auth_style == crate::config::schema::cloud_providers::AuthStyle::None;
         let url = reqwest::Url::parse(&entry.endpoint)
             .map_err(|_| "Candidate probe requires a valid HTTP(S) endpoint".to_string())?;
-        if !auth_ok || entry.slug == "openhuman" {
-            return Err("Candidate credential probing requires an API-key provider".into());
+        if (!auth_ok && !anonymous) || entry.slug == "openhuman" {
+            return Err(
+                "Candidate credential probing requires an API-key provider or an anonymous endpoint"
+                    .into(),
+            );
         }
+        // Anonymous endpoints may use remote plaintext HTTP because no key is
+        // ever sent; credentialed endpoints must use HTTPS or local loopback.
         if !matches!(url.scheme(), "http" | "https")
-            || !crate::inference::provider::factory::credentialed_endpoint_is_safe(&entry.endpoint)
+            || (auth_ok
+                && !crate::inference::provider::factory::credentialed_endpoint_is_safe(
+                    &entry.endpoint,
+                ))
             || !url.username().is_empty()
             || url.password().is_some()
             || url.query().is_some()
             || url.fragment().is_some()
         {
             return Err(
-                "Candidate credential probing requires HTTPS or loopback HTTP without URL credentials"
+                "Candidate provider requires a valid HTTP(S) URL; credentialed providers require HTTPS or loopback HTTP without URL credentials"
                     .into(),
             );
         }

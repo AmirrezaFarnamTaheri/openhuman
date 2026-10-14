@@ -275,3 +275,57 @@ fn preview_rejects_invalid_ca_without_touching_saved_provider() {
     );
     assert_eq!(config.cloud_providers[0].endpoint, "https://original.example/v1");
 }
+
+#[tokio::test]
+async fn candidate_preview_can_probe_anonymous_provider_without_loading_a_key() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "object": "list",
+            "data": [{ "id": "local-model", "object": "model" }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut config = crate::config::Config::default();
+    config.cloud_providers.push(CloudProviderCreds {
+        slug: "anonymous-model-host".into(),
+        endpoint: format!("{}/v1", server.uri()),
+        auth_style: AuthStyle::None,
+        ..Default::default()
+    });
+    let outcome = list_configured_models_with_candidate_key_from_config(
+        "anonymous-model-host", &config, "",
+    )
+    .await
+    .expect("anonymous /models listing should work without a credential");
+    assert_eq!(outcome.value["models"][0]["id"], "local-model");
+
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].headers.get("authorization").is_none());
+    assert!(requests[0].headers.get("x-api-key").is_none());
+}
+
+#[tokio::test]
+async fn anonymous_candidate_cannot_be_used_as_managed_jwt_preview() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    let mut config = crate::config::Config::default();
+    config.cloud_providers.push(CloudProviderCreds {
+        slug: "managed-like".into(),
+        endpoint: "https://api.example.com/v1".into(),
+        auth_style: AuthStyle::OpenhumanJwt,
+        ..Default::default()
+    });
+    let result = list_configured_models_with_candidate_key_from_config(
+        "managed-like", &config, "",
+    )
+    .await;
+    assert!(result.is_err(), "JWT provider previews must never use this BYOK probe");
+}
