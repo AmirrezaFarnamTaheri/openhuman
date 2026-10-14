@@ -313,6 +313,17 @@ impl ToolCallCodec {
     }
 }
 
+/// Model-specific transport policy for mixed-protocol OpenAI-compatible
+/// gateways. Auto preserves the legacy ProviderRegistry behavior. Responses
+/// is an explicit opt-in for one concrete provider model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelTransport {
+    #[default]
+    Auto,
+    Responses,
+}
+
 /// Endpoint config for one cloud LLM provider.
 ///
 /// **Note on secrets**: API keys are NOT stored on this struct. They live in
@@ -349,6 +360,10 @@ pub struct CloudProviderCreds {
     #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub model_image_endpoints: std::collections::HashMap<String, String>,
 
+    /// Exact per-model transport override; sibling models retain default routing.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub model_transports: std::collections::HashMap<String, ModelTransport>,
+
     /// Optional selection strategy: round_robin (default), least_busy or priority_weighted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotation_strategy: Option<String>,
@@ -375,10 +390,19 @@ impl Default for CloudProviderCreds {
             auth_style: AuthStyle::Bearer,
             image_endpoint: None,
             model_image_endpoints: std::collections::HashMap::new(),
+            model_transports: std::collections::HashMap::new(),
             rotation_strategy: None,
             tool_call_codec: ToolCallCodec::Native,
             default_model: None,
         }
+    }
+}
+
+impl CloudProviderCreds {
+    /// Exact upstream model-id match; neither prefix nor provider slug implies
+    /// a Responses capability for any other model.
+    pub fn model_transport(&self, model: &str) -> ModelTransport {
+        self.model_transports.get(model).copied().unwrap_or_default()
     }
 }
 
