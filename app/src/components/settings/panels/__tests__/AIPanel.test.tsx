@@ -1014,9 +1014,18 @@ describe('AIPanel', () => {
         chat: { kind: 'cloud', providerSlug: 'openai', model: 'gpt-5' },
       },
     });
-    vi.mocked(callCoreRpc)
-      .mockResolvedValueOnce({ result: { connected: true } })
-      .mockResolvedValueOnce({ result: {} });
+    // Initial settings load may issue additional RPCs. Answer each OAuth
+    // operation by method so the connected status cannot be consumed by an
+    // unrelated request before the dialog renders.
+    vi.mocked(callCoreRpc).mockImplementation(async request => {
+      if (request.method === 'openhuman.inference_openai_oauth_status') {
+        return { result: { connected: true } } as never;
+      }
+      if (request.method === 'openhuman.inference_openai_oauth_disconnect') {
+        return { result: { disconnected: true, connected: false } } as never;
+      }
+      return { result: {} } as never;
+    });
 
     renderWithProviders(<AIPanel />);
     await openProviderRowAction('openai', /Replace API key/i);

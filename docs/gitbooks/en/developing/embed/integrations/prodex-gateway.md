@@ -11,12 +11,11 @@ This integration is **opt-in**. Neither Prodex nor Codex is bundled, launched, i
 
 ## Run the gateway
 
-Install and configure Prodex independently from [christiandoxa/prodex](https://github.com/christiandoxa/prodex). Use its own documented `prodex gateway` command and choose a supported provider. A local illustrative setup is:
+Install and configure Prodex independently from [christiandoxa/prodex](https://github.com/christiandoxa/prodex). Use its own documented `prodex gateway` command and choose a supported provider. A local illustrative setup is (configure `policy.toml` as shown below before launching):
 
 ```sh
 export PRODEX_GATEWAY_CLIENT_KEY='replace-with-a-random-inference-only-token'
 export GEMINI_API_KEY='replace-with-your-upstream-provider-token'
-# Configure policy.toml (below) and then launch:
 prodex gateway --provider gemini
 ```
 

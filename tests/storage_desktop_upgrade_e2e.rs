@@ -449,22 +449,44 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
         // capability (a batch across independent JSON files is not crash-
         // atomic). Legacy run-ledger entry trees require that guarantee.
         // Never mark the session import complete or claim a lossless upgrade.
-        let sessions = reports.iter().find(|report| report.domain == "sessions")
+        let sessions = reports
+            .iter()
+            .find(|report| report.domain == "sessions")
             .expect("session importer is present");
-        let error = sessions.outcome.as_ref()
+        let error = sessions
+            .outcome
+            .as_ref()
             .expect_err("file backend must refuse unsafe session migration");
-        assert!(format!("{error:#}").contains("validated_batch"), "{error:#}");
-        assert_eq!(tree(workspace), before, "legacy workspace was modified on refusal");
+        assert!(
+            format!("{error:#}").contains("validated_batch"),
+            "{error:#}"
+        );
+        assert_eq!(
+            tree(workspace),
+            before,
+            "legacy workspace was modified on refusal"
+        );
 
         // A partial attempt leaves its import marker absent, allowing a
         // later retry on a backend that supports atomic validation.
         let again = import::run(&config).await;
-        let sessions = again.iter().find(|report| report.domain == "sessions")
+        let sessions = again
+            .iter()
+            .find(|report| report.domain == "sessions")
             .expect("session importer is retried");
-        let error = sessions.outcome.as_ref()
+        let error = sessions
+            .outcome
+            .as_ref()
             .expect_err("unsupported file migration must not be marked done");
-        assert!(format!("{error:#}").contains("validated_batch"), "{error:#}");
-        assert_eq!(tree(workspace), before, "retry changed the legacy workspace");
+        assert!(
+            format!("{error:#}").contains("validated_batch"),
+            "{error:#}"
+        );
+        assert_eq!(
+            tree(workspace),
+            before,
+            "retry changed the legacy workspace"
+        );
         return;
     }
     for report in &reports {
