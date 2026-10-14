@@ -14,9 +14,11 @@ files (28 recorded parse failures), indexing 40,239 declarations,
 20,344 imports and 225,170 call occurrences. The combined AST inventories
 contain **173,569 declarations, 49,570 import references and 788,016 calls**.
 
-The more selective normalized method-body comparison found four cross-peer pairs
-with qualifying exact matches: Mem0/Ruflo (16), Jev-Auto-Router/Jev-Codex
-Router (1), CLI-Anything/Mem0 (1), and SWE-agent/Mem0 (1).
+The more selective normalized method-body comparison, after additionally
+excluding tiny Python method bodies, found **three** cross-peer pairs with
+qualifying exact matches: Mem0/Ruflo (16), CLI-Anything/Mem0 (2), and
+Jev-Auto-Router/Jev-Codex Router (1). A former SWE-agent/Mem0 overlap was
+an undersized stub and was deliberately excluded.
 Many are UI/test scaffolds; one shared Mem0/Ruflo cosine-similarity helper
 lacks explicit zero-norm and dimensional-mismatch guards. It must not
 supersede OpenHuman's vector implementation without numerical and
