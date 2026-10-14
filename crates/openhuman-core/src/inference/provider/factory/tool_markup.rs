@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 use tinyinference_llm::message::ContentBlock;
 use tinyinference_llm::model::{
     ChatModel, DeferredHandle, DeferredStatus, InputModality, InputSource, ModelProfile,
-    ModelRequest, ModelResponse, ModelStream, ModelStreamItem, StreamAccumulator,
+    ModelRequest, ModelResponse, ModelStream, ModelStreamItem, StreamAccumulator, ToolChoice,
 };
 use tinyinference_llm::tool::{ToolCall, ToolSchema};
 
@@ -137,6 +137,22 @@ pub(super) fn parse_qnml_calls(
     Ok(Some(calls))
 }
 
+/// Preserve the caller's executable-tool restrictions even when the upstream
+/// transport serializes calls as plain markup rather than native tool deltas.
+/// Model-provided QNML must never expand ToolChoice::None or ToolChoice::Tool.
+fn allowed_qnml_tools(request: &ModelRequest) -> Vec<ToolSchema> {
+    match &request.tool_choice {
+        ToolChoice::None => Vec::new(),
+        ToolChoice::Tool(name) => request
+            .tools
+            .iter()
+            .filter(|tool| tool.name == *name)
+            .cloned()
+            .collect(),
+        ToolChoice::Auto | ToolChoice::Required => request.tools.clone(),
+    }
+}
+
 /// Honors native tool_calls if already present: compatibility never overrides
 /// a proper provider wire response, and never changes user-visible plain text.
 pub(super) fn rewrite_qnml_response(
@@ -203,7 +219,7 @@ impl ChatModel<()> for QnmlCompatModel {
         state: &(),
         request: ModelRequest,
     ) -> tinyinference_llm::Result<ModelResponse> {
-        let declared = request.tools.clone();
+        let declared = allowed_qnml_tools(&request);
         let response = self.inner.invoke(state, request).await?;
         rewrite_qnml_response(response, &declared)
     }
@@ -213,10 +229,10 @@ impl ChatModel<()> for QnmlCompatModel {
         state: &(),
         request: ModelRequest,
     ) -> tinyinference_llm::Result<ModelStream> {
-        if request.tools.is_empty() {
+        let declared = allowed_qnml_tools(&request);
+        if declared.is_empty() {
             return self.inner.stream(state, request).await;
         }
-        let declared = request.tools.clone();
         let mut original = self.inner.stream(state, request).await?;
         let metadata = original.metadata().clone();
         let terminal = async move {
