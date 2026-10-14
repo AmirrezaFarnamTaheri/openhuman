@@ -42,7 +42,7 @@ export const CloudProviderEditor = ({
   const [label, setLabel] = useState<string>(initial?.label ?? '');
   const [endpoint, setEndpoint] = useState(initial?.endpoint ?? '');
   const [imageEndpoint, setImageEndpoint] = useState(initial?.imageEndpoint ?? '');
-  const [toolCallCodec, setToolCallCodec] = useState<'native' | 'qnml'>(
+  const [toolCallCodec, setToolCallCodec] = useState<'native' | 'qnml' | 'tagged_json'>(
     initial?.toolCallCodec ?? 'native'
   );
   const [rotationStrategy, setRotationStrategy] = useState(
@@ -301,10 +301,11 @@ export const CloudProviderEditor = ({
         <select
           id="cloud-provider-tool-codec"
           value={toolCallCodec}
-          onChange={event => setToolCallCodec(event.target.value as 'native' | 'qnml')}
+          onChange={event => setToolCallCodec(event.target.value as 'native' | 'qnml' | 'tagged_json')}
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
           <option value="native">Native API (recommended)</option>
           <option value="qnml">QNML tags (Qwen / 2API compatible)</option>
+          <option value="tagged_json">Tagged JSON (web2api compatible)</option>
         </select>
         <p className="text-xs text-content-muted">
           For gateways that return tagged tool calls as text. OpenHuman validates declared tool
