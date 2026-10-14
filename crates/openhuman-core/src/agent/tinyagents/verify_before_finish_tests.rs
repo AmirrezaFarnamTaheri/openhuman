@@ -322,6 +322,12 @@ fn single_round_mutations_and_delegations_require_finish_verification() {
         "delegate_reviewer",
         "spawn_subagent",
         "spawn_parallel_agents",
+        "spawn_async_subagent",
+        "spawn_worker_thread",
+        "continue_subagent",
+        "steer_subagent",
+        "delegate",
+        "git_operations",
         "run_workflow",
     ] {
         assert!(
