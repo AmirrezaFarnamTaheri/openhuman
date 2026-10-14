@@ -362,3 +362,18 @@ async fn installed_middleware_checks_a_single_delegate_handoff() {
     assert_eq!(checks, 1, "delegated work must be verified by its root orchestrator");
     assert_eq!(text, "checked");
 }
+
+#[test]
+fn finish_evidence_rejects_hidden_exit_status_as_proof() {
+    let check = check_message();
+    for fragment in [
+        "exit status",
+        "without pipefail",
+        "|| true",
+        "backgrounded",
+        "skipped",
+        "cancelled",
+    ] {
+        assert!(check.contains(fragment), "verification instruction must mention {fragment}");
+    }
+}
