@@ -191,15 +191,39 @@ fn prepare_compat_request(
     let require_tool = matches!(request.tool_choice, ToolChoice::Required | ToolChoice::Tool(_));
     let instruction = match codec {
         ToolCallCodec::Qnml => format!(
-            "2API tool transport: return a complete QNML tool_calls envelope when invoking a tool.              Use <|QNML|tool_calls> followed by one or more              <|QNML|invoke name=\\\"EXACT_DECLARED_NAME\\\"> blocks, each parameter encoded as              <|QNML|parameter name=\\\"PARAMETER\\\"><![CDATA[value]]></|QNML|parameter>,              with </|QNML|invoke> and </|QNML|tool_calls> closing tags.              Output ordinary assistant text when no tool is needed.              Never produce undeclared commands; do not invent tool names or arguments.              Tool requirement: {}. Declared tool schemas (JSON): {}",
-            if require_tool { "at least one call required" } else { "call only when needed" },
+            r#"2API QNML tool transport. Use only the declared tools below.
+For every tool invocation emit this EXACT tagged grammar:
+<|QNML|tool_calls>
+<|QNML|invoke name="EXACT_DECLARED_NAME">
+<|QNML|parameter name="PARAMETER"><![CDATA[value]]></|QNML|parameter>
+</|QNML|invoke>
+</|QNML|tool_calls>
+Emit ordinary assistant text if no tool is needed. Never invent tool names.
+Requirement: {}.
+Declared tool schemas (JSON): {}"#,
+            if require_tool {
+                "at least one call required"
+            } else {
+                "call only when needed"
+            },
             tools_json,
         ),
         ToolCallCodec::TaggedJson => format!(
-            "2API tagged-JSON transport: respond with exactly one terminal block.              When calling declared tools, output              <tool_calls>[{{\\\"name\\\":\\\"EXACT_DECLARED_NAME\\\",\\\"arguments\\\":{{}}}}]</tool_calls>,              using valid JSON objects matching the provided schemas.              Otherwise output <final_answer>your answer</final_answer>.              Optional <think>reasoning</think> blocks may precede the terminal block.              No text outside these blocks and never send undeclared tool calls.              Tool requirement: {}. Declared tool schemas (JSON): {}",
-            if require_tool { "at least one call required" }
-            else if matches!(request.tool_choice, ToolChoice::None) { "tools are disabled" }
-            else { "call only when needed" },
+            r#"2API tagged-JSON tool transport. Output at most one terminal block.
+For tools emit <tool_calls>[{{"name":"EXACT_DECLARED_NAME","arguments":{{}}}}]</tool_calls>.
+Otherwise emit <final_answer>your answer</final_answer>.
+Optional <think>reasoning</think> blocks may precede the terminal block.
+Use valid JSON with only declared tools and schema-validated arguments.
+Do not output text before, after or between these terminal blocks.
+Requirement: {}.
+Declared tool schemas (JSON): {}"#,
+            if require_tool {
+                "at least one call required"
+            } else if matches!(request.tool_choice, ToolChoice::None) {
+                "tools are disabled"
+            } else {
+                "call only when needed"
+            },
             tools_json,
         ),
         ToolCallCodec::Native => unreachable!("handled above"),
