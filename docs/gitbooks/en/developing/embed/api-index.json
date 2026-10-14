@@ -581,6 +581,7 @@
     "docs/gitbooks/en/developing/embed/integrations/local-models.md",
     "docs/gitbooks/en/developing/embed/integrations/mcp.md",
     "docs/gitbooks/en/developing/embed/integrations/openai-compatible.md",
+    "docs/gitbooks/en/developing/embed/integrations/prodex-gateway.md",
     "docs/gitbooks/en/developing/embed/integrations/storage-drivers.md",
     "docs/gitbooks/en/developing/embed/integrations/tinyhumans-managed.md",
     "docs/gitbooks/en/developing/embed/integrations/web-search.md",
