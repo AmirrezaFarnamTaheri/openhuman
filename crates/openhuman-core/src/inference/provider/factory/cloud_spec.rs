@@ -10,6 +10,9 @@
 
 use super::*;
 use tinyinference_llm::providers::openai::codex::OpenAiCodexRouting;
+use tinyinference_llm::providers::openai::{
+    OpenAiConfig, build_openai_model, build_openai_model_with_http, endpoint_is_openrouter,
+};
 use tinyinference_llm::providers::registry::{ProviderBuildOptions, ProviderRegistry};
 use tinyinference_llm::{ProviderKind, ProviderSpec};
 
@@ -57,6 +60,8 @@ pub(super) struct CloudBuild<'a> {
     pub(super) user_agent: Option<&'a str>,
     pub(super) codex: Option<&'a OpenAiCodexRouting>,
     pub(super) http: Option<reqwest::Client>,
+    /// Explicit model-scoped /responses override, never inferred from the slug.
+    pub(super) responses_api_primary: bool,
 }
 
 impl<'a> CloudBuild<'a> {
@@ -92,6 +97,39 @@ pub(super) fn build_cloud_model(build: CloudBuild<'_>) -> anyhow::Result<Arc<dyn
         build.spec.kind.as_str(),
         build.auth_style
     );
+    // Only an explicit, exact model override enters this branch. For default
+    // routes, keep using the vendor registry unchanged. Codex OAuth already
+    // selects its own Responses transport and account-specific request shape.
+    if build.responses_api_primary && !build.codex.is_some_and(|route| route.using_oauth) {
+        if matches!(build.auth_style, CompatAuthStyle::Anthropic) {
+            anyhow::bail!(
+                "[chat-factory] Responses API requires OpenAI-compatible authentication, not Anthropic Messages"
+            );
+        }
+        let config = OpenAiConfig {
+            provider_name: &build.spec.provider,
+            endpoint: &build.spec.base_url,
+            api_key: build.key,
+            auth_style: build.auth_style.clone(),
+            model: &build.spec.model,
+            temperature_unsupported_models: build.temperature_unsupported_models,
+            temperature_override: build.temperature_override,
+            merge_system_into_user: false,
+            extra_headers: build.extra_headers,
+            native_tool_calling: Some(build.native_tool_calling),
+            vision: None,
+            default_provider_options: None,
+            responses_api_primary: true,
+            responses_omit_max_output_tokens: false,
+            extra_query_params: build.extra_query_params,
+            user_agent: build.user_agent,
+            explicit_cache_control: endpoint_is_openrouter(&build.spec.base_url),
+        };
+        return Ok(match build.http {
+            Some(http) => build_openai_model_with_http(config, http),
+            None => build_openai_model(config),
+        });
+    }
     build
         .registry()
         .build_with(&build.spec, build.options())
