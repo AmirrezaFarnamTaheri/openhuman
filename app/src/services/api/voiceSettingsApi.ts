@@ -46,6 +46,8 @@ export interface VoiceProviderCreds {
   tts_api_style: string;
   default_stt_model: string | null;
   default_tts_voice: string | null;
+  /** Explicit OpenAI-compatible TTS model (Kokoro etc.); omitted uses tts-1. */
+  default_tts_model?: string | null;
 }
 
 export interface VoiceProviderView extends VoiceProviderCreds {
