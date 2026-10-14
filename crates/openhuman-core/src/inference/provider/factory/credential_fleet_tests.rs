@@ -21,6 +21,56 @@ fn image_endpoints_only_apply_when_request_contains_images() {
     };
     assert!(request_has_image(&image));
 }
+struct CapabilityStubModel {
+    modality: InputModality,
+}
+#[async_trait]
+impl ChatModel<()> for CapabilityStubModel {
+    fn supports_input(&self, modality: InputModality, _: &str, _: InputSource) -> bool {
+        modality == self.modality
+    }
+
+    async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+        Err(tinyinference_llm::Error::Model("capability probe only".into()))
+    }
+}
+
+#[test]
+fn fleet_reports_non_image_capabilities_of_the_model_that_receives_the_request() {
+    let fleet = CredentialFleetModel::new(
+        "fleet-capability-route".into(),
+        vec!["credential".into()],
+        vec![Arc::new(CapabilityStubModel {
+            modality: InputModality::Audio,
+        })],
+        Some(vec![Arc::new(CapabilityStubModel {
+            modality: InputModality::Image,
+        })]),
+        RotationStrategy::RoundRobin,
+    );
+
+    assert!(fleet.supports_input(
+        InputModality::Image,
+        "image/png",
+        InputSource::Base64
+    ));
+    assert!(fleet.supports_input(
+        InputModality::Audio,
+        "audio/wav",
+        InputSource::Url
+    ));
+    assert!(!fleet.supports_input(
+        InputModality::Document,
+        "application/pdf",
+        InputSource::Url
+    ));
+    assert!(!fleet.supports_input(
+        InputModality::Video,
+        "video/mp4",
+        InputSource::Url
+    ));
+}
+
 struct StubStreamModel {
     fail_auth: bool,
 }
