@@ -186,6 +186,35 @@ async fn qnml_cannot_call_a_different_declared_tool_than_explicitly_selected() {
     );
 }
 
+#[tokio::test]
+async fn explicit_no_tools_policy_never_executes_tagged_calls() {
+    use tinyinference_llm::model::ToolChoice;
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: qnml_two_calls().into(),
+    }));
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::None,
+        ..Default::default()
+    };
+    let result = adapter.invoke(&(), request).await.unwrap();
+    assert!(result.message.tool_calls.is_empty());
+}
+
+#[tokio::test]
+async fn named_tool_choice_rejects_other_declared_tools() {
+    use tinyinference_llm::model::ToolChoice;
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: qnml_two_calls().into(),
+    }));
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::Tool("shell".into()),
+        ..Default::default()
+    };
+    assert!(adapter.invoke(&(), request).await.is_err());
+}
+
 struct FakeTaggedModel {
     body: String,
 }
