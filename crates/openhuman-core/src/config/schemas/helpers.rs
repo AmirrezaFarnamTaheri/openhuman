@@ -32,9 +32,18 @@ pub(super) struct CloudProviderUpdate {
     /// Model-id-specific image URL overrides, keyed within the provider group.
     #[serde(default)]
     pub(super) model_image_endpoints: std::collections::HashMap<String, String>,
+    /// Explicit per-model transport selection; defaults to existing routing.
+    #[serde(default)]
+    pub(super) model_transports: std::collections::HashMap<
+        String,
+        crate::config::schema::cloud_providers::ModelTransport,
+    >,
     /// Credential strategy: round_robin | least_busy | priority_weighted.
     #[serde(default)]
     pub(super) rotation_strategy: Option<String>,
+    /// Native tool format, QNML or tagged-JSON compatibility (opt-in).
+    #[serde(default)]
+    pub(super) tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
     /// Optional PEM CA bundle for this provider. Empty string removes it.
     #[serde(default)]
     pub(super) ca_cert_pem: Option<String>,
