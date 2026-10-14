@@ -11,6 +11,9 @@
 //! ask.
 
 mod gate;
+mod source_evidence;
+
+pub use source_evidence::SourceEvidenceTool;
 
 #[cfg(test)]
 #[path = "gate_tests.rs"]
