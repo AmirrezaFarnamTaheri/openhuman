@@ -24,6 +24,7 @@ describe('builtinCloudProviders', () => {
     ['qwen-pay-as-you-go', 'https://dashscope.aliyuncs.com/compatible-mode/v1', 'bearer'],
     ['qwen-token-plan', 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1', 'bearer'],
     ['llmtr', 'https://llmtr.com/v1', 'bearer'],
+    ['prodex', 'http://127.0.0.1:4000/v1', 'bearer'],
   ] as const)('maps %s to its endpoint and auth style', (slug, endpoint, authStyle) => {
     expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
     expect(authStyleForBuiltinCloudProvider(slug)).toBe(authStyle);
@@ -52,6 +53,7 @@ describe('builtinCloudProviders', () => {
         'sumopod',
         'modelscope',
         'llmtr',
+        'prodex',
       ])
     );
   });
