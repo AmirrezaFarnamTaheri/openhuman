@@ -307,6 +307,48 @@ fn builtin_table_is_the_upstream_catalog_plus_the_managed_route() {
 }
 
 #[test]
+fn per_model_protocol_override_round_trips_without_changing_legacy_defaults() {
+    use crate::config::schema::cloud_providers::{CloudProviderCreds, ModelTransport};
+
+    let entry: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "multi-protocol-gateway",
+        "endpoint": "https://router.example/v1",
+        "model_transports": {
+            "vendor/response-model": "responses"
+        }
+    }))
+    .expect("explicit model protocol should deserialize");
+    assert_eq!(
+        entry.model_transport("vendor/response-model"),
+        ModelTransport::Responses
+    );
+    assert_eq!(
+        entry.model_transport("vendor/chat-model"),
+        ModelTransport::Auto,
+        "unlisted models must preserve preexisting registry routing"
+    );
+    assert_eq!(
+        serde_json::to_value(&entry).unwrap()["model_transports"]["vendor/response-model"],
+        "responses"
+    );
+
+    let legacy: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "legacy", "endpoint": "https://legacy.example/v1"
+    }))
+    .unwrap();
+    assert_eq!(legacy.model_transport("any"), ModelTransport::Auto);
+    assert!(serde_json::to_value(&legacy)
+        .unwrap()
+        .get("model_transports")
+        .is_none());
+    assert!(serde_json::from_value::<CloudProviderCreds>(serde_json::json!({
+        "slug": "invalid", "endpoint": "https://example/v1",
+        "model_transports": {"model": "unsupported_protocol"}
+    }))
+    .is_err());
+}
+
+#[test]
 fn image_endpoint_presets_round_trip_and_default_without_mapping() {
     let entry: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
         "id": "a",
