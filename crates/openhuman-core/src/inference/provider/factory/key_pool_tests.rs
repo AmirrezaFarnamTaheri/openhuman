@@ -131,3 +131,76 @@ fn leases_are_released_without_underflow() {
     release(scope, "a");
     assert_eq!(snapshot(scope)[0].active_leases, 0);
 }
+
+#[test]
+fn late_success_must_not_clear_an_active_rate_limit_from_another_lease() {
+    let scope = "key-pool-test-concurrent-429-success";
+    let secret = "same-provider-credential";
+    let keys = vec![secret.to_owned()];
+    assert!(next_key(scope, &keys).is_some());
+    record_result_for(scope, secret, Some(KeyFailure::RateLimited), Some(120_000));
+    assert_eq!(snapshot(scope)[0].status, "cooldown");
+
+    // Another request was already in flight and returned 200 after the 429.
+    // This is NOT evidence that provider's cooldown has expired.
+    record_result_for(scope, secret, None, None);
+    assert_eq!(snapshot(scope)[0].status, "cooldown");
+    assert!(next_key(scope, &keys).is_none());
+    forget(scope);
+}
+
+#[test]
+fn parallel_rate_limit_outcomes_cannot_shorten_the_existing_deadline() {
+    let scope = "key-pool-test-parallel-429";
+    let secret = "rate-limited-key";
+    next_key(scope, &[secret.to_owned()]);
+    record_result_for(scope, secret, Some(KeyFailure::RateLimited), Some(240_000));
+    let first_deadline = {
+        let pools = registry().lock().unwrap();
+        pools.get(scope).unwrap().keys[0].cooldown_until.unwrap()
+    };
+    record_result_for(scope, secret, Some(KeyFailure::RateLimited), Some(1000));
+    let second_deadline = {
+        let pools = registry().lock().unwrap();
+        pools.get(scope).unwrap().keys[0].cooldown_until.unwrap()
+    };
+    assert!(second_deadline >= first_deadline, "an overlapping 429 shortened an active cooldown");
+    forget(scope);
+}
+
+#[test]
+fn session_affinity_cache_evicts_earliest_expiring_binding() {
+    let scope = "key-pool-test-affinity-order";
+    let keys = vec!["stable".to_owned()];
+    next_key(scope, &keys);
+    {
+        let mut pools = registry().lock().unwrap();
+        let pool = pools.get_mut(scope).unwrap();
+        let base = Instant::now();
+        let id = secret_id("stable");
+        for i in 0..512u64 {
+            pool.sticky.insert(
+                format!("run-{i}"),
+                (id, base + Duration::from_secs(60 + i)),
+            );
+        }
+    }
+
+    choose_key_for_run(
+        scope,
+        &keys,
+        &[],
+        RotationStrategy::RoundRobin,
+        Some("run-new"),
+    )
+    .unwrap();
+    {
+        let pools = registry().lock().unwrap();
+        let sticky = &pools.get(scope).unwrap().sticky;
+        assert_eq!(sticky.len(), 512);
+        assert!(!sticky.contains_key("run-0"), "evict oldest/earliest expiry, not arbitrary HashMap entry");
+        assert!(sticky.contains_key("run-511"));
+        assert!(sticky.contains_key("run-new"));
+    }
+    forget(scope);
+}
