@@ -85,7 +85,7 @@ test('inference requires a catalog-listed model and never exposes completion con
     assert.equal(init.method, 'POST');
     assert.equal(init.redirect, 'error');
     assert.deepEqual(JSON.parse(init.body).messages, [{role:'user', content:'Reply READY.'}]);
-    return respond(JSON.stringify({choices: [{message: {content: 'READY'}}], usage: {total_tokens: 4}}));
+    return respond(JSON.stringify({choices: [{message: {role: 'assistant', content: 'READY'}}], usage: {total_tokens: 4}}));
   };
   await assert.rejects(() => probeProdexInference({
     baseUrl: 'http://127.0.0.1:4000/v1', key: exampleKey,
@@ -104,7 +104,7 @@ test('CLI defaults to read-only mode and requires explicit billable-inference op
   const fetchImpl = async (url) => {
     if (url.toString().endsWith('/models')) { modelCalls++; return respond(); }
     inferenceCalls++;
-    return respond(JSON.stringify({choices:[{message:{content:'READY'}}]}));
+    return respond(JSON.stringify({choices:[{message:{role:'assistant',content:'READY'}}]}));
   };
   const env = {PRODEX_GATEWAY_CLIENT_KEY:exampleKey,PRODEX_GATEWAY_URL:'http://127.0.0.1:4000/v1'};
   const report = await runProdexSmoke([], env, fetchImpl);
@@ -115,4 +115,14 @@ test('CLI defaults to read-only mode and requires explicit billable-inference op
   const billed = await runProdexSmoke(['--inference','--model','prodex-fast'], env, fetchImpl);
   assert.equal(billed.mode, 'inference');
   assert.equal(inferenceCalls, 1);
+});
+
+// Positive probes must require actual assistant output; metadata-only
+// completions cannot be reported as healthy or billed inference.
+test('metadata-only completion is not a successful inference probe', async () => {
+  await assert.rejects(() => probeProdexInference({
+    baseUrl: 'http://127.0.0.1:4000/v1', key: exampleKey,
+    model: 'prodex-fast', availableModels: ['prodex-fast'],
+    fetchImpl: async () => respond(JSON.stringify({choices: [{message: {role: 'assistant', content: ''}}]})),
+  }), /assistant text output/);
 });
