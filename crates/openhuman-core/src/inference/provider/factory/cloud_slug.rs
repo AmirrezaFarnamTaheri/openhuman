@@ -133,6 +133,16 @@ pub(super) fn resolve_cloud_slug<'a>(
             "[chat-factory] image endpoint overrides require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
         );
     }
+    // This is not Prodex-specific: every Bearer/Anthropic direct-provider
+    // route can forward a stored account secret. Validate the main endpoint
+    // even for config.toml imports and dormant model profiles.
+    if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        && !prodex_gateway_endpoint_is_safe(&entry.endpoint)
+    {
+        anyhow::bail!(
+            "[chat-factory] credentialed provider endpoints require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
+        );
+    }
 
     // Resolve effective model: use provided model if non-empty, else fall back
     // to the entry's legacy default_model (if any), else empty → error.
@@ -263,6 +273,15 @@ pub(super) fn resolve_cloud_slug<'a>(
     let bearer_is_oauth = slug == "openai" && openai_bearer_is_oauth(config);
     let codex = resolve_openai_codex_routing(config, slug, &entry.endpoint, &key, bearer_is_oauth)
         .map_err(anyhow::Error::msg)?;
+    // Re-check the actual endpoint after Codex routing, not just the saved
+    // base, so an alternate transport cannot downgrade the credential.
+    if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        && !prodex_gateway_endpoint_is_safe(cloud_base_url(entry, &codex))
+    {
+        anyhow::bail!(
+            "[chat-factory] resolved credential endpoint requires HTTPS or loopback HTTP"
+        );
+    }
 
     Ok(CloudSlugResolution {
         entry,

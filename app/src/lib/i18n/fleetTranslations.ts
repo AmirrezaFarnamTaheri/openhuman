@@ -18,6 +18,7 @@ const keys = [
   'toolCodecQnml',
   'toolCodecTaggedJson',
   'toolCodecHelp',
+  'keyedEndpointInvalid',
 ] as const;
 
 const messages = {
@@ -37,7 +38,8 @@ const messages = {
     'Native API (recommended)',
     'QNML tags (Qwen / 2API compatible)',
     'Tagged JSON (web2api compatible)',
-    'For gateways that return tagged tool calls as text. Tool permissions are validated and tool-enabled streams are buffered; ordinary chat streams normally.',
+    'For gateways that return tagged tool calls as text. Tool permissions are validated and tool-enabled streams are buffered; ordinary chat streams normally.',,
+    'API keys require HTTPS or loopback HTTP; remote plaintext HTTP is not allowed.'
   ],
   es: [
     'La URL del proveedor debe ser HTTP(S) válida y no contener credenciales.',
@@ -55,7 +57,8 @@ const messages = {
     'API nativa (recomendado)',
     'Etiquetas QNML (Qwen / 2API)',
     'JSON etiquetado (web2api)',
-    'Para pasarelas con llamadas a herramientas en texto. Se comprueban permisos y se almacenan sus flujos en búfer; el chat normal sigue en directo.',
+    'Para pasarelas con llamadas a herramientas en texto. Se comprueban permisos y se almacenan sus flujos en búfer; el chat normal sigue en directo.',,
+    'Las claves API requieren HTTPS o HTTP local; no se permite HTTP remoto sin cifrar.'
   ],
   fr: [
     'L’URL du fournisseur doit être une URL HTTP(S) valide sans identifiants.',
@@ -73,7 +76,8 @@ const messages = {
     'API native (recommandé)',
     'Balises QNML (Qwen / 2API)',
     'JSON balisé (web2api)',
-    'Pour les passerelles avec appels d’outils en texte. Les autorisations sont vérifiées et ces flux mis en tampon ; le chat normal reste progressif.',
+    'Pour les passerelles avec appels d’outils en texte. Les autorisations sont vérifiées et ces flux mis en tampon ; le chat normal reste progressif.',,
+    'Les clés API exigent HTTPS ou HTTP local ; le HTTP distant non chiffré est interdit.'
   ],
   de: [
     'Die Anbieter-Basis-URL muss gültiges HTTP(S) ohne eingebettete Zugangsdaten sein.',
@@ -91,7 +95,8 @@ const messages = {
     'Native API (empfohlen)',
     'QNML-Tags (Qwen / 2API)',
     'Markiertes JSON (web2api)',
-    'Für Gateways mit textbasierten Tool-Aufrufen. Berechtigungen werden geprüft und Tool-Streams gepuffert; normaler Chat streamt weiter.',
+    'Für Gateways mit textbasierten Tool-Aufrufen. Berechtigungen werden geprüft und Tool-Streams gepuffert; normaler Chat streamt weiter.',,
+    'API-Schlüssel benötigen HTTPS oder lokales HTTP; unverschlüsseltes HTTP im Netzwerk ist nicht erlaubt.'
   ],
   pt: [
     'A URL base do provedor deve ser HTTP(S) válida e não conter credenciais.',
@@ -109,7 +114,8 @@ const messages = {
     'API nativa (recomendado)',
     'Tags QNML (Qwen / 2API)',
     'JSON com tags (web2api)',
-    'Para gateways com chamadas de ferramentas em texto. As permissões são verificadas e esses fluxos usam buffer; o chat comum continua em streaming.',
+    'Para gateways com chamadas de ferramentas em texto. As permissões são verificadas e esses fluxos usam buffer; o chat comum continua em streaming.',,
+    'Chaves API exigem HTTPS ou HTTP local; HTTP remoto sem criptografia não é permitido.'
   ],
   it: [
     'L’URL di base del provider deve essere HTTP(S) valida e senza credenziali.',
@@ -127,7 +133,8 @@ const messages = {
     'API nativa (consigliata)',
     'Tag QNML (Qwen / 2API)',
     'JSON con tag (web2api)',
-    'Per gateway con chiamate agli strumenti come testo. I permessi sono controllati e tali flussi bufferizzati; la chat normale resta in streaming.',
+    'Per gateway con chiamate agli strumenti come testo. I permessi sono controllati e tali flussi bufferizzati; la chat normale resta in streaming.',,
+    'Le chiavi API richiedono HTTPS o HTTP locale; HTTP remoto non cifrato non è consentito.'
   ],
   tr: [
     'Sağlayıcı temel URL’si kimlik bilgisi içermeyen geçerli HTTP(S) adresi olmalıdır.',
@@ -145,7 +152,8 @@ const messages = {
     'Yerel API (önerilir)',
     'QNML etiketleri (Qwen / 2API)',
     'Etiketli JSON (web2api)',
-    'Metinle etiketli araç çağrısı gönderen ağ geçitleri için. İzinler denetlenir, araç akışları arabelleğe alınır; normal sohbet akışı sürer.',
+    'Metinle etiketli araç çağrısı gönderen ağ geçitleri için. İzinler denetlenir, araç akışları arabelleğe alınır; normal sohbet akışı sürer.',,
+    'API anahtarları HTTPS veya yerel HTTP gerektirir; şifresiz uzak HTTP yasaktır.'
   ],
   ru: [
     'Базовый URL провайдера должен быть корректным HTTP(S)-адресом без учётных данных.',
@@ -163,7 +171,8 @@ const messages = {
     'Нативный API (рекомендуется)',
     'Теги QNML (Qwen / 2API)',
     'Размеченный JSON (web2api)',
-    'Для шлюзов с текстовыми вызовами инструментов. Права проверяются, потоки инструментов буферизуются; обычный чат идёт потоком.',
+    'Для шлюзов с текстовыми вызовами инструментов. Права проверяются, потоки инструментов буферизуются; обычный чат идёт потоком.',,
+    'API-ключи требуют HTTPS или локального HTTP; удалённый незашифрованный HTTP запрещён.'
   ],
   pl: [
     'Bazowy URL dostawcy musi być poprawnym HTTP(S) bez danych logowania.',
@@ -181,7 +190,8 @@ const messages = {
     'Natywne API (zalecane)',
     'Znaczniki QNML (Qwen / 2API)',
     'Oznaczony JSON (web2api)',
-    'Dla bramek zwracających wywołania narzędzi jako tekst. Uprawnienia są sprawdzane, strumienie narzędzi buforowane; zwykły czat działa strumieniowo.',
+    'Dla bramek zwracających wywołania narzędzi jako tekst. Uprawnienia są sprawdzane, strumienie narzędzi buforowane; zwykły czat działa strumieniowo.',,
+    'Klucze API wymagają HTTPS lub lokalnego HTTP; zdalny nieszyfrowany HTTP jest zabroniony.'
   ],
   id: [
     'URL dasar penyedia harus berupa HTTP(S) valid tanpa kredensial.',
@@ -199,7 +209,8 @@ const messages = {
     'API native (disarankan)',
     'Tag QNML (Qwen / 2API)',
     'JSON bertag (web2api)',
-    'Untuk gateway dengan panggilan alat berupa teks. Izin diverifikasi dan aliran alat dibuffer; chat biasa tetap streaming.',
+    'Untuk gateway dengan panggilan alat berupa teks. Izin diverifikasi dan aliran alat dibuffer; chat biasa tetap streaming.',,
+    'Kunci API memerlukan HTTPS atau HTTP loopback; HTTP jarak jauh tanpa enkripsi dilarang.'
   ],
   ja: [
     'プロバイダーのベースURLには認証情報を含まない有効なHTTP(S)アドレスを指定してください。',
@@ -217,7 +228,8 @@ const messages = {
     'ネイティブAPI（推奨）',
     'QNMLタグ（Qwen / 2API互換）',
     'タグ付きJSON（web2api互換）',
-    'タグ付きテキストでツール呼び出しを返すゲートウェイ向けです。権限を検証しツール付きストリームをバッファリングします。通常のチャットはストリーミングされます。',
+    'タグ付きテキストでツール呼び出しを返すゲートウェイ向けです。権限を検証しツール付きストリームをバッファリングします。通常のチャットはストリーミングされます。',,
+    'APIキーにはHTTPSまたはループバックHTTPが必要です。暗号化されないリモートHTTPは使用できません。'
   ],
   ko: [
     '제공자 기본 URL은 자격 증명이 없는 올바른 HTTP(S) 주소여야 합니다.',
@@ -235,7 +247,8 @@ const messages = {
     '네이티브 API(권장)',
     'QNML 태그(Qwen / 2API 호환)',
     '태그형 JSON(web2api 호환)',
-    '도구 호출을 텍스트로 반환하는 게이트웨이용입니다. 권한을 검사하고 도구 스트림을 버퍼링하며 일반 채팅은 계속 스트리밍됩니다.',
+    '도구 호출을 텍스트로 반환하는 게이트웨이용입니다. 권한을 검사하고 도구 스트림을 버퍼링하며 일반 채팅은 계속 스트리밍됩니다.',,
+    'API 키에는 HTTPS 또는 루프백 HTTP가 필요합니다. 암호화되지 않은 원격 HTTP는 허용되지 않습니다.'
   ],
   'zh-CN': [
     '提供商基础 URL 必须是有效的 HTTP(S) 地址，且不能包含凭据。',
@@ -253,7 +266,8 @@ const messages = {
     '原生 API（推荐）',
     'QNML 标签（Qwen / 2API）',
     '标记式 JSON（web2api）',
-    '适用于以标签文本返回工具调用的网关。会验证工具权限并缓冲工具流；普通聊天仍正常流式输出。',
+    '适用于以标签文本返回工具调用的网关。会验证工具权限并缓冲工具流；普通聊天仍正常流式输出。',,
+    'API 密钥必须使用 HTTPS 或本地回环 HTTP；不允许未加密的远程 HTTP。'
   ],
   ar: [
     'يجب أن يكون عنوان المزود الأساسي HTTP(S) صالحًا وخاليًا من بيانات الاعتماد.',
@@ -271,7 +285,8 @@ const messages = {
     'واجهة API أصلية (موصى بها)',
     'وسوم QNML (Qwen / 2API)',
     'JSON موسوم (web2api)',
-    'للبوابات التي تعيد استدعاءات الأدوات كنص موسوم. يتم التحقق من الصلاحيات وتخزين تدفقات الأدوات مؤقتًا؛ المحادثة العادية تظل متدفقة.',
+    'للبوابات التي تعيد استدعاءات الأدوات كنص موسوم. يتم التحقق من الصلاحيات وتخزين تدفقات الأدوات مؤقتًا؛ المحادثة العادية تظل متدفقة.',,
+    'تتطلب مفاتيح API استخدام HTTPS أو HTTP المحلي؛ يُمنع HTTP البعيد غير المشفّر.'
   ],
   hi: [
     'प्रदाता का मूल URL बिना क्रेडेंशियल वाला मान्य HTTP(S) पता होना चाहिए।',
@@ -289,7 +304,8 @@ const messages = {
     'मूल API (अनुशंसित)',
     'QNML टैग (Qwen / 2API)',
     'टैग वाला JSON (web2api)',
-    'टेक्स्ट टैग में टूल कॉल देने वाले गेटवे के लिए। अनुमतियाँ जाँची जाती हैं और टूल स्ट्रीम बफ़र होती हैं; सामान्य चैट स्ट्रीम जारी रहती है।',
+    'टेक्स्ट टैग में टूल कॉल देने वाले गेटवे के लिए। अनुमतियाँ जाँची जाती हैं और टूल स्ट्रीम बफ़र होती हैं; सामान्य चैट स्ट्रीम जारी रहती है।',,
+    'API कुंजियों के लिए HTTPS या स्थानीय लूपबैक HTTP चाहिए; असुरक्षित दूरस्थ HTTP की अनुमति नहीं है।'
   ],
   bn: [
     'প্রোভাইডারের বেস URL বৈধ HTTP(S) ঠিকানা হতে হবে, যাতে লগইন তথ্য থাকবে না।',
@@ -307,7 +323,8 @@ const messages = {
     'নেটিভ API (প্রস্তাবিত)',
     'QNML ট্যাগ (Qwen / 2API)',
     'ট্যাগযুক্ত JSON (web2api)',
-    'টেক্সটে ট্যাগ দিয়ে টুল কল পাঠানো গেটওয়ের জন্য। অনুমতি যাচাই হয় এবং টুল স্ট্রিম বাফার হয়; সাধারণ চ্যাট স্বাভাবিকভাবে স্ট্রিম হয়।',
+    'টেক্সটে ট্যাগ দিয়ে টুল কল পাঠানো গেটওয়ের জন্য। অনুমতি যাচাই হয় এবং টুল স্ট্রিম বাফার হয়; সাধারণ চ্যাট স্বাভাবিকভাবে স্ট্রিম হয়।',,
+    'API কী-এর জন্য HTTPS বা স্থানীয় লুপব্যাক HTTP দরকার; অনিরাপদ দূরবর্তী HTTP অনুমোদিত নয়।'
   ],
 } satisfies Record<Locale, readonly string[]>;
 

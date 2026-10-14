@@ -154,3 +154,19 @@ async fn candidate_keys_must_not_be_forwarded_over_plaintext_remote_http() {
     .await;
     assert!(result.unwrap_err().contains("HTTPS or loopback"));
 }
+
+#[tokio::test]
+async fn existing_keys_are_never_forwarded_to_remote_plaintext_catalogs() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    let mut config = crate::config::Config::default();
+    config.cloud_providers.push(CloudProviderCreds {
+        slug: "unsafe-catalog".into(),
+        endpoint: "http://example.com/v1".into(),
+        auth_style: AuthStyle::Bearer,
+        ..Default::default()
+    });
+    let error = list_configured_models_from_config("unsafe-catalog", &config)
+        .await
+        .unwrap_err();
+    assert!(error.contains("HTTPS or loopback"), "{error}");
+}

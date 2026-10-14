@@ -135,6 +135,21 @@ async fn list_configured_models_inner(
         .or_else(|| synthesize_managed_entry(&provider_id))
         .ok_or_else(|| format!("no cloud provider with id or slug '{}' found", provider_id))?;
 
+    // Ordinary saved BYOK keys need the same safety boundary as one-shot
+    // candidate keys. Reject unsafe destinations before loading any credential
+    // or constructing an authenticated request.
+    if matches!(
+        entry.auth_style,
+        crate::config::schema::cloud_providers::AuthStyle::Bearer
+            | crate::config::schema::cloud_providers::AuthStyle::Anthropic
+    ) && !crate::inference::provider::factory::credentialed_endpoint_is_safe(&entry.endpoint)
+    {
+        return Err(
+            "Credentialed provider endpoints require HTTPS or loopback HTTP without URL credentials"
+                .into(),
+        );
+    }
+
     // Candidate credentials are never persisted or mixed with existing account
     // keys. Only explicitly configured BYOK providers can be tested. Reject
     // plaintext remote endpoints and credential-bearing URLs before any I/O.
