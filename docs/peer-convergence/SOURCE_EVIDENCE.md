@@ -31,8 +31,10 @@ Derived graphs and evidence are different from Canny verification receipts, Open
 
 ## Verified-output and partial-catalog safety
 
-A page's graph must not claim unique resolution from an incomplete catalog: after directory/file/byte/output budget truncation, edges are marked `catalog_incomplete`, candidate targets are omitted, and reverse impact is withheld with `impact_omitted_reason=incomplete_catalog`. A syntactically matched import can still be a false dependency; all graph results are explicitly `syntactic_only`.
+A page's graph must not claim unique resolution from an incomplete catalog: after directory/file/byte/output budget truncation, edges are marked `catalog_incomplete`, confirmed `to` targets are omitted, and reverse impact is withheld with `impact_omitted_reason=incomplete_catalog`. When a target was actually observed within the partial catalog, it is exposed only as `observed_candidate` for follow-up verification, never as a confirmed dependency. A syntactically matched import can still be a false dependency; all graph results are explicitly `syntactic_only`.
 
 Scan results trim matched excerpts before exceeding the tool-output limit, preserving valid JSON and marking `complete=false` with `truncated_reason=max_response_bytes`. Hashes and result generation describe the observed bytes, **not** an atomic snapshot or completeness of excluded files. Explicitly addressed symbolic links are refused just as linked files discovered while walking are skipped.
 
 The proof strength is restricted to focused regression cases until Rust unit tests and platform integration tests execute on the latest exact PR head. Do not represent a passing peer-suite baseline or successful TypeScript check as proof that this Rust feature compiles.
+
+Graph results also include `scope_path` and `scope_is_workspace`. Even a scan that finishes its specified subdirectory is not evidence that imports outside that directory were absent from the whole repository. Graph impact remains explicitly non-exhaustive.
