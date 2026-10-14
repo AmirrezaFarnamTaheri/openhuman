@@ -72,6 +72,7 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
             endpoint: format!("{base}/v1"),
             auth_style: CloudAuthStyle::Bearer,
             default_model: Some("demo-chat".to_string()),
+        ..Default::default()
         },
         CloudProviderCreds {
             id: "openrouter-id".to_string(),
@@ -80,6 +81,7 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
             endpoint: format!("{base}/openrouter"),
             auth_style: CloudAuthStyle::Bearer,
             default_model: None,
+        ..Default::default()
         },
         CloudProviderCreds {
             id: "missing-id".to_string(),
@@ -88,6 +90,7 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
             endpoint: format!("{base}/missing"),
             auth_style: CloudAuthStyle::None,
             default_model: None,
+        ..Default::default()
         },
         CloudProviderCreds {
             id: "html-id".to_string(),
@@ -96,6 +99,7 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
             endpoint: format!("{base}/html"),
             auth_style: CloudAuthStyle::None,
             default_model: None,
+        ..Default::default()
         },
         CloudProviderCreds {
             id: "wrong-data-id".to_string(),
@@ -104,6 +108,7 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
             endpoint: format!("{base}/wrong-data"),
             auth_style: CloudAuthStyle::None,
             default_model: None,
+        ..Default::default()
         },
         CloudProviderCreds {
             id: "error-payload-id".to_string(),
@@ -112,6 +117,7 @@ async fn provider_factory_and_model_listing_cover_cloud_local_and_invalid_shapes
             endpoint: format!("{base}/error-payload"),
             auth_style: CloudAuthStyle::None,
             default_model: None,
+        ..Default::default()
         },
     ];
     config.chat_provider = Some("custom:demo-chat@0.4".to_string());

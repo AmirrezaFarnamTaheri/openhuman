@@ -4,7 +4,7 @@
 //! maintained in Rust, where requests actually execute. This module never
 //! exposes or logs secrets. Pool identity includes the local workspace.
 use std::collections::{HashMap, HashSet};
-use std::hash::{BuildHasher, Hash, Hasher, RandomState};
+use std::hash::{BuildHasher, RandomState};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -78,9 +78,7 @@ fn registry() -> &'static Mutex<HashMap<String, Pool>> {
 /// retain only the keys they need to authenticate.
 fn secret_id(value: &str) -> u64 {
     static SALT: OnceLock<RandomState> = OnceLock::new();
-    let mut hasher = SALT.get_or_init(RandomState::new).build_hasher();
-    value.hash(&mut hasher);
-    hasher.finish()
+    SALT.get_or_init(RandomState::new).hash_one(value)
 }
 
 /// Read a secret group from comma, semicolon, or newline-separated credentials.

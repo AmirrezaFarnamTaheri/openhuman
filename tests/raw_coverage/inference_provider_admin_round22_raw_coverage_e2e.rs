@@ -478,6 +478,7 @@ fn provider_entry(
         endpoint: endpoint.to_string(),
         auth_style,
         default_model: default_model.map(ToString::to_string),
+    ..Default::default()
     }
 }
 

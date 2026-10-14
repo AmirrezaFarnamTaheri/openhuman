@@ -291,11 +291,17 @@ impl Default for CloudProviderCreds {
 
 /// Normalize settings provided over either model-settings RPC surface.
 /// Reject embedded URL credentials, unsupported schemes and duplicate trimmed ids.
+type NormalizedFleetConfig = (
+    Option<String>,
+    std::collections::HashMap<String, String>,
+    Option<String>,
+);
+
 pub fn normalize_fleet_config(
     image_endpoint: Option<String>,
     model_image_endpoints: std::collections::HashMap<String, String>,
     rotation_strategy: Option<String>,
-) -> Result<(Option<String>, std::collections::HashMap<String, String>, Option<String>), String> {
+) -> Result<NormalizedFleetConfig, String> {
     fn image_url(raw: &str) -> Result<String, String> {
         let value = raw.trim();
         let url = reqwest::Url::parse(value)

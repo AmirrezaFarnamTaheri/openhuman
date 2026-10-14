@@ -141,6 +141,7 @@ async fn provider_model_listing_covers_local_synthesis_and_openrouter_failures()
             endpoint: format!("{base}/openrouter-error"),
             auth_style: CloudAuthStyle::Bearer,
             default_model: None,
+        ..Default::default()
         },
         CloudProviderCreds {
             id: "array-id".to_string(),
@@ -149,6 +150,7 @@ async fn provider_model_listing_covers_local_synthesis_and_openrouter_failures()
             endpoint: format!("{base}/array-body"),
             auth_style: CloudAuthStyle::None,
             default_model: None,
+        ..Default::default()
         },
         CloudProviderCreds {
             id: "status-id".to_string(),
@@ -157,6 +159,7 @@ async fn provider_model_listing_covers_local_synthesis_and_openrouter_failures()
             endpoint: format!("{base}/status-body"),
             auth_style: CloudAuthStyle::None,
             default_model: None,
+        ..Default::default()
         },
     ];
     config.save().await.expect("save config");

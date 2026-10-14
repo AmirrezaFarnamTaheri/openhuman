@@ -77,6 +77,7 @@ async fn http_models_and_chat_use_mocked_ollama_without_real_runtime() {
         endpoint: format!("{base}/cloud"),
         auth_style: CloudAuthStyle::None,
         default_model: Some("cloud-default@0.5".to_string()),
+    ..Default::default()
     }];
     config.save().await.expect("save config");
 
