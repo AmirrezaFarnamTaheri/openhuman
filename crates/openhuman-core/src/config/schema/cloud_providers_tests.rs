@@ -394,7 +394,7 @@ fn verified_peer_compatible_presets_have_expected_bearer_routes() {
         ("ovhcloud", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"),
         ("nebius", "https://api.tokenfactory.nebius.com/v1"),
         ("llm7", "https://api.llm7.io/v1"),
-        ("glhf", "https://glhf.chat/api/openai/v1"),
+        ("synthetic", "https://api.synthetic.new/openai/v1"),
     ] {
         let preset = super::builtin_cloud_provider(slug).expect("verified peer preset");
         assert_eq!(preset.endpoint, endpoint, "{slug} endpoint");
