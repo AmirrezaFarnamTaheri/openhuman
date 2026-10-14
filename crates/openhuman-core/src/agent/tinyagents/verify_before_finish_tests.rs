@@ -305,3 +305,37 @@ async fn an_unlinked_wrap_up_does_not_silence_the_check() {
         "without the shared Arc the check cannot see the notice"
     );
 }
+
+
+/// Peer convergence: a one-round code edit or single child handoff still needs
+/// a final independent requirement/verification pass; five-round threshold
+/// alone misses short but consequential coding missions.
+#[test]
+fn single_round_mutations_and_delegations_require_finish_verification() {
+    for tool in [
+        "file_write",
+        "edit_file",
+        "apply_patch",
+        "delegate_coding",
+        "delegate_reviewer",
+        "spawn_subagent",
+        "spawn_parallel_agents",
+        "run_workflow",
+    ] {
+        assert!(
+            should_check(&activity(1, &[tool])),
+            "a consequential one-round {tool} call must be verified"
+        );
+    }
+    for tool in ["file_read", "grep", "glob", "current_time"] {
+        assert!(!should_check(&activity(1, &[tool])), "read-only {tool} should not force a costly extra check");
+    }
+}
+
+#[test]
+fn finish_check_requires_verification_after_latest_write_or_commit() {
+    let check = check_message();
+    assert!(check.contains("after the last write"));
+    assert!(check.contains("latest exact commit"));
+    assert!(check.contains("stale"));
+}
