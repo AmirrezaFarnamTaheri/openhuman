@@ -355,3 +355,15 @@ fn llmtr_preset_uses_provider_native_bearer_endpoint() {
     assert_eq!(preset.endpoint, "https://llmtr.com/v1");
     assert_eq!(preset.auth_style, AuthStyle::Bearer);
 }
+
+#[test]
+fn prodex_gateway_is_a_builtin_responses_capable_bearer_provider() {
+    let rows: Vec<_> = BUILTIN_CLOUD_PROVIDERS.iter().filter(|provider| provider.slug == "prodex").collect();
+    assert_eq!(rows.len(), 1, "one canonical Prodex entry");
+    let preset = rows[0];
+    assert_eq!(preset.label, "Prodex Gateway");
+    assert_eq!(preset.endpoint, "http://127.0.0.1:4000/v1");
+    assert_eq!(preset.auth_style, AuthStyle::Bearer);
+    assert!(builtin_cloud_supports_responses_api("prodex"), "gateway provides /v1/responses");
+    assert!(!endpoint_host_is_chat_completions_only(preset.endpoint), "must not treat gateway as chat-only");
+}
