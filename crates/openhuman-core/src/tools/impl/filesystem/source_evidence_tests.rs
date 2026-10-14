@@ -168,3 +168,54 @@ async fn verify_requires_a_full_digest_and_bounded_line_range() {
         "start_line": 80, "end_line": 20
     })).await.is_err());
 }
+
+
+#[tokio::test]
+async fn graph_operation_reuses_scoped_read_policy_and_records_source_hashes() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("src")).unwrap();
+    std::fs::write(project.path().join("src/main.ts"), "import './helper';\n").unwrap();
+    std::fs::write(project.path().join("src/helper.ts"), "export const ok = true;\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let graph = run(&tool, json!({"operation":"graph","path":"src","focus_path":"src/helper.ts"})).await;
+    assert_eq!(graph["operation"], "graph");
+    assert_eq!(graph["scan_complete"], true);
+    assert_eq!(graph["edges"][0]["status"], "resolved");
+    assert_eq!(graph["edges"][0]["to"], "src/helper.ts");
+    assert_eq!(graph["impact"], json!(["src/main.ts"]));
+    assert_eq!(graph["impact_exhaustive"], false);
+    assert_eq!(graph["semantic_graph"], false);
+}
+
+#[tokio::test]
+async fn graph_never_indexes_credential_files_or_linked_external_source() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("main.ts"), "import './linked';\n").unwrap();
+    std::fs::write(project.path().join(".env"), "TOP_SECRET=forbidden").unwrap();
+    std::fs::write(outside.path().join("linked.ts"), "export const secret = 123;\n").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(outside.path().join("linked.ts"), project.path().join("linked.ts")).unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let graph = run(&tool, json!({"operation":"graph"})).await;
+    assert_eq!(graph["edges"][0]["status"], "unresolved");
+    assert!(!graph.to_string().contains("forbidden"));
+    assert!(!graph.to_string().contains("linked.ts"));
+}
+
+#[tokio::test]
+async fn graph_inherits_scan_limits_and_does_not_claim_complete_impact() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    for index in 0..5 {
+        std::fs::write(project.path().join(format!("{index}.ts")), "export const value = 1;\n").unwrap();
+    }
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let graph = run(&tool, json!({"operation":"graph","max_files":2})).await;
+    assert_eq!(graph["scan_complete"], false);
+    assert_eq!(graph["edges_complete"], false);
+    assert_eq!(graph["nodes"].as_array().unwrap().len(), 2);
+    assert_eq!(graph["impact_exhaustive"], false);
+}
