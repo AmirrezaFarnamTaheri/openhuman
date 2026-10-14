@@ -79,6 +79,7 @@ fn creds_with_fields_round_trips() {
         tts_api_style: TtsApiStyle::OpenaiAudio,
         default_stt_model: Some("nova-2".into()),
         default_tts_voice: None,
+        default_tts_model: None,
     };
     let json = serde_json::to_string(&creds).unwrap();
     let back: VoiceProviderCreds = serde_json::from_str(&json).unwrap();
