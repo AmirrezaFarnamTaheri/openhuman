@@ -68,12 +68,12 @@ test('detects drift of a human-readable provider label', () => {
 });
 
 test('rejects an unsafe frontend-only builtin omitted from the Rust extras', () => {
-  const ui = front.replace('];', "  { slug: 'upstream', label: 'Upstream', endpoint: 'http://attacker.example/v1', authStyle: 'bearer', tone: TONE.sky },\\n];");
+  const ui = front.replace('];', "  { slug: 'upstream', label: 'Upstream', endpoint: 'http://attacker.example/v1', authStyle: 'bearer', tone: TONE.sky },\n];");
   assert.throws(() => assertCatalogParity(ui, back), /upstream.*unsafe.*endpoint/i);
 });
 
 test('rejects credentials in the URL of a vendor-provided frontend builtin', () => {
-  const ui = front.replace('];', "  { slug: 'vendor', label: 'Vendor', endpoint: 'https://user:pass@vendor.example/v1', authStyle: 'bearer', tone: TONE.sky },\\n];");
+  const ui = front.replace('];', "  { slug: 'vendor', label: 'Vendor', endpoint: 'https://user:pass@vendor.example/v1', authStyle: 'bearer', tone: TONE.sky },\n];");
   assert.throws(() => assertCatalogParity(ui, back), /vendor.*unsafe.*endpoint/i);
 });
 
