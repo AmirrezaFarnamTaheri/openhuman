@@ -213,9 +213,11 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
       setNotice(t('voice.providers.saved'));
       // Force a reload so the rest of the panel reflects the new state.
       await loadData(true);
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : t('voice.providers.failedToSave');
       setError(message);
+      return false;
     } finally {
       setIsSavingProviders(false);
     }
@@ -241,7 +243,9 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
     setIsSavingRouting(true);
     setError(null);
     try {
-      await persistProviders({ stt_provider: sttProvider, tts_provider: ttsProvider });
+      if (!(await persistProviders({ stt_provider: sttProvider, tts_provider: ttsProvider }))) {
+        return;
+      }
       setSavedSttProvider(sttProvider);
       setSavedTtsProvider(ttsProvider);
       setNotice(t('voice.providers.saved'));
