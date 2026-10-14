@@ -190,6 +190,10 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
         }
         graph["edges_complete"] = json!(false);
         graph["edge_truncated_reason"] = json!("max_graph_result_bytes");
+        // Do not leave dependency impact claims that rely on relationships
+        // deliberately omitted from the bounded response.
+        graph["impact"] = json!([]);
+        graph["impact_omitted_reason"] = json!("bounded_edges");
     }
     graph
 }
