@@ -48,6 +48,8 @@ const log = debug('flows:run-item-data-browser');
 
 /** Cap a single table cell's rendered text so one huge value can't blow out the row. */
 const MAX_CELL_CHARS = 200;
+/** Keep huge tool results out of the DOM until the user asks for more rows. */
+const TABLE_PAGE_SIZE = 100;
 
 type ViewMode = 'table' | 'json';
 
@@ -96,6 +98,7 @@ interface Props {
 export function RunItemDataBrowser({ items, inputItems, testIdPrefix }: Props) {
   const { t } = useT();
   const [view, setView] = useState<ViewMode>('table');
+  const [visibleCount, setVisibleCount] = useState(TABLE_PAGE_SIZE);
   // Which output row currently has its paired source input revealed (single-open).
   const [revealedSource, setRevealedSource] = useState<number | null>(null);
 
@@ -109,7 +112,13 @@ export function RunItemDataBrowser({ items, inputItems, testIdPrefix }: Props) {
     [items, inputItems]
   );
 
-  const jsonText = useMemo(() => formatJson(items.map(item => item.json)), [items]);
+  // Large JSON can be megabytes. Do not stringify it while the user is
+  // reading the table; formatting is performed only on explicit JSON view.
+  const jsonText = useMemo(
+    () => (view === 'json' ? formatJson(items.map(item => item.json)) : ''),
+    [view, items]
+  );
+  const visibleItems = items.slice(0, visibleCount);
 
   const totalColSpan = 1 + (useColumns ? columns.length : 1) + (showActions ? 1 : 0);
 
@@ -194,7 +203,7 @@ export function RunItemDataBrowser({ items, inputItems, testIdPrefix }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item, index) => {
+              {visibleItems.map((item, index) => {
                 const canPair = item.pairedIndex !== null && inputItems !== undefined;
                 const sourceItem =
                   canPair && item.pairedIndex !== null ? inputItems?.[item.pairedIndex] : undefined;
@@ -221,6 +230,15 @@ export function RunItemDataBrowser({ items, inputItems, testIdPrefix }: Props) {
             </TableBody>
           </Table>
         </div>
+      )}
+      {view === 'table' && visibleCount < items.length && (
+        <button
+          type="button"
+          className="mt-2 rounded-md border border-line px-2 py-1 text-xs text-content-secondary hover:bg-surface-muted"
+          data-testid={`${testIdPrefix}-load-more`}
+          onClick={() => setVisibleCount(count => Math.min(items.length, count + TABLE_PAGE_SIZE))}>
+          {t('common.showMore')}
+        </button>
       )}
     </div>
   );
