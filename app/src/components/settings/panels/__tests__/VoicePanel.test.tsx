@@ -186,6 +186,40 @@ describe('VoicePanel', () => {
 
   // ─── Voice Routing Section ──────────────────────────────────────────────
 
+  it('configures a keyless local Kokoro TTS provider without storing an API token', async () => {
+    renderWithProviders(<VoicePanel />, { initialEntries: ['/settings/voice'] });
+
+    const chip = await screen.findByTestId('voice-provider-chip-kokoro');
+    fireEvent.click(chip);
+    const url = await screen.findByTestId('kokoro-endpoint-url');
+    fireEvent.change(url, { target: { value: 'http://127.0.0.1:8890/v1' } });
+    fireEvent.change(screen.getByTestId('kokoro-model-id'), {
+      target: { value: 'kokoro-v1' },
+    });
+    fireEvent.change(screen.getByTestId('kokoro-voice-id'), {
+      target: { value: 'af_heart' },
+    });
+    fireEvent.click(screen.getByTestId('kokoro-save-and-enable'));
+
+    await waitFor(() => expect(saveVoiceSettings).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        voiceProviders: expect.arrayContaining([
+          expect.objectContaining({
+            slug: 'kokoro',
+            endpoint: 'http://127.0.0.1:8890/v1',
+            auth_style: 'none',
+            capability: 'tts',
+            default_tts_model: 'kokoro-v1',
+            default_tts_voice: 'af_heart',
+            has_api_key: false,
+          }),
+        ]),
+      })
+    ));
+    expect(setVoiceProviderKey).not.toHaveBeenCalled();
+  });
+
   it('renders the STT and TTS provider dropdowns defaulting to cloud', async () => {
     renderWithProviders(<VoicePanel />, { initialEntries: ['/settings/voice'] });
 
