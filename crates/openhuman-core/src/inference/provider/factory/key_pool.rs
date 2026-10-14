@@ -155,6 +155,32 @@ pub fn choose_key_for_run(
     strategy: RotationStrategy,
     run_id: Option<&str>,
 ) -> Option<(usize, String)> {
+    choose_key_for_run_impl(scope, configured, excluded, strategy, run_id, false)
+}
+
+/// Choose and reserve an active lease in one lock acquisition.
+///
+/// Model Fleet callers must use this instead of a separate `choose_key` and
+/// `acquire`: with least_busy, concurrent requests would otherwise all observe
+/// zero active requests and stampede onto the same credential.
+pub fn choose_key_and_acquire_for_run(
+    scope: &str,
+    configured: &[String],
+    excluded: &[usize],
+    strategy: RotationStrategy,
+    run_id: Option<&str>,
+) -> Option<(usize, String)> {
+    choose_key_for_run_impl(scope, configured, excluded, strategy, run_id, true)
+}
+
+fn choose_key_for_run_impl(
+    scope: &str,
+    configured: &[String],
+    excluded: &[usize],
+    strategy: RotationStrategy,
+    run_id: Option<&str>,
+    reserve_lease: bool,
+) -> Option<(usize, String)> {
     let mut pools = registry()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -218,6 +244,11 @@ pub fn choose_key_for_run(
     };
     pool.next = (selected + 1) % pool.keys.len();
     pool.keys[selected].last_used = Some(now);
+    if reserve_lease {
+        // Do this before unlocking so the next least-busy selection observes
+        // the in-flight reservation; Lease::from_reserved owns its release.
+        pool.keys[selected].active += 1;
+    }
     if let Some(run) = run_id.filter(|id| !id.is_empty()) {
         // A bounded cache prevents unbounded correlation IDs in long-lived apps.
         if pool.sticky.len() >= 512 && !pool.sticky.contains_key(run) {
