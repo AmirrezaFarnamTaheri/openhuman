@@ -26,7 +26,7 @@ describe('model-fleet preset management', () => {
 
   it('preserves an occupied key when additional keys are pasted at a cursor', () => {
     const rows = ['original-key', 'other-key'];
-    expect(insertFleetKeysAtSelection(rows, 0, 'pasted-1\\npasted-2', 4, 4)).toEqual([
+    expect(insertFleetKeysAtSelection(rows, 0, 'pasted-1\npasted-2', 4, 4)).toEqual([
       'original-key', 'pasted-1', 'pasted-2', 'other-key',
     ]);
     expect(rows).toEqual(['original-key', 'other-key']);
@@ -41,7 +41,7 @@ describe('model-fleet preset management', () => {
 
   it('never silently truncates credential batches over the row limit', () => {
     const full = Array.from({ length: 128 }, (_, i) => 'key-' + i);
-    expect(() => insertFleetKeysAtSelection(full, 0, 'additional-a\\nadditional-b', 0, 0))
+    expect(() => insertFleetKeysAtSelection(full, 0, 'additional-a\nadditional-b', 0, 0))
       .toThrow(/128/);
     expect(full).toHaveLength(128);
   });
