@@ -30,6 +30,7 @@ const DEFAULT_DEADLINE: Duration = Duration::from_secs(3);
 /// forward entire conversations, tool results, or internal agent transcripts.
 const MAX_DECISION_RECENT_TURNS: usize = 6;
 const MAX_DECISION_TURN_CHARS: usize = 500;
+const MAX_DECISION_INTENT_CHARS: usize = 4_000;
 
 /// Evaluates `tinytools_jev` requests against Jev through `tinyjevclient`.
 #[derive(Debug, Clone)]
@@ -54,7 +55,21 @@ impl TinyJevEvaluator {
     }
 
     fn build(request: &JevRequest) -> EvaluationRequest {
-        let mut state = json!({ "request": request.intent });
+        // Preserve both the original goal and the latest specified conditions
+        // when a tool-search intent is abnormally long. The marker is explicit
+        // to the decision model; this is a size guard, not semantic summarization.
+        let intent_truncated = request.intent.chars().count() > MAX_DECISION_INTENT_CHARS;
+        let intent = if intent_truncated {
+            let head: String = request.intent.chars()
+                .take(MAX_DECISION_INTENT_CHARS / 2).collect();
+            let tail: String = request.intent.chars().rev()
+                .take(MAX_DECISION_INTENT_CHARS / 2)
+                .collect::<Vec<_>>().into_iter().rev().collect();
+            format!("{head}\n[... middle of request omitted due to context budget ...]\n{tail}")
+        } else {
+            request.intent.clone()
+        };
+        let mut state = json!({ "request": intent });
         // Jev receives only task intent and bounded user-turn context, never
         // the raw system prompt, history, tool results or credentials. Choosing
         // the latest turns matches how tool choice should use recent intent.
@@ -63,7 +78,7 @@ impl TinyJevEvaluator {
             .collect();
         let offset = candidates.len().saturating_sub(MAX_DECISION_RECENT_TURNS);
         let selected = &candidates[offset..];
-        let mut truncated = offset != 0;
+        let mut truncated = offset != 0 || intent_truncated;
         let recent: Vec<Value> = selected.iter().map(|turn| {
             if turn.chars().count() > MAX_DECISION_TURN_CHARS {
                 truncated = true;
@@ -76,7 +91,12 @@ impl TinyJevEvaluator {
             }
             if truncated {
                 object.insert("context_truncated".to_owned(), Value::Bool(true));
-                object.insert("recent_turns_dropped".to_owned(), json!(offset));
+                if offset > 0 {
+                    object.insert("recent_turns_dropped".to_owned(), json!(offset));
+                }
+                if intent_truncated {
+                    object.insert("request_truncated".to_owned(), Value::Bool(true));
+                }
             }
         }
         let criteria: BTreeMap<String, Option<Value>> = request
