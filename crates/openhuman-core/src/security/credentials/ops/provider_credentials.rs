@@ -89,6 +89,34 @@ pub async fn remove_provider_credentials(
     ))
 }
 
+/// Switch a named provider account without copying or exposing its token.
+/// This is also the explicit Codex OAuth account-selection RPC.
+pub async fn activate_provider_credentials(
+    config: &Config,
+    provider: &str,
+    profile: &str,
+) -> Result<Outcome<super::super::responses::AuthProfileSummary>, String> {
+    let provider = normalize_provider(provider).map_err(|_| "Invalid provider".to_string())?;
+    if provider == APP_SESSION_PROVIDER {
+        return Err("App session credentials cannot be selected as a provider account".into());
+    }
+    if profile.trim().is_empty() {
+        return Err("Profile name is required".into());
+    }
+    let auth = AuthService::from_config(config);
+    let selected = auth
+        .set_active_profile(&provider, profile)
+        .map_err(|_| "Requested provider account was not found".to_string())?;
+    let stored = auth.get_profile(&provider, Some(&selected))
+        .map_err(|_| "Could not load selected provider account".to_string())?
+        .ok_or_else(|| "Selected provider account was not found".to_string())?;
+    clear_provider_auth_error(&provider);
+    Ok(Outcome::single_log(
+        summarize_auth_profile(&stored),
+        "active provider account changed",
+    ))
+}
+
 pub async fn list_provider_credentials(
     config: &Config,
     provider_filter: Option<String>,

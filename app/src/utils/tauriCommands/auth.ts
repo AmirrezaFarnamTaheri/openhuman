@@ -116,3 +116,14 @@ export async function authListProviderCredentials(
     params: provider ? { provider } : {},
   });
 }
+
+/** Change the active named account without moving or exposing secret material. */
+export async function authActivateProviderCredentials(args: {
+  provider: string;
+  profile: string;
+}): Promise<CommandResponse<AuthProfileSummary>> {
+  return await callCoreRpc<CommandResponse<AuthProfileSummary>>({
+    method: 'openhuman.auth_activate_provider_credentials',
+    params: args,
+  });
+}
