@@ -41,6 +41,34 @@ struct RetryDecision {
     failure: KeyFailure,
     after_ms: Option<u64>,
 }
+/// A 403 is ambiguous: providers also return it for unsupported models,
+/// denied tools and malformed requests. Never evict a credential based on
+/// loose substring matches (e.g. `invalid_model`, `unauthorized_model`).
+/// Only documented credential-scoped code families permit another key.
+fn forbidden_key_failure(code: &str) -> Option<KeyFailure> {
+    match code.trim().to_ascii_lowercase().as_str() {
+        "invalid_api_key"
+        | "invalid_api_key_error"
+        | "api_key_invalid"
+        | "invalid_token"
+        | "invalid_credentials"
+        | "authentication_error"
+        | "unauthorized"
+        | "unauthorized_client"
+        | "revoked"
+        | "key_revoked"
+        | "api_key_revoked"
+        | "token_revoked" => Some(KeyFailure::Authentication),
+        "quota_exhausted"
+        | "quota_exceeded"
+        | "insufficient_quota"
+        | "resource_exhausted"
+        | "rate_limit_exceeded"
+        | "rate_limit_error"
+        | "rate_limited" => Some(KeyFailure::RateLimited),
+        _ => None,
+    }
+}
 fn classify(
     status: Option<u16>,
     code: Option<&str>,
@@ -49,22 +77,7 @@ fn classify(
     let failure = match status {
         Some(401) => KeyFailure::Authentication,
         Some(429) => KeyFailure::RateLimited,
-        Some(403)
-            if code.is_some_and(|c| {
-                let c = c.to_ascii_lowercase();
-                c.contains("invalid") || c.contains("unauthorized") || c.contains("revoked")
-            }) =>
-        {
-            KeyFailure::Authentication
-        }
-        Some(403)
-            if code.is_some_and(|c| {
-                let c = c.to_ascii_lowercase();
-                c.contains("quota") || c.contains("rate_limit") || c.contains("resource_exhausted")
-            }) =>
-        {
-            KeyFailure::RateLimited
-        }
+        Some(403) => forbidden_key_failure(code?)?,
         _ => return None,
     };
     Some(RetryDecision {
