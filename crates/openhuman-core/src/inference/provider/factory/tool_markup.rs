@@ -19,7 +19,9 @@ use crate::config::schema::cloud_providers::ToolCallCodec;
 
 #[path = "tool_tagged_json.rs"]
 mod tagged_json;
-use tagged_json::{parse_tagged_json_output, rewrite_tagged_json_response};
+#[cfg(test)]
+use tagged_json::parse_tagged_json_output;
+use tagged_json::rewrite_tagged_json_response;
 
 const OPEN_CALLS: &str = "<|QNML|tool_calls>";
 const CLOSE_CALLS: &str = "</|QNML|tool_calls>";
