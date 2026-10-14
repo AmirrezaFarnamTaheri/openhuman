@@ -177,6 +177,25 @@ export function validModelFleetEndpoint(value: string): boolean {
   }
 }
 
+/** A model-specific image route receives the same provider key as text
+ * inference. Never send it over remote HTTP. Match Rust's loopback exemption,
+ * but do not change legacy primary-provider endpoint validation here.
+ */
+export function validModelFleetImageEndpoint(value: string): boolean {
+  if (!validModelFleetEndpoint(value)) return false;
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  const url = new URL(trimmed);
+  if (url.protocol === 'https:') return true;
+  if (url.protocol !== 'http:') return false;
+  const host = url.hostname.toLowerCase();
+  return (
+    host === 'localhost' ||
+    host === '[::1]' ||
+    /^127(?:\.\d{1,3}){3}$/.test(host)
+  );
+}
+
 /** A blank image-URL input means 'do not edit' unless Clear was clicked;
  * applying a strategy must not silently clear the existing endpoint.
  */
@@ -213,8 +232,8 @@ export function parseModelImageEndpoints(input: string): Record<string, string> 
     if (!id || id.length > 200 || /\p{Cc}/u.test(id)) {
       throw new Error('Image model ids must be nonempty and at most 200 characters.');
     }
-    if (!url || !validModelFleetEndpoint(url)) {
-      throw new Error('Each model image endpoint must be an http(s) base URL.');
+    if (!url || !validModelFleetImageEndpoint(url)) {
+      throw new Error('Image endpoints require HTTPS or loopback HTTP, without URL credentials.');
     }
     if (Object.prototype.hasOwnProperty.call(endpoints, id)) {
       throw new Error('Duplicate image model mapping: ' + id);
