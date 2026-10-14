@@ -103,6 +103,8 @@ fn only_explicit_known_responses_providers_advertise_the_endpoint() {
     assert!(builtin_cloud_supports_responses_api("openai"));
     assert!(builtin_cloud_supports_responses_api("prodex"));
     assert!(builtin_cloud_supports_responses_api("nebius"));
+    assert!(builtin_cloud_supports_responses_api("openrouter"));
+    assert!(builtin_cloud_supports_responses_api("xai"));
     for slug in ["deepseek", "groq", "mistral", "fireworks", "together"] {
         assert!(
             !builtin_cloud_supports_responses_api(slug),
@@ -115,11 +117,11 @@ fn only_explicit_known_responses_providers_advertise_the_endpoint() {
 /// preset list so adding a new built-in that wrongly claims the Responses
 /// API — or renaming a known capable provider — fails CI rather than silently
 /// re-enabling the guaranteed-404 `/responses` fallback. OpenAI, Prodex,
-/// and Nebius serve `/v1/responses`; the remainder is chat-only unless verified.
+/// Nebius, OpenRouter and xAI serve `/v1/responses`; the remainder is chat-only unless verified.
 #[test]
 fn responses_api_capability_is_coupled_to_the_preset_list() {
     for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
-        let expected = matches!(provider.slug, "openai" | "prodex" | "nebius");
+        let expected = matches!(provider.slug, "openai" | "prodex" | "nebius" | "openrouter" | "xai");
         assert_eq!(
             builtin_cloud_supports_responses_api(provider.slug),
             expected,
