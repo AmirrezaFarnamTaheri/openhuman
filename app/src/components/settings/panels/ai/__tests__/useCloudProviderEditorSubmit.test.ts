@@ -29,191 +29,63 @@ beforeEach(() => {
 });
 
 describe('useCloudProviderEditorSubmit', () => {
-  it('persists QNML compatibility through the native verified provider editor', async () => {
-    api.flushCloudProviders.mockResolvedValue(undefined);
+  it('persists codec and model transports without an eager flush', async () => {
     const persist = vi.fn().mockResolvedValue(undefined);
-    const onDone = vi.fn();
-    const { result } = renderHook(() =>
-      useCloudProviderEditorSubmit({
-        editing: 'new',
-        draft: EMPTY_SETTINGS,
-        saved: EMPTY_SETTINGS,
-        persist,
-        t: key => key,
-        onDone,
-      })
-    );
-
-    await act(async () => {
-      await result.current(
-        {
-          id: '',
-          slug: 'qwen-2api-local',
-          label: 'Local Qwen gateway',
-          endpoint: 'http://127.0.0.1:4000/v1',
-          authStyle: 'bearer',
-          toolCallCodec: 'qnml',
-          maskedKey: '',
-        },
-        '',
-        { skipProbe: true }
-      );
-    });
-
-    expect(api.flushCloudProviders).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          slug: 'qwen-2api-local',
-          tool_call_codec: 'qnml',
-        }),
-      ])
-    );
-    expect(persist).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cloudProviders: [
-          expect.objectContaining({ slug: 'qwen-2api-local', toolCallCodec: 'qnml' }),
-        ],
-      })
-    );
-    expect(onDone).toHaveBeenCalledOnce();
-  });
-
-  it('retains per-model protocol selection in eager provider flush and saved configuration', async () => {
-    api.flushCloudProviders.mockResolvedValue(undefined);
-    const persist = vi.fn().mockResolvedValue(undefined);
+    const done = vi.fn();
     const { result } = renderHook(() => useCloudProviderEditorSubmit({
-      editing: 'new',
-      draft: EMPTY_SETTINGS,
-      saved: EMPTY_SETTINGS,
-      persist,
-      t: key => key,
-      onDone: vi.fn(),
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: key => key, onDone: done,
     }));
     await act(async () => {
       await result.current({
-        id: '',
-        slug: 'mixed',
-        label: 'Mixed protocol gateway',
-        endpoint: 'https://router.example/v1',
-        authStyle: 'bearer',
-        maskedKey: '',
-        modelTransports: { 'response-model': 'responses', 'chat-model': 'chat_completions' },
+        id: '', slug: 'qwen-local', label: 'Qwen gateway',
+        endpoint: 'http://127.0.0.1:4000/v1', authStyle: 'bearer',
+        maskedKey: '', toolCallCodec: 'qnml',
+        modelTransports: { 'response-model': 'responses' },
       }, '', { skipProbe: true });
     });
-    expect(api.flushCloudProviders).toHaveBeenCalledWith(expect.arrayContaining([
-      expect.objectContaining({
-        slug: 'mixed',
-        model_transports: { 'response-model': 'responses', 'chat-model': 'chat_completions' },
-      }),
-    ]));
+    expect(api.listProviderModels).not.toHaveBeenCalled();
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
     expect(persist).toHaveBeenCalledWith(expect.objectContaining({
       cloudProviders: [expect.objectContaining({
-        slug: 'mixed',
-        modelTransports: { 'response-model': 'responses', 'chat-model': 'chat_completions' },
+        toolCallCodec: 'qnml', modelTransports: { 'response-model': 'responses' },
       })],
     }));
+    expect(done).toHaveBeenCalledTimes(1);
   });
 
-  it('validates the provider CA before persisting a new key', async () => {
-    api.flushCloudProviders.mockRejectedValue(new Error('invalid CA bundle'));
-    const { result } = renderHook(() =>
-      useCloudProviderEditorSubmit({
-        editing: 'new',
-        draft: EMPTY_SETTINGS,
-        saved: EMPTY_SETTINGS,
-        persist: vi.fn(),
-        t: key => key,
-        onDone: vi.fn(),
-      })
-    );
-
-    await act(async () => {
-      await expect(
-        result.current(
-          {
-            id: '',
-            slug: 'private-provider',
-            label: 'Private provider',
-            endpoint: 'https://provider.example/v1',
-            authStyle: 'bearer',
-            maskedKey: '',
-            caCertPem: 'invalid PEM',
-          },
-          'new-secret'
-        )
-      ).rejects.toThrow('invalid CA bundle');
-    });
-
-    expect(api.flushCloudProviders).toHaveBeenCalledTimes(2);
-    expect(api.flushCloudProviders).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ slug: 'private-provider', ca_cert_pem: 'invalid PEM' }),
-      ])
-    );
-    expect(api.flushCloudProviders).toHaveBeenNthCalledWith(2, []);
-    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
-    expect(api.listProviderModels).not.toHaveBeenCalled();
-  });
-
-  it('restores the previous provider list when key storage fails', async () => {
-    api.flushCloudProviders.mockResolvedValue(undefined);
-    api.flushCloudProviders.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
-    api.setCloudProviderKey.mockRejectedValue(new Error('keyring locked'));
-    const previous = {
-      id: 'old-provider',
-      slug: 'private-provider',
-      label: 'Old provider',
-      endpoint: 'https://old.example/v1',
-      authStyle: 'bearer' as const,
-      maskedKey: '••••old',
-      caCertPem: 'old CA',
-    };
-    const saved = { ...EMPTY_SETTINGS, cloudProviders: [previous] };
-    const { result } = renderHook(() =>
-      useCloudProviderEditorSubmit({
-        editing: previous,
-        draft: saved,
-        saved,
-        persist: vi.fn(),
-        t: key => key,
-        onDone: vi.fn(),
-      })
-    );
-
-    await act(async () => {
-      await expect(
-        result.current(
-          { ...previous, endpoint: 'https://new.example/v1', caCertPem: 'new CA' },
-          'replacement-key'
-        )
-      ).rejects.toThrow('keyring locked');
-    });
-
-    expect(api.flushCloudProviders).toHaveBeenCalledTimes(2);
-    expect(api.flushCloudProviders).toHaveBeenNthCalledWith(
-      1,
-      expect.arrayContaining([
-        expect.objectContaining({ endpoint: 'https://new.example/v1', ca_cert_pem: 'new CA' }),
-      ])
-    );
-    expect(api.flushCloudProviders).toHaveBeenNthCalledWith(
-      2,
-      expect.arrayContaining([
-        expect.objectContaining({ endpoint: 'https://old.example/v1', ca_cert_pem: 'old CA' }),
-      ])
-    );
-    expect(api.listProviderModels).toHaveBeenCalledWith('private-provider', 'replacement-key');
-  });
-
-  it('does not delete the replacement credential on failed edit verification', async () => {
-    api.flushCloudProviders.mockResolvedValue(undefined);
-    api.listProviderModels.mockRejectedValue(new Error('provider /models temporarily unavailable'));
+  it('probes an edited endpoint without ever exposing the previous key to that endpoint', async () => {
+    const calls: string[] = [];
+    api.listProviderModels.mockImplementation(async () => { calls.push('preview'); return []; });
+    api.setCloudProviderKey.mockImplementation(async () => { calls.push('store'); });
     const existing = {
-      id: 'p_existing',
-      slug: 'existing',
-      label: 'Existing account',
-      endpoint: 'https://old.example/v1',
-      authStyle: 'bearer' as const,
+      id: 'p_existing', slug: 'existing', label: 'Existing',
+      endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
+      maskedKey: '••••stored',
+    };
+    const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
+    const persist = vi.fn().mockImplementation(async () => { calls.push('persist'); });
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: existing, draft: saved, saved, persist,
+      t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await result.current({ ...existing, endpoint: 'https://new.example/v1' }, 'replacement-key');
+    });
+    expect(calls).toEqual(['preview', 'persist', 'store']);
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
+    expect(api.listProviderModels).toHaveBeenCalledWith(
+      'existing', 'replacement-key',
+      expect.objectContaining({ slug: 'existing', endpoint: 'https://new.example/v1' })
+    );
+    expect(api.setCloudProviderKey).toHaveBeenCalledWith('existing', 'replacement-key');
+  });
+
+  it('keeps both stores untouched if preview verification rejects a new credential', async () => {
+    api.listProviderModels.mockRejectedValue(new Error('invalid credential'));
+    const existing = {
+      id: 'p_existing', slug: 'existing', label: 'Existing',
+      endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
       maskedKey: '••••stored',
     };
     const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
@@ -225,121 +97,106 @@ describe('useCloudProviderEditorSubmit', () => {
     await act(async () => {
       await expect(result.current(
         { ...existing, endpoint: 'https://new.example/v1' },
-        'new-replacement-key'
-      )).rejects.toThrow(/Could not reach/i);
+        'bad-key'
+      )).rejects.toThrow(/Could not reach/);
     });
-    expect(api.flushCloudProviders).toHaveBeenCalledTimes(2);
-    expect(api.listProviderModels).toHaveBeenCalledWith('existing', 'new-replacement-key');
+    expect(api.listProviderModels).toHaveBeenCalledWith(
+      'existing', 'bad-key',
+      expect.objectContaining({ endpoint: 'https://new.example/v1' })
+    );
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
     expect(api.setCloudProviderKey).not.toHaveBeenCalled();
     expect(api.clearCloudProviderKey).not.toHaveBeenCalled();
     expect(persist).not.toHaveBeenCalled();
   });
 
-  it('cleans up a newly created key after a failed new-provider probe', async () => {
-    api.flushCloudProviders.mockResolvedValue(undefined);
-    api.listProviderModels.mockRejectedValue(new Error('unreachable'));
-    const persist = vi.fn();
+  it('passes an explicit blank key when the endpoint changes but no key was entered', async () => {
+    api.listProviderModels.mockResolvedValue([]);
+    const existing = {
+      id: 'p_existing', slug: 'existing', label: 'Existing',
+      endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
+      maskedKey: '••••stored',
+    };
+    const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
     const { result } = renderHook(() => useCloudProviderEditorSubmit({
-      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS, persist,
+      editing: existing, draft: saved, saved,
+      persist: vi.fn().mockResolvedValue(undefined),
       t: key => key, onDone: vi.fn(),
     }));
     await act(async () => {
-      await expect(result.current({
-        id: '', slug: 'new-provider', label: 'New provider',
-        endpoint: 'https://api.example/v1', authStyle: 'bearer', maskedKey: '',
-      }, 'temporary-key')).rejects.toThrow('Could not reach');
+      await result.current({ ...existing, endpoint: 'https://new.example/v1' }, '');
     });
-    expect(api.listProviderModels).toHaveBeenCalledWith('new-provider', 'temporary-key');
+    expect(api.listProviderModels).toHaveBeenCalledWith(
+      'existing', '',
+      expect.objectContaining({ endpoint: 'https://new.example/v1' })
+    );
     expect(api.setCloudProviderKey).not.toHaveBeenCalled();
-    expect(api.clearCloudProviderKey).not.toHaveBeenCalled();
+  });
+
+  it('does not store a new key when the backend rejects a proposed CA certificate', async () => {
+    api.listProviderModels.mockRejectedValue(new Error('invalid CA bundle'));
+    const persist = vi.fn();
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await expect(result.current({
+        id: '', slug: 'invalid-ca', label: 'Invalid CA',
+        endpoint: 'https://api.example/v1', authStyle: 'bearer',
+        maskedKey: '', caCertPem: 'invalid PEM',
+      }, 'new-secret')).rejects.toThrow(/invalid CA/);
+    });
+    expect(api.listProviderModels).toHaveBeenCalledWith(
+      'invalid-ca', 'new-secret',
+      expect.objectContaining({ ca_cert_pem: 'invalid PEM' })
+    );
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
     expect(persist).not.toHaveBeenCalled();
   });
 
-  it('restores the previous provider list when the eager flush fails', async () => {
-    api.flushCloudProviders
-      .mockRejectedValueOnce(new Error('settings write failed'))
-      .mockResolvedValueOnce(undefined);
+  it('compensates settings if secret storage fails after a successful preview', async () => {
+    api.listProviderModels.mockResolvedValue([]);
+    api.setCloudProviderKey.mockRejectedValue(new Error('keyring locked'));
     const previous = {
-      id: 'old-provider',
-      slug: 'private-provider',
-      label: 'Old provider',
-      endpoint: 'https://old.example/v1',
-      authStyle: 'bearer' as const,
-      maskedKey: '••••old',
-      caCertPem: 'old CA',
-    };
-    const saved = { ...EMPTY_SETTINGS, cloudProviders: [previous] };
-    const { result } = renderHook(() =>
-      useCloudProviderEditorSubmit({
-        editing: previous,
-        draft: saved,
-        saved,
-        persist: vi.fn(),
-        t: key => key,
-        onDone: vi.fn(),
-      })
-    );
-
-    await act(async () => {
-      await expect(
-        result.current(
-          { ...previous, endpoint: 'https://new.example/v1', caCertPem: 'new CA' },
-          'replacement-key'
-        )
-      ).rejects.toThrow('settings write failed');
-    });
-
-    expect(api.flushCloudProviders).toHaveBeenCalledTimes(2);
-    expect(api.flushCloudProviders).toHaveBeenNthCalledWith(
-      2,
-      expect.arrayContaining([
-        expect.objectContaining({ endpoint: 'https://old.example/v1', ca_cert_pem: 'old CA' }),
-      ])
-    );
-    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
-    expect(api.listProviderModels).not.toHaveBeenCalled();
-  });
-
-  it('validates a replacement before saving any new secret or committing settings', async () => {
-    const stages: string[] = [];
-    api.flushCloudProviders.mockImplementation(async () => {
-      stages.push('flush');
-    });
-    api.listProviderModels.mockImplementation(async () => {
-      stages.push('probe');
-      return [];
-    });
-    api.setCloudProviderKey.mockImplementation(async () => {
-      stages.push('store');
-    });
-    const previous = {
-      id: 'p_existing',
-      slug: 'existing',
-      label: 'Existing account',
-      endpoint: 'https://old.example/v1',
-      authStyle: 'bearer' as const,
+      id: 'p_existing', slug: 'existing', label: 'Existing',
+      endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
       maskedKey: '••••stored',
     };
     const saved = { ...EMPTY_SETTINGS, cloudProviders: [previous] };
-    const persist = vi.fn().mockImplementation(async () => {
-      stages.push('persist');
-    });
+    const persist = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useCloudProviderEditorSubmit({
-      editing: previous,
-      draft: saved,
-      saved,
-      persist,
-      t: key => key,
-      onDone: vi.fn(),
+      editing: previous, draft: saved, saved, persist,
+      t: key => key, onDone: vi.fn(),
     }));
     await act(async () => {
-      await result.current({
-        ...previous,
-        endpoint: 'https://new.example/v1',
-      }, 'replacement-key');
+      await expect(result.current(
+        { ...previous, endpoint: 'https://new.example/v1' }, 'replacement-key'
+      )).rejects.toThrow('keyring locked');
     });
-    expect(stages).toEqual(['flush', 'probe', 'persist', 'store']);
-    expect(api.listProviderModels).toHaveBeenCalledWith('existing', 'replacement-key');
-    expect(api.setCloudProviderKey).toHaveBeenCalledWith('existing', 'replacement-key');
+    expect(api.flushCloudProviders).toHaveBeenCalledTimes(1);
+    expect(api.flushCloudProviders).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ endpoint: 'https://old.example/v1' })
+    ]));
+    expect(persist).toHaveBeenCalledTimes(2);
+    expect(persist).toHaveBeenLastCalledWith(saved);
+  });
+
+  it('restores possible partial writes when saving the provider config fails', async () => {
+    api.listProviderModels.mockResolvedValue([]);
+    const persist = vi.fn().mockRejectedValue(new Error('settings write failed'));
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await expect(result.current({
+        id: '', slug: 'new-provider', label: 'New Provider',
+        endpoint: 'https://api.example/v1', authStyle: 'bearer', maskedKey: '',
+      }, 'new-key')).rejects.toThrow('settings write failed');
+    });
+    expect(api.flushCloudProviders).toHaveBeenCalledTimes(1);
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
   });
 });
