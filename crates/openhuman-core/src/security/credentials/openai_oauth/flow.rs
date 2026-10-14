@@ -116,5 +116,6 @@ pub async fn disconnect_openai_oauth(config: &Config) -> Result<serde_json::Valu
             .map_err(|error| error.to_string())?
     } else { false };
     flow(config).await?.clear_pending().await;
-    Ok(serde_json::json!({ "disconnected": removed }))
+    let connected = selected_openai_oauth_profile(config)?.is_some();
+    Ok(serde_json::json!({ "disconnected": removed, "connected": connected }))
 }

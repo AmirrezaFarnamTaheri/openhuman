@@ -134,9 +134,17 @@ pub(super) fn selected_openai_oauth_profile(
     if active.as_ref().is_some_and(|p| p.kind == AuthProfileKind::OAuth) {
         return Ok(active);
     }
-    Ok(auth.get_profile(OPENAI_PROVIDER_KEY, Some(OPENAI_OAUTH_PROFILE_NAME))
+    if let Some(legacy) = auth
+        .get_profile(OPENAI_PROVIDER_KEY, Some(OPENAI_OAUTH_PROFILE_NAME))
         .map_err(|e| e.to_string())?
-        .filter(|p| p.kind == AuthProfileKind::OAuth))
+        .filter(|p| p.kind == AuthProfileKind::OAuth)
+    {
+        return Ok(Some(legacy));
+    }
+    let data = auth.load_profiles().map_err(|e| e.to_string())?;
+    Ok(data.profiles.values().find(|profile| {
+        profile.provider == OPENAI_PROVIDER_KEY && profile.kind == AuthProfileKind::OAuth
+    }).cloned())
 }
 
 fn codex_cli_auth_path() -> Result<PathBuf, String> {

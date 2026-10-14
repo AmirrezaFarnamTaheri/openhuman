@@ -135,12 +135,15 @@ const OpenAiOAuthConnect = ({
     setBusy(true);
     setError(null);
     try {
-      await callCoreRpc({ method: 'openhuman.inference_openai_oauth_disconnect', params: {} });
+      const response = await callCoreRpc<{ result: { connected?: boolean } }>({
+        method: 'openhuman.inference_openai_oauth_disconnect', params: {},
+      });
       console.debug('[ai-settings:openai-oauth] disconnect succeeded');
       await onDisconnected?.();
       setAwaitingCallback(false);
       setCallbackUrl('');
-      applyConnected(false);
+      // Another independently authorized account may still exist.
+      applyConnected(Boolean(response?.result?.connected));
     } catch {
       console.warn('[ai-settings:openai-oauth] disconnect failed');
       setError(t('settings.ai.openaiOauthDisconnectError'));

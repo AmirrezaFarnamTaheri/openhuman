@@ -118,13 +118,32 @@ impl AuthProfilesStore {
         let _lock = self.acquire_lock()?;
         let mut data = self.load_locked()?;
 
-        let removed = data.profiles.remove(profile_id).is_some();
-        if !removed {
+        let Some(removed_profile) = data.profiles.remove(profile_id) else {
             return Ok(false);
-        }
-
+        };
+        // An explicit provider-account removal must not strand another
+        // already-authorized account. Preserve the credential kind: selecting
+        // an API key because an OAuth account was removed (or vice versa)
+        // would silently change the caller's authentication semantics.
+        let provider = &removed_profile.provider;
+        let was_active = data
+            .active_profiles
+            .get(provider)
+            .is_some_and(|active| active == profile_id);
         data.active_profiles
             .retain(|_, active| active != profile_id);
+        if was_active && provider.starts_with("provider:") {
+            if let Some(next) = data
+                .profiles
+                .values()
+                .find(|profile| {
+                    profile.provider == *provider && profile.kind == removed_profile.kind
+                })
+            {
+                data.active_profiles
+                    .insert(provider.clone(), next.id.clone());
+            }
+        }
         data.updated_at = Utc::now();
         self.save_locked(&data)?;
 
