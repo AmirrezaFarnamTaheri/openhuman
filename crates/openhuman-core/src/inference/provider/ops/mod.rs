@@ -20,7 +20,8 @@ pub use http_error::{
 };
 
 pub use models::{
-    list_configured_models, list_configured_models_from_config, synthesize_local_runtime_entry,
+    list_configured_models, list_configured_models_from_config,
+    list_configured_models_with_candidate_key, synthesize_local_runtime_entry,
 };
 
 pub use provider_factory::{

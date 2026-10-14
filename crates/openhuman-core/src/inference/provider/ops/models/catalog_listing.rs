@@ -84,9 +84,37 @@ pub async fn list_configured_models(
     list_configured_models_from_config(provider_id, &config).await
 }
 
+/// Probe a candidate credential without altering the saved auth-profile store.
+/// This is used by provider editing before replacing an encrypted account key.
+pub async fn list_configured_models_with_candidate_key(
+    provider_id: &str,
+    candidate_key: &str,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    let config = crate::config::Config::load_or_init()
+        .await
+        .map_err(|e| e.to_string())?;
+    list_configured_models_with_candidate_key_from_config(provider_id, &config, candidate_key).await
+}
+
 pub async fn list_configured_models_from_config(
     provider_id: &str,
     config: &crate::config::Config,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    list_configured_models_inner(provider_id, config, None).await
+}
+
+pub async fn list_configured_models_with_candidate_key_from_config(
+    provider_id: &str,
+    config: &crate::config::Config,
+    candidate_key: &str,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    list_configured_models_inner(provider_id, config, Some(candidate_key)).await
+}
+
+async fn list_configured_models_inner(
+    provider_id: &str,
+    config: &crate::config::Config,
+    candidate_key: Option<&str>,
 ) -> Result<crate::core::Outcome<serde_json::Value>, String> {
     let provider_id = provider_id.trim().to_string();
     if provider_id.is_empty() {
@@ -106,6 +134,37 @@ pub async fn list_configured_models_from_config(
         .or_else(|| synthesize_local_runtime_entry(&provider_id, config))
         .or_else(|| synthesize_managed_entry(&provider_id))
         .ok_or_else(|| format!("no cloud provider with id or slug '{}' found", provider_id))?;
+
+    // Candidate credentials are never persisted or mixed with existing account
+    // keys. Only explicitly configured BYOK providers can be tested. Reject
+    // plaintext remote endpoints and credential-bearing URLs before any I/O.
+    if let Some(candidate) = candidate_key {
+        let auth_ok = matches!(
+            entry.auth_style,
+            crate::config::schema::cloud_providers::AuthStyle::Bearer
+                | crate::config::schema::cloud_providers::AuthStyle::Anthropic
+        );
+        let url = reqwest::Url::parse(&entry.endpoint)
+            .map_err(|_| "Candidate probe requires a valid HTTP(S) endpoint".to_string())?;
+        if !auth_ok || entry.slug == "openhuman" {
+            return Err("Candidate credential probing requires an API-key provider".into());
+        }
+        if !matches!(url.scheme(), "http" | "https")
+            || !url_is_credential_safe(&entry.endpoint)
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+        {
+            return Err(
+                "Candidate credential probing requires HTTPS or loopback HTTP without URL credentials"
+                    .into(),
+            );
+        }
+        if candidate.len() > 256 * 1024 || candidate.trim().is_empty() {
+            return Err("Candidate credential is empty or exceeds 256 KiB".into());
+        }
+    }
 
     // Sentry TAURI-RUST-114C/114D: the app stores Claude Code with the cosmetic
     // endpoint `cli://claude-code`. It runs as a local CLI and has no `/models`
@@ -127,15 +186,39 @@ pub async fn list_configured_models_from_config(
     }
 
     use crate::config::schema::cloud_providers::AuthStyle;
-    let looked_up = crate::inference::provider::factory::lookup_key_for_slug(&entry.slug, config)
-        .unwrap_or_default();
-    let raw_api_key = resolve_local_runtime_key(&entry.slug, looked_up, config);
+    let raw_api_key = if let Some(candidate) = candidate_key {
+        candidate.to_owned()
+    } else {
+        let looked_up =
+            crate::inference::provider::factory::lookup_key_for_slug(&entry.slug, config)
+                .unwrap_or_default();
+        resolve_local_runtime_key(&entry.slug, looked_up, config)
+    };
 
-    let bearer_is_oauth = entry.slug == "openai"
+    // A candidate API key must never be interpreted as an existing Codex OAuth
+    // session or cause the stored OAuth account to enter the probe.
+    let bearer_is_oauth = candidate_key.is_none()
+        && entry.slug == "openai"
         && crate::inference::provider::factory::openai_bearer_is_oauth(config);
     // Authenticate individual candidates for /models, not a combined bearer.
     // Managed sessions and Codex OAuth are never interpreted as key groups.
-    let candidates = if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+    let candidates = if candidate_key.is_some() {
+        // Keep candidate health separate from committed account health; the
+        // probe cannot evict or cool down the actual provider's credentials.
+        let keys = crate::inference::provider::factory::model_fleet_probe_keys(
+            &format!("{}:{}:candidate-catalog", config.workspace_dir.display(), entry.slug),
+            raw_api_key,
+        );
+        if keys.is_empty() || keys.len() > 128 {
+            return Err("Candidate credential group must contain 1-128 distinct keys".into());
+        }
+        if keys.iter().any(|key| {
+            key.len() > 4096 || key.chars().any(char::is_control)
+        }) {
+            return Err("Candidate credential contains invalid characters or an oversized key".into());
+        }
+        keys
+    } else if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
         && !bearer_is_oauth
     {
         crate::inference::provider::factory::model_fleet_probe_keys(

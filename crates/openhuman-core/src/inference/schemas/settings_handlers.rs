@@ -94,6 +94,9 @@ pub(super) struct InferenceUpdateLocalSettingsParams {
 #[derive(Debug, Deserialize)]
 pub(super) struct InferenceListModelsParams {
     provider_id: String,
+    /// Optional one-shot BYOK candidate; never saved to the credential store.
+    #[serde(default)]
+    candidate_api_key: Option<String>,
 }
 
 pub(super) fn handle_inference_resolve_model(params: Map<String, Value>) -> ControllerFuture {
@@ -333,6 +336,15 @@ pub(super) fn handle_inference_update_local_settings(
 pub(super) fn handle_inference_list_models(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let request = deserialize_params::<InferenceListModelsParams>(params)?;
+        if let Some(candidate) = request.candidate_api_key.as_deref() {
+            return to_json(
+                crate::inference::provider::ops::list_configured_models_with_candidate_key(
+                    &request.provider_id,
+                    candidate,
+                )
+                .await?,
+            );
+        }
         to_json(crate::inference::rpc::inference_list_models(&request.provider_id).await?)
     })
 }
