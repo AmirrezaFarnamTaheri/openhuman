@@ -42,6 +42,7 @@ function toPanelProvider(p: CloudProviderView): CloudProvider {
     imageEndpoint: p.image_endpoint ?? '',
     modelImageEndpoints: p.model_image_endpoints ?? {},
     rotationStrategy: p.rotation_strategy ?? 'round_robin',
+    toolCallCodec: p.tool_call_codec ?? 'native',
     caCertPem: p.ca_cert_pem ?? '',
     authStyle: p.auth_style,
     maskedKey: maskKeyLabel(p.has_api_key),
@@ -80,6 +81,7 @@ function toApiSettings(panel: AISettings): ApiAISettings {
       image_endpoint: p.imageEndpoint ?? '',
       model_image_endpoints: p.modelImageEndpoints ?? {},
       rotation_strategy: p.rotationStrategy ?? 'round_robin',
+      tool_call_codec: p.toolCallCodec ?? 'native',
       ca_cert_pem: p.caCertPem ?? '',
       auth_style: p.authStyle,
       has_api_key: p.maskedKey.startsWith('••••'),
@@ -150,6 +152,7 @@ export function useAISettings() {
       image_endpoint: p.imageEndpoint ?? '',
       model_image_endpoints: p.modelImageEndpoints ?? {},
       rotation_strategy: p.rotationStrategy ?? 'round_robin',
+      tool_call_codec: p.toolCallCodec ?? 'native',
       ca_cert_pem: p.caCertPem ?? '',
       auth_style: p.authStyle,
     }));
