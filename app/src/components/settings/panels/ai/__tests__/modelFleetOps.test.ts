@@ -7,6 +7,7 @@ import {
   insertFleetKeysAtSelection,
   parseFleetApiKeys,
   parseModelImageEndpoints,
+  parseModelTransportOverrides,
   syncConfiguredProviderPresets,
   syncModelPresets,
   updateSelectedGroupSettings,
@@ -166,6 +167,23 @@ describe('model-fleet preset management', () => {
       expect(parseModelImageEndpoints('vision = ' + url)).toEqual({ vision: url });
     }
     expect(validModelFleetImageEndpoint('')).toBe(true);
+  });
+
+  it('selects a transport only for exact model ids and rejects ambiguous modes', () => {
+    expect(parseModelTransportOverrides(
+      'vendor/model-one = responses\nvendor/model-two = auto'
+    )).toEqual({
+      'vendor/model-one': 'responses',
+      'vendor/model-two': 'auto',
+    });
+    expect(parseModelTransportOverrides('')).toEqual({});
+    expect(() => parseModelTransportOverrides('x = anthropic_messages')).toThrow(/auto|responses/);
+    expect(() => parseModelTransportOverrides('x = responses\nx = auto')).toThrow(/Duplicate/);
+    expect(() => parseModelTransportOverrides('missing-equals')).toThrow();
+    expect(() => parseModelTransportOverrides(' = responses')).toThrow();
+    expect(() => parseModelTransportOverrides('__proto__ = responses')).not.toThrow();
+    expect(Object.getPrototypeOf(parseModelTransportOverrides('__proto__ = responses')))
+      .toBeNull();
   });
 
   it('changes a key rotation strategy without clearing the existing image endpoint', () => {
