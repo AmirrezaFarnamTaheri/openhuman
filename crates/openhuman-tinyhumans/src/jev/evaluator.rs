@@ -25,6 +25,12 @@ const NEEDS_TOOL_QUESTION: &str = "needs_tool";
 /// per-attempt timeout and retries.
 const DEFAULT_DEADLINE: Duration = Duration::from_secs(3);
 
+/// Keep externally routed System-One context bounded. Preserve the latest
+/// user turns in chronological order, with explicit partial metadata; do not
+/// forward entire conversations, tool results, or internal agent transcripts.
+const MAX_DECISION_RECENT_TURNS: usize = 6;
+const MAX_DECISION_TURN_CHARS: usize = 500;
+
 /// Evaluates `tinytools_jev` requests against Jev through `tinyjevclient`.
 #[derive(Debug, Clone)]
 pub struct TinyJevEvaluator {
@@ -49,18 +55,28 @@ impl TinyJevEvaluator {
 
     fn build(request: &JevRequest) -> EvaluationRequest {
         let mut state = json!({ "request": request.intent });
-        if !request.recent_turns.is_empty() {
-            if let Some(object) = state.as_object_mut() {
-                object.insert(
-                    "recent_user_turns".to_owned(),
-                    Value::Array(
-                        request
-                            .recent_turns
-                            .iter()
-                            .map(|turn| Value::String(turn.clone()))
-                            .collect(),
-                    ),
-                );
+        // Jev receives only task intent and bounded user-turn context, never
+        // the raw system prompt, history, tool results or credentials. Choosing
+        // the latest turns matches how tool choice should use recent intent.
+        let candidates: Vec<_> = request.recent_turns.iter()
+            .filter(|turn| !turn.trim().is_empty())
+            .collect();
+        let offset = candidates.len().saturating_sub(MAX_DECISION_RECENT_TURNS);
+        let selected = &candidates[offset..];
+        let mut truncated = offset != 0;
+        let recent: Vec<Value> = selected.iter().map(|turn| {
+            if turn.chars().count() > MAX_DECISION_TURN_CHARS {
+                truncated = true;
+            }
+            Value::String(turn.chars().take(MAX_DECISION_TURN_CHARS).collect())
+        }).collect();
+        if let Some(object) = state.as_object_mut() {
+            if !recent.is_empty() {
+                object.insert("recent_user_turns".to_owned(), Value::Array(recent));
+            }
+            if truncated {
+                object.insert("context_truncated".to_owned(), Value::Bool(true));
+                object.insert("recent_turns_dropped".to_owned(), json!(offset));
             }
         }
         let criteria: BTreeMap<String, Option<Value>> = request
