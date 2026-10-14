@@ -43,6 +43,11 @@ pub(super) struct InferenceCloudProviderUpdate {
     #[serde(default)]
     tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
     #[serde(default)]
+    model_transports: std::collections::HashMap<
+        String,
+        crate::config::schema::cloud_providers::ModelTransport,
+    >,
+    #[serde(default)]
     ca_cert_pem: Option<String>,
     // keep until v0.66 (review after 2027-01-11): incoming RPC discriminator
     // remains accepted until shipped-client parameter coverage exists.
@@ -275,6 +280,10 @@ pub(super) fn handle_inference_update_model_settings(
                                 model_image_endpoints,
                                 rotation_strategy,
                                 tool_call_codec: entry.tool_call_codec,
+                                model_transports:
+                                    crate::config::schema::cloud_providers::normalize_model_transports(
+                                        entry.model_transports,
+                                    )?,
                                 default_model: entry.default_model,
                             };
                             Ok(provider)
@@ -380,5 +389,40 @@ mod tool_codec_update_contract_tests {
         }))
         .unwrap();
         assert_eq!(input.tool_call_codec, ToolCallCodec::Native);
+        assert!(input.model_transports.is_empty());
+    }
+
+    #[test]
+    fn rpc_model_transports_preserve_exact_model_ids_and_protocols() {
+        use crate::config::schema::cloud_providers::{normalize_model_transports, ModelTransport};
+
+        let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "mixed-gateway",
+            "endpoint": "https://example.net/v1",
+            "model_transports": {
+                "vendor/responses-v2": "responses",
+                "legacy-chat": "chat_completions",
+                "default": "auto"
+            }
+        }))
+        .expect("valid wire transport selection");
+
+        let routes = normalize_model_transports(input.model_transports).unwrap();
+        assert_eq!(routes["vendor/responses-v2"], ModelTransport::Responses);
+        assert_eq!(routes["legacy-chat"], ModelTransport::ChatCompletions);
+        assert_eq!(routes["default"], ModelTransport::Auto);
+    }
+
+    #[test]
+    fn rpc_model_transports_reject_invalid_ids_before_persistence() {
+        use crate::config::schema::cloud_providers::normalize_model_transports;
+
+        let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "mixed-gateway",
+            "endpoint": "https://example.net/v1",
+            "model_transports": {" padded-model ": "responses"}
+        }))
+        .expect("serde permits the key; normalization validates it");
+        assert!(normalize_model_transports(input.model_transports).is_err());
     }
 }

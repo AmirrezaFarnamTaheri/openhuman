@@ -53,8 +53,10 @@ Model text is never interpreted as a tool call when the mode is unset.
   cancellation and Model Fleet are the **single owners** of transport and auth.
 - The QNML adapter is a small `ChatModel<()>` wrapper around an already-built
   native model, selected per provider via `CloudProviderCreds.tool_call_codec`.
-- ToolChoice::None disables conversion; ToolChoice::Tool(name) restricts the
-  decoder to the selected tool. Tool schemas validate parsed arguments.
+- ToolChoice::None never yields tool calls: QNML output passes through as text,
+  while tagged-JSON tool blocks fail the turn and final-answer tags are removed.
+  ToolChoice::Tool(name) restricts the decoder to the selected tool; tool
+  schemas validate parsed arguments.
 - Ordinary prose/code examples quoting QNML cannot invoke tools: the complete
   top-level envelope must be present. Unknown names, broken tags, duplicate
   arguments, wrong argument types and unclosed CDATA fail closed.

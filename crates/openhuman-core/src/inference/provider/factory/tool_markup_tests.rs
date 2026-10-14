@@ -302,8 +302,8 @@ fn tagged_json_parallel_and_single_tool_calls_share_native_validation() {
 
 #[test]
 fn tagged_json_terminal_answers_strip_tags_and_keep_thinking_private() {
-    let response = response("<think>reason privately</think><final_answer>Hello there</final_answer>".into());
-    let converted = rewrite_tagged_json_response(response, &declared()).unwrap();
+    let tagged_response = response("<think>reason privately</think><final_answer>Hello there</final_answer>".into());
+    let converted = rewrite_tagged_json_response(tagged_response, &declared()).unwrap();
     assert_eq!(converted.message.content.len(), 2);
     assert!(matches!(
         converted.message.content[0],

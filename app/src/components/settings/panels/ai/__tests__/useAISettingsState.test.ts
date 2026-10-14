@@ -49,7 +49,7 @@ async function mountLoaded() {
 }
 
 describe('useAISettings().save — save-time provider re-probe', () => {
-  it('retains saved per-model routing through the panel's client config round-trip', async () => {
+  it('retains saved per-model routing through the panel client config round-trip', async () => {
     api.loadAISettings.mockResolvedValueOnce({
       cloudProviders: [{
         id: 'p_mixed',
