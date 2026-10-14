@@ -458,3 +458,22 @@ fn effective_tts_defaults_to_cloud() {
     let config = cfg();
     assert_eq!(effective_tts_provider(&config), "cloud");
 }
+
+#[test]
+fn kokoro_provider_requires_an_explicit_local_registry_entry_and_preserves_voice() {
+    let mut config = cfg();
+    config.voice_providers.push(crate::config::schema::voice_providers::VoiceProviderCreds {
+        slug: "kokoro".into(),
+        endpoint: "http://127.0.0.1:8880/v1".into(),
+        auth_style: crate::config::schema::AuthStyle::None,
+        capability: VoiceCapability::Tts,
+        default_tts_model: Some("kokoro".into()),
+        default_tts_voice: Some("af_bella".into()),
+        ..Default::default()
+    });
+    let provider = create_tts_provider("kokoro", "", &config).unwrap();
+    assert_eq!(provider.name(), "external");
+    assert_eq!(provider.configured_voice(), Some("af_bella"));
+    let other = create_tts_provider("kokoro:am_michael", "", &config).unwrap();
+    assert_eq!(other.configured_voice(), Some("am_michael"));
+}
