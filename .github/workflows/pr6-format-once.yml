@@ -1,0 +1,69 @@
+# Temporary, single-use formatter for the OpenHuman unified PR. The runner
+# deletes this workflow from the formatting commit, leaving no persistent
+# privileged workflow in the PR diff. No secrets are exposed to formatters.
+name: Format unified PR once
+on:
+  push:
+    branches: [feat/prodex-convergence]
+    paths: [.github/workflows/pr6-format-once.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr6-format-once
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    if: github.repository == 'AmirrezaFarnamTaheri/openhuman'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout branch without any persisted credentials
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      - name: Install pinned formatter
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install formatting dependencies without lifecycle scripts
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile --ignore-scripts
+      - name: Normalize Rust and app source
+        run: |
+          cargo fmt --all
+          pnpm --dir app exec prettier --write src
+      - name: Verify formatter modified only app or Rust sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r item; do
+            case "$item" in
+              app/*|crates/*) ;;
+              *) echo "::error::Unexpected formatted path $item"; exit 1 ;;
+            esac
+          done < <(git diff --name-only)
+      - name: Commit formatted source and self-delete the temporary workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/feat/prodex-convergence"
+          rm .github/workflows/pr6-format-once.yml
+          git add -- app crates .github/workflows/pr6-format-once.yml
+          git config user.name 'openhuman-ci-formatter'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'style(ci): normalize Rust and app formatting on unified PR'
+          TOKEN_B64="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $TOKEN_B64" \
+            push origin HEAD:refs/heads/feat/prodex-convergence
