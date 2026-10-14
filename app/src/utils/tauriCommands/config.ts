@@ -43,6 +43,8 @@ export interface CloudProviderCreds {
   image_endpoint?: string | null;
   /** Per-model image endpoints, keyed by provider-native model id. */
   model_image_endpoints?: Record<string, string>;
+  /** Explicit per-model API transport; unlisted models retain automatic routing. */
+  model_transports?: Record<string, 'auto' | 'responses'>;
   /** Multi-key routing strategy; default is round_robin. */
   rotation_strategy?: 'round_robin' | 'least_busy' | 'priority_weighted' | null;
   /** Native tool calls by default; opt-in QNML text-tool decoder for 2API gateways. */
