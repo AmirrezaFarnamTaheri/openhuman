@@ -372,6 +372,40 @@ fn reject_invalid_image_endpoints_and_unknown_strategy() {
 }
 
 #[test]
+fn image_model_endpoint_overrides_require_https_outside_loopback() {
+    use std::collections::HashMap;
+
+    for url in [
+        "http://images.example/v1",
+        "http://169.254.169.254/latest/meta-data",
+        "http://localhost.bad.example/v1",
+        "http://10.0.0.20:8080/v1",
+    ] {
+        assert!(
+            super::normalize_fleet_config(Some(url.to_owned()), HashMap::new(), None).is_err(),
+            "unsafe HTTP image group endpoint accepted: {url}"
+        );
+        let mut overrides = HashMap::new();
+        overrides.insert("vision".to_owned(), url.to_owned());
+        assert!(
+            super::normalize_fleet_config(None, overrides, None).is_err(),
+            "unsafe HTTP per-model endpoint accepted: {url}"
+        );
+    }
+    for url in [
+        "http://localhost:4000/v1",
+        "http://127.0.0.2:4000/v1",
+        "http://[::1]:4000/v1",
+        "https://images.example/v1",
+    ] {
+        assert!(
+            super::normalize_fleet_config(Some(url.to_owned()), HashMap::new(), None).is_ok(),
+            "safe image endpoint rejected: {url}"
+        );
+    }
+}
+
+#[test]
 fn additional_fork_cloud_presets_are_represented_exactly_once() {
     for slug in [
         "tokendance",
