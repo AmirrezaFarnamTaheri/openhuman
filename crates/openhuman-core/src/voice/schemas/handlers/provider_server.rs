@@ -171,6 +171,7 @@ pub(crate) fn handle_voice_update_provider_settings(
                     tts_api_style,
                     default_stt_model: update.default_stt_model,
                     default_tts_voice: update.default_tts_voice,
+                    default_tts_model: update.default_tts_model,
                 });
             }
             config.voice_providers = new_entries;
@@ -220,6 +221,7 @@ pub(crate) fn handle_voice_update_provider_settings(
                     "tts_api_style": serde_json::to_value(p.tts_api_style).unwrap_or_default(),
                     "default_stt_model": p.default_stt_model,
                     "default_tts_voice": p.default_tts_voice,
+                    "default_tts_model": p.default_tts_model,
                 })
             })
             .collect();
