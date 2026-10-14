@@ -106,3 +106,25 @@ fn decision_context_ignores_empty_turns_and_preserves_unicode_boundaries() {
     assert_eq!(turns[1], "newest request");
     assert_eq!(output.state["context_truncated"], true);
 }
+
+
+#[test]
+fn system_one_intent_keeps_both_head_and_tail_when_over_budget() {
+    let mut input = request(None);
+    input.intent = format!("original-goal:{}:latest-specific-detail", "🙂".repeat(6000));
+    let wire = TinyJevEvaluator::build(&input);
+    let text = wire.state["request"].as_str().unwrap();
+    assert!(text.starts_with("original-goal:"));
+    assert!(text.ends_with(":latest-specific-detail"));
+    assert!(text.chars().count() <= 4_080);
+    assert_eq!(wire.state["request_truncated"], true);
+    assert_eq!(wire.state["context_truncated"], true);
+}
+
+#[test]
+fn system_one_short_intent_and_context_are_not_flagged_partial() {
+    let wire = TinyJevEvaluator::build(&request(None));
+    assert_eq!(wire.state["request"], "ping alex");
+    assert!(wire.state.get("request_truncated").is_none());
+    assert!(wire.state.get("context_truncated").is_none());
+}
