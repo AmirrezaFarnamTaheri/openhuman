@@ -21,6 +21,7 @@ const MAX_TOTAL_BYTES: usize = 2 * 1024 * 1024;
 const MAX_MATCHES: usize = 3;
 const MAX_LINE_CHARS: usize = 160;
 const MAX_DEPTH: usize = 12;
+const MAX_VISITED_ENTRIES: usize = 8192;
 const MAX_VERIFY_LINES: usize = 80;
 const SKIP_DIRS: &[&str] = &[".git", ".svn", ".hg", "node_modules", "target", ".next", "dist", "build", ".venv", "__pycache__"];
 const SKIP_FILES: &[&str] = &[".env", ".env.local", ".env.production", ".env.development", ".npmrc", ".pypirc", "id_rsa", "id_ed25519", "credentials.json", "secrets.json"];
@@ -66,6 +67,7 @@ impl Tool for SourceEvidenceTool {
             "path":{"type":"string","description":"Relative path in current workspace, default '.'"},
             "query":{"type":"string","maxLength":128,"description":"Optional literal substring for scanning"},
             "max_files":{"type":"integer","minimum":1,"maximum":32},
+            "max_entries":{"type":"integer","minimum":1,"maximum":8192,"description":"Global directory traversal budget"},
             "after_path":{"type":"string","maxLength":180,"description":"Return paths lexically after this previous-page path"},
             "max_edges":{"type":"integer","minimum":1,"maximum":64},
             "focus_path":{"type":"string","maxLength":180,"description":"Optional indexed path for reverse impact analysis in graph mode"},
@@ -156,6 +158,7 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     let query = args.get("query").and_then(Value::as_str).unwrap_or("");
     if query.len() > 128 { anyhow::bail!("query too long"); }
     let max_files = args.get("max_files").and_then(Value::as_u64).unwrap_or(MAX_FILES as u64).clamp(1, MAX_FILES as u64) as usize;
+    let max_entries = args.get("max_entries").and_then(Value::as_u64).unwrap_or(MAX_VISITED_ENTRIES as u64).clamp(1, MAX_VISITED_ENTRIES as u64) as usize;
     let after = args.get("after_path").and_then(Value::as_str).unwrap_or("");
     if after.len() > 180 || after.starts_with('/') || after.contains('\\') || after.chars().any(char::is_control)
         || after.split('/').any(|part| part == ".." || (part.is_empty() && !after.is_empty())) {
@@ -164,8 +167,12 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     let mut paths = vec![(path.to_path_buf(), 0usize)];
     let mut entries: Vec<PathBuf> = Vec::new();
     let mut truncated: Option<&str> = None;
-    // Bounded traversal, deterministic ordering; never follow directory links.
+    // Bounded traversal; never follow directory links. Output is ordered
+    // within the observed window but a directory entry-limit is partial.
+    let mut visited = 0usize;
     while let Some((next, depth)) = paths.pop() {
+        visited += 1;
+        if visited > max_entries { truncated = Some("max_entries"); break; }
         let metadata = match tokio::fs::symlink_metadata(&next).await {
             Ok(meta) => meta,
             Err(_) => { truncated = Some("filesystem_changed"); continue; }
