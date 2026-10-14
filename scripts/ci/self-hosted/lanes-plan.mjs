@@ -445,9 +445,15 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           run: "bash scripts/ci-cancel-aware.sh cargo doc -p openhuman-embed --no-deps",
         },
         {
+          name: "test-modules",
+          when: core,
+          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${modulesDir}" ${modulesEnvFile}`,
+        },
+        {
           name: "embed-offline-examples",
           when: core,
-          run: "node scripts/run-embed-examples.mjs",
+          needs: ["test-modules"],
+          run: withModules("node scripts/run-embed-examples.mjs"),
         },
         {
           name: "tinyhumans-clippy",
@@ -546,18 +552,27 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
       env: { ...rustEnv, ...sccache, RUST_MIN_STACK: "16777216" },
       checks: [
         {
+          name: "test-modules",
+          when: areas.storage,
+          run: `bash scripts/ci/self-hosted/install-test-modules.sh "${modulesDir}" ${modulesEnvFile}`,
+        },
+        {
           name: "storage-e2e",
           when: areas.storage,
-          run:
+          needs: ["test-modules"],
+          run: withModules(
             `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS}` +
-            STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join(""),
+            STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join("")
+          ),
         },
         {
           name: "storage-lib-tests",
           when: areas.storage,
-          run:
+          needs: ["test-modules"],
+          run: withModules(
             `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
-            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join(""),
+            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join("")
+          ),
         },
         {
           name: "storage-session-store-tests",
