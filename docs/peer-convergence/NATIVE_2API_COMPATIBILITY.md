@@ -10,8 +10,14 @@
    authorized OpenAI-compatible 2API gateway.
 2. Keep **Tool-call format: Native API (recommended)** if it emits structured
    OpenAI `tool_calls`, Anthropic Messages tool blocks, or native Responses events.
-3. Choose **QNML tags (Qwen / 2API compatible)** only when that provider's text
-   output contains Qwen-style tagged tool invocations. Save and test the provider.
+3. Choose **QNML tags (Qwen / 2API compatible)** for Qwen-style
+   `<|QNML|invoke>` markup, or **Tagged JSON (web2api compatible)** for
+   `<tool_calls>` / `<tool_call>` JSON with optional `<think>` and
+   `<final_answer>` blocks. Both are explicit opt-ins; save and test.
+   OpenHuman prepends bounded protocol/tool-schema instructions for selected
+   text-tool modes, while withholding native function-call fields from these
+   non-native transports. Original typed tool permissions are still enforced
+   on every decoded call.
 4. Select the provider/model in OpenHuman's existing Model Fleet. Keys remain in
    the encrypted/scoped credential store and existing route overrides still apply.
 
@@ -24,6 +30,17 @@ Example of the bounded accepted 2API QNML envelope:
   </|QNML|invoke>
 </|QNML|tool_calls>
 ```
+
+An alternative tagged-JSON response from `web2api` is:
+
+```text
+<think>Need a file</think>
+<tool_calls>[{"name":"read_file","arguments":{"path":"README.md"}}]</tool_calls>
+```
+
+For ordinary answers the tagged-JSON gateway may return
+`<final_answer>Hello</final_answer>`; the adapter maps this to visible text
+while keeping `<think>` in non-visible native thinking blocks.
 
 The native adapter converts a **complete** envelope into typed
 `tinyinference_llm::tool::ToolCall` objects only after checking the name
@@ -44,6 +61,12 @@ Model text is never interpreted as a tool call when the mode is unset.
 - At most **256 KiB** total tool-output, **16** calls, **48** arguments per call,
   and **64 KiB** per parameter are inspected. No permissive lookalike/
   Unicode/homoglyph repair is performed before assigning executable calls.
+- Tagged-JSON streams are buffered even without tools, because that protocol
+  wraps ordinary assistant responses in `<final_answer>` tags and must not
+  flash raw tags in the chat. QNML text-only streaming remains incremental.
+- The injected per-request protocol instructions are generated from the
+  *allowed* tool declarations after applying `tool_choice`, bounded to
+  64 KiB of schema JSON, and invalidate stale prompt-prefix cache metadata.
 - Tool-enabled streams are buffered until an authoritative terminal response;
   no partial tool markup escapes to the chat UI. HTTP provider failures,
   deferred handles, and cancellation stay inside the existing stream lifecycle.
@@ -86,7 +109,7 @@ gateway smoke tests must pass before claiming production-ready parity.
 
 ### Outstanding convergence capabilities
 
-- Tagged-JSON tools (`web2api`) and tolerant read-only diagnostic previews
+- Additional tagged tool-call dialects and tolerant read-only diagnostic previews
   without ever promoting untrusted malformed text to executable calls.
 - Explicit model-level protocol preference (Chat Completions vs Responses vs
   Anthropic Messages/Gemini-native), with provenance and expiration.
