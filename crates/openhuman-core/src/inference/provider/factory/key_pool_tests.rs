@@ -258,3 +258,22 @@ fn session_affinity_cache_evicts_earliest_expiring_binding() {
     }
     forget(scope);
 }
+
+#[test]
+fn untrusted_correlation_ids_do_not_fill_session_affinity_with_unbounded_strings() {
+    let scope = "key-pool-test-large-correlation";
+    let keys = vec!["safe".to_owned()];
+    let long_id = "r".repeat(64 * 1024);
+    for run_id in [&long_id[..], "newline\\nseparator", "control\\u{7}bell"] {
+        assert!(choose_key_for_run(
+            scope,
+            &keys,
+            &[],
+            RotationStrategy::RoundRobin,
+            Some(run_id),
+        )
+        .is_some());
+    }
+    let pools = registry().lock().unwrap();
+    assert!(pools.get(scope).unwrap().sticky.is_empty());
+}
