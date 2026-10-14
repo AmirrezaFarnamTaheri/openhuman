@@ -8,6 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use tokio::io::AsyncReadExt;
 use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolResult, ToolRunContext};
 
 use crate::security::SecurityPolicy;
@@ -111,16 +112,42 @@ fn parse_line_range(args: &Value) -> anyhow::Result<(usize, usize)> {
     Ok((usize::try_from(start)?, usize::try_from(end)?))
 }
 async fn read_checked(policy: &SecurityPolicy, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
-    // Revalidate each individual file: cataloging a directory does not grant
-    // read permissions to its denied descendants.
-    let actual = policy.validate_path(&path.to_string_lossy()).await;
-    let Ok(actual) = actual else { return Ok(None); };
-    let metadata = tokio::fs::symlink_metadata(path).await?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > MAX_FILE_BYTES {
+    // Authorization is per file, not inherited from the scanned directory.
+    let Ok(actual) = policy.validate_path(&path.to_string_lossy()).await else {
+        return Ok(None);
+    };
+    let Ok(initial) = tokio::fs::symlink_metadata(path).await else {
+        return Ok(None);
+    };
+    if !initial.is_file() || initial.file_type().is_symlink() || initial.len() > MAX_FILE_BYTES {
         return Ok(None);
     }
-    let bytes = tokio::fs::read(&actual).await?;
+    // Limit reads at the OS handle, not after unbounded read_to_end; a file
+    // can grow between metadata and reading. On Unix do not follow a symlink
+    // substituted at the canonical final component after initial validation.
+    let mut options = tokio::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NOFOLLOW);
+    let Ok(file) = options.open(&actual).await else {
+        return Ok(None);
+    };
+    let Ok(metadata) = file.metadata().await else {
+        return Ok(None);
+    };
+    if !metadata.is_file() || metadata.len() > MAX_FILE_BYTES {
+        return Ok(None);
+    }
+    let mut bounded = file.take(MAX_FILE_BYTES + 1);
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    if bounded.read_to_end(&mut bytes).await.is_err() {
+        return Ok(None);
+    }
     if bytes.len() > MAX_FILE_BYTES as usize || bytes.contains(&0) || std::str::from_utf8(&bytes).is_err() {
+        return Ok(None);
+    }
+    // Fail closed if a symlink or parent was retargeted during the read.
+    if policy.validate_path(&path.to_string_lossy()).await.ok().as_ref() != Some(&actual) {
         return Ok(None);
     }
     Ok(Some(bytes))
@@ -174,12 +201,18 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     let mut last_scanned: Option<String> = None;
     for path in entries.into_iter().take(max_files) {
         last_scanned = Some(relative(root, &path));
-        let metadata = tokio::fs::symlink_metadata(&path).await?;
+        let metadata = match tokio::fs::symlink_metadata(&path).await {
+            Ok(value) => value,
+            Err(_) => { truncated.get_or_insert("filesystem_changed"); continue; }
+        };
         if metadata.len() > MAX_FILE_BYTES {
             truncated.get_or_insert("oversize_file");
             continue;
         }
-        let Some(bytes) = read_checked(policy, &path).await? else { continue };
+        let Some(bytes) = read_checked(policy, &path).await? else {
+            truncated.get_or_insert("unreadable_or_unsupported_file");
+            continue;
+        };
         if total.saturating_add(bytes.len()) > MAX_TOTAL_BYTES {
             truncated = Some("max_total_bytes"); break;
         }
