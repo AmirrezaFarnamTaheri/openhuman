@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   flushCloudProviders: vi.fn(),
   listProviderModels: vi.fn(),
   setCloudProviderKey: vi.fn(),
+  clearCloudProviderKey: vi.fn(),
 }));
 
 vi.mock('../../../../../services/api/aiSettingsApi', async importOriginal => ({
@@ -15,12 +16,15 @@ vi.mock('../../../../../services/api/aiSettingsApi', async importOriginal => ({
   flushCloudProviders: api.flushCloudProviders,
   listProviderModels: api.listProviderModels,
   setCloudProviderKey: api.setCloudProviderKey,
+  clearCloudProviderKey: api.clearCloudProviderKey,
 }));
 
 beforeEach(() => {
   api.flushCloudProviders.mockReset();
   api.listProviderModels.mockReset();
   api.setCloudProviderKey.mockReset();
+  api.clearCloudProviderKey.mockReset();
+  api.clearCloudProviderKey.mockResolvedValue(undefined);
   api.setCloudProviderKey.mockResolvedValue(undefined);
 });
 
@@ -199,6 +203,53 @@ describe('useCloudProviderEditorSubmit', () => {
       ])
     );
     expect(api.listProviderModels).not.toHaveBeenCalled();
+  });
+
+  it('does not delete the replacement credential on failed edit verification', async () => {
+    api.flushCloudProviders.mockResolvedValue(undefined);
+    api.listProviderModels.mockRejectedValue(new Error('provider /models temporarily unavailable'));
+    const existing = {
+      id: 'p_existing',
+      slug: 'existing',
+      label: 'Existing account',
+      endpoint: 'https://old.example/v1',
+      authStyle: 'bearer' as const,
+      maskedKey: '••••stored',
+    };
+    const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
+    const persist = vi.fn();
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: existing, draft: saved, saved, persist,
+      t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await expect(result.current(
+        { ...existing, endpoint: 'https://new.example/v1' },
+        'new-replacement-key'
+      )).rejects.toThrow(/previous key cannot be restored automatically/i);
+    });
+    expect(api.flushCloudProviders).toHaveBeenCalledTimes(2);
+    expect(api.setCloudProviderKey).toHaveBeenCalledWith('existing', 'new-replacement-key');
+    expect(api.clearCloudProviderKey).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it('cleans up a newly created key after a failed new-provider probe', async () => {
+    api.flushCloudProviders.mockResolvedValue(undefined);
+    api.listProviderModels.mockRejectedValue(new Error('unreachable'));
+    const persist = vi.fn();
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS, persist,
+      t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await expect(result.current({
+        id: '', slug: 'new-provider', label: 'New provider',
+        endpoint: 'https://api.example/v1', authStyle: 'bearer', maskedKey: '',
+      }, 'temporary-key')).rejects.toThrow('Could not reach');
+    });
+    expect(api.clearCloudProviderKey).toHaveBeenCalledWith('new-provider');
+    expect(persist).not.toHaveBeenCalled();
   });
 
   it('restores the previous provider list when the eager flush fails', async () => {
