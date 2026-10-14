@@ -15,6 +15,11 @@ use tinyinference_llm::model::{
     ModelRequest, ModelResponse, ModelStream, ModelStreamItem, StreamAccumulator, ToolChoice,
 };
 use tinyinference_llm::tool::{ToolCall, ToolSchema};
+use crate::config::schema::cloud_providers::ToolCallCodec;
+
+#[path = "tool_tagged_json.rs"]
+mod tagged_json;
+use tagged_json::{parse_tagged_json_output, rewrite_tagged_json_response};
 
 const OPEN_CALLS: &str = "<|QNML|tool_calls>";
 const CLOSE_CALLS: &str = "</|QNML|tool_calls>";
@@ -214,18 +219,31 @@ pub(super) fn rewrite_qnml_response(
 
 /// This adapter is selected by a per-provider explicit compatibility setting.
 /// Credentials, transport, TLS, retries, approval, and execution stay native.
-pub(super) struct QnmlCompatModel {
+pub(super) struct TextToolCompatModel {
     inner: Arc<dyn ChatModel<()>>,
+    codec: ToolCallCodec,
 }
 
-impl QnmlCompatModel {
-    pub(super) fn new(inner: Arc<dyn ChatModel<()>>) -> Self {
-        Self { inner }
+impl TextToolCompatModel {
+    pub(super) fn new(inner: Arc<dyn ChatModel<()>>, codec: ToolCallCodec) -> Self {
+        Self { inner, codec }
+    }
+}
+
+fn rewrite_text_codec_response(
+    response: ModelResponse,
+    declared: &[ToolSchema],
+    codec: ToolCallCodec,
+) -> tinyinference_llm::Result<ModelResponse> {
+    match codec {
+        ToolCallCodec::Native => Ok(response),
+        ToolCallCodec::Qnml => rewrite_qnml_response(response, declared),
+        ToolCallCodec::TaggedJson => rewrite_tagged_json_response(response, declared),
     }
 }
 
 #[async_trait]
-impl ChatModel<()> for QnmlCompatModel {
+impl ChatModel<()> for TextToolCompatModel {
     fn profile(&self) -> Option<&ModelProfile> {
         self.inner.profile()
     }
@@ -237,7 +255,7 @@ impl ChatModel<()> for QnmlCompatModel {
     fn cache_identity(&self) -> Option<String> {
         self.inner
             .cache_identity()
-            .map(|identity| format!("{identity}:qnml-v1"))
+            .map(|identity| format!("{identity}:text-tool-{:?}-v1", self.codec))
     }
 
     async fn invoke(
@@ -248,7 +266,7 @@ impl ChatModel<()> for QnmlCompatModel {
         let declared = allowed_qnml_tools(&request);
         let choice = request.tool_choice.clone();
         let response = self.inner.invoke(state, request).await?;
-        enforce_tool_choice(rewrite_qnml_response(response, &declared)?, &choice)
+        enforce_tool_choice(rewrite_text_codec_response(response, &declared, self.codec)?, &choice)
     }
 
     async fn stream(
@@ -258,12 +276,16 @@ impl ChatModel<()> for QnmlCompatModel {
     ) -> tinyinference_llm::Result<ModelStream> {
         let declared = allowed_qnml_tools(&request);
         let choice = request.tool_choice.clone();
-        if declared.is_empty() {
-            if matches!(choice, ToolChoice::Required | ToolChoice::Tool(_)) {
-                return Err(invalid("requested tool is not declared"));
-            }
+        if declared.is_empty() && matches!(choice, ToolChoice::Required | ToolChoice::Tool(_)) {
+            return Err(invalid("requested tool is not declared"));
+        }
+        // QNML has no text-only terminal grammar; keep streaming those turns.
+        // Tagged JSON has <final_answer> blocks even without tools, so it
+        // buffers that explicit provider mode to avoid exposing protocol tags.
+        if declared.is_empty() && self.codec == ToolCallCodec::Qnml {
             return self.inner.stream(state, request).await;
         }
+        let codec = self.codec;
         let mut original = self.inner.stream(state, request).await?;
         let metadata = original.metadata().clone();
         let terminal = async move {
@@ -321,7 +343,7 @@ impl ChatModel<()> for QnmlCompatModel {
             }
             match accumulator
                 .finish()
-                .and_then(|result| rewrite_qnml_response(result, &declared))
+                .and_then(|result| rewrite_text_codec_response(result, &declared, codec))
                 .and_then(|result| enforce_tool_choice(result, &choice))
             {
                 Ok(response) => ModelStreamItem::Completed(response),
