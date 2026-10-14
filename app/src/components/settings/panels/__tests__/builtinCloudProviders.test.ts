@@ -112,6 +112,7 @@ describe('builtinCloudProviders', () => {
     ['cohere', 'Cohere', 'https://api.cohere.ai/compatibility/v1'],
     ['tokenrouter', 'TokenRouter', 'https://api.tokenrouter.io/v1'],
     ['byteplus-modelark-ap', 'BytePlus ModelArk (Asia Pacific)', 'https://ark.ap-southeast.bytepluses.com/api/v3'],
+    ['byteplus-modelark-eu', 'BytePlus ModelArk (Europe)', 'https://ark.eu-west.bytepluses.com/api/v3'],
   ] as const)('exposes peer provider %s with documented compatible transport', (slug, label, endpoint) => {
     const entry = BUILTIN_CLOUD_PROVIDERS.find(provider => provider.slug === slug);
     expect(entry).toMatchObject({ label, endpoint, authStyle: 'bearer' });
