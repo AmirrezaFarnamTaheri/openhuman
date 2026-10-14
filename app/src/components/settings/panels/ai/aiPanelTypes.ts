@@ -29,7 +29,7 @@ export type CloudProvider = {
   imageEndpoint?: string;
   modelImageEndpoints?: Record<string, string>;
   rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
-  toolCallCodec?: 'native' | 'qnml';
+  toolCallCodec?: 'native' | 'qnml' | 'tagged_json';
   caCertPem?: string;
 };
 
