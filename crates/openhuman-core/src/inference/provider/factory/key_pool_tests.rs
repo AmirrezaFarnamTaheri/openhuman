@@ -121,6 +121,60 @@ fn deleted_provider_scopes_are_pruned() {
     assert!(provider_snapshots(prefix).is_empty());
 }
 #[test]
+fn least_busy_reserves_active_lease_before_returning_the_key() {
+    // The two calls simulate simultaneous requests that do not yield between
+    // choosing their credentials. The first selection must reserve its lease
+    // before the second request makes its choice, otherwise both select A.
+    let scope = "key-pool-test-atomic-reservation";
+    let keys = vec!["first".to_owned(), "second".to_owned()];
+    let (first_index, first) = choose_key_and_acquire_for_run(
+        scope, &keys, &[], RotationStrategy::LeastBusy, None,
+    )
+    .expect("first credential available");
+    assert_eq!(first_index, 0);
+    assert_eq!(snapshot(scope)[first_index].active_leases, 1);
+
+    let (second_index, second) = choose_key_and_acquire_for_run(
+        scope, &keys, &[], RotationStrategy::LeastBusy, None,
+    )
+    .expect("second credential available");
+    assert_ne!(first_index, second_index, "lease reservation must influence the next selection");
+    assert_eq!(snapshot(scope)[second_index].active_leases, 1);
+
+    release(scope, &first);
+    release(scope, &second);
+    assert!(snapshot(scope).iter().all(|row| row.active_leases == 0));
+    forget(scope);
+}
+
+#[test]
+fn reservations_honor_excluded_keys_and_run_affinity_without_double_acquire() {
+    let scope = "key-pool-test-atomic-exclusions";
+    let keys = vec!["a".to_owned(), "b".to_owned()];
+    let (selected, secret) = choose_key_and_acquire_for_run(
+        scope, &keys, &[], RotationStrategy::RoundRobin, Some("session"),
+    )
+    .unwrap();
+    let (sticky, again) = choose_key_and_acquire_for_run(
+        scope, &keys, &[], RotationStrategy::RoundRobin, Some("session"),
+    )
+    .unwrap();
+    assert_eq!(selected, sticky, "healthy session binding stays stable");
+    assert_eq!(secret, again);
+    assert_eq!(snapshot(scope)[selected].active_leases, 2);
+    assert_eq!(
+        choose_key_and_acquire_for_run(scope, &keys, &[0, 1], RotationStrategy::RoundRobin, None),
+        None,
+        "exhausted candidate set cannot reserve another lease"
+    );
+
+    release(scope, &secret);
+    release(scope, &again);
+    assert_eq!(snapshot(scope)[selected].active_leases, 0);
+    forget(scope);
+}
+
+#[test]
 fn leases_are_released_without_underflow() {
     let scope = "key-pool-test-lease";
     let keys = vec!["a".to_owned()];
