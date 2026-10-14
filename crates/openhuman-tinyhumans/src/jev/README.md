@@ -97,8 +97,9 @@ up to a 4,000-scalar content budget plus the marker. This retains the original
 task objective alongside late constraints without concealing truncation.
 
 Choice options are distinct key/description pairs from the existing
-retrieval shortlist. Duplicate names, more than 64 options or descriptions
-over 2,000 Unicode scalars are refused before remote egress; the harness's
+retrieval shortlist. Duplicate names, more than 255 options, any description over 2,000 Unicode
+scalars, or more than 96,000 total description scalars are refused before
+remote egress; the harness's
 existing ranker fallback handles rejection. These guards are **not** semantic
 summarization and are not proof that the selected tool is appropriate.
 
