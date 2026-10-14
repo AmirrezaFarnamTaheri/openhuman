@@ -114,3 +114,15 @@ fn no_claim_of_complete_language_or_semantic_coverage() {
     assert_eq!(graph["snapshot_atomic"], false);
     assert_eq!(graph["edges"].as_array().unwrap().len(), 0);
 }
+
+
+#[test]
+fn dotted_typescript_stem_is_not_mistaken_for_a_known_extension() {
+    let docs = vec![
+        source("src/index.ts", "import './user.service';\n"),
+        source("src/user.service.ts", "export const service = true;\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    assert_eq!(edge(&graph)["status"], "resolved");
+    assert_eq!(edge(&graph)["to"], "src/user.service.ts");
+}
