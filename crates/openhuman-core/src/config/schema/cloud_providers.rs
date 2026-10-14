@@ -125,9 +125,9 @@ pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
         auth_style: AuthStyle::Bearer,
     },
     BuiltinCloudProvider {
-        slug: "glhf",
-        label: "glhf.chat",
-        endpoint: "https://glhf.chat/api/openai/v1",
+        slug: "synthetic",
+        label: "Synthetic",
+        endpoint: "https://api.synthetic.new/openai/v1",
         auth_style: AuthStyle::Bearer,
     },
 ];
