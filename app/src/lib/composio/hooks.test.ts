@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockListToolkits = vi.fn();
@@ -267,6 +267,88 @@ describe('useComposioIntegrations', () => {
     expect(result.current.toolkits).toEqual([]);
     expect(result.current.connectionByToolkit.size).toBe(0);
     expect(result.current.error).toBe('backend unreachable');
+  });
+
+  it('pauses Composio polling on 401 until a credential configuration change', async () => {
+    const { useComposioIntegrations } = await import('./hooks');
+    mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
+    mockListConnections.mockResolvedValue({ connections: [] });
+    let tick: (() => void) | undefined;
+    const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
+      if (interval === 12_345 && typeof handler === 'function') tick = handler;
+      return 1234;
+    });
+    const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
+    try {
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(tick).toBeDefined();
+
+      // This is a completed authenticated fetch, not an unavailable local key.
+      mockListConnections.mockRejectedValueOnce(new Error('HTTP 401 invalid API key'));
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const afterUnauthorized = mockListConnections.mock.calls.length;
+
+      // Calling the installed interval callback again must not keep hammering
+      // the invalid credentials endpoint, or poll the old tenant repeatedly.
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(afterUnauthorized);
+
+      // Once a new key is saved (or the mode changes), normal refresh and
+      // periodic polling must resume without requiring component remount.
+      await act(async () => {
+        window.dispatchEvent(new Event('composio:config-changed'));
+        await Promise.resolve();
+      });
+      await waitFor(() =>
+        expect(mockListConnections.mock.calls.length).toBeGreaterThan(afterUnauthorized)
+      );
+      const afterRefresh = mockListConnections.mock.calls.length;
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(afterRefresh + 1);
+    } finally {
+      unmount();
+      timer.mockRestore();
+    }
+  });
+
+  it('keeps polling on transient Composio failures other than authentication', async () => {
+    const { useComposioIntegrations } = await import('./hooks');
+    mockListToolkits.mockResolvedValue({ toolkits: [] });
+    mockListConnections.mockResolvedValue({ connections: [] });
+    let tick: (() => void) | undefined;
+    const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
+      if (interval === 12_345 && typeof handler === 'function') tick = handler;
+      return 1234;
+    });
+    const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
+    try {
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      mockListConnections.mockRejectedValueOnce(new Error('503 service unavailable'));
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const first = mockListConnections.mock.calls.length;
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(first + 1);
+    } finally {
+      unmount();
+      timer.mockRestore();
+    }
   });
 
   it('skips toolkit fetch and polling for local sessions without a composio api key', async () => {
