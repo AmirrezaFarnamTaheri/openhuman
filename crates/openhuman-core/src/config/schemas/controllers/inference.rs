@@ -152,6 +152,7 @@ pub(super) fn handle_update_model_settings(params: Map<String, Value>) -> Contro
                                 image_endpoint,
                                 model_image_endpoints,
                                 rotation_strategy,
+                                tool_call_codec: e.tool_call_codec,
                                 default_model: e.default_model,
                             };
                             Ok(entry)
