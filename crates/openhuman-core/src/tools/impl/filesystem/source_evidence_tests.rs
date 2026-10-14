@@ -287,3 +287,19 @@ async fn oversized_source_is_reported_as_partial_without_allocating_file_content
     assert_eq!(result["truncated_reason"], "oversize_file");
     assert_eq!(result["files"].as_array().unwrap().len(), 0);
 }
+
+
+#[tokio::test]
+async fn global_path_traversal_budget_bounds_sparse_directory_trees() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    for index in 0..12 {
+        std::fs::create_dir(project.path().join(format!("sub{index}"))).unwrap();
+    }
+    std::fs::write(project.path().join("root.rs"), "fn root() {}").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"scan","max_entries":3})).await;
+    assert_eq!(result["complete"], false);
+    assert_eq!(result["truncated_reason"], "max_entries");
+    assert!(result["files"].as_array().unwrap().len() <= 2);
+}
