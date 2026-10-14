@@ -131,8 +131,8 @@ struct Lease {
     key: String,
 }
 impl Lease {
-    fn new(scope: &str, key: &str) -> Self {
-        key_pool::acquire(scope, key);
+    /// The key-pool selector has already reserved this active lease atomically.
+    fn from_reserved(scope: &str, key: &str) -> Self {
         Self {
             scope: scope.to_owned(),
             key: key.to_owned(),
@@ -214,7 +214,7 @@ impl ChatModel<()> for CredentialFleetModel {
         let image = request_has_image(&request);
         let mut tried = Vec::new();
         let mut last_error = None;
-        while let Some((index, key)) = key_pool::choose_key_for_run(
+        while let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
             &self.scope,
             &self.keys,
             &tried,
@@ -225,7 +225,7 @@ impl ChatModel<()> for CredentialFleetModel {
                 .map(|correlation| correlation.run_id.as_str()),
         ) {
             tried.push(index);
-            let lease = Lease::new(&self.scope, &key);
+            let lease = Lease::from_reserved(&self.scope, &key);
             match self
                 .route(index, image)
                 .invoke(state, request.clone())
@@ -262,7 +262,7 @@ impl ChatModel<()> for CredentialFleetModel {
         let image = request_has_image(&request);
         let mut tried = Vec::new();
         let mut last_error = None;
-        while let Some((index, key)) = key_pool::choose_key_for_run(
+        while let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
             &self.scope,
             &self.keys,
             &tried,
@@ -273,7 +273,7 @@ impl ChatModel<()> for CredentialFleetModel {
                 .map(|correlation| correlation.run_id.as_str()),
         ) {
             tried.push(index);
-            let lease = Lease::new(&self.scope, &key);
+            let lease = Lease::from_reserved(&self.scope, &key);
             let mut live = match self
                 .route(index, image)
                 .stream(state, request.clone())
