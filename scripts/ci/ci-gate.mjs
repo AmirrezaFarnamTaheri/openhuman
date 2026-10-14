@@ -3,13 +3,13 @@
 // soon as ANY of the PR CI flows passes, and then cancels the GitHub-hosted
 // runs still working on that commit.
 //
-// Run by .github/workflows/ci-gate.yml on every `workflow_run` (requested and
-// completed) of the flows below. That workflow runs from the default branch
+// Run by .github/workflows/ci-gate.yml on each `workflow_run` (requested and
+// completed) of the active flows below. That workflow runs from the default branch
 // and never checks out PR code; this script only reads run and job state
 // through the API and writes a commit status.
 //
-//   success  a flow's decisive job passed (EX63 lanes, hosted lanes gate, or
-//            CI Lite's PR CI Gate); the other GitHub-hosted runs are cancelled
+//   success  a flow's decisive job passed (EX63 lanes or hosted lanes gate);
+//            the other GitHub-hosted runs are cancelled
 //   pending  nothing has passed yet and at least one flow is still running
 //   failure  every flow finished and none passed
 //
@@ -34,7 +34,6 @@ export const SOURCES = [
     job: "Lanes / CI Fast (hosted) Gate",
     hosted: true,
   },
-  { workflow: "ci-lite.yml", name: "CI Lite", job: "PR CI Gate", hosted: true },
 ];
 
 const PR_EVENTS = new Set(["pull_request", "pull_request_target"]);

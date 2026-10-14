@@ -1,8 +1,8 @@
 ---
 # CI Gate — the single PR check branch protection should require.
 #
-# CI Fast (EX63, org members), CI Fast (hosted, outsiders) and CI Lite
-# (GitHub-hosted, everyone) all run on a PR. This workflow posts one commit
+# CI Fast (EX63, org members) and CI Fast (hosted, outsiders)
+# run on a PR. This workflow posts one commit
 # status, "CI Gate", on the PR head commit: success as soon as any of them
 # passes, pending while any is still running, failure once all have finished
 # without a pass. On success it cancels the GitHub-hosted runs still working on
@@ -16,7 +16,7 @@ name: CI Gate
 
 on:
   workflow_run:
-    workflows: ["CI Fast", "CI Fast (hosted)", "CI Lite"]
+    workflows: ["CI Fast", "CI Fast (hosted)"]
     types: [requested, completed]
 
 permissions:
@@ -33,7 +33,7 @@ concurrency:
 jobs:
   gate:
     name: Update CI Gate status
-    # Only PR runs gate anything; CI Lite's pushes to main are not PRs.
+    # Only PR runs gate anything; pushes to main are not PRs.
     if: >-
       github.event.workflow_run.event == 'pull_request' ||
       github.event.workflow_run.event == 'pull_request_target'
