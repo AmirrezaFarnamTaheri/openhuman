@@ -41,6 +41,8 @@ pub(super) struct InferenceCloudProviderUpdate {
     #[serde(default)]
     rotation_strategy: Option<String>,
     #[serde(default)]
+    tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
+    #[serde(default)]
     ca_cert_pem: Option<String>,
     // keep until v0.66 (review after 2027-01-11): incoming RPC discriminator
     // remains accepted until shipped-client parameter coverage exists.
@@ -272,6 +274,7 @@ pub(super) fn handle_inference_update_model_settings(
                                 image_endpoint,
                                 model_image_endpoints,
                                 rotation_strategy,
+                                tool_call_codec: entry.tool_call_codec,
                                 default_model: entry.default_model,
                             };
                             Ok(provider)
