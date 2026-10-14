@@ -171,3 +171,73 @@ fn truncated_graph_does_not_report_unprovable_reverse_impact() {
         assert_eq!(graph["impact_omitted_reason"], "bounded_edges");
     }
 }
+
+
+#[test]
+fn python_relative_imports_resolve_module_file_and_package() {
+    let docs = vec![
+        source("src/pkg/main.py", "from .helpers import do_thing\nfrom .subpackage import api\n"),
+        source("src/pkg/helpers.py", "def do_thing(): pass\n"),
+        source("src/pkg/subpackage/__init__.py", "def api(): pass\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 2);
+    assert_eq!(edges[0]["kind"], "python_import");
+    assert_eq!(edges[0]["status"], "resolved");
+    assert_eq!(edges[0]["to"], "src/pkg/helpers.py");
+    assert_eq!(edges[1]["to"], "src/pkg/subpackage/__init__.py");
+}
+
+#[test]
+fn python_parent_relative_import_does_not_escape_observed_root() {
+    let docs = vec![
+        source("src/pkg/tasks/run.py", "from ..shared import helper\nfrom .....escape import secret\n"),
+        source("src/pkg/shared.py", "helper = 1\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 2);
+    assert_eq!(edges[0]["status"], "resolved");
+    assert_eq!(edges[0]["to"], "src/pkg/shared.py");
+    assert_eq!(edges[1]["status"], "unresolved");
+    assert!(edges[1]["to"].is_null());
+}
+
+#[test]
+fn python_from_current_package_can_reference_multiple_imported_children() {
+    let docs = vec![
+        source("package/__init__.py", "from . import alpha, beta\n"),
+        source("package/alpha.py", "alpha = 1\n"),
+        source("package/beta.py", "beta = 2\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 2);
+    assert_eq!(edges[0]["to"], "package/alpha.py");
+    assert_eq!(edges[1]["to"], "package/beta.py");
+}
+
+#[test]
+fn python_matching_module_file_and_package_is_ambiguous() {
+    let docs = vec![
+        source("src/main.py", "from .utils import value\n"),
+        source("src/utils.py", "value = 1\n"),
+        source("src/utils/__init__.py", "value = 2\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    assert_eq!(edge(&graph)["status"], "ambiguous");
+    assert_eq!(edge(&graph)["candidate_count"], 2);
+}
+
+#[test]
+fn javascript_dynamic_literal_import_is_a_possible_dependency() {
+    let docs = vec![
+        source("app/route.ts", "const load = () => import('./view');\n"),
+        source("app/view.tsx", "export function View() {}\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    assert_eq!(edge(&graph)["kind"], "dynamic_import");
+    assert_eq!(edge(&graph)["status"], "resolved");
+    assert_eq!(edge(&graph)["to"], "app/view.tsx");
+}
