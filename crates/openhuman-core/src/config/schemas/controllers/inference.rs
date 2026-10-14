@@ -143,6 +143,27 @@ pub(super) fn handle_update_model_settings(params: Map<String, Value>) -> Contro
                                     e.model_image_endpoints,
                                     e.rotation_strategy,
                                 )?;
+                            if e.model_transports.len() > 512
+                                || e.model_transports.keys().any(|id| {
+                                    id.is_empty()
+                                        || id.len() > 200
+                                        || id != id.trim()
+                                        || id.chars().any(char::is_control)
+                                })
+                            {
+                                return Err(
+                                    "model transport overrides require 1-200 printable model ids and at most 512 entries".to_string()
+                                );
+                            }
+                            if auth_style == AuthStyle::Anthropic
+                                && e.model_transports.values().any(|mode| {
+                                    *mode == crate::config::schema::cloud_providers::ModelTransport::Responses
+                                })
+                            {
+                                return Err(
+                                    "Responses transport cannot use Anthropic Messages authentication".into()
+                                );
+                            }
                             let entry = CloudProviderCreds {
                                 id,
                                 slug,
@@ -151,7 +172,9 @@ pub(super) fn handle_update_model_settings(params: Map<String, Value>) -> Contro
                                 auth_style,
                                 image_endpoint,
                                 model_image_endpoints,
+                                model_transports: e.model_transports,
                                 rotation_strategy,
+                                tool_call_codec: e.tool_call_codec,
                                 default_model: e.default_model,
                             };
                             Ok(entry)
