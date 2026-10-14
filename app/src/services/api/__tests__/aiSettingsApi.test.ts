@@ -689,6 +689,36 @@ describe('saveAISettings', () => {
     expect(patch.cloud_providers![0].auth_style).toBe('anthropic');
   });
 
+  it('persists QNML tool-call compatibility and a later opt-out without losing provider settings', async () => {
+    const prev = makeSettings();
+    const enabled = makeSettings({
+      cloudProviders: [
+        {
+          ...prev.cloudProviders[0],
+          tool_call_codec: 'qnml',
+          image_endpoint: 'https://vision.example/v1',
+          rotation_strategy: 'least_busy',
+        },
+      ],
+    });
+    await saveAISettings(prev, enabled);
+    let patch = mockOpenhumanUpdateModelSettings.mock.calls[0][0];
+    expect(patch.cloud_providers?.[0]).toMatchObject({
+      tool_call_codec: 'qnml',
+      image_endpoint: 'https://vision.example/v1',
+      rotation_strategy: 'least_busy',
+    });
+
+    mockOpenhumanUpdateModelSettings.mockClear();
+    const disabled = makeSettings({
+      cloudProviders: [{ ...enabled.cloudProviders[0], tool_call_codec: 'native' }],
+    });
+    await saveAISettings(enabled, disabled);
+    patch = mockOpenhumanUpdateModelSettings.mock.calls[0][0];
+    expect(patch.cloud_providers?.[0].tool_call_codec).toBe('native');
+    expect(patch.cloud_providers?.[0].rotation_strategy).toBe('least_busy');
+  });
+
   it('sends both providers and routing when both change', async () => {
     const prev = makeSettings({ cloudProviders: [] });
     const next = makeSettings({
