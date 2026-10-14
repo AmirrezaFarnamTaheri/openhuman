@@ -308,6 +308,7 @@ export const CloudProviderEditor = ({
         <p className="text-xs text-content-muted">
           Use responses or chat_completions only for models that support those protocols.
           Unlisted models keep native Auto routing. Codex OAuth requires Responses.
+          Responses output currently completes as one buffered result rather than incremental SSE.
         </p>
       </div>
       <div className="space-y-2">

@@ -111,6 +111,29 @@ All layers are **contracts inside the existing core**, not standalone servers.
 No adapter gets to bypass approval, read arbitrary credentials, impersonate a
 different account or rewrite routing/billing state.
 
+### Partial P0 implementation: explicit model transport
+
+- `cloud_providers[].model_transports` is an exact model-id-to-transport
+  map with `auto`, `chat_completions`, and `responses` values.
+  Unlisted models keep the existing registry/Anthropic/Codex route.
+- The React editor, settings service and Rust RPC preserve this field across
+  loading, eager flush, save and edit. Rust rejects unknown protocols,
+  malformed model ids, and more than 512 mappings.
+- The native Rust model builder routes a specifically selected Responses
+  model through the existing OpenAI-compatible transport while preserving
+  TLS roots, header/query options, scoped credentials, request pricing-route
+  settings, tool policy, and image-route override behavior. Codex OAuth must
+  remain on Responses and Anthropic-native routes cannot masquerade as a
+  Bearer-compatible Responses model.
+- A local-HTTP fixture asserts the effective `/v1/responses` versus
+  `/v1/chat/completions` request paths.
+- **Not yet complete**: this is an explicit configuration override, not
+  dynamic capability discovery. The pinned upstream Responses adapter still
+  emits one buffered completion on its `stream()` path instead of
+  incremental Responses SSE. Real-provider compatibility, cancellation,
+  usage, tool-event parity, and multimodal fidelity still require
+  test-server fixtures and approved-key smoke tests.
+
 ### Highest-priority remaining work
 
 **P0 — protocol-/model-level routing.** OpenCode Zen and other mixed protocol
