@@ -122,7 +122,11 @@ async function loadLocale(locale: Locale): Promise<Record<string, string>> {
   if (!val || typeof val !== "object") {
     throw new Error(`${p}: default export is not a translation map`);
   }
-  return { ...(val as Record<string, string>), ...fleetTranslations[locale], ...parallelFlowTranslations[locale] };
+  return {
+    ...(val as Record<string, string>),
+    ...fleetTranslations[locale],
+    ...parallelFlowTranslations[locale],
+  };
 }
 
 async function walkSourceFiles(dir: string, out: string[]): Promise<void> {

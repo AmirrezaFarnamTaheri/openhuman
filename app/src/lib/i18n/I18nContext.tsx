@@ -92,7 +92,16 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const t = useCallback(
     (key: string, fallback?: string): string => {
       const map = translations[locale] ?? resolveEn();
-      return parallelFlowTranslations[locale]?.[key] ?? fleetTranslations[locale]?.[key] ?? map[key] ?? parallelFlowTranslations.en[key] ?? fleetTranslations.en[key] ?? resolveEn()[key] ?? fallback ?? key;
+      return (
+        parallelFlowTranslations[locale]?.[key] ??
+        fleetTranslations[locale]?.[key] ??
+        map[key] ??
+        parallelFlowTranslations.en[key] ??
+        fleetTranslations.en[key] ??
+        resolveEn()[key] ??
+        fallback ??
+        key
+      );
     },
     [locale]
   );

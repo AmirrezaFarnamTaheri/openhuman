@@ -134,11 +134,15 @@ export const PALETTE_ENTRIES: PaletteEntry[] = NODE_KINDS.flatMap((kind): Palett
     ];
   }
   if (kind === 'scatter') {
-    return [{
-      key: kind, kind, group: meta.group,
-      labelKey: 'flows.nodeKind.scatter',
-      preset: { lanes: 8 },
-    }];
+    return [
+      {
+        key: kind,
+        kind,
+        group: meta.group,
+        labelKey: 'flows.nodeKind.scatter',
+        preset: { lanes: 8 },
+      },
+    ];
   }
   return [{ key: kind, kind, group: meta.group, labelKey: `flows.nodeKind.${kind}` }];
 });

@@ -33,15 +33,26 @@ describe('graphAdapter', () => {
     it('round-trips native parallel lane kinds, policies, and wiring losslessly', () => {
       const original = graph({
         nodes: [
-          node({ id: 'start', kind: 'trigger', name: 'Start' }),
-          node({ id: 'scatter', kind: 'scatter', name: 'Scatter',
-            config: { lanes: 8, path: 'rows' } }),
-          node({ id: 'transform', kind: 'transform', name: 'Transform' }),
-          node({ id: 'gather', kind: 'gather', name: 'Gather',
+          node({ id: 'start', kind: 'trigger', name: 'Start', position: { x: 0, y: 0 } }),
+          node({
+            id: 'scatter', kind: 'scatter', name: 'Scatter',
+            config: { lanes: 8, path: 'rows' }, position: { x: 0, y: 132 },
+          }),
+          node({
+            id: 'transform', kind: 'transform', name: 'Transform',
+            position: { x: 0, y: 264 },
+          }),
+          node({
+            id: 'gather', kind: 'gather', name: 'Gather',
             config: {
-              from: ['transform'], release: 'quorum', n: 3, max_polls: 500,
+              from: ['transform'],
+              release: 'quorum',
+              n: 3,
+              max_polls: 500,
               on_lane_error: 'collect',
-            } }),
+            },
+            position: { x: 0, y: 396 },
+          }),
         ],
         edges: [
           edge({ from_node: 'start', to_node: 'scatter' }),
