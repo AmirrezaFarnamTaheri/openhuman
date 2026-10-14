@@ -800,13 +800,20 @@ export async function flushCloudProviders(providers: CloudProviderCreds[]): Prom
 /** An optional candidate is used only for this read-only probe; never stored. */
 export async function listProviderModels(
   providerId: string,
-  candidateApiKey?: string
+  candidateApiKey?: string,
+  previewProvider?: CloudProviderCreds
 ): Promise<ModelInfo[]> {
   const res = await callCoreRpc<{ result: { models: ModelInfo[] } }>({
     method: 'openhuman.inference_list_models',
     params: {
       provider_id: providerId,
-      ...(candidateApiKey ? { candidate_api_key: candidateApiKey } : {}),
+      ...(candidateApiKey !== undefined ? { candidate_api_key: candidateApiKey } : {}),
+      ...(previewProvider
+        ? {
+            candidate_provider: previewProvider,
+            candidate_ca_cert_pem: previewProvider.ca_cert_pem ?? '',
+          }
+        : {}),
     },
   });
   return res?.result?.models ?? [];

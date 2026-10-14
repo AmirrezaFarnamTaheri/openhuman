@@ -61,9 +61,8 @@ export function useCloudProviderEditorSubmit({
         auth_style: p.authStyle,
       }));
 
-      // The provider is provisionally flushed only so the native probe can
-      // resolve its CA certificate, endpoint and auth style. The current API
-      // key remains in encrypted storage until the candidate has passed.
+      // Build a read-only preview; never re-point live traffic before the
+      // proposed endpoint and candidate key have been verified.
       const list =
         editing === 'new' || !editing
           ? [...draft.cloudProviders, upserted]
@@ -91,14 +90,16 @@ export function useCloudProviderEditorSubmit({
         }));
 
       let settingsPersisted = false;
+      let settingsWriteAttempted = false;
+      const previewProvider = nextWireProviders.find(p => p.slug === upserted.slug);
+      if (!previewProvider) throw new Error('Provider preview entry not found');
       try {
-        await flushCloudProviders(nextWireProviders);
         // A candidate credential is sent for this one-shot native read-only
         // probe but is neither persisted nor mixed with the saved key fleet.
         // Failed probes therefore leave the previous encrypted key untouched.
         if (!opts?.skipProbe) {
           try {
-            await listProviderModels(upserted.slug, apiKey || undefined);
+            await listProviderModels(upserted.slug, apiKey, previewProvider);
           } catch (probeErr) {
             const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
             console.warn('[ai-settings] provider /models probe failed', {
@@ -112,18 +113,23 @@ export function useCloudProviderEditorSubmit({
         // Persist the provider and other settings first. A failed settings
         // write must not overwrite a working credential; the AuthService key
         // replacement is the last irreversible operation in this flow.
+        settingsWriteAttempted = true;
         await persist({ ...draft, cloudProviders: list });
         settingsPersisted = true;
         if (apiKey) {
           await setCloudProviderKey(upserted.slug, apiKey);
         }
       } catch (error) {
-        await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
-          console.warn(
-            `[ai-settings] rollback provider settings failed slug=${upserted.slug}`,
-            rollbackErr
-          )
-        );
+        // A failed preview never touched shared settings. Do not overwrite
+        // concurrent provider edits with a blind compensation write.
+        if (settingsWriteAttempted) {
+          await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
+            console.warn(
+              `[ai-settings] rollback provider settings failed slug=${upserted.slug}`,
+              rollbackErr
+            )
+          );
+        }
         if (settingsPersisted) {
           // Restore the editor's saved/draft snapshot after a failed key-store
           // write. This keeps the UI consistent with the reverted provider.
