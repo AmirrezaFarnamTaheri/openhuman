@@ -268,31 +268,21 @@ async fn list_configured_models_inner(
         routing.account_id.is_some()
     );
 
-    // Catalogue probing carries bearer or x-api-key credentials. reqwest only
-    // strips a fixed set of sensitive headers when redirecting across origins:
-    // x-api-key is NOT on that list. Disallow redirects altogether, including
-    // same-origin redirects, instead of letting a /models probe forward a secret
-    // to a second URL. Keep the platform TLS, proxy, CA and timeout policies.
-    let service_key = "providers.list_models";
-    let mut client_builder = crate::config::apply_runtime_proxy_to_builder(
-        crate::util::tls::tls_client_builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .connect_timeout(std::time::Duration::from_secs(10))
-            .redirect(reqwest::redirect::Policy::none()),
-        service_key,
-    );
-    if let Some(pem) = config
-        .cloud_provider_ca_certs
-        .get(entry.slug.trim())
-        .filter(|pem| !pem.is_empty())
-    {
-        for cert in crate::util::tls::parse_ca_bundle(pem)? {
-            client_builder = client_builder.add_root_certificate(cert);
-        }
-    }
-    let client = client_builder
-        .build()
-        .map_err(|_| "Could not build secure provider catalogue probe client".to_string())?;
+    // This probe carries provider credentials, including custom x-api-key
+    // headers that reqwest does not strip from redirects. Reuse the native
+    // no-redirect transport builder with the same TLS roots, proxy and CA.
+    let client = crate::util::tls::credentialed_client_builder(
+        "providers.list_models",
+        config
+            .cloud_provider_ca_certs
+            .get(entry.slug.trim())
+            .map(String::as_str)
+            .filter(|pem| !pem.is_empty()),
+    )?
+    .timeout(std::time::Duration::from_secs(30))
+    .connect_timeout(std::time::Duration::from_secs(10))
+    .build()
+    .map_err(|_| "Could not build secure provider catalogue probe client".to_string())?;
 
     // Managed backend (`openhuman`) needs a different URL *and* a different
     // credential than every BYOK provider above, so neither `entry.endpoint`

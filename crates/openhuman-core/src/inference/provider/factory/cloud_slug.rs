@@ -558,23 +558,30 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         crate::security::egress::EgressDescriptor::inference(&slug, &effective_model, true),
     );
 
-    let http = match config
-        .cloud_provider_ca_certs
-        .get(&slug)
-        .filter(|pem| !pem.is_empty())
-    {
-        Some(pem) => {
-            let label = if anthropic_native {
-                "provider.anthropic"
-            } else {
-                "provider.compatible"
-            };
-            match crate::util::tls::client_with_ca_bundle(pem, label) {
-                Ok(http) => Some(http),
-                Err(error) => return Some(Err(anyhow::anyhow!(error))),
-            }
-        }
-        None => None,
+    // Always pin credentialed native inference requests to their configured
+    // origin. Redirects could carry custom authentication headers (x-api-key)
+    // to another URL, because reqwest only strips a fixed header allowlist.
+    // This preserves platform TLS, user proxy routing and optional private CAs.
+    let service_key = if anthropic_native {
+        "provider.anthropic"
+    } else {
+        "provider.compatible"
+    };
+    let http = match crate::util::tls::credentialed_client_builder(
+        service_key,
+        config
+            .cloud_provider_ca_certs
+            .get(&slug)
+            .map(String::as_str)
+            .filter(|pem| !pem.is_empty()),
+    )
+    .and_then(|builder| {
+        builder
+            .build()
+            .map_err(|_| "Could not build secure provider inference HTTP client".to_string())
+    }) {
+        Ok(client) => Some(client),
+        Err(error) => return Some(Err(anyhow::anyhow!(error))),
     };
     let auth_style = cloud_spec::registry_auth_style(entry.auth_style)
         .expect("managed JWT entries returned above");
