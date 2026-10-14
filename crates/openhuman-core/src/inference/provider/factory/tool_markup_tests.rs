@@ -500,6 +500,35 @@ async fn qnml_stream_buffers_tool_markup_and_emits_one_normalized_terminal_resul
     assert!(result.message.content.is_empty());
 }
 
+
+#[tokio::test]
+async fn tagged_json_final_answer_never_flashes_protocol_tags_in_chat() {
+    use futures::StreamExt;
+    let adapter = TextToolCompatModel::new(
+        Arc::new(FakeTaggedModel {
+            body: "<think>private</think><final_answer>Safe, clean answer</final_answer>".into(),
+        }),
+        ToolCallCodec::TaggedJson,
+    );
+    let events: Vec<ModelStreamItem> = adapter
+        .stream(&(), ModelRequest::default())
+        .await
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(events.len(), 2);
+    let ModelStreamItem::Completed(response) = &events[1] else {
+        panic!("expected terminal normalized answer");
+    };
+    assert_eq!(
+        response.message.content.last(),
+        Some(&ContentBlock::Text("Safe, clean answer".into())),
+    );
+    assert!(!response.message.content.iter().any(|block| {
+        matches!(block, ContentBlock::Text(text) if text.contains("<final_answer>"))
+    }));
+}
+
 #[tokio::test]
 async fn ordinary_chat_stream_still_emits_native_text_deltas() {
     use futures::StreamExt;
