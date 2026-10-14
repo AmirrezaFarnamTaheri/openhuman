@@ -1,0 +1,24 @@
+name: Prodex convergence verification
+
+on:
+  push:
+    branches:
+      - feat/prodex-convergence
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+concurrency:
+  group: prodex-convergence-verify
+  cancel-in-progress: true
+
+jobs:
+  frontend-and-core:
+    uses: ./.github/workflows/test-reusable.yml
+    with:
+      run_unit: true
+      run_rust_core: true
+      run_rust_tauri: false
