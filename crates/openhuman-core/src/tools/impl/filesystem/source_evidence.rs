@@ -23,6 +23,7 @@ const MAX_LINE_CHARS: usize = 160;
 const MAX_DEPTH: usize = 12;
 const MAX_VISITED_ENTRIES: usize = 8192;
 const MAX_VERIFY_LINES: usize = 80;
+const MAX_JSON_RESPONSE_BYTES: usize = 26_000;
 const SKIP_DIRS: &[&str] = &[".git", ".svn", ".hg", "node_modules", "target", ".next", "dist", "build", ".venv", "__pycache__"];
 const SKIP_FILES: &[&str] = &[".env", ".env.local", ".env.production", ".env.development", ".npmrc", ".pypirc", "id_rsa", "id_ed25519", "credentials.json", "secrets.json"];
 
@@ -39,6 +40,9 @@ impl SourceEvidenceTool {
         };
         let op = args.get("operation").and_then(Value::as_str).unwrap_or("scan");
         let path = args.get("path").and_then(Value::as_str).unwrap_or(".");
+        if explicitly_targets_symlink(&scoped, path) {
+            anyhow::bail!("source evidence cannot follow explicitly addressed symbolic links");
+        }
         let resolved = scoped.validate_path(path).await.map_err(anyhow::Error::msg)?;
         let root = scoped.validate_path(".").await.map_err(anyhow::Error::msg)?;
         if !resolved.starts_with(&root) {
@@ -84,6 +88,25 @@ impl Tool for SourceEvidenceTool {
     async fn execute_with_context(&self, args: Value, _options: ToolCallOptions, context: Option<&dyn ToolRunContext>) -> anyhow::Result<ToolResult> {
         self.run(args, context).await
     }
+}
+
+/// Respect the same no-symlink rule for direct paths and directory walks.
+/// Canonicalizing first would erase the link and let explicit scans bypass it.
+fn explicitly_targets_symlink(policy: &SecurityPolicy, path: &str) -> bool {
+    let requested = Path::new(path);
+    let mut cursor = if requested.is_absolute() {
+        PathBuf::new()
+    } else {
+        policy.action_dir.clone()
+    };
+    for part in requested.components() {
+        cursor.push(part);
+        if std::fs::symlink_metadata(&cursor)
+            .is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+            return true;
+        }
+    }
+    false
 }
 
 fn ignored(path: &Path, directory: bool) -> bool {
@@ -255,6 +278,19 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
             anyhow::bail!("invalid focus_path");
         }
         let mut graph = build_graph(&graph_docs, max_edges, focus);
+        if truncated.is_some() {
+            // An observed unique candidate is not unique in a catalog whose
+            // unscanned files could contain a second matching implementation.
+            // Incomplete evidence must not justify definite edges or impact.
+            if let Some(edges) = graph["edges"].as_array_mut() {
+                for edge in edges {
+                    edge["status"] = json!("catalog_incomplete");
+                    edge["to"] = Value::Null;
+                }
+            }
+            graph["impact"] = json!([]);
+            graph["impact_omitted_reason"] = json!("incomplete_catalog");
+        }
         graph["generation"] = json!(generation);
         graph["next_after_path"] = json!(next_after_path);
         graph["scan_complete"] = json!(truncated.is_none());
@@ -263,13 +299,25 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
         if truncated.is_some() { graph["edges_complete"] = json!(false); }
         return Ok(graph);
     }
-    Ok(json!({
+    let mut response = json!({
         "operation":"scan","generation":generation,
         "complete":truncated.is_none(),"truncated_reason":truncated,
         "next_after_path":next_after_path,
         "observed_bytes":source_bytes, "files":files,
         "snapshot_atomic":false
-    }))
+    });
+    // Maintain JSON validity: downstream tool-output clipping is text-based.
+    while response.to_string().len() > MAX_JSON_RESPONSE_BYTES {
+        let Some(matches) = response["files"].as_array_mut().and_then(|files| {
+            files.iter_mut().rev().find_map(|file| {
+                file["matches"].as_array_mut().filter(|matches| !matches.is_empty())
+            })
+        }) else { break; };
+        matches.pop();
+        response["complete"] = json!(false);
+        response["truncated_reason"] = json!("max_response_bytes");
+    }
+    Ok(response)
 }
 async fn verify(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value) -> anyhow::Result<Value> {
     let expected = args.get("expected_sha256").and_then(Value::as_str)
@@ -287,8 +335,17 @@ async fn verify(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value)
     let lines: Vec<Value> = text.lines().enumerate()
         .filter(|(i,_)| i+1 >= start && i+1 <= end)
         .map(|(i,line)| json!({"line":i+1,"text":bounded_line(line)})).collect();
-    Ok(json!({"operation":"verify","path":relative(root,path),"source_hash":actual,
-        "verified":true,"lines":lines,"snapshot_atomic":false}))
+    let mut result = json!({"operation":"verify","path":relative(root,path),"source_hash":actual,
+        "verified":true,"lines":lines,"lines_complete":true,"next_line":Value::Null,
+        "snapshot_atomic":false});
+    while result.to_string().len() > MAX_JSON_RESPONSE_BYTES {
+        let Some(removed) = result["lines"].as_array_mut().and_then(Vec::pop) else {
+            anyhow::bail!("source verification result cannot fit the tool output budget");
+        };
+        result["lines_complete"] = json!(false);
+        result["next_line"] = removed["line"].clone();
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
