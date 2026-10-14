@@ -248,17 +248,18 @@ impl ChatModel<()> for QnmlCompatModel {
                         bytes = bytes.saturating_add(delta.content.len());
                     }
                     ModelStreamItem::Completed(response) => {
-                        bytes = bytes.saturating_add(
-                            response
-                                .message
-                                .content
-                                .iter()
-                                .filter_map(|block| match block {
-                                    ContentBlock::Text(text) => Some(text.len()),
-                                    _ => None,
-                                })
-                                .sum::<usize>(),
-                        );
+                        let response_bytes: usize = response
+                            .message
+                            .content
+                            .iter()
+                            .filter_map(|block| match block {
+                                ContentBlock::Text(text) => Some(text.len()),
+                                _ => None,
+                            })
+                            .sum();
+                        // The final response repeats the content already seen
+                        // in deltas, so count the larger view, not their sum.
+                        bytes = bytes.max(response_bytes);
                         completed = true;
                     }
                     ModelStreamItem::Deferred(handle) => {
