@@ -163,7 +163,7 @@ pub fn is_builtin_cloud_slug(slug: &str) -> bool {
 /// Whether a built-in cloud provider exposes the OpenAI **Responses API**
 /// (`/v1/responses`).
 ///
-/// OpenAI and the optional Prodex gateway serve `/responses`; most other
+/// OpenAI, the optional Prodex gateway, and Nebius serve `/responses`; most other
 /// built-ins (DeepSeek, Groq, Mistral, Fireworks, ...) are chat-completions-only.
 /// Enabling the chat-completions-404 → `/responses` fallback for those
 /// guarantees a second 404 against an endpoint that does not exist, which floods
@@ -177,7 +177,7 @@ pub fn is_builtin_cloud_slug(slug: &str) -> bool {
 /// a genuine OpenAI proxy that does support `/responses`, so the factory keeps
 /// the fallback for those.
 pub fn builtin_cloud_supports_responses_api(slug: &str) -> bool {
-    matches!(slug, "openai" | "prodex")
+    matches!(slug, "openai" | "prodex" | "nebius")
 }
 
 /// Extract the lowercased authority host from an endpoint URL, dropping the
@@ -244,7 +244,7 @@ pub fn host_is_builtin_cloud_provider(host: &str) -> bool {
 ///
 /// Derived entirely from [`BUILTIN_CLOUD_PROVIDERS`]: a host is chat-only when
 /// some built-in preset uses it AND no preset at that host advertises the
-/// Responses API (only OpenAI's `api.openai.com` does). This closes the
+/// Responses API (including Nebius and the opt-in Prodex gateway). This closes the
 /// custom-slug gap behind the builtin-slug gate
 /// ([`builtin_cloud_supports_responses_api`]): a user slug pointed at, e.g.,
 /// `integrate.api.nvidia.com` must never attempt `/responses` (TAURI-RUST-5A1),
