@@ -4,6 +4,29 @@
 
 The 20 additional peer ZIP archives yielded 25,264 central-directory entries, 10,750 eligible source candidates, and 82,739 lexical declaration occurrences. A second strict fingerprint analysis indexed 9,768 source files and 1,045,322 normalized 12-line windows. Only the Mem0/Ruflo alert-dialog scaffolding yielded 108 exact cross-peer windows. Neither method-name overlap nor absence of exact code windows establishes semantic equivalence or difference.
 
+## Structural parser deep pass
+
+An additional offline syntax-tree audit read **9,724** eligible JS/TS and Python
+peer source files without executing archive code. TypeScript 5.8.3 parsed
+**6,759** JS/TS files and indexed 133,330 declarations, 29,226
+imports, and 562,846 call occurrences. Python 3.13 accepted 2,937 of 2,965
+files (28 recorded parse failures), indexing 40,239 declarations,
+20,344 imports and 225,170 call occurrences. The combined AST inventories
+contain **173,569 declarations, 49,570 import references and 788,016 calls**.
+
+The more selective normalized method-body comparison found four cross-peer pairs
+with qualifying exact matches: Mem0/Ruflo (16), Jev-Auto-Router/Jev-Codex
+Router (1), CLI-Anything/Mem0 (1), and SWE-agent/Mem0 (1).
+Many are UI/test scaffolds; one shared Mem0/Ruflo cosine-similarity helper
+lacks explicit zero-norm and dimensional-mismatch guards. It must not
+supersede OpenHuman's vector implementation without numerical and
+runtime parity tests. ASTs reveal structure, not semantic superiority.
+
+The separate audit bundle includes per-file source hashes, AST method ranges,
+body fingerprints, import references, parser-error records and scripts.
+Rust, C#, Go and other peer languages remain in the lexical catalog but
+were not processed by these Python/TypeScript AST parsers.
+
 ## Actual code committed on this PR
 
 1. Source Evidence: opt-in SHA-256 evidence, per-file host authorization, bounded scans, pagination, hash-checked line retrieval, explicit partial results and JSON-safe output.
