@@ -6,7 +6,7 @@ import Button from '../../../ui/Button';
 import TextField from '../../../ui/TextField';
 import {
   authListProviderCredentials, authRemoveProviderCredentials,
-  authStoreProviderCredentials, type AuthProfileSummary,
+  authStoreProviderCredentials, authActivateProviderCredentials, type AuthProfileSummary,
 } from '../../../../utils/tauriCommands/auth';
 import type { CloudProvider } from './aiPanelTypes';
 import { accountFleetEligible, validateAccountApiKey, validateNamedProviderAccount } from './providerAccountOps';
@@ -21,6 +21,7 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [removeConfirmation, setRemoveConfirmation] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
 
@@ -65,6 +66,20 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
       setRevision(value => value + 1);
     } catch {
       setError('Could not save account to native credential storage.');
+    } finally { setBusy(false); }
+  };
+
+  const activate = async (profile: string) => {
+    if (busy || !active) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await authActivateProviderCredentials({ provider: 'provider:' + active, profile });
+      setNotice('Preferred account updated. New model requests use the selected profile first.');
+      setRevision(value => value + 1);
+    } catch {
+      setError('Could not select provider account.');
     } finally { setBusy(false); }
   };
 
@@ -119,6 +134,7 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
         Add account to secure vault
       </Button>
       {error && <p role="alert" className="text-xs text-coral-600">{error}</p>}
+      {notice && <p role="status" className="text-xs text-content-secondary">{notice}</p>}
       {loading && <p className="text-xs text-content-muted">Loading accounts…</p>}
       <div className="space-y-1">
         {accounts.map(row => (
@@ -126,12 +142,16 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
             <span>{row.profile_name === 'default' ? 'Default key' : row.profile_name}
               <span className="ml-1 text-content-muted">({row.has_token ? 'stored' : 'missing key'})</span>
             </span>
-            {row.profile_name !== 'default' && row.profile_name !== 'oauth' && (
-              <Button type="button" variant="secondary" size="xs" disabled={busy}
-                onClick={() => void remove(row.profile_name)}>
-                {removeConfirmation === row.profile_name ? 'Confirm remove' : 'Remove'}
-              </Button>
-            )}
+            <div className="flex gap-2">
+              <Button type="button" variant="tertiary" size="xs" disabled={busy}
+                onClick={() => void activate(row.profile_name)}>Prefer</Button>
+              {row.profile_name !== 'default' && row.profile_name !== 'oauth' && (
+                <Button type="button" variant="secondary" size="xs" disabled={busy}
+                  onClick={() => void remove(row.profile_name)}>
+                  {removeConfirmation === row.profile_name ? 'Confirm remove' : 'Remove'}
+                </Button>
+              )}
+            </div>
           </div>
         ))}
         {!loading && accounts.length === 0 && <p className="text-xs text-content-muted">
