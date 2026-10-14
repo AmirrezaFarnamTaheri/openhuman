@@ -149,3 +149,25 @@ fn generated_graph_json_respects_output_budget_without_broken_json() {
     assert!(roundtrip["edges"].is_array());
     assert!(roundtrip["nodes"].is_array());
 }
+
+
+#[test]
+fn truncated_graph_does_not_report_unprovable_reverse_impact() {
+    let mut docs = Vec::new();
+    for i in 0..32 {
+        let stem = format!("{}_{}", "a".repeat(125), i);
+        let mut imports = String::new();
+        for j in 0..32 {
+            if j != i {
+                imports.push_str(&format!("import './{}_{}';\n", "a".repeat(125), j));
+            }
+        }
+        docs.push(source(&format!("src/{stem}.ts"), &imports));
+    }
+    let graph = build_graph(&docs, 64, Some(&docs[0].path));
+    assert_eq!(graph["edges_complete"], false);
+    if graph["edge_truncated_reason"] == "max_graph_result_bytes" {
+        assert_eq!(graph["impact"], serde_json::json!([]));
+        assert_eq!(graph["impact_omitted_reason"], "bounded_edges");
+    }
+}
