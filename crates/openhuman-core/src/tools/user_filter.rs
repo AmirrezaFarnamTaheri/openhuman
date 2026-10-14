@@ -290,8 +290,9 @@ pub(crate) fn filter_tools_by_user_preference(
     let allowed = expand_enabled_tool_names(enabled_tool_names);
     if allowed.is_empty() {
         log::warn!(
-            "[tool-filter] enabled_tools was non-empty but none matched known UI IDs or tool names; leaving tools unfiltered for safety"
+            "[tool-filter] enabled_tools contained no recognized tools; preserving legacy fallback except opt-in source evidence"
         );
+        tools.retain(|tool| tool.name() != "source_evidence");
         return;
     }
 
