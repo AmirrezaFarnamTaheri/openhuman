@@ -279,7 +279,9 @@ pub(crate) fn filter_tools_by_user_preference(
     enabled_tool_names: &[String],
 ) {
     if enabled_tool_names.is_empty() {
-        // Empty list means all tools are enabled (user has not configured preferences yet).
+        // An unset legacy snapshot enables baseline tools, but never an opt-in
+        // source-indexing surface: source contents may be sensitive.
+        tools.retain(|tool| tool.name() != "source_evidence");
         return;
     }
 
