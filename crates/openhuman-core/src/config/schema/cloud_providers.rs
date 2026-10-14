@@ -113,6 +113,33 @@ pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
         endpoint: "https://api.xiaomimimo.com/v1",
         auth_style: AuthStyle::Bearer,
     },
+    // Key-only OpenAI-compatible peers with documented public base URLs.
+    // Model availability and per-model transport features are not implied.
+    BuiltinCloudProvider {
+        slug: "cohere",
+        label: "Cohere",
+        endpoint: "https://api.cohere.ai/compatibility/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "tokenrouter",
+        label: "TokenRouter",
+        endpoint: "https://api.tokenrouter.io/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    // Region-scoped ModelArk access; AP and EU keys are not interchangeable.
+    BuiltinCloudProvider {
+        slug: "byteplus-modelark-ap",
+        label: "BytePlus ModelArk (Asia Pacific)",
+        endpoint: "https://ark.ap-southeast.bytepluses.com/api/v3",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "byteplus-modelark-eu",
+        label: "BytePlus ModelArk (Europe)",
+        endpoint: "https://ark.eu-west.bytepluses.com/api/v3",
+        auth_style: AuthStyle::Bearer,
+    },
     // Opt-in loopback gateway; OpenHuman never forwards Codex OAuth credentials.
     BuiltinCloudProvider {
         slug: "prodex",
