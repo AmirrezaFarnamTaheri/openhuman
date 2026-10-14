@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::Value;
 use tinyinference_llm::message::ContentBlock;
-use tinyinference_llm::model::{ModelResponse, ToolChoice};
+use tinyinference_llm::model::ModelResponse;
 use tinyinference_llm::tool::{ToolCall, ToolSchema};
 
 use super::{MAX_OUTPUT_BYTES, MAX_TOOL_CALLS, MAX_VALUE_BYTES};
