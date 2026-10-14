@@ -56,7 +56,6 @@ fn relative_target(source: &str, spec: &str) -> Option<String> {
 }
 
 fn candidate_paths(source: &str, spec: &str, kind: &str) -> Vec<String> {
-    let Some(stem) = relative_target(source, spec) else { return Vec::new(); };
     if kind == "module" {
         // foo.rs nested-module directory convention differs from lib/main/mod.
         let mut parent = source.rsplit_once('/').map_or("", |(dir, _)| dir).to_string();
@@ -68,6 +67,7 @@ fn candidate_paths(source: &str, spec: &str, kind: &str) -> Vec<String> {
         let prefix = if parent.is_empty() { String::new() } else { format!("{parent}/") };
         return vec![format!("{prefix}{spec}.rs"), format!("{prefix}{spec}/mod.rs")];
     }
+    let Some(stem) = relative_target(source, spec) else { return Vec::new(); };
     if Path::new(&stem).extension().is_some() {
         vec![stem]
     } else {
