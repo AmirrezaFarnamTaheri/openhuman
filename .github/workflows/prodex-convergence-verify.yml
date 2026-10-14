@@ -12,7 +12,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: prodex-convergence-verify
+  group: prodex-convergence-verify-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

@@ -99,8 +99,9 @@ fn is_builtin_cloud_slug_matches_presets_only() {
 }
 
 #[test]
-fn only_openai_builtin_exposes_responses_api() {
+fn only_openai_and_prodex_builtins_expose_responses_api() {
     assert!(builtin_cloud_supports_responses_api("openai"));
+    assert!(builtin_cloud_supports_responses_api("prodex"));
     for slug in ["deepseek", "groq", "mistral", "fireworks", "together"] {
         assert!(
             !builtin_cloud_supports_responses_api(slug),
@@ -112,16 +113,16 @@ fn only_openai_builtin_exposes_responses_api() {
 /// Drift guard (TAURI-RUST-5EN): couple the capability helper to the
 /// preset list so adding a new built-in that wrongly claims the Responses
 /// API — or renaming `openai` — fails CI rather than silently re-enabling
-/// the guaranteed-404 `/responses` fallback. OpenAI's first-party endpoint
-/// is the only built-in that serves `/v1/responses`.
+/// the guaranteed-404 `/responses` fallback. OpenAI and the opt-in Prodex
+/// gateway serve `/v1/responses`; other built-ins are chat-completions-only.
 #[test]
 fn responses_api_capability_is_coupled_to_the_preset_list() {
     for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
-        let expected = provider.slug == "openai";
+        let expected = matches!(provider.slug, "openai" | "prodex");
         assert_eq!(
             builtin_cloud_supports_responses_api(provider.slug),
             expected,
-            "built-in {} Responses-API capability drifted from the openai-only invariant",
+            "built-in {} Responses-API capability drifted from the explicit-capability invariant",
             provider.slug
         );
     }

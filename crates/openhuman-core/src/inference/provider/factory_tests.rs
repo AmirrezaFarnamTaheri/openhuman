@@ -274,3 +274,49 @@ fn prodex_gateway_uses_exactly_one_scoped_virtual_key() {
     assert!(!cloud_slug::prodex_has_single_virtual_key("vk-one;vk-two"));
     assert!(!cloud_slug::prodex_has_single_virtual_key("vk-one\nvk-two"));
 }
+
+#[test]
+fn prodex_gateway_rejects_unsafe_default_and_model_image_destinations() {
+    for url in [
+        "http://remote.example/v1",
+        "http://127.0.0.1.attacker.example/v1",
+        "https://user:secret@example.com/v1",
+        "https://example.com/v1?token=secret",
+        "file:///tmp/elsewhere",
+    ] {
+        for model_override in [false, true] {
+            let mut entry = openai_entry("p_prodex_images", "prodex");
+            entry.endpoint = "http://127.0.0.1:4000/v1".into();
+            if model_override {
+                entry.model_image_endpoints.insert("unused-image-model".into(), url.into());
+            } else {
+                entry.image_endpoint = Some(url.into());
+            }
+            let config = config_with_providers(vec![entry]);
+            let err = cloud_slug::resolve_cloud_slug("chat", "prodex", "test-model", &config)
+                .err()
+                .expect("unsafe image URL must fail before any credential lookup");
+            assert!(err.to_string().contains("HTTPS"), "{url}: {err}");
+        }
+    }
+}
+
+#[test]
+fn prodex_gateway_allows_safe_image_destinations() {
+    let mut entry = openai_entry("p_prodex_images", "prodex");
+    entry.endpoint = "http://127.0.0.1:4000/v1".into();
+    entry.image_endpoint = Some("https://images.example.com/v1".into());
+    entry.model_image_endpoints.insert(
+        "vision".into(),
+        "http://[::1]:4001/v1".into(),
+    );
+    assert!(
+        cloud_slug::prodex_gateway_destinations_are_safe(&entry),
+        "TLS and loopback destinations are safe for a scoped gateway key"
+    );
+    entry.model_image_endpoints.insert(
+        "another-model".into(),
+        "http://remote.example/v1".into(),
+    );
+    assert!(!cloud_slug::prodex_gateway_destinations_are_safe(&entry));
+}
