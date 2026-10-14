@@ -153,6 +153,32 @@ fn allowed_qnml_tools(request: &ModelRequest) -> Vec<ToolSchema> {
     }
 }
 
+/// A provider's accepted wire format is not permission to silently weaken
+/// the tool-choice contract. In particular, Required and Tool(name) need at
+/// least one actual tool call, even when the gateway returns ordinary prose.
+fn enforce_tool_choice(
+    response: ModelResponse,
+    choice: &ToolChoice,
+) -> tinyinference_llm::Result<ModelResponse> {
+    match choice {
+        ToolChoice::Required if response.message.tool_calls.is_empty() => {
+            Err(invalid("required tool call missing from model response"))
+        }
+        ToolChoice::Tool(_) if response.message.tool_calls.is_empty() => {
+            Err(invalid("selected tool call missing from model response"))
+        }
+        ToolChoice::Tool(name)
+            if response.message.tool_calls.iter().any(|call| call.name != *name) =>
+        {
+            Err(invalid("gateway returned a tool outside the named tool choice"))
+        }
+        ToolChoice::None if !response.message.tool_calls.is_empty() => {
+            Err(invalid("gateway returned a tool despite tool_choice none"))
+        }
+        _ => Ok(response),
+    }
+}
+
 /// Honors native tool_calls if already present: compatibility never overrides
 /// a proper provider wire response, and never changes user-visible plain text.
 pub(super) fn rewrite_qnml_response(
@@ -220,8 +246,9 @@ impl ChatModel<()> for QnmlCompatModel {
         request: ModelRequest,
     ) -> tinyinference_llm::Result<ModelResponse> {
         let declared = allowed_qnml_tools(&request);
+        let choice = request.tool_choice.clone();
         let response = self.inner.invoke(state, request).await?;
-        rewrite_qnml_response(response, &declared)
+        enforce_tool_choice(rewrite_qnml_response(response, &declared)?, &choice)
     }
 
     async fn stream(
@@ -230,7 +257,11 @@ impl ChatModel<()> for QnmlCompatModel {
         request: ModelRequest,
     ) -> tinyinference_llm::Result<ModelStream> {
         let declared = allowed_qnml_tools(&request);
+        let choice = request.tool_choice.clone();
         if declared.is_empty() {
+            if matches!(choice, ToolChoice::Required | ToolChoice::Tool(_)) {
+                return Err(invalid("requested tool is not declared"));
+            }
             return self.inner.stream(state, request).await;
         }
         let mut original = self.inner.stream(state, request).await?;
@@ -291,6 +322,7 @@ impl ChatModel<()> for QnmlCompatModel {
             match accumulator
                 .finish()
                 .and_then(|result| rewrite_qnml_response(result, &declared))
+                .and_then(|result| enforce_tool_choice(result, &choice))
             {
                 Ok(response) => ModelStreamItem::Completed(response),
                 Err(tinyinference_llm::Error::Provider(error)) => {
