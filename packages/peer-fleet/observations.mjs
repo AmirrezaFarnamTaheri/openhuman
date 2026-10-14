@@ -79,10 +79,22 @@ export function mergeQuotaSnapshots(previous,next) {
   if (!previous) return next;
   if (!next) return previous;
   if (previous.provider !== next.provider || previous.accountRef !== next.accountRef) throw new Error('quota scope mismatch');
-  if (next.observedAt < previous.observedAt ||
-      (next.observedAt === previous.observedAt && previous.windows.length>=next.windows.length) ||
-      (next.windows.length===0 && next.state!=='forbidden')) return previous;
-  return next;
+  if (next.observedAt < previous.observedAt) return previous;
+  // A fresh 403 is authoritative even when it shares the timestamp of the
+  // cached success. Never permit cached available quotas to mask a denial.
+  if (next.state === 'forbidden') return next;
+  if (next.windows.length === 0) return previous;
+  if (next.observedAt === previous.observedAt && previous.windows.length >= next.windows.length) return previous;
+  // Partial per-model updates must not erase unrelated valid quota windows.
+  // Expired windows are not carried forward into the new observation.
+  const merged = new Map(previous.windows
+    .filter(window => window.resetAt > next.observedAt)
+    .map(window => [window.id, window]));
+  for (const window of next.windows) merged.set(window.id, window);
+  const windows = [...merged.values()].sort((a, b) => a.id.localeCompare(b.id));
+  const state = next.freshness === 'stale' || !windows.length ? 'unknown'
+    : windows.some(window => window.remainingPercent === 0) ? 'exhausted' : 'available';
+  return {...next, windows, state, tier: next.tier ?? previous.tier};
 }
 
 /** Read-only summary; stale and forbidden observations never imply capacity. */

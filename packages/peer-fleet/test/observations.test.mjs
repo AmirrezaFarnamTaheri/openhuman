@@ -72,3 +72,18 @@ test('invalid identity and nonpositive observation timestamps are rejected',()=>
   assert.throws(()=>normalizeAccountQuota({provider:'antigravity',accountRef:'',origin:'cockpit-tools',now,payload:baseline}));
   assert.throws(()=>normalizeAccountQuota({provider:'antigravity',accountRef:'same',origin:'cockpit-tools',now,payload:{...baseline,last_updated:0}}));
 });
+
+test('partial later refresh merges independent model windows without losing unmentioned live buckets',()=>{
+ const previous=normalizeAccountQuota({provider:'antigravity',accountRef:'id',origin:'antigravity-manager',now,payload:baseline});
+ const later=normalizeAccountQuota({provider:'antigravity',accountRef:'id',origin:'antigravity-manager',now,payload:{last_updated:now/1000-10,models:[{name:'gemini-3-flash',percentage:40,reset_time:'2026-10-15T12:00:00Z'}]}});
+ const merged=mergeQuotaSnapshots(previous,later);
+ assert.equal(merged.windows.length,3);
+ assert.equal(merged.windows.find(w=>w.id==='model:gemini-3-flash').remainingPercent,40);
+ assert.equal(merged.windows.find(w=>w.id==='bucket:gemini-weekly').remainingPercent,50);
+});
+
+test('a forbidden observation supersedes cached availability even at an equal timestamp',()=>{
+ const previous=normalizeAccountQuota({provider:'antigravity',accountRef:'id',origin:'cockpit-tools',now,payload:baseline});
+ const blocked=normalizeAccountQuota({provider:'antigravity',accountRef:'id',origin:'cockpit-tools',now,payload:{...baseline,is_forbidden:true,models:[],quota_groups:[]}});
+ assert.equal(mergeQuotaSnapshots(previous,blocked).state,'forbidden');
+});
