@@ -19,7 +19,7 @@ import {
   ProviderProbeError,
   slugifyCustomProviderName,
 } from './aiPanelTypes';
-import { parseModelImageEndpoints, validModelFleetEndpoint } from './modelFleetOps';
+import { parseModelImageEndpoints, validModelFleetEndpoint, validModelFleetImageEndpoint } from './modelFleetOps';
 
 export const CloudProviderEditor = ({
   initial,
@@ -94,9 +94,14 @@ export const CloudProviderEditor = ({
       if (slugError) {
         throw new Error(slugError);
       }
-      if (!validModelFleetEndpoint(imageEndpoint) || !validModelFleetEndpoint(endpoint)) {
+      if (!validModelFleetEndpoint(endpoint)) {
         throw new Error(
-          'Provider endpoints must be valid http(s) base URLs without embedded credentials.'
+          'Provider endpoint must be a valid http(s) base URL without embedded credentials.'
+        );
+      }
+      if (!validModelFleetImageEndpoint(imageEndpoint)) {
+        throw new Error(
+          'Image endpoints require HTTPS or loopback HTTP, without URL credentials.'
         );
       }
       const imageMap = parseModelImageEndpoints(modelImageMappingText);
