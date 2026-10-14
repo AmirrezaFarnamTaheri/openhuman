@@ -86,6 +86,28 @@ than a stalled turn. The ranker sets a 6 s per-evaluation deadline (measured
 evaluations through the proxy run 0.7 to 1.9 s at p50); the evaluator's own
 default is 3 s.
 
+### System-One context and bounded decisions
+
+Tool search does **not** forward an entire agent transcript to the decision model.
+The wire state contains the tool-selection intent, at most six most-recent
+nonblank **user** turns (in chronological order, 500 Unicode scalar values
+per turn), and truncation markers when relevant. An abnormally long current
+intent keeps its first and last 2,000 Unicode scalars with an omission marker,
+up to a 4,000-scalar content budget plus the marker. This retains the original
+task objective alongside late constraints without concealing truncation.
+
+Choice options are distinct key/description pairs from the existing
+retrieval shortlist. Duplicate names, more than 64 options or descriptions
+over 2,000 Unicode scalars are refused before remote egress; the harness's
+existing ranker fallback handles rejection. These guards are **not** semantic
+summarization and are not proof that the selected tool is appropriate.
+
+The Jev request does not include assistant drafts, system instructions, tool
+outputs, untrusted page contents, credentials, private memory or all session
+turns. Any future addition of such state requires explicit opt-in privacy
+review, permission gating and bounded provenance. The configured
+Jev route still determines where the user-turn and shortlist material is sent.
+
 ## Layout
 
 | Path | What it does |
