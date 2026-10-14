@@ -805,13 +805,15 @@ interface CatalogueCredentialEvidence {
 
 /** Model catalogs can be public. HTTP 200 alone does not authenticate a key. */
 function verifyCatalogueCredential(probe?: CatalogueCredentialEvidence): void {
+  const checked = probe?.checked_keys ?? Number.NaN;
+  const rejected = probe?.rejected_keys ?? Number.NaN;
   if (
     probe?.authenticated !== true ||
-    !Number.isInteger(probe.checked_keys) ||
-    (probe.checked_keys ?? 0) < 1 ||
-    !Number.isInteger(probe.rejected_keys) ||
-    (probe.rejected_keys ?? 0) < 0 ||
-    (probe.rejected_keys ?? 0) >= (probe.checked_keys ?? 0)
+    !Number.isInteger(checked) ||
+    checked < 1 ||
+    !Number.isInteger(rejected) ||
+    rejected < 0 ||
+    rejected >= checked
   ) {
     throw new Error('Provider API key was not verified: /models may be publicly accessible.');
   }
