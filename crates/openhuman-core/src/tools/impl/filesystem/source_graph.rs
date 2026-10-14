@@ -37,6 +37,33 @@ fn js_require_pattern() -> &'static Regex {
     pattern(&PATTERN, r#"\brequire\s*\(\s*['"](\.[^'"]+)['"]\s*\)"#)
 }
 
+fn js_dynamic_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    pattern(&PATTERN, r#"\bimport\s*\(\s*['"](\.[^'"]+)['"]\s*\)"#)
+}
+fn python_from_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    pattern(&PATTERN, r"^\s*from\s+(\.+[A-Za-z_0-9.]*)\s+import\s+(.+)$")
+}
+fn python_relative_target(source: &str, spec: &str) -> Option<String> {
+    let dots = spec.bytes().take_while(|byte| *byte == b'.').count();
+    if dots == 0 { return None; }
+    let module = spec.get(dots..)?;
+    let mut parts: Vec<&str> = source.split('/').collect();
+    parts.pop();
+    for _ in 1..dots { parts.pop()?; }
+    if parts.is_empty() { return None; }
+    if !module.is_empty() {
+        for piece in module.split('.') {
+            let valid = !piece.is_empty() &&
+                piece.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
+            if !valid { return None; }
+            parts.push(piece);
+        }
+    }
+    Some(parts.join("/"))
+}
+
 /// Normalize an import specifier, not a filesystem path; this performs no I/O.
 fn relative_target(source: &str, spec: &str) -> Option<String> {
     if !spec.starts_with('.') || spec.contains('\0') || spec.contains('\\') {
@@ -66,6 +93,10 @@ fn candidate_paths(source: &str, spec: &str, kind: &str) -> Vec<String> {
         }
         let prefix = if parent.is_empty() { String::new() } else { format!("{parent}/") };
         return vec![format!("{prefix}{spec}.rs"), format!("{prefix}{spec}/mod.rs")];
+    }
+    if kind == "python_import" {
+        let Some(stem) = python_relative_target(source, spec) else { return Vec::new(); };
+        return vec![format!("{stem}.py"), format!("{stem}/__init__.py")];
     }
     let Some(stem) = relative_target(source, spec) else { return Vec::new(); };
     if matches!(
@@ -111,43 +142,74 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
         let ext = Path::new(&doc.path).extension().and_then(|e| e.to_str());
         let js = matches!(ext, Some("ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts"));
         let rust = ext == Some("rs");
-        if !js && !rust { continue; }
+        let python = ext == Some("py");
+        if !js && !rust && !python { continue; }
         let mut previous_line = "";
         for (index, line) in doc.content.lines().enumerate() {
-            let import = if rust {
+            let imports: Vec<(&str, String)> = if rust {
                 if previous_line.trim_start().starts_with("#[path") {
                     previous_line = line;
                     continue;
                 }
                 rust_mod_pattern().captures(line)
                     .map(|captures| ("module", captures[1].to_string()))
-            } else {
-                js_from_pattern().captures(line)
+                    .into_iter().collect()
+            } else if js {
+                // Conservative: ignore explicit comment-only lines.
+                if line.trim_start().starts_with("//") { continue; }
+                let mut found = Vec::new();
+                if let Some(captures) = js_from_pattern().captures(line)
                     .or_else(|| js_side_effect_pattern().captures(line))
-                    .or_else(|| js_require_pattern().captures(line))
-                    .map(|captures| ("import", captures[1].to_string()))
+                    .or_else(|| js_require_pattern().captures(line)) {
+                    found.push(("import", captures[1].to_string()));
+                }
+                if let Some(captures) = js_dynamic_pattern().captures(line) {
+                    found.push(("dynamic_import", captures[1].to_string()));
+                }
+                found
+            } else {
+                let mut found = Vec::new();
+                if let Some(captures) = python_from_pattern().captures(line) {
+                    let module = &captures[1];
+                    if module.bytes().all(|byte| byte == b'.') {
+                        for name in captures[2].split(',') {
+                            let name = name.split_whitespace().next().unwrap_or("");
+                            let valid = name.bytes().next().is_some_and(|byte| {
+                                byte.is_ascii_alphabetic() || byte == b'_'
+                            }) && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
+                            if valid {
+                                found.push(("python_import", format!("{module}{name}")));
+                            }
+                        }
+                    } else {
+                        found.push(("python_import", module.to_string()));
+                    }
+                }
+                found
             };
             previous_line = line;
-            let Some((kind, spec)) = import else { continue; };
-            let (status, target, count) = resolve(&present, candidate_paths(&doc.path, &spec, kind));
-            if edges.len() >= max_edges {
-                complete = false;
-                break 'documents;
+            for (kind, spec) in imports {
+                let (status, target, count) =
+                    resolve(&present, candidate_paths(&doc.path, &spec, kind));
+                if edges.len() >= max_edges {
+                    complete = false;
+                    break 'documents;
+                }
+                if let Some(to) = target.as_ref() {
+                    reverse.entry(to.clone()).or_default().insert(doc.path.clone());
+                }
+                edges.push(json!({
+                    "from":doc.path,
+                    "to":target,
+                    "kind":kind,
+                    "status":status,
+                    "candidate_count":count,
+                    "line":index+1,
+                    "specifier":spec.chars().take(120).collect::<String>(),
+                    "evidence_hash":doc.source_hash,
+                    "confidence":"syntactic_only"
+                }));
             }
-            if let Some(to) = target.as_ref() {
-                reverse.entry(to.clone()).or_default().insert(doc.path.clone());
-            }
-            edges.push(json!({
-                "from":doc.path,
-                "to":target,
-                "kind":kind,
-                "status":status,
-                "candidate_count":count,
-                "line":index+1,
-                "specifier":spec.chars().take(120).collect::<String>(),
-                "evidence_hash":doc.source_hash,
-                "confidence":"syntactic_only"
-            }));
         }
     }
 
@@ -176,7 +238,7 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
         "impact_exhaustive":false,
         "semantic_graph":false,
         "snapshot_atomic":false,
-        "supported_syntax":["rust_mod", "javascript_typescript_static_relative_import", "commonjs_relative_require"],
+        "supported_syntax":["rust_mod", "javascript_typescript_static_relative_import", "commonjs_relative_require", "javascript_dynamic_literal_import", "python_relative_from_import"],
         "resolution_rule":"exact unique local candidate only"
     });
     // Tool output may be threaded directly into an LLM context. Preserve a
