@@ -86,13 +86,66 @@ pub async fn list_configured_models(
 
 /// Probe a candidate credential without altering the saved auth-profile store.
 /// This is used by provider editing before replacing an encrypted account key.
+/// Apply an uncommitted provider edit to the in-memory probe snapshot.
+/// Neither the configured endpoints nor the credential store is changed.
+fn apply_candidate_provider_preview(
+    config: &mut crate::config::Config,
+    provider_id: &str,
+    entry: crate::config::schema::cloud_providers::CloudProviderCreds,
+    ca_cert_pem: Option<String>,
+) -> Result<(), String> {
+    use crate::config::schema::cloud_providers::is_slug_reserved;
+    if is_slug_reserved(&entry.slug) || entry.slug != provider_id {
+        return Err("Candidate provider must match a non-reserved provider slug".into());
+    }
+    if entry.endpoint.len() > 8192 || entry.slug.len() > 128 {
+        return Err("Candidate provider identifier or endpoint exceeds maximum length".into());
+    }
+    if !entry.id.is_empty() && config.cloud_providers.iter().any(|existing| {
+        existing.id == entry.id && existing.slug != entry.slug
+    }) {
+        return Err("Candidate provider id conflicts with a different provider".into());
+    }
+    // Validate controls through the same Rust normalizers as saved settings.
+    crate::config::schema::cloud_providers::normalize_fleet_config(
+        entry.image_endpoint.clone(),
+        entry.model_image_endpoints.clone(),
+        entry.rotation_strategy.clone(),
+    )?;
+    crate::config::schema::cloud_providers::normalize_model_transports(
+        entry.model_transports.clone(),
+    )?;
+    if let Some(pem) = ca_cert_pem {
+        let checked = crate::config::rpc::collect_provider_ca_certs([
+            (entry.slug.as_str(), Some(pem.as_str()))
+        ])?;
+        if pem.is_empty() {
+            config.cloud_provider_ca_certs.remove(&entry.slug);
+        } else if let Some(value) = checked.get(&entry.slug) {
+            config.cloud_provider_ca_certs.insert(entry.slug.clone(), value.clone());
+        }
+    }
+    config.cloud_providers.retain(|existing| existing.slug != entry.slug);
+    config.cloud_providers.push(entry);
+    Ok(())
+}
+
 pub async fn list_configured_models_with_candidate_key(
     provider_id: &str,
     candidate_key: &str,
+    preview: Option<crate::config::schema::cloud_providers::CloudProviderCreds>,
+    preview_ca_cert_pem: Option<String>,
 ) -> Result<crate::core::Outcome<serde_json::Value>, String> {
-    let config = crate::config::Config::load_or_init()
+    let mut config = crate::config::Config::load_or_init()
         .await
         .map_err(|e| e.to_string())?;
+    if let Some(entry) = preview {
+        apply_candidate_provider_preview(
+            &mut config, provider_id, entry, preview_ca_cert_pem
+        )?;
+    } else if preview_ca_cert_pem.is_some() {
+        return Err("CA preview requires a candidate provider entry".into());
+    }
     list_configured_models_with_candidate_key_from_config(provider_id, &config, candidate_key).await
 }
 
@@ -165,7 +218,7 @@ async fn list_configured_models_inner(
             return Err("Candidate credential probing requires an API-key provider".into());
         }
         if !matches!(url.scheme(), "http" | "https")
-            || !url_is_credential_safe(&entry.endpoint)
+            || !crate::inference::provider::factory::credentialed_endpoint_is_safe(&entry.endpoint)
             || !url.username().is_empty()
             || url.password().is_some()
             || url.query().is_some()
@@ -176,8 +229,8 @@ async fn list_configured_models_inner(
                     .into(),
             );
         }
-        if candidate.len() > 256 * 1024 || candidate.trim().is_empty() {
-            return Err("Candidate credential is empty or exceeds 256 KiB".into());
+        if candidate.len() > 256 * 1024 {
+            return Err("Candidate credential exceeds 256 KiB".into());
         }
     }
 
@@ -217,7 +270,12 @@ async fn list_configured_models_inner(
         && crate::inference::provider::factory::openai_bearer_is_oauth(config);
     // Authenticate individual candidates for /models, not a combined bearer.
     // Managed sessions and Codex OAuth are never interpreted as key groups.
-    let candidates = if candidate_key.is_some() {
+    let candidates = if candidate_key.is_some() && raw_api_key.is_empty() {
+        // Probe an anonymous/local endpoint without ever loading an existing
+        // stored credential: absence of a new key must not leak the old key
+        // to a newly edited origin during a preview.
+        vec![String::new()]
+    } else if candidate_key.is_some() {
         // Keep candidate health separate from committed account health; the
         // probe cannot evict or cool down the actual provider's credentials.
         let keys = crate::inference::provider::factory::model_fleet_probe_keys(

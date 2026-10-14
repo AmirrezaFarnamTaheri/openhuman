@@ -212,3 +212,66 @@ async fn catalog_probe_refuses_redirects_with_anthropic_keys() {
     let requests = receiver.received_requests().await.unwrap();
     assert!(requests.is_empty(), "the redirected endpoint must never receive a request");
 }
+
+#[test]
+fn provider_preview_changes_only_the_supplied_snapshot() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    let mut config = crate::config::Config::default();
+    let original = CloudProviderCreds {
+        id: "stable-id".into(),
+        slug: "previewed".into(),
+        endpoint: "https://original.example/v1".into(),
+        auth_style: AuthStyle::Bearer,
+        ..Default::default()
+    };
+    config.cloud_providers.push(original.clone());
+    let new = CloudProviderCreds {
+        endpoint: "https://replacement.example/v1".into(),
+        ..original.clone()
+    };
+    apply_candidate_provider_preview(&mut config, "previewed", new, None).unwrap();
+    assert_eq!(config.cloud_providers.len(), 1);
+    assert_eq!(config.cloud_providers[0].endpoint, "https://replacement.example/v1");
+    assert_eq!(original.endpoint, "https://original.example/v1");
+}
+
+#[test]
+fn preview_rejects_identity_crossover_and_reserved_provider_ids() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    let mut config = crate::config::Config::default();
+    for (slug, id) in [("openhuman", "openhuman"), ("target", "other")] {
+        let entry = CloudProviderCreds {
+            id: "p_1".into(),
+            slug: slug.into(),
+            endpoint: "https://models.example/v1".into(),
+            auth_style: AuthStyle::Bearer,
+            ..Default::default()
+        };
+        assert!(apply_candidate_provider_preview(&mut config, id, entry, None).is_err());
+    }
+    assert!(config.cloud_providers.is_empty());
+}
+
+#[test]
+fn preview_rejects_invalid_ca_without_touching_saved_provider() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    let mut config = crate::config::Config::default();
+    let old = CloudProviderCreds {
+        slug: "previewed".into(),
+        endpoint: "https://original.example/v1".into(),
+        auth_style: AuthStyle::Bearer,
+        ..Default::default()
+    };
+    config.cloud_providers.push(old.clone());
+    let candidate = CloudProviderCreds {
+        endpoint: "https://replacement.example/v1".into(),
+        ..old
+    };
+    assert!(
+        apply_candidate_provider_preview(
+            &mut config, "previewed", candidate, Some("invalid PEM".into())
+        )
+        .is_err()
+    );
+    assert_eq!(config.cloud_providers[0].endpoint, "https://original.example/v1");
+}
