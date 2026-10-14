@@ -37,6 +37,10 @@ pub(super) struct CloudProviderUpdate {
     pub(super) rotation_strategy: Option<String>,
     #[serde(default)]
     pub(super) tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
+    /// Exact per-model wire route, as configured by the user; no implicit inference.
+    #[serde(default)]
+    pub(super) model_transports:
+        std::collections::HashMap<String, crate::config::schema::cloud_providers::ModelTransport>,
     /// Optional PEM CA bundle for this provider. Empty string removes it.
     #[serde(default)]
     pub(super) ca_cert_pem: Option<String>,

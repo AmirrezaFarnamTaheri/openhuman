@@ -408,6 +408,26 @@ impl CloudProviderCreds {
     }
 }
 
+/// Normalize model transport overrides received over RPC. Model ids are exact
+/// upstream wire ids, so silently trimming a key could route a different model.
+pub fn normalize_model_transports(
+    overrides: std::collections::HashMap<String, ModelTransport>,
+) -> Result<std::collections::HashMap<String, ModelTransport>, String> {
+    if overrides.len() > 512 {
+        return Err("too many model transport overrides (maximum 512)".into());
+    }
+    for id in overrides.keys() {
+        if id.is_empty()
+            || id.len() > 200
+            || id.trim() != id
+            || id.chars().any(char::is_control)
+        {
+            return Err("model transport id must be 1-200 printable, unpadded characters".into());
+        }
+    }
+    Ok(overrides)
+}
+
 /// Normalize settings provided over either model-settings RPC surface.
 /// Reject embedded URL credentials, unsupported schemes and duplicate trimmed ids.
 pub type NormalizedFleetConfig = (

@@ -349,6 +349,25 @@ fn per_model_protocol_override_round_trips_without_changing_legacy_defaults() {
 }
 
 #[test]
+fn model_transport_overrides_reject_ambiguous_ids_and_unbounded_maps() {
+    use super::{normalize_model_transports, ModelTransport};
+    use std::collections::HashMap;
+    for name in ["", " padded", "padded ", "line\nbreak", "x\tbad"] {
+        let overrides = HashMap::from([(name.to_owned(), ModelTransport::Responses)]);
+        assert!(normalize_model_transports(overrides).is_err(), "invalid model id: {name:?}");
+    }
+    let too_many: HashMap<String, ModelTransport> = (0..513)
+        .map(|n| (format!("model-{n}"), ModelTransport::ChatCompletions))
+        .collect();
+    assert!(normalize_model_transports(too_many).is_err());
+    let approved = HashMap::from([
+        ("vendor/response".to_owned(), ModelTransport::Responses),
+        ("vendor/chat".to_owned(), ModelTransport::ChatCompletions),
+    ]);
+    assert_eq!(normalize_model_transports(approved.clone()).unwrap(), approved);
+}
+
+#[test]
 fn image_endpoint_presets_round_trip_and_default_without_mapping() {
     let entry: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
         "id": "a",
