@@ -540,10 +540,7 @@ fn openai_oauth_status_reports_active_nonlegacy_token_account_as_disconnected() 
     let status = openai_oauth_status(&config).unwrap();
     assert!(!status.connected);
     assert_eq!(status.auth_method.as_deref(), Some("token"));
-    assert_eq!(
-        status.profile_id.as_deref(),
-        Some("provider:openai:work"),
-    );
+    assert_eq!(status.profile_id.as_deref(), Some("provider:openai:work"),);
 }
 
 #[test]

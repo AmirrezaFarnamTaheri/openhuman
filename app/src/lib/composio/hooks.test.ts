@@ -283,7 +283,7 @@ describe('useComposioIntegrations', () => {
         tick = handler;
         return 1234 as unknown as ReturnType<typeof window.setInterval>;
       }
-      return realSetInterval(handler, interval) as ReturnType<typeof window.setInterval>;
+      return realSetInterval(handler, interval) as unknown as ReturnType<typeof window.setInterval>;
     });
     const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
     try {
@@ -342,7 +342,7 @@ describe('useComposioIntegrations', () => {
         tick = handler;
         return 1234 as unknown as ReturnType<typeof window.setInterval>;
       }
-      return realSetInterval(handler, interval) as ReturnType<typeof window.setInterval>;
+      return realSetInterval(handler, interval) as unknown as ReturnType<typeof window.setInterval>;
     });
     const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
     try {

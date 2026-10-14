@@ -482,7 +482,9 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
             pendingLocalProviderReady={pendingLocalProviderReady}
             isSavingProviders={isSavingProviders}
             onTtsProviderChange={onTtsProviderChange}
-            persistProviders={async update => { await persistProviders(update); }}
+            persistProviders={async update => {
+              await persistProviders(update);
+            }}
           />
         )}
 
@@ -504,7 +506,9 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
           piperVoicePresets={piperVoicePresets}
           piperVoicePresetIds={PIPER_VOICE_PRESET_IDS}
           voiceStatus={voiceStatus}
-          persistProviders={async update => { await persistProviders(update); }}
+          persistProviders={async update => {
+              await persistProviders(update);
+            }}
           elevenlabsVoiceId={elevenlabsVoiceId}
           setElevenlabsVoiceId={setElevenlabsVoiceId}
           ttsTestBlockedByInstall={ttsTestBlockedByInstall}

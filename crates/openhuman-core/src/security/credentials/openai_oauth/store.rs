@@ -108,7 +108,7 @@ pub(super) fn persist_openai_oauth_token_set(
                     OPENAI_OAUTH_PROFILE_NAME.to_string()
                 } else {
                     let digest = Sha256::digest(account_id.as_bytes());
-                    format!("oauth-{}", hex::encode(digest)[..16].to_string())
+                    format!("oauth-{}", &hex::encode(digest)[..16])
                 }
             })
     } else if oauth_profiles.is_empty() {

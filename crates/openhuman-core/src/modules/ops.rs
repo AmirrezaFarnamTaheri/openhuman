@@ -362,8 +362,8 @@ async fn resolve(config: &Config, record: &'static ModuleRecord) -> Result<(), S
         ModuleSource::LocalFile | ModuleSource::Source => {
             if let Some(path) = plan.artifact {
                 let module_config = module_config(config, record.id);
-                let result = blocking(move || load_local(runtime, &path, record.id, module_config))
-                    .await;
+                let result =
+                    blocking(move || load_local(runtime, &path, record.id, module_config)).await;
                 return loaded_or_outcome(result, is_serving(runtime, record.bus_name));
             }
         }

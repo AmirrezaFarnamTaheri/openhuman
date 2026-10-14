@@ -71,13 +71,11 @@ async fn refuses_cross_provider_profile_and_app_session_activation() {
         true,
     )
     .unwrap();
-    assert!(activate_provider_credentials(
-        &config,
-        "provider:google",
-        "provider:anthropic:work"
-    )
-    .await
-    .is_err());
+    assert!(
+        activate_provider_credentials(&config, "provider:google", "provider:anthropic:work")
+            .await
+            .is_err()
+    );
     assert!(
         activate_provider_credentials(&config, APP_SESSION_PROVIDER, "default")
             .await
