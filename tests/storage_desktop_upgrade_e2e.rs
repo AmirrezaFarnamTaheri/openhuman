@@ -37,7 +37,7 @@ use tinystoragedrivers_core::Query;
 #[path = "support/storage_drivers.rs"]
 mod storage_drivers;
 
-use storage_drivers::Case;
+use storage_drivers::{Case, Driver};
 
 /// The committed tinyflows workspace (written by the retired tinyflows-sqlite
 /// writers): flows, revisions, runs, drafts, checkpoints and cron jobs.
@@ -444,6 +444,29 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     // First boot: every host importer runs and none is left without a source.
     let reports = import::run(&config).await;
     assert!(!reports.is_empty());
+    if case.driver == Driver::File {
+        // The file backend deliberately has no atomic read-checked batch
+        // capability (a batch across independent JSON files is not crash-
+        // atomic). Legacy run-ledger entry trees require that guarantee.
+        // Never mark the session import complete or claim a lossless upgrade.
+        let sessions = reports.iter().find(|report| report.domain == "sessions")
+            .expect("session importer is present");
+        let error = sessions.outcome.as_ref()
+            .expect_err("file backend must refuse unsafe session migration");
+        assert!(format!("{error:#}").contains("validated_batch"), "{error:#}");
+        assert_eq!(tree(workspace), before, "legacy workspace was modified on refusal");
+
+        // A partial attempt leaves its import marker absent, allowing a
+        // later retry on a backend that supports atomic validation.
+        let again = import::run(&config).await;
+        let sessions = again.iter().find(|report| report.domain == "sessions")
+            .expect("session importer is retried");
+        let error = sessions.outcome.as_ref()
+            .expect_err("unsupported file migration must not be marked done");
+        assert!(format!("{error:#}").contains("validated_batch"), "{error:#}");
+        assert_eq!(tree(workspace), before, "retry changed the legacy workspace");
+        return;
+    }
     for report in &reports {
         match report.outcome.as_ref().unwrap_or_else(|error| {
             panic!("{} failed to import: {error:#}", report.domain);
