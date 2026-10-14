@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "disclaimer": "Peer declared model names only; not live availability, capability, price or provider entitlement. No aliases activated automatically.",
+  "records": [
+    {
+      "id": "claude-4-6-opus-thinking",
+      "provider": "antigravity",
+      "source": "antigravity-panel:src/shared/config/quota_strategy.json"
+    },
+    {
+      "id": "claude-4-6-sonnet-thinking",
+      "provider": "antigravity",
+      "source": "antigravity-panel:src/shared/config/quota_strategy.json"
+    },
+    {
+      "id": "claude-opus-4-6",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "claude-opus-4-6-thinking",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src-tauri/resources/model_specs.json"
+    },
+    {
+      "id": "claude-opus-4-6-thinking",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src-tauri/resources/model_specs.json"
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "claude-sonnet-4-6-thinking",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-2.0-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src-tauri/resources/model_specs.json"
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src-tauri/resources/model_specs.json"
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-2.5-flash-lite",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-2.5-flash-thinking",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-2.5-pro",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src-tauri/resources/model_specs.json"
+    },
+    {
+      "id": "gemini-3-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3-flash",
+      "provider": "antigravity",
+      "source": "antigravity-panel:src/shared/config/quota_strategy.json"
+    },
+    {
+      "id": "gemini-3-flash",
+      "provider": "antigravity",
+      "source": "zero-gravity:src/api/models.rs"
+    },
+    {
+      "id": "gemini-3-flash-agent",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3-pro",
+      "provider": "antigravity",
+      "source": "zero-gravity:src/api/models.rs"
+    },
+    {
+      "id": "gemini-3-pro-high",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src-tauri/resources/model_specs.json"
+    },
+    {
+      "id": "gemini-3-pro-high",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3-pro-high",
+      "provider": "antigravity",
+      "source": "antigravity-panel:src/shared/config/quota_strategy.json"
+    },
+    {
+      "id": "gemini-3-pro-high",
+      "provider": "antigravity",
+      "source": "zero-gravity:src/api/models.rs"
+    },
+    {
+      "id": "gemini-3-pro-image",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3-pro-low",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3-pro-low",
+      "provider": "antigravity",
+      "source": "antigravity-panel:src/shared/config/quota_strategy.json"
+    },
+    {
+      "id": "gemini-3-pro-low",
+      "provider": "antigravity",
+      "source": "zero-gravity:src/api/models.rs"
+    },
+    {
+      "id": "gemini-3.1-flash-image",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3.1-flash-lite",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3.1-pro",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3.1-pro-high",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3.1-pro-low",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3.1-pro-preview",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src-tauri/resources/model_specs.json"
+    },
+    {
+      "id": "gemini-3.5-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3.7-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-3.8-flash-tiered",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-4-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-4-pro",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-4.0-flash",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-4.0-pro",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gemini-pro-agent",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gpt-oss-120b-medium",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src-tauri/resources/model_specs.json"
+    },
+    {
+      "id": "gpt-oss-120b-medium",
+      "provider": "antigravity",
+      "source": "Antigravity-Shield:src/config/modelConfig.ts"
+    },
+    {
+      "id": "gpt-oss-120b-medium",
+      "provider": "antigravity",
+      "source": "antigravity-panel:src/shared/config/quota_strategy.json"
+    },
+    {
+      "id": "opus-4.5",
+      "provider": "antigravity",
+      "source": "zero-gravity:src/api/models.rs"
+    },
+    {
+      "id": "opus-4.6",
+      "provider": "antigravity",
+      "source": "zero-gravity:src/api/models.rs"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@openhuman/peer-fleet-contracts",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Credential-free fleet contracts distilled from independently audited peers",
+  "scripts": {"test": "node --test test/*.test.mjs"},
+  "engines": {"node": ">=22"}
+}
