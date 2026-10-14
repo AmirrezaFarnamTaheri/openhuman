@@ -46,6 +46,16 @@ export function useCloudProviderEditorSubmit({
         maskedKey: maskKeyLabel(apiKey ? true : next.maskedKey.startsWith('••••')),
       };
 
+      // A verified key replacement overwrites the existing encrypted default
+      // credential. The client cannot recover the previous secret after that
+      // write; a failed /models probe must not also erase the replacement key.
+      const replacingExistingCredential =
+        Boolean(apiKey) &&
+        saved.cloudProviders.some(
+          provider =>
+            provider.slug === upserted.slug && (provider.maskedKey ?? '').startsWith('••••')
+        );
+
       // Snapshot the prior persisted cloud_providers list so we can restore
       // it if the live probe fails.
       const priorWireProviders = saved.cloudProviders.map(p => ({
@@ -116,7 +126,12 @@ export function useCloudProviderEditorSubmit({
             await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
               console.warn(`[ai-settings] rollback flush failed slug=${upserted.slug}`, rollbackErr)
             );
-            if (apiKey) {
+            // Only a *new* credential can be safely undone by removing it.
+            // An edited provider's previous encrypted token was overwritten;
+            // clearing the replacement here would leave the account with no
+            // usable credential at all. Surface that non-atomic boundary until
+            // the backend supports an atomic probe-and-replace transaction.
+            if (apiKey && !replacingExistingCredential) {
               await clearCloudProviderKey(upserted.slug).catch(rollbackErr =>
                 console.warn(
                   `[ai-settings] rollback clearCloudProviderKey failed slug=${upserted.slug}`,
@@ -129,7 +144,10 @@ export function useCloudProviderEditorSubmit({
               slug: upserted.slug,
               summary: presentProviderSetupError(msg, t).summary,
             });
-            throw new ProviderProbeError(`Could not reach ${upserted.label}: ${msg}`);
+            const warning = replacingExistingCredential
+              ? ' Your previous key cannot be restored automatically; the replacement API key remains stored. Re-enter the previous key if needed.'
+              : '';
+            throw new ProviderProbeError(`Could not reach ${upserted.label}: ${msg}.${warning}`);
           }
         }
       }
