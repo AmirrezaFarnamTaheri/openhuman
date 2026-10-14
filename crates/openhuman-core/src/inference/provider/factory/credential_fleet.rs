@@ -223,14 +223,14 @@ impl ChatModel<()> for CredentialFleetModel {
                 break;
             }
             let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
-            &self.scope,
-            &self.keys,
-            &tried,
-            self.strategy,
-            request
-                .correlation
-                .as_ref()
-                .map(|correlation| correlation.run_id.as_str()),
+                &self.scope,
+                &self.keys,
+                &tried,
+                self.strategy,
+                request
+                    .correlation
+                    .as_ref()
+                    .map(|correlation| correlation.run_id.as_str()),
             ) else {
                 break;
             };
@@ -277,14 +277,14 @@ impl ChatModel<()> for CredentialFleetModel {
                 break;
             }
             let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
-            &self.scope,
-            &self.keys,
-            &tried,
-            self.strategy,
-            request
-                .correlation
-                .as_ref()
-                .map(|correlation| correlation.run_id.as_str()),
+                &self.scope,
+                &self.keys,
+                &tried,
+                self.strategy,
+                request
+                    .correlation
+                    .as_ref()
+                    .map(|correlation| correlation.run_id.as_str()),
             ) else {
                 break;
             };
