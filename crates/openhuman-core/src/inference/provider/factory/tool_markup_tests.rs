@@ -1,0 +1,177 @@
+use super::*;
+use serde_json::json;
+use tinyinference_llm::message::{AssistantMessage, MessageDelta};
+use tinyinference_llm::model::{ModelRequest, ModelResponse, ModelStreamItem};
+use tinyinference_llm::tool::ToolSchema;
+
+fn declared() -> Vec<ToolSchema> {
+    vec![
+        ToolSchema::new(
+            "shell",
+            "Run an approved command",
+            json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}),
+        ),
+        ToolSchema::new(
+            "read_file",
+            "Read a permitted file",
+            json!({"type":"object","properties":{"path":{"type":"string"},"line":{"type":"integer"}},"required":["path"],"additionalProperties":false}),
+        ),
+    ]
+}
+
+fn qnml_two_calls() -> &'static str {
+    r#"<|QNML|tool_calls>
+<|QNML|invoke name="shell"><|QNML|parameter name="command"><![CDATA[printf "a<b & c"]]></|QNML|parameter></|QNML|invoke>
+<|QNML|invoke name="read_file"><|QNML|parameter name="path"><![CDATA[README.md]]></|QNML|parameter><|QNML|parameter name="line">3</|QNML|parameter></|QNML|invoke>
+</|QNML|tool_calls>"#
+}
+
+#[test]
+fn decodes_qwen_qnml_into_declared_typed_tool_calls() {
+    let calls = parse_qnml_calls(qnml_two_calls(), &declared())
+        .expect("valid QNML")
+        .expect("envelope recognized");
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0].name, "shell");
+    assert_eq!(calls[0].arguments, json!({"command": "printf \"a<b & c\""}));
+    assert_eq!(calls[1].name, "read_file");
+    assert_eq!(calls[1].arguments, json!({"path":"README.md","line":3}));
+    assert_ne!(calls[0].id, calls[1].id);
+}
+
+#[test]
+fn plain_text_and_prose_examples_never_become_executable_tools() {
+    assert!(parse_qnml_calls("hello there", &declared()).unwrap().is_none());
+    assert!(parse_qnml_calls(
+        "Example: <|QNML|tool_calls><|QNML|invoke name=\"shell\"></|QNML|invoke></|QNML|tool_calls>",
+        &declared(),
+    ).unwrap().is_none());
+    assert!(parse_qnml_calls(qnml_two_calls(), &[]).unwrap().is_none());
+}
+
+#[test]
+fn rejects_unknown_tools_and_invalid_arguments_before_creating_calls() {
+    let unknown = qnml_two_calls().replace("name=\"shell\"", "name=\"delete_database\"");
+    assert!(parse_qnml_calls(&unknown, &declared()).is_err());
+    let invalid = qnml_two_calls().replace("name=\"line\">3", "name=\"line\">\"three\"");
+    assert!(parse_qnml_calls(&invalid, &declared()).is_err());
+}
+
+#[test]
+fn malformed_or_ambiguous_markup_fails_closed() {
+    for raw in [
+        "<|QNML|tool_calls><|QNML|invoke name=\"shell\">",
+        "<|QNML|tool_calls><|QNML|invoke name=\"shell\"></|QNML|invoke></|QNML|tool_calls>",
+        "<|QNML|tool_calls><|QNML|invoke name=\"shell\"><|QNML|parameter name=\"command\">pwd</|QNML|parameter>",
+        "<|QNML|tool_calls><|QNML|invoke name=\"shell\"><|QNML|parameter name=\"command\">pwd</|QNML|parameter><|QNML|parameter name=\"command\">ls</|QNML|parameter></|QNML|invoke></|QNML|tool_calls>",
+        "<|QNML|tool_calls><|QNML|invoke name=\"shell\"><|QNML|parameter name=\"command\"><![CDATA[pwd]]></|QNML|parameter></|QNML|invoke>surprise</|QNML|tool_calls>",
+    ] {
+        assert!(parse_qnml_calls(raw, &declared()).is_err(), "accepted malformed: {raw}");
+    }
+}
+
+#[test]
+fn qnml_is_bounded_for_untrusted_web_gateway_output() {
+    let oversized = format!(
+        "<|QNML|tool_calls><|QNML|invoke name=\"shell\"><|QNML|parameter name=\"command\"><![CDATA[{}]]></|QNML|parameter></|QNML|invoke></|QNML|tool_calls>",
+        "x".repeat(256 * 1024)
+    );
+    assert!(parse_qnml_calls(&oversized, &declared()).is_err());
+    let mut repeated = String::from("<|QNML|tool_calls>");
+    for _ in 0..17 {
+        repeated.push_str("<|QNML|invoke name=\"read_file\"><|QNML|parameter name=\"path\">README.md</|QNML|parameter></|QNML|invoke>");
+    }
+    repeated.push_str("</|QNML|tool_calls>");
+    assert!(parse_qnml_calls(&repeated, &declared()).is_err());
+}
+
+fn response(text: String) -> ModelResponse {
+    ModelResponse {
+        message: AssistantMessage {
+            id: None,
+            content: vec![ContentBlock::Text(text)],
+            tool_calls: vec![],
+            usage: None,
+            origin: None,
+        },
+        usage: None,
+        finish_reason: Some("stop".into()),
+        raw: None,
+        resolved_model: None,
+        continue_turn: None,
+        served_from_cache: false,
+        correlation: None,
+        resolved_route: None,
+    }
+}
+
+#[test]
+fn conversion_removes_raw_tagged_markup_but_preserves_native_tool_calls() {
+    let converted = rewrite_qnml_response(response(qnml_two_calls().into()), &declared()).unwrap();
+    assert!(converted.message.content.is_empty(), "tool markup must not leak into visible chat");
+    assert_eq!(converted.message.tool_calls.len(), 2);
+    assert_eq!(converted.finish_reason.as_deref(), Some("tool_calls"));
+
+    let unchanged = response("normal assistant answer".into());
+    let parsed = rewrite_qnml_response(unchanged.clone(), &declared()).unwrap();
+    assert_eq!(parsed.message, unchanged.message);
+    let mut native = response(qnml_two_calls().into());
+    native.message.tool_calls.push(tinyinference_llm::tool::ToolCall::new(
+        "native-call", "shell", json!({"command":"pwd"}),
+    ));
+    let preserved = rewrite_qnml_response(native.clone(), &declared()).unwrap();
+    assert_eq!(preserved.message, native.message);
+}
+
+struct FakeTaggedModel {
+    body: String,
+}
+
+#[async_trait]
+impl ChatModel<()> for FakeTaggedModel {
+    async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+        Ok(response(self.body.clone()))
+    }
+
+    async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+        let text = self.body.clone();
+        Ok(ModelStream::new(Box::pin(futures::stream::iter(vec![
+            ModelStreamItem::Started,
+            ModelStreamItem::MessageDelta(MessageDelta::text(text.clone())),
+            ModelStreamItem::Completed(response(text)),
+        ]))))
+    }
+}
+
+#[tokio::test]
+async fn qnml_stream_buffers_tool_markup_and_emits_one_normalized_terminal_result() {
+    use futures::StreamExt;
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: qnml_two_calls().to_string(),
+    }));
+    let request = ModelRequest {
+        tools: declared(),
+        ..Default::default()
+    };
+    let stream = adapter.stream(&(), request).await.unwrap();
+    let events: Vec<ModelStreamItem> = stream.collect().await;
+    assert_eq!(events.len(), 2, "must not expose partial tool tags as chat text");
+    assert!(matches!(events[0], ModelStreamItem::Started));
+    let ModelStreamItem::Completed(result) = &events[1] else {
+        panic!("expected a successful terminal result");
+    };
+    assert_eq!(result.message.tool_calls.len(), 2);
+    assert!(result.message.content.is_empty());
+}
+
+#[tokio::test]
+async fn ordinary_chat_stream_still_emits_native_text_deltas() {
+    use futures::StreamExt;
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: "ordinary answer".into(),
+    }));
+    let stream = adapter.stream(&(), ModelRequest::default()).await.unwrap();
+    let events: Vec<ModelStreamItem> = stream.collect().await;
+    assert_eq!(events.len(), 3);
+    assert!(matches!(events[1], ModelStreamItem::MessageDelta(_)));
+}
