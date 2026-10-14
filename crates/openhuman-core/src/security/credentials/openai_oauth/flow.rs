@@ -76,7 +76,16 @@ pub fn import_openai_oauth_from_codex_cli(config: &Config) -> Result<serde_json:
 
 pub fn openai_oauth_status(config: &Config) -> Result<OpenAiOAuthStatusResult, String> {
     use crate::security::credentials::profiles::AuthProfileKind;
-    let profile = selected_openai_oauth_profile(config)?;
+    // OAuth and API-key profiles share the OpenAI provider namespace.
+    // Resolve an actual OAuth account first, but when none is authorized,
+    // preserve the previous UI contract: report the selected API-key profile
+    // as disconnected/token rather than erasing its identity.
+    let profile = match selected_openai_oauth_profile(config)? {
+        Some(oauth) => Some(oauth),
+        None => crate::security::credentials::AuthService::from_config(config)
+            .get_profile(OPENAI_PROVIDER_KEY, None)
+            .map_err(|error| error.to_string())?,
+    };
     let Some(profile) = profile else {
         return Ok(OpenAiOAuthStatusResult {
             connected: false,
