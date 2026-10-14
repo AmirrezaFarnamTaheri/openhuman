@@ -753,8 +753,10 @@ test("each module-backed lane stages and sources native fixtures before executin
       assert.ok(install.when, laneName + ": native fixtures must be installed");
       assert.match(install.run, /install-test-modules\.sh/);
       assert.ok(check.needs.includes("test-modules"), runner + ": fixture dependency");
-      assert.match(check.run, /\\. ci-out\\/test-modules-(?:rust-lint|storage-drivers)\\.env/,
-        runner + ": native module paths must reach Rust process");
+      assert.ok(
+        check.run.includes(". ci-out/test-modules-" + laneName + ".env"),
+        runner + ": native module paths must reach Rust process"
+      );
     }
   }
 });
