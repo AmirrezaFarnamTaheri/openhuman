@@ -75,3 +75,34 @@ fn failures_map_without_leaking_the_key() {
         RankError::Timeout
     ));
 }
+
+
+#[test]
+fn decision_context_is_bounded_and_keeps_latest_turns_in_order() {
+    let mut input = request(None);
+    input.recent_turns = (0..20).map(|i| format!("user-turn-{i}:{}", "x".repeat(900))).collect();
+    let output = TinyJevEvaluator::build(&input);
+    let turns = output.state["recent_user_turns"].as_array().unwrap();
+    assert_eq!(turns.len(), 6, "external System-One receives only six recent turns");
+    assert!(turns[0].as_str().unwrap().starts_with("user-turn-14:"));
+    assert!(turns[5].as_str().unwrap().starts_with("user-turn-19:"));
+    assert!(turns.iter().all(|t| t.as_str().unwrap().chars().count() <= 500));
+    assert_eq!(output.state["context_truncated"], true);
+    assert_eq!(output.state["recent_turns_dropped"], 14);
+}
+
+#[test]
+fn decision_context_ignores_empty_turns_and_preserves_unicode_boundaries() {
+    let mut input = request(None);
+    input.recent_turns = vec![
+        " ".into(),
+        format!("{}{}", "🙂".repeat(650), "tail"),
+        "newest request".into()
+    ];
+    let output = TinyJevEvaluator::build(&input);
+    let turns = output.state["recent_user_turns"].as_array().unwrap();
+    assert_eq!(turns.len(), 2);
+    assert_eq!(turns[0].as_str().unwrap().chars().count(), 500);
+    assert_eq!(turns[1], "newest request");
+    assert_eq!(output.state["context_truncated"], true);
+}
