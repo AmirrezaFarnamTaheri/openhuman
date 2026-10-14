@@ -303,6 +303,9 @@ jobs:
       CARGO_BUILD_JOBS: "1"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
+      - name: Allow deep nested submodule fixtures on Windows
+        shell: pwsh
+        run: git config --global core.longpaths true
       - name: Checkout code
         uses: actions/checkout@v7
         with:
