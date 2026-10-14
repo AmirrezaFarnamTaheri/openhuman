@@ -286,6 +286,74 @@ async fn invalid_model_403_does_not_evict_api_keys_or_retry_another_credential()
     key_pool::forget(scope);
 }
 
+struct PostOutputRateLimitModel {
+    attempts: Arc<std::sync::atomic::AtomicUsize>,
+}
+#[async_trait]
+impl ChatModel<()> for PostOutputRateLimitModel {
+    async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+        Err(tinyinference_llm::Error::Model("stream only".into()))
+    }
+    async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+        self.attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(ModelStream::new(Box::pin(futures::stream::iter(vec![
+            ModelStreamItem::Started,
+            ModelStreamItem::MessageDelta(
+                tinyinference_llm::message::MessageDelta::text("visible output")
+            ),
+            ModelStreamItem::ProviderFailed(ProviderError {
+                status: Some(429),
+                ..Default::default()
+            }),
+        ]))))
+    }
+}
+
+#[tokio::test]
+async fn post_content_upstream_429_cannot_replay_or_duplicate_visible_tool_output() {
+    use futures::StreamExt;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let first = Arc::new(AtomicUsize::new(0));
+    let second = Arc::new(AtomicUsize::new(0));
+    let scope = "fleet-postcontent-no-replay";
+    let fleet = CredentialFleetModel::new(
+        scope.into(),
+        vec!["already-streamed".into(), "unused-backup".into()],
+        vec![
+            Arc::new(PostOutputRateLimitModel {
+                attempts: Arc::clone(&first),
+            }),
+            Arc::new(PostOutputRateLimitModel {
+                attempts: Arc::clone(&second),
+            }),
+        ],
+        None,
+        RotationStrategy::RoundRobin,
+    );
+    let events: Vec<ModelStreamItem> = fleet
+        .stream(&(), ModelRequest::default())
+        .await
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(first.load(Ordering::SeqCst), 1);
+    assert_eq!(second.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        events.iter().filter(|item| matches!(item, ModelStreamItem::MessageDelta(_))).count(),
+        1,
+        "an emitted delta is never replayed across credentials"
+    );
+    assert!(
+        matches!(events.last(), Some(ModelStreamItem::ProviderFailed(_))),
+        "the upstream failure must remain visible"
+    );
+    assert_eq!(key_pool::snapshot(scope)[0].status, "cooldown");
+    assert!(key_pool::snapshot(scope).iter().all(|entry| entry.active_leases == 0));
+    key_pool::forget(scope);
+}
+
 struct CountingRateLimitedModel {
     attempts: Arc<std::sync::atomic::AtomicUsize>,
 }
