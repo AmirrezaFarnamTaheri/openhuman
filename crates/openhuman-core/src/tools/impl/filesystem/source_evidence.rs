@@ -284,6 +284,13 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
             // Incomplete evidence must not justify definite edges or impact.
             if let Some(edges) = graph["edges"].as_array_mut() {
                 for edge in edges {
+                    if !edge["to"].is_null() {
+                        // A target appeared among observed files, but the
+                        // incomplete catalog cannot prove it is the unique
+                        // resolution. Preserve it only as an explicitly
+                        // provisional candidate, never a confirmed graph edge.
+                        edge["observed_candidate"] = edge["to"].clone();
+                    }
                     edge["status"] = json!("catalog_incomplete");
                     edge["to"] = Value::Null;
                 }
@@ -292,6 +299,8 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
             graph["impact_omitted_reason"] = json!("incomplete_catalog");
         }
         graph["generation"] = json!(generation);
+        graph["scope_path"] = json!(relative(root, path));
+        graph["scope_is_workspace"] = json!(path == root);
         graph["next_after_path"] = json!(next_after_path);
         graph["scan_complete"] = json!(truncated.is_none());
         graph["truncated_reason"] = json!(truncated);
