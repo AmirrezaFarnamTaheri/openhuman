@@ -123,6 +123,69 @@ fn conversion_removes_raw_tagged_markup_but_preserves_native_tool_calls() {
     assert_eq!(preserved.message, native.message);
 }
 
+#[tokio::test]
+async fn qnml_does_not_upgrade_markup_into_tools_when_tool_choice_is_none() {
+    use futures::StreamExt;
+    use tinyinference_llm::model::ToolChoice;
+
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: qnml_two_calls().to_owned(),
+    }));
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::None,
+        ..Default::default()
+    };
+    let response = adapter.invoke(&(), request.clone()).await.unwrap();
+    assert!(
+        response.message.tool_calls.is_empty(),
+        "a declared tool must remain disabled when tool_choice is none"
+    );
+
+    let events: Vec<ModelStreamItem> = adapter
+        .stream(&(), request)
+        .await
+        .unwrap()
+        .collect()
+        .await;
+    assert!(
+        events.iter().all(|event| !matches!(
+            event,
+            ModelStreamItem::Completed(result) if !result.message.tool_calls.is_empty()
+        )),
+        "the streaming path must also honor tool_choice none"
+    );
+}
+
+#[tokio::test]
+async fn qnml_cannot_call_a_different_declared_tool_than_explicitly_selected() {
+    use futures::StreamExt;
+    use tinyinference_llm::model::ToolChoice;
+
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: qnml_two_calls().to_owned(),
+    }));
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::Tool("read_file".to_owned()),
+        ..Default::default()
+    };
+    assert!(
+        adapter.invoke(&(), request.clone()).await.is_err(),
+        "shell is declared but not permitted by the named-tool policy"
+    );
+    let events: Vec<ModelStreamItem> = adapter
+        .stream(&(), request)
+        .await
+        .unwrap()
+        .collect()
+        .await;
+    assert!(
+        events.iter().any(|event| matches!(event, ModelStreamItem::Failed(_))),
+        "streaming must reject forbidden named-tool markup"
+    );
+}
+
 struct FakeTaggedModel {
     body: String,
 }
