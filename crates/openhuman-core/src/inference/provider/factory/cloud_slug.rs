@@ -23,6 +23,35 @@ pub(super) fn cloud_base_url<'a>(
     }
 }
 
+/// A bearer key for an independently deployed gateway must not travel over
+/// remote cleartext HTTP or be mixed into URL userinfo/query/fragment fields.
+/// Localhost HTTP is allowed for separately installed development gateways.
+pub(super) fn prodex_gateway_endpoint_is_safe(endpoint: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(endpoint) else {
+        return false;
+    };
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || url.host_str().is_none()
+    {
+        return false;
+    }
+    match url.scheme() {
+        "https" => true,
+        "http" => {
+            let hostname = url.host_str().unwrap_or_default();
+            let unbracketed = hostname.trim_start_matches('[').trim_end_matches(']');
+            unbracketed.eq_ignore_ascii_case("localhost")
+                || unbracketed
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback())
+        }
+        _ => false,
+    }
+}
+
 /// Look up a `cloud_providers` entry by slug and build the provider.
 /// The shared resolution for a `<slug>:<model>` cloud provider — the cloud
 /// `cloud_providers` entry, the effective model id (with `default_model`
@@ -58,6 +87,14 @@ pub(super) fn resolve_cloud_slug<'a>(
             known.join(", ")
         )
     })?;
+
+    // The gateway virtual key is not a general cloud API token. Never send it
+    // to remote HTTP or allow the endpoint to carry URL-embedded credentials.
+    if slug == "prodex" && !prodex_gateway_endpoint_is_safe(&entry.endpoint) {
+        anyhow::bail!(
+            "[chat-factory] Prodex gateway requires HTTPS or loopback HTTP, with no URL credentials, query or fragment"
+        );
+    }
 
     // Resolve effective model: use provided model if non-empty, else fall back
     // to the entry's legacy default_model (if any), else empty → error.
