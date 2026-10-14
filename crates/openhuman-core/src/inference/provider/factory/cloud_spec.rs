@@ -116,7 +116,7 @@ pub(super) fn build_cloud_model(build: CloudBuild<'_>) -> anyhow::Result<Arc<dyn
     // Explicit chat_completions retains the native registry implementation,
     // but cannot silently select Anthropic Messages for an incompatible slug.
     if build.spec.kind != ProviderKind::Compatible
-        || !matches!(build.auth_style, CompatAuthStyle::Bearer | CompatAuthStyle::None)
+        || !matches!(&build.auth_style, CompatAuthStyle::Bearer | CompatAuthStyle::None)
     {
         anyhow::bail!(
             "[chat-factory] explicit model transport requires an OpenAI-compatible Bearer/None provider"
