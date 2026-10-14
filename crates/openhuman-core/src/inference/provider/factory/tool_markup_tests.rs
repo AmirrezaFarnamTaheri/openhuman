@@ -215,6 +215,66 @@ async fn named_tool_choice_rejects_other_declared_tools() {
     assert!(adapter.invoke(&(), request).await.is_err());
 }
 
+#[tokio::test]
+async fn required_tool_policy_rejects_plain_text_from_qnml_gateway() {
+    use futures::StreamExt;
+    use tinyinference_llm::model::ToolChoice;
+
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: "I cannot use tools right now".to_owned(),
+    }));
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::Required,
+        ..Default::default()
+    };
+    assert!(
+        adapter.invoke(&(), request.clone()).await.is_err(),
+        "required tool output may not silently become a plain chat reply"
+    );
+    let events: Vec<ModelStreamItem> = adapter
+        .stream(&(), request).await.unwrap().collect().await;
+    assert!(
+        events.iter().any(|event| matches!(event, ModelStreamItem::Failed(_))),
+        "required tool streaming must fail if the gateway emits no tool"
+    );
+}
+
+#[tokio::test]
+async fn named_tool_policy_rejects_plain_text_without_the_selected_tool() {
+    use futures::StreamExt;
+    use tinyinference_llm::model::ToolChoice;
+
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: "Finished without tool calls".into(),
+    }));
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::Tool("read_file".into()),
+        ..Default::default()
+    };
+    assert!(adapter.invoke(&(), request.clone()).await.is_err());
+    let events: Vec<ModelStreamItem> = adapter
+        .stream(&(), request).await.unwrap().collect().await;
+    assert!(events.iter().any(|event| matches!(event, ModelStreamItem::Failed(_))));
+}
+
+#[tokio::test]
+async fn auto_choice_may_return_ordinary_text_without_tool_execution() {
+    use tinyinference_llm::model::ToolChoice;
+
+    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+        body: "A normal answer".to_owned(),
+    }));
+    let response = adapter.invoke(&(), ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::Auto,
+        ..Default::default()
+    }).await.unwrap();
+    assert!(response.message.tool_calls.is_empty());
+    assert_eq!(response.text(), "A normal answer");
+}
+
 struct FakeTaggedModel {
     body: String,
 }
