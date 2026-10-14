@@ -1,0 +1,60 @@
+# Single-use, read-only comparison of upstream main's and the unified PR's
+# actual Cargo feature-resolution closure on the same GitHub-hosted Linux VM.
+name: Kernel floor diff (diagnostic)
+on:
+  push:
+    branches: [feat/prodex-convergence]
+    paths: [.github/workflows/pr6-kernel-diagnostic.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr6-kernel-diff
+  cancel-in-progress: false
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: main-repo
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/prodex-convergence
+          path: pr-repo
+          submodules: recursive
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.96.1'
+      - name: Measure matching feature closures and identify each newly reachable name
+        shell: bash
+        run: |
+          set -euo pipefail
+          for root in main-repo pr-repo; do
+            (
+              cd "$root"
+              GGML_NATIVE=OFF cargo tree -p openhuman -e normal --prefix none --no-default-features --features flows |
+                sed 's/ (\\*)$//' | grep -vE '^[[:space:]]*$' | sort -u > "../$root-packages.txt"
+              awk '{print $1}' "../$root-packages.txt" | sort -u > "../$root-names.txt"
+              echo "$root packages=$(wc -l < "../$root-packages.txt") names=$(wc -l < "../$root-names.txt")"
+            )
+          done
+          echo "::group::New reachable crate names"
+          comm -13 main-repo-names.txt pr-repo-names.txt || true
+          echo "::endgroup::"
+          echo "::group::Removed reachable crate names"
+          comm -23 main-repo-names.txt pr-repo-names.txt || true
+          echo "::endgroup::"
+          echo "::group::Added package versions"
+          comm -13 main-repo-packages.txt pr-repo-packages.txt || true
+          echo "::endgroup::"
+          echo "::group::Removed package versions"
+          comm -23 main-repo-packages.txt pr-repo-packages.txt || true
+          echo "::endgroup::"
