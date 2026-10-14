@@ -12,6 +12,7 @@
 
 mod gate;
 mod source_evidence;
+mod source_graph;
 
 pub use source_evidence::SourceEvidenceTool;
 
