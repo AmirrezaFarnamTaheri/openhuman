@@ -140,7 +140,7 @@ fn rejects_mismatched_and_unrelated_target_agent_ids() {
         );
         let error = parse_triage_decision(&reply).unwrap_err();
         assert!(
-            matches!(error, ParseError::WrongTarget { expected: target, .. } if target == expected),
+            matches!(&error, ParseError::WrongTarget { expected: got, .. } if *got == expected),
             "unexpected classification for {action} -> {target}: {error:?}"
         );
     }
