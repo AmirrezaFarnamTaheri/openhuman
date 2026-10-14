@@ -30,6 +30,11 @@ describe('builtinCloudProviders', () => {
     expect(authStyleForBuiltinCloudProvider(slug)).toBe(authStyle);
   });
 
+  it('prompts for a least-privilege inference key, not an administrator token', () => {
+    const gateway = BUILTIN_CLOUD_PROVIDERS.find(provider => provider.slug === 'prodex');
+    expect(gateway?.keyPlaceholder).toBe('Inference-scoped virtual key');
+  });
+
   it('contains the full phase one provider set', () => {
     expect(BUILTIN_CLOUD_PROVIDERS.map(provider => provider.slug)).toEqual(
       expect.arrayContaining([
