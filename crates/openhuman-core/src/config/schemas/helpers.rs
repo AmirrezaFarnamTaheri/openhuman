@@ -344,3 +344,41 @@ pub fn json_output(name: &'static str, comment: &'static str) -> FieldSchema {
 pub(super) fn to_json<T: serde::Serialize>(outcome: Outcome<T>) -> Result<Value, String> {
     outcome.into_cli_compatible_json()
 }
+
+#[cfg(test)]
+mod per_model_protocol_rpc_tests {
+    use super::*;
+    use crate::config::schema::cloud_providers::{ModelTransport, ToolCallCodec};
+
+    #[test]
+    fn config_domain_settings_input_keeps_exact_model_transport_and_tagged_codec() {
+        let entry: CloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "multi-gateway",
+            "endpoint": "https://gateway.example/v1",
+            "tool_call_codec": "tagged_json",
+            "model_transports": {"vendor/responses": "responses"}
+        }))
+        .expect("valid per-model protocol");
+        assert_eq!(entry.tool_call_codec, ToolCallCodec::TaggedJson);
+        assert_eq!(
+            entry.model_transports.get("vendor/responses"),
+            Some(&ModelTransport::Responses)
+        );
+    }
+
+    #[test]
+    fn config_domain_settings_input_defaults_legacy_and_rejects_unknown_transport() {
+        let legacy: CloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "old",
+            "endpoint": "https://old.example/v1"
+        }))
+        .unwrap();
+        assert_eq!(legacy.tool_call_codec, ToolCallCodec::Native);
+        assert!(legacy.model_transports.is_empty());
+        assert!(serde_json::from_value::<CloudProviderUpdate>(serde_json::json!({
+            "slug": "invalid",
+            "endpoint": "https://gateway.example/v1",
+            "model_transports": {"model": "arbitrary"}
+        })).is_err());
+    }
+}
