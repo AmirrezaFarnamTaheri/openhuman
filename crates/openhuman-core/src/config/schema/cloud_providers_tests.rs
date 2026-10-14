@@ -99,9 +99,10 @@ fn is_builtin_cloud_slug_matches_presets_only() {
 }
 
 #[test]
-fn only_openai_and_prodex_builtins_expose_responses_api() {
+fn only_explicit_known_responses_providers_advertise_the_endpoint() {
     assert!(builtin_cloud_supports_responses_api("openai"));
     assert!(builtin_cloud_supports_responses_api("prodex"));
+    assert!(builtin_cloud_supports_responses_api("nebius"));
     for slug in ["deepseek", "groq", "mistral", "fireworks", "together"] {
         assert!(
             !builtin_cloud_supports_responses_api(slug),
@@ -112,13 +113,13 @@ fn only_openai_and_prodex_builtins_expose_responses_api() {
 
 /// Drift guard (TAURI-RUST-5EN): couple the capability helper to the
 /// preset list so adding a new built-in that wrongly claims the Responses
-/// API — or renaming `openai` — fails CI rather than silently re-enabling
-/// the guaranteed-404 `/responses` fallback. OpenAI and the opt-in Prodex
-/// gateway serve `/v1/responses`; other built-ins are chat-completions-only.
+/// API — or renaming a known capable provider — fails CI rather than silently
+/// re-enabling the guaranteed-404 `/responses` fallback. OpenAI, Prodex,
+/// and Nebius serve `/v1/responses`; the remainder is chat-only unless verified.
 #[test]
 fn responses_api_capability_is_coupled_to_the_preset_list() {
     for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
-        let expected = matches!(provider.slug, "openai" | "prodex");
+        let expected = matches!(provider.slug, "openai" | "prodex" | "nebius");
         assert_eq!(
             builtin_cloud_supports_responses_api(provider.slug),
             expected,
@@ -398,8 +399,17 @@ fn verified_peer_compatible_presets_have_expected_bearer_routes() {
         let preset = super::builtin_cloud_provider(slug).expect("verified peer preset");
         assert_eq!(preset.endpoint, endpoint, "{slug} endpoint");
         assert_eq!(preset.auth_style, AuthStyle::Bearer, "{slug} authentication");
-        assert!(!builtin_cloud_supports_responses_api(slug), "{slug} is chat-completions-only");
-        assert!(endpoint_host_is_chat_completions_only(endpoint), "{slug} endpoint must not fall back to Responses");
+        let supports_responses = slug == "nebius";
+        assert_eq!(
+            builtin_cloud_supports_responses_api(slug),
+            supports_responses,
+            "{slug} Responses-API capability"
+        );
+        assert_eq!(
+            endpoint_host_is_chat_completions_only(endpoint),
+            !supports_responses,
+            "{slug} endpoint fallback gate"
+        );
     }
 }
 
