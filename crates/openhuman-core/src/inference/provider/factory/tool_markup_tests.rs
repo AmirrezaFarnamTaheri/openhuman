@@ -326,7 +326,7 @@ fn tagged_json_bounded_parser_rejects_undeclared_or_wrongly_typed_tool_calls() {
         r#"<tool_calls>{"name":"read_file","arguments":{"path":"README.md"}}</tool_calls>"#,
         r#"<tool_calls>[]</tool_calls>"#,
         r#"<tool_calls>[{"name":"read_file","arguments":{"path":"README.md"}}]"#,
-        r#"<tool_call>{"name":"read_file","arguments":{"path":"README.md"}}#,
+        r#"<tool_call>{"name":"read_file","arguments":{"path":"README.md"}}"#,
         r#"<think>reasoning</think>"#,
         r#"<final_answer>answer</final_answer><tool_calls>[{"name":"shell","arguments":{"command":"pwd"}}]</tool_calls>"#,
     ] {
