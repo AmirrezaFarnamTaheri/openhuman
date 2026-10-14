@@ -36,8 +36,20 @@
    multiplying provider calls by every configured API key.
 6. New regression tests exercise the catalog, native model aliases, key-pool
    race conditions, streaming/unary bounded retry and credential-lease lifecycle.
+7. Cloud-provider 403 classification is now conservative: exact credential
+   errors evict one key, exact quota failures cool one key down, and unrelated
+   forbidden errors (including `invalid_model` and `invalid_request_error`)
+   do not fan out one failing invocation across the fleet. Unary and streaming
+   regression cases cover the selection boundary.
+8. Provider-specific image endpoint overrides require HTTPS for remote hosts
+   because inference credentials can be reused on image routes. Plain HTTP is
+   retained only for explicit loopback development gateways
+   (`localhost`, `127.0.0.0/8`, `::1`).
 
-Do **not** confuse unit/source assertions with live provider validation.
+
+Do **not** confuse unit/source assertions with live provider validation. As of this
+continuation, Rust/Tauri full-suite and approved-key provider smoke results for the
+latest branch head have not been independently confirmed.
 Required Rust/React/Tauri CI and disposable-key integration smoke tests remain
 release gates. Full other-peer feature convergence is not represented as done.
 
