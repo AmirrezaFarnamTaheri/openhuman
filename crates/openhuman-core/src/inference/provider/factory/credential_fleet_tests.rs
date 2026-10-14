@@ -109,3 +109,67 @@ fn provider_failures_are_rerouted_conservatively() {
     assert!(classify(Some(400), None, None).is_none());
     assert!(classify(Some(403), Some("forbidden"), None).is_none());
 }
+
+struct CountingRateLimitedModel {
+    attempts: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+#[async_trait]
+impl ChatModel<()> for CountingRateLimitedModel {
+    async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
+        self.attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Err(tinyinference_llm::Error::Provider(Box::new(ProviderError {
+            status: Some(429),
+            ..Default::default()
+        })))
+    }
+
+    async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
+        self.attempts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(ModelStream::new(Box::pin(futures::stream::iter(vec![
+            ModelStreamItem::Started,
+            ModelStreamItem::ProviderFailed(ProviderError {
+                status: Some(429),
+                ..Default::default()
+            }),
+        ]))))
+    }
+}
+
+#[tokio::test]
+async fn fleet_fails_over_at_most_the_per_call_budget_for_unary_requests() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let scope = "fleet-bounded-429-unary";
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let keys: Vec<String> = (0..8).map(|index| format!("unary-key-{index}")).collect();
+    let models: Vec<Arc<dyn ChatModel<()>>> = keys.iter().map(|_| {
+        Arc::new(CountingRateLimitedModel { attempts: Arc::clone(&attempts) })
+            as Arc<dyn ChatModel<()>>
+    }).collect();
+    let fleet = CredentialFleetModel::new(
+        scope.into(), keys, models, None, RotationStrategy::RoundRobin
+    );
+    assert!(fleet.invoke(&(), ModelRequest::default()).await.is_err());
+    assert_eq!(attempts.load(Ordering::SeqCst), MAX_KEY_ATTEMPTS_PER_CALL);
+    key_pool::forget(scope);
+}
+
+#[tokio::test]
+async fn fleet_fails_over_at_most_the_per_call_budget_for_precontent_stream_failures() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let scope = "fleet-bounded-429-stream";
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let keys: Vec<String> = (0..8).map(|index| format!("stream-key-{index}")).collect();
+    let models: Vec<Arc<dyn ChatModel<()>>> = keys.iter().map(|_| {
+        Arc::new(CountingRateLimitedModel { attempts: Arc::clone(&attempts) })
+            as Arc<dyn ChatModel<()>>
+    }).collect();
+    let fleet = CredentialFleetModel::new(
+        scope.into(), keys, models, None, RotationStrategy::RoundRobin
+    );
+    assert!(fleet.stream(&(), ModelRequest::default()).await.is_err());
+    assert_eq!(attempts.load(Ordering::SeqCst), MAX_KEY_ATTEMPTS_PER_CALL);
+    key_pool::forget(scope);
+}
