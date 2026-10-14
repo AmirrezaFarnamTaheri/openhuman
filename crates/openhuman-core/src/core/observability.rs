@@ -3093,7 +3093,9 @@ pub fn is_insufficient_credits_event(event: &sentry::protocol::Event<'_>) -> boo
 /// [`tinyinference_llm::failure::body_indicates_quota_exhausted`], so
 /// the emit-site guard and this `before_send` net can't drift. Shared with the
 /// event-level filter [`is_quota_exhausted_event`].
-pub use tinyinference_llm::failure::body_indicates_quota_exhausted as is_quota_exhausted_message;
+pub fn is_quota_exhausted_message(body: &str) -> bool {
+    tinyinference_llm::failure::body_indicates_quota_exhausted(body)
+}
 
 /// Defense-in-depth `before_send` filter for provider **monthly-quota
 /// exhausted** events (TAURI-RUST-C9A): the user's third-party plan has spent
