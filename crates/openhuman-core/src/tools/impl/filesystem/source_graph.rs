@@ -166,7 +166,7 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
         }
     }
 
-    json!({
+    let mut graph = json!({
         "operation":"graph",
         "nodes":nodes,
         "edges":edges,
@@ -178,7 +178,20 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
         "snapshot_atomic":false,
         "supported_syntax":["rust_mod", "javascript_typescript_static_relative_import", "commonjs_relative_require"],
         "resolution_rule":"exact unique local candidate only"
-    })
+    });
+    // Tool output may be threaded directly into an LLM context. Preserve a
+    // parseable JSON envelope instead of relying on downstream character
+    // truncation, which would corrupt it and drop completeness metadata.
+    const MAX_GRAPH_JSON_BYTES: usize = 26_000;
+    while graph.to_string().len() > MAX_GRAPH_JSON_BYTES {
+        let Some(edges) = graph["edges"].as_array_mut() else { break; };
+        if edges.pop().is_none() {
+            break;
+        }
+        graph["edges_complete"] = json!(false);
+        graph["edge_truncated_reason"] = json!("max_graph_result_bytes");
+    }
+    graph
 }
 
 #[cfg(test)]
