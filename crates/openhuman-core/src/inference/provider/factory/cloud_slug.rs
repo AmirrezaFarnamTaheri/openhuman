@@ -588,10 +588,13 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             codex: account_route.as_ref().or(codex_route),
             http: http.clone(),
         })?;
-        if entry.tool_call_codec == crate::config::schema::cloud_providers::ToolCallCodec::Qnml {
-            Ok(Arc::new(super::tool_markup::QnmlCompatModel::new(native)))
-        } else {
+        if entry.tool_call_codec.is_native() {
             Ok(native)
+        } else {
+            Ok(Arc::new(super::tool_markup::TextToolCompatModel::new(
+                native,
+                entry.tool_call_codec,
+            )))
         }
     };
     let models: Vec<Arc<dyn ChatModel<()>>> = match keys
