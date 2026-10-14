@@ -25,8 +25,7 @@ mod local_runtime;
 mod managed_provider;
 mod openrouter;
 use tinyinference_llm::catalog::{
-    append_query_param, endpoint_hosts_models_listing, is_openrouter_provider,
-    merge_openai_codex_model_hints, parse_models_response, ModelInfo,
+    is_openrouter_provider, merge_openai_codex_model_hints, parse_models_response, ModelInfo,
 };
 
 #[cfg(test)]
