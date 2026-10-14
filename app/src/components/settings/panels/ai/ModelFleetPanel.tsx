@@ -15,6 +15,7 @@ import TextField from '../../../ui/TextField';
 import type { AISettings, CloudProvider } from './aiPanelTypes';
 import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
 import { summarizeFleetHealth } from './fleetHealthInsights';
+import { ProviderAccountFleet } from './ProviderAccountFleet';
 import { validProdexDestination } from './prodexEndpointPolicy';
 import {
   fleetModelKey, syncModelPresets, applyModelBulkPatch,
@@ -338,6 +339,8 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           </Button>
         </div>
       </div>
+
+      <ProviderAccountFleet providers={providers} />
 
       <div className="space-y-2 border-t border-line-subtle pt-3">
         <h4 className="text-sm font-medium text-content">
