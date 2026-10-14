@@ -215,7 +215,14 @@ impl ChatModel<()> for CredentialFleetModel {
         self.models.first().and_then(|model| model.profile())
     }
     fn supports_input(&self, modality: InputModality, mime: &str, source: InputSource) -> bool {
-        let models = self.image_models.as_ref().unwrap_or(&self.models);
+        // An alternate image route is only selected when the request actually
+        // carries an image. Audio/video/document inputs still use the primary
+        // models, so capability probes must reflect that same route.
+        let models = if modality == InputModality::Image {
+            self.image_models.as_ref().unwrap_or(&self.models)
+        } else {
+            &self.models
+        };
         models
             .first()
             .is_some_and(|model| model.supports_input(modality, mime, source))
