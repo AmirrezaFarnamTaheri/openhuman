@@ -35,6 +35,8 @@ pub(super) struct CloudProviderUpdate {
     /// Credential strategy: round_robin | least_busy | priority_weighted.
     #[serde(default)]
     pub(super) rotation_strategy: Option<String>,
+    #[serde(default)]
+    pub(super) tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
     /// Optional PEM CA bundle for this provider. Empty string removes it.
     #[serde(default)]
     pub(super) ca_cert_pem: Option<String>,
