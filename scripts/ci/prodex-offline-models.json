@@ -1,0 +1,1956 @@
+{
+  "schema_version": 1,
+  "purpose": "OFFLINE, UNVERIFIED metadata enrichment only; never a live availability/price claim",
+  "source": "prodex-main.zip:crates/prodex-provider-core/catalog/models.json",
+  "source_sha256": "ed8d65c08d0c544aefdef29aea8b023cb7fda9a90adcdaad9bdfa027b13cea04",
+  "model_count": 82,
+  "models": [
+    {
+      "provider": "openai",
+      "id": "gpt-6-astra",
+      "display_name": "GPT-6 Astra",
+      "context_window_tokens": 1050000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-6.1-sol",
+      "display_name": "GPT-6.1 Sol",
+      "context_window_tokens": 1050000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-6-luna",
+      "display_name": "GPT-6 Luna",
+      "context_window_tokens": 1050000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-6-sol",
+      "display_name": "GPT-6 Sol",
+      "context_window_tokens": 1050000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.6-sol",
+      "display_name": "GPT-5.6 Sol",
+      "context_window_tokens": 872000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.6-terra",
+      "display_name": "GPT-5.6 Terra",
+      "context_window_tokens": 872000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.6-luna",
+      "display_name": "GPT-5.6 Luna",
+      "context_window_tokens": 872000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.4",
+      "display_name": "GPT-5.4",
+      "context_window_tokens": 400000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.4-mini",
+      "display_name": "GPT-5.4 Mini",
+      "context_window_tokens": 400000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.3-codex",
+      "display_name": "GPT-5.3 Codex",
+      "context_window_tokens": 400000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.2",
+      "display_name": "GPT-5.2",
+      "context_window_tokens": 400000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "auto",
+      "display_name": "Anthropic Auto",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "opus",
+      "display_name": "Claude Opus",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "sonnet",
+      "display_name": "Claude Sonnet",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "haiku",
+      "display_name": "Claude Haiku",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-opus-5-5",
+      "display_name": "Claude Opus 5.5",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-sonnet-5-5",
+      "display_name": "Claude Sonnet 5.5",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-fable-5-1",
+      "display_name": "Claude Fable 5.1",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-opus-4-8",
+      "display_name": "Claude Opus 4.8",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-sonnet-4-6",
+      "display_name": "Claude Sonnet 4.6",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-haiku-4-5",
+      "display_name": "Claude Haiku 4.5",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-opus-4-6",
+      "display_name": "Claude Opus 4.6",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-opus-4-20250514",
+      "display_name": "Claude Opus 4",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-6-astra",
+      "display_name": "GPT-6 Astra",
+      "context_window_tokens": 1050000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-6.1-sol",
+      "display_name": "GPT-6.1 Sol",
+      "context_window_tokens": 1050000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-6-luna",
+      "display_name": "GPT-6 Luna",
+      "context_window_tokens": 1050000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-6-sol",
+      "display_name": "GPT-6 Sol",
+      "context_window_tokens": 1050000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-opus-5-5",
+      "display_name": "Claude Opus 5.5",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-opus-5",
+      "display_name": "Claude Opus 5",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-sonnet-5-5",
+      "display_name": "Claude Sonnet 5.5",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-sonnet-5",
+      "display_name": "Claude Sonnet 5",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-fable-5-1",
+      "display_name": "Claude Fable 5.1",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gemini-3.8-flash",
+      "display_name": "Gemini 3.8 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gemini-3.7-flash",
+      "display_name": "Gemini 3.7 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gemini-3.6-flash",
+      "display_name": "Gemini 3.6 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5.6-sol",
+      "display_name": "GPT-5.6 Sol",
+      "context_window_tokens": 272000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5.6-terra",
+      "display_name": "GPT-5.6 Terra",
+      "context_window_tokens": 272000,
+      "max_output_tokens": 128000,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5.6-luna",
+      "display_name": "GPT-5.6 Luna",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "auto",
+      "display_name": "Copilot Auto",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "codex",
+      "display_name": "Copilot Codex",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5.3-codex",
+      "display_name": "GPT-5.3 Codex",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5.5",
+      "display_name": "GPT-5.5",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5.4",
+      "display_name": "GPT-5.4",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5.4-mini",
+      "display_name": "GPT-5.4 Mini",
+      "context_window_tokens": 400000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5.4-nano",
+      "display_name": "GPT-5.4 Nano",
+      "context_window_tokens": 400000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-5-mini",
+      "display_name": "GPT-5 Mini",
+      "context_window_tokens": 400000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-sonnet-4-6",
+      "display_name": "Claude Sonnet 4.6",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-opus-4-8",
+      "display_name": "Claude Opus 4.8",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-opus-4-7",
+      "display_name": "Claude Opus 4.7",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-fable-5",
+      "display_name": "Claude Fable 5",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "claude-haiku-4-5",
+      "display_name": "Claude Haiku 4.5",
+      "context_window_tokens": 200000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gemini-3.5-flash",
+      "display_name": "Gemini 3.5 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "copilot",
+      "id": "gpt-4o",
+      "display_name": "GPT-4o",
+      "context_window_tokens": 400000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "deepseek",
+      "id": "deepseek-v4-pro",
+      "display_name": "DeepSeek V4 Pro",
+      "context_window_tokens": 128000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "deepseek",
+      "id": "deepseek-v4-flash",
+      "display_name": "DeepSeek V4 Flash",
+      "context_window_tokens": 128000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "deepseek",
+      "id": "deepseek-chat",
+      "display_name": "DeepSeek Chat",
+      "context_window_tokens": 128000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "deepseek",
+      "id": "deepseek-reasoner",
+      "display_name": "DeepSeek Reasoner",
+      "context_window_tokens": 128000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "auto",
+      "display_name": "Gemini Auto",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "auto-gemini-3",
+      "display_name": "Gemini 3 Auto",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "auto-gemini-2.5",
+      "display_name": "Gemini 2.5 Auto",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "pro",
+      "display_name": "Gemini Pro",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "flash",
+      "display_name": "Gemini Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "flash-lite",
+      "display_name": "Gemini Flash Lite",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "chat-compression-default",
+      "display_name": "Gemini Chat Compression",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3.8-flash",
+      "display_name": "Gemini 3.8 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3.7-flash",
+      "display_name": "Gemini 3.7 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3.6-flash",
+      "display_name": "Gemini 3.6 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3.5-flash-lite",
+      "display_name": "Gemini 3.5 Flash Lite",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3.1-pro-preview",
+      "display_name": "Gemini 3.1 Pro Preview",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3.1-pro-preview-customtools",
+      "display_name": "Gemini 3.1 Pro Preview Custom Tools",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3-flash-preview",
+      "display_name": "Gemini 3 Flash Preview",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3-flash",
+      "display_name": "Gemini 3 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3.5-flash",
+      "display_name": "Gemini 3.5 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-3.1-flash-lite",
+      "display_name": "Gemini 3.1 Flash Lite",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-2.5-pro",
+      "display_name": "Gemini 2.5 Pro",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-2.5-flash",
+      "display_name": "Gemini 2.5 Flash",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemini-2.5-flash-lite",
+      "display_name": "Gemini 2.5 Flash Lite",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemma-4-31b-it",
+      "display_name": "Gemma 4 31B IT",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "gemini",
+      "id": "gemma-4-26b-a4b-it",
+      "display_name": "Gemma 4 26B A4B IT",
+      "context_window_tokens": 1048576,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": true,
+        "audio": false,
+        "web_search": true,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "kiro",
+      "id": "gpt-5.6-luna",
+      "display_name": "GPT-5.6 Luna",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "kiro",
+      "id": "auto",
+      "display_name": "Kiro Auto",
+      "context_window_tokens": 1000000,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": false,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": true
+      },
+      "pricing_known": false
+    },
+    {
+      "provider": "local",
+      "id": "local",
+      "display_name": "Local OpenAI Compatible",
+      "context_window_tokens": null,
+      "max_output_tokens": null,
+      "supported_endpoints": [
+        "responses",
+        "responses/compact",
+        "chat-completions",
+        "messages",
+        "models",
+        "embeddings",
+        "images",
+        "audio",
+        "batches",
+        "rerank",
+        "a2a"
+      ],
+      "feature_flags": {
+        "tools": true,
+        "json_schema": true,
+        "vision": false,
+        "audio": false,
+        "web_search": false,
+        "reasoning": false
+      },
+      "pricing_known": false
+    }
+  ]
+}
