@@ -16,6 +16,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  gateway-offline:
+    name: Prodex data-plane contract (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate safe Gateway model/inference diagnostics
+        run: node --test scripts/__tests__/prodex-gateway-smoke.test.mjs
   frontend-and-core:
     uses: ./.github/workflows/test-reusable.yml
     with:
