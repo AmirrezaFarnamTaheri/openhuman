@@ -587,6 +587,8 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             user_agent: user_agent.as_deref(),
             codex: account_route.as_ref().or(codex_route),
             http: http.clone(),
+            responses_api_primary: entry.model_transport(&effective_model)
+                == crate::config::schema::cloud_providers::ModelTransport::Responses,
         })?;
         if entry.tool_call_codec.is_native() {
             Ok(native)
