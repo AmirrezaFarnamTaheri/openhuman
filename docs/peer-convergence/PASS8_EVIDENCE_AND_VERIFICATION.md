@@ -11,6 +11,20 @@ The 20 additional peer ZIP archives yielded 25,264 central-directory entries, 10
 3. Root TinyAgents final-verification middleware: short consequential edits, git operations and native delegation/handoff tools now trigger a requirements check even below the previous five-round threshold. The check requires tests after the last write, latest exact commit checks and observable exit status.
 4. Four new key-only, OpenAI-compatible provider presets on both Rust and frontend catalogs: Cohere (https://api.cohere.ai/compatibility/v1), TokenRouter (https://api.tokenrouter.io/v1), BytePlus ModelArk Asia Pacific (https://ark.ap-southeast.bytepluses.com/api/v3) and Europe (https://ark.eu-west.bytepluses.com/api/v3). API keys and endpoints are region-scoped for BytePlus. No model-level quota, entitlement or pricing is implied.
 
+### System-One context convergence
+
+The existing Jev evaluator already sent current intent, recent user turns and
+shortlisted tool choices (plus a yes/no needs-tool question). The new bounded
+adapter retains at most six recent user turns, limits each to 500 Unicode scalar
+values, and preserves the initial and latest halves of exceptionally long
+intents. It emits explicit truncation metadata and refuses duplicate/oversized
+Choice options before remote egress. It does not silently add system prompts,
+agent/tool transcripts, file contents or memory to the external route.
+
+The next higher-order step is an **opt-in, provenance-aware task-state summary**
+that includes only user-authorized minimal evidence necessary for selection.
+Do not implement hidden raw transcript forwarding to a decision endpoint.
+
 ## Executed checks
 
 | Check | Evidence | What it does not verify |
