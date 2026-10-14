@@ -309,6 +309,39 @@ export const BUILTIN_CLOUD_PROVIDERS: BuiltinCloudProvider[] = [
     authStyle: 'bearer',
     tone: TONE.fuchsia,
   },
+  // Documented key-based OpenAI-compatible endpoints adapted from peer routing
+  // catalogs. These presets do not imply free access, live authentication,
+  // transport parity for every model, or multi-region credential portability.
+  {
+    slug: 'cohere',
+    label: 'Cohere',
+    endpoint: 'https://api.cohere.ai/compatibility/v1',
+    authStyle: 'bearer',
+    tone: TONE.orange,
+  },
+  {
+    slug: 'tokenrouter',
+    label: 'TokenRouter',
+    endpoint: 'https://api.tokenrouter.io/v1',
+    authStyle: 'bearer',
+    tone: TONE.sky,
+    keyPlaceholder: 'tr_...',
+  },
+  // BytePlus ModelArk keys/endpoints are isolated by geographic region.
+  {
+    slug: 'byteplus-modelark-ap',
+    label: 'BytePlus ModelArk (Asia Pacific)',
+    endpoint: 'https://ark.ap-southeast.bytepluses.com/api/v3',
+    authStyle: 'bearer',
+    tone: TONE.rose,
+  },
+  {
+    slug: 'byteplus-modelark-eu',
+    label: 'BytePlus ModelArk (Europe)',
+    endpoint: 'https://ark.eu-west.bytepluses.com/api/v3',
+    authStyle: 'bearer',
+    tone: TONE.indigo,
+  },
   // 9Router's self-hosted OpenAI-compatible gateway. This is deliberately
   // localhost-only by default, not a provider-wide OAuth token importer:
   // accounts, quota, tiers and access rights remain owned by 9Router.
