@@ -84,3 +84,23 @@ fn creds_with_fields_round_trips() {
     let back: VoiceProviderCreds = serde_json::from_str(&json).unwrap();
     assert_eq!(creds, back);
 }
+
+#[test]
+fn kokoro_preset_is_keyless_local_tts_with_custom_model() {
+    let p = builtin_voice_provider("kokoro").expect("Kokoro preset");
+    assert_eq!(p.endpoint, "http://127.0.0.1:8880/v1");
+    assert_eq!(p.capability, VoiceCapability::Tts);
+    assert_eq!(p.tts_api_style, TtsApiStyle::OpenaiAudio);
+    assert_eq!(p.default_tts_voice, Some("af_bella"));
+    assert_eq!(p.default_tts_model, Some("kokoro"));
+    let creds = VoiceProviderCreds {
+        slug: "kokoro".into(),
+        endpoint: p.endpoint.into(),
+        auth_style: AuthStyle::None,
+        capability: VoiceCapability::Tts,
+        default_tts_model: Some("kokoro".into()),
+        default_tts_voice: Some("af_bella".into()),
+        ..Default::default()
+    };
+    assert_eq!(serde_json::from_str::<VoiceProviderCreds>(&serde_json::to_string(&creds).unwrap()).unwrap(), creds);
+}
