@@ -51,6 +51,11 @@ const TOOL_FAMILIES: &[ToolFamily] = &[
         default_enabled: true,
     },
     ToolFamily {
+        id: "source_evidence",
+        rust_names: &["source_evidence"],
+        default_enabled: false,
+    },
+    ToolFamily {
         id: "file_write",
         rust_names: &["file_write"],
         default_enabled: true,
