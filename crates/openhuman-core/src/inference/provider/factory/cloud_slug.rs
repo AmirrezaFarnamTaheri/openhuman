@@ -364,11 +364,37 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         Err(e) => return Some(Err(e)),
     };
 
+    // A Codex subscription bearer is scoped to the official Responses API.
+    // Never forward that bearer to user-configured image endpoints, even if
+    // those settings were saved while an API-key profile was active.
+    if codex.using_oauth && (
+        entry.image_endpoint.as_deref().is_some_and(|value| !value.trim().is_empty())
+        || entry.model_image_endpoints.values().any(|value| !value.trim().is_empty())
+    ) {
+        return Some(Err(anyhow::anyhow!(
+            "Codex OAuth credentials cannot be sent to alternate image endpoints"
+        )));
+    }
+    let codex_accounts = if codex.using_oauth {
+        match crate::security::credentials::openai_oauth::lookup_openai_oauth_fleet(config) {
+            Ok(accounts) => accounts,
+            Err(error) => return Some(Err(anyhow::anyhow!(error))),
+        }
+    } else {
+        Vec::new()
+    };
+
     // Credentials are parsed once; one provider slug can own a pool of keys.
     // No credential group is ever sent as a single upstream Authorization header.
-    let keys = if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
+    let keys = if codex.using_oauth {
+        if codex_accounts.is_empty() {
+            vec![key.clone()]
+        } else {
+            codex_accounts.iter().map(|account| account.access_token.clone()).collect()
+        }
+    } else if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
         match super::credentials::lookup_token_account_fleet(
-            &slug, config, &key, codex.using_oauth,
+            &slug, config, &key, false,
         ) {
             Ok(found) if !found.is_empty() => found,
             Ok(_) => vec![String::new()],
@@ -382,7 +408,7 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             "Prodex Gateway requires exactly one inference-scoped virtual key; rotate upstream provider accounts in Prodex"
         )));
     }
-    if codex.using_oauth && keys.len() > 1 {
+    if codex.using_oauth && keys.len() > 1 && keys.len() != codex_accounts.len() {
         return Some(Err(anyhow::anyhow!(
             "OpenAI Codex OAuth credentials cannot be mixed with API keys"
         )));
@@ -509,6 +535,26 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     let build = |credential: &str, base: &str| -> anyhow::Result<Arc<dyn ChatModel<()>>> {
         let mut spec = cloud_spec::cloud_provider_spec(entry, &effective_model);
         spec.base_url = base.to_string();
+        // Each OAuth model has the account-id header that belongs to its own
+        // access token. Reusing the active account's header for every key would
+        // cause cross-account requests and broken failover.
+        let account = if codex.using_oauth {
+            codex_accounts.iter().find(|a| a.access_token == credential)
+        } else { None };
+        let mut headers = extra_headers.clone();
+        let account_route = account.map(|identity|
+            tinyinference_llm::providers::openai::codex::OpenAiCodexRouting {
+                endpoint: codex.endpoint.clone(),
+                using_oauth: true,
+                account_id: identity.account_id.clone(),
+            }
+        );
+        if codex.using_oauth {
+            headers.retain(|(name, _)| !name.eq_ignore_ascii_case(OPENAI_CODEX_ACCOUNT_HEADER));
+            if let Some(id) = account.and_then(|identity| identity.account_id.as_deref()) {
+                headers.push((OPENAI_CODEX_ACCOUNT_HEADER.to_owned(), id.to_owned()));
+            }
+        }
         cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
             spec,
             auth_style: auth_style.clone(),
@@ -516,10 +562,10 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             temperature_override,
             temperature_unsupported_models: config.temperature_unsupported_models.as_slice(),
             native_tool_calling,
-            extra_headers: extra_headers.as_slice(),
+            extra_headers: headers.as_slice(),
             extra_query_params: extra_query_params.as_slice(),
             user_agent: user_agent.as_deref(),
-            codex: codex_route,
+            codex: account_route.as_ref().or(codex_route),
             http: http.clone(),
         })
     };
