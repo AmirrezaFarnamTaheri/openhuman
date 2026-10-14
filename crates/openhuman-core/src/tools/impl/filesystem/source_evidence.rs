@@ -12,6 +12,7 @@ use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolResult, ToolRunConte
 
 use crate::security::SecurityPolicy;
 use super::gate::security_scoped_to_root;
+use super::source_graph::{build_graph, SourceDocument};
 
 const MAX_FILES: usize = 32;
 const MAX_FILE_BYTES: u64 = 256 * 1024;
@@ -42,9 +43,10 @@ impl SourceEvidenceTool {
             anyhow::bail!("source evidence path is outside the active workspace");
         }
         let result = match op {
-            "scan" => scan(&scoped, &root, &resolved, &args).await?,
+            "scan" => scan(&scoped, &root, &resolved, &args, false).await?,
+            "graph" => scan(&scoped, &root, &resolved, &args, true).await?,
             "verify" => verify(&scoped, &root, &resolved, &args).await?,
-            _ => anyhow::bail!("operation must be scan or verify"),
+            _ => anyhow::bail!("operation must be scan, graph, or verify"),
         };
         Ok(ToolResult::success(result.to_string()))
     }
@@ -59,10 +61,12 @@ impl Tool for SourceEvidenceTool {
     fn permission_level(&self) -> PermissionLevel { PermissionLevel::ReadOnly }
     fn parameters_schema(&self) -> Value {
         json!({"type":"object","properties":{
-            "operation":{"type":"string","enum":["scan","verify"]},
+            "operation":{"type":"string","enum":["scan","graph","verify"]},
             "path":{"type":"string","description":"Relative path in current workspace, default '.'"},
             "query":{"type":"string","maxLength":128,"description":"Optional literal substring for scanning"},
             "max_files":{"type":"integer","minimum":1,"maximum":32},
+            "max_edges":{"type":"integer","minimum":1,"maximum":64},
+            "focus_path":{"type":"string","maxLength":180,"description":"Optional indexed path for reverse impact analysis in graph mode"},
             "expected_sha256":{"type":"string","minLength":64,"maxLength":64},
             "start_line":{"type":"integer","minimum":1},
             "end_line":{"type":"integer","minimum":1}
@@ -120,7 +124,7 @@ async fn read_checked(policy: &SecurityPolicy, path: &Path) -> anyhow::Result<Op
     }
     Ok(Some(bytes))
 }
-async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value) -> anyhow::Result<Value> {
+async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, graph_mode: bool) -> anyhow::Result<Value> {
     let query = args.get("query").and_then(Value::as_str).unwrap_or("");
     if query.len() > 128 { anyhow::bail!("query too long"); }
     let max_files = args.get("max_files").and_then(Value::as_u64).unwrap_or(MAX_FILES as u64).clamp(1, MAX_FILES as u64) as usize;
@@ -155,6 +159,7 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value) -
     }
     entries.sort();
     let mut files = Vec::new();
+    let mut graph_docs = Vec::new();
     let mut total = 0usize;
     let mut generation = Sha256::new();
     let mut source_bytes = 0usize;
@@ -171,8 +176,17 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value) -
         total += bytes.len();
         let digest = hex_digest(&bytes);
         let label = relative(root, &path);
+        if label.len() > 180 {
+            truncated.get_or_insert("path_length_limit");
+            continue;
+        }
         generation.update(label.as_bytes()); generation.update([0]); generation.update(digest.as_bytes()); generation.update([0]);
         let text = std::str::from_utf8(&bytes)?;
+        if graph_mode {
+            graph_docs.push(SourceDocument {
+                path: label.clone(), source_hash: digest.clone(), content: text.to_owned(),
+            });
+        }
         let matches: Vec<Value> = if query.is_empty() { Vec::new() } else {
             let all: Vec<_> = text.lines().enumerate()
                 .filter(|(_,line)| line.contains(query)).collect();
@@ -182,8 +196,23 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value) -
         source_bytes += bytes.len();
         files.push(json!({"path":label,"source_hash":digest,"size_bytes":bytes.len(),"matches":matches}));
     }
+    let generation = format!("{:x}",generation.finalize());
+    if graph_mode {
+        let max_edges = args.get("max_edges").and_then(Value::as_u64).unwrap_or(64).clamp(1,64) as usize;
+        let focus = args.get("focus_path").and_then(Value::as_str);
+        if focus.is_some_and(|path| path.len() > 180 || path.chars().any(char::is_control)) {
+            anyhow::bail!("invalid focus_path");
+        }
+        let mut graph = build_graph(&graph_docs, max_edges, focus);
+        graph["generation"] = json!(generation);
+        graph["scan_complete"] = json!(truncated.is_none());
+        graph["truncated_reason"] = json!(truncated);
+        graph["observed_bytes"] = json!(source_bytes);
+        if truncated.is_some() { graph["edges_complete"] = json!(false); }
+        return Ok(graph);
+    }
     Ok(json!({
-        "operation":"scan","generation":format!("{:x}",generation.finalize()),
+        "operation":"scan","generation":generation,
         "complete":truncated.is_none(),"truncated_reason":truncated,
         "observed_bytes":source_bytes, "files":files,
         "snapshot_atomic":false
