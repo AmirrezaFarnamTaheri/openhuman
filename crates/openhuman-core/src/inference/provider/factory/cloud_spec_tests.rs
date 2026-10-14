@@ -103,3 +103,14 @@ fn discovery_request_uses_x_api_key_for_anthropic_and_skips_codex_oauth() {
     with_oauth.codex = Some(&oauth);
     assert!(cloud_discovery_request(&with_oauth).is_none());
 }
+
+#[test]
+fn prodex_gateway_discovers_models_with_the_scoped_virtual_key() {
+    let creds = entry("prodex", "http://127.0.0.1:4000/v1", AuthStyle::Bearer);
+    let request = cloud_discovery_request(&build(&creds, "prodex-fast", "vk-scoped"))
+        .expect("Prodex gateway provides a /v1/models endpoint");
+    assert_eq!(request.endpoint, "http://127.0.0.1:4000/v1");
+    assert!(request.headers.iter().any(|(key, value)| {
+        key == "Authorization" && value == "Bearer vk-scoped"
+    }));
+}
