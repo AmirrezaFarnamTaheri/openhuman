@@ -13,6 +13,10 @@ export type FleetHealthSummary = {
   evicted: number;
   activeLeases: number;
   nextRecoveryMs: number | null;
+  /** Counts reflect observed key-model attempts since local health reset, NOT quota. */
+  successCount: number;
+  failureCount: number;
+  observedSuccessRate: number | null;
   status: 'unobserved' | 'ready' | 'degraded' | 'unavailable';
 };
 
@@ -25,6 +29,8 @@ export function summarizeFleetHealth(snapshot: ModelFleetStatus | null): FleetHe
   let evicted = 0;
   let activeLeases = 0;
   let nextRecoveryMs: number | null = null;
+  let successCount = 0;
+  let failureCount = 0;
   for (const provider of snapshot?.providers ?? []) {
     if (!provider || !Array.isArray(provider.models)) continue;
     providerCount++;
@@ -43,6 +49,12 @@ export function summarizeFleetHealth(snapshot: ModelFleetStatus | null): FleetHe
             nextRecoveryMs = nextRecoveryMs === null ? retry : Math.min(nextRecoveryMs, retry);
           }
         }
+        if (Number.isSafeInteger(key.successes) && key.successes >= 0) {
+          successCount += key.successes;
+        }
+        if (Number.isSafeInteger(key.failures) && key.failures >= 0) {
+          failureCount += key.failures;
+        }
         if (Number.isSafeInteger(key.active_leases) && key.active_leases >= 0) {
           activeLeases += key.active_leases;
         }
@@ -52,6 +64,9 @@ export function summarizeFleetHealth(snapshot: ModelFleetStatus | null): FleetHe
   const status = keyCount === 0 ? 'unobserved'
     : healthy === 0 ? 'unavailable'
       : cooling + evicted > 0 ? 'degraded' : 'ready';
+  const attempts = successCount + failureCount;
+  const observedSuccessRate = attempts > 0
+    ? Math.round((successCount / attempts) * 100) : null;
   return {providerCount, modelCount, keyCount, healthy, cooling, evicted,
-    activeLeases, nextRecoveryMs, status};
+    activeLeases, nextRecoveryMs, successCount, failureCount, observedSuccessRate, status};
 }

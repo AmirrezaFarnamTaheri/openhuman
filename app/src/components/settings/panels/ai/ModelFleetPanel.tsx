@@ -244,6 +244,13 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               <p>{healthSummary.healthy} healthy, {healthSummary.cooling} cooling,
                 {' '}{healthSummary.evicted} evicted, {healthSummary.activeLeases} active leases
                 {' '}across {healthSummary.modelCount} models.</p>
+              {healthSummary.observedSuccessRate !== null && <p>
+                {t('settings.ai.fleet.observedSuccesses', 'Observed model-key attempts')}:
+                {' '}{healthSummary.successCount} succeeded,
+                {' '}{healthSummary.failureCount} failed
+                {' '}({healthSummary.observedSuccessRate}% successful).
+                {' '}{t('settings.ai.fleet.notQuota', 'These are local outcomes, not provider quota.')}
+              </p>}
               {healthSummary.nextRecoveryMs !== null && <p>
                 {t('settings.ai.fleet.earliestCooldown', 'Earliest reported cooldown')}:
                 {' '}{Math.ceil(healthSummary.nextRecoveryMs / 1000)}s
