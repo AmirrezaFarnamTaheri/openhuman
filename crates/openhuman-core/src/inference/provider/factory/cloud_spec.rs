@@ -101,7 +101,7 @@ pub(super) fn build_cloud_model(build: CloudBuild<'_>) -> anyhow::Result<Arc<dyn
     // routes, keep using the vendor registry unchanged. Codex OAuth already
     // selects its own Responses transport and account-specific request shape.
     if build.responses_api_primary && !build.codex.is_some_and(|route| route.using_oauth) {
-        if matches!(build.auth_style, CompatAuthStyle::Anthropic) {
+        if matches!(&build.auth_style, CompatAuthStyle::Anthropic) {
             anyhow::bail!(
                 "[chat-factory] Responses API requires OpenAI-compatible authentication, not Anthropic Messages"
             );
