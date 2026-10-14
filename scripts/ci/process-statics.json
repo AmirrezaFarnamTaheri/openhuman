@@ -28,5 +28,15 @@
     "category": "B",
     "reason": "Holds only unit mutexes. The key is the workspace directory plus the acting memory identity, so different scopes never share or wait on a lock and no tenant data is stored.",
     "verification": "tinymemes/service_tests.rs: foreground_remixes_share_a_lock_per_workspace_and_never_across_workspaces"
+  },
+  {
+    "file": "crates/openhuman-core/src/agent/multimodal.rs",
+    "scope": "",
+    "name": "MEMORY",
+    "type": "OnceLock<BlobAttachmentStash>",
+    "count": 1,
+    "category": "B",
+    "reason": "Process-local in-memory attachment fallback only for the CLI/direct/test path without init_attachments_dir; the host path uses the initialized workspace-backed stash instead. Avoids persisting bytes or credentials on disk and is never selected for initialized service workspaces.",
+    "verification": "agent/multimodal.rs: stash() selects workspace-scoped attachment_stash_for(workspace) when ATTACHMENTS_DIR is initialized; memory_stash() is the explicitly ephemeral uninitialized fallback. Never expose a shared fallback for multi-tenant services."
   }
 ]

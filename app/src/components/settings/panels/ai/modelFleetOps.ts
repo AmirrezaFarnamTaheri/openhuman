@@ -180,7 +180,7 @@ export function parseModelImageEndpoints(input: string): Record<string, string> 
     if (sep < 1) throw new Error('Each image model mapping must be model-id = base URL.');
     const id = line.slice(0, sep).trim();
     const url = line.slice(sep + 1).trim();
-    if (!id || id.length > 200 || /[\u0000-\u001f\u007f]/.test(id)) {
+    if (!id || id.length > 200 || /\p{Cc}/u.test(id)) {
       throw new Error('Image model ids must be nonempty and at most 200 characters.');
     }
     if (!url || !validModelFleetEndpoint(url)) {

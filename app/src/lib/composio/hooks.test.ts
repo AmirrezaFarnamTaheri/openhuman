@@ -281,7 +281,7 @@ describe('useComposioIntegrations', () => {
     const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
       if (interval === 12_345 && typeof handler === 'function') {
         tick = handler;
-        return 1234;
+        return 1234 as unknown as ReturnType<typeof window.setInterval>;
       }
       return realSetInterval(handler, interval);
     });
@@ -340,7 +340,7 @@ describe('useComposioIntegrations', () => {
     const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
       if (interval === 12_345 && typeof handler === 'function') {
         tick = handler;
-        return 1234;
+        return 1234 as unknown as ReturnType<typeof window.setInterval>;
       }
       return realSetInterval(handler, interval);
     });

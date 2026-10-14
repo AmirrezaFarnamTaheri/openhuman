@@ -3085,14 +3085,10 @@ pub fn is_insufficient_credits_event(event: &sentry::protocol::Event<'_>) -> boo
     })
 }
 
-/// Message-level matcher for a provider **monthly-quota / usage-limit
-/// exhausted** failure. Status-agnostic by design — unlike
-/// [`is_insufficient_credits_message`] it does NOT anchor on a 402 status,
-/// because the Kiro IDE proxy wraps its 402 inside a 500 envelope
-/// (TAURI-RUST-C9A). Delegates to the single-source quota-phrase set in
-/// [`tinyinference_llm::failure::body_indicates_quota_exhausted`], so
-/// the emit-site guard and this `before_send` net can't drift. Shared with the
-/// event-level filter [`is_quota_exhausted_event`].
+/// Message matcher for monthly quota exhaustion, including upstream 402
+/// errors rewrapped as 500 (TAURI-RUST-C9A). Delegates to the shared
+/// `tinyinference_llm::failure` predicate used by the emit-site guard and
+/// event-level `is_quota_exhausted_event` filter.
 pub fn is_quota_exhausted_message(body: &str) -> bool {
     tinyinference_llm::failure::body_indicates_quota_exhausted(body)
 }

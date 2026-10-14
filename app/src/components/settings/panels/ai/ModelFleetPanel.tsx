@@ -154,7 +154,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const saveModelImageEndpoint = (remove = false) => void run(async () => {
     if (!activeProvider) throw new Error('Choose a provider group.');
     const id = modelId.trim();
-    if (!id || id.length > 200 || /[\u0000-\u001f\u007f]/.test(id)) {
+    if (!id || id.length > 200 || /\p{Cc}/u.test(id)) {
       throw new Error('Enter a valid model id (up to 200 characters).');
     }
     if (!remove && (!modelImageUrl.trim() || !validModelFleetEndpoint(modelImageUrl))) {
