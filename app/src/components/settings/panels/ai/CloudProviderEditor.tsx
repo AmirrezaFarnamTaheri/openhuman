@@ -42,6 +42,9 @@ export const CloudProviderEditor = ({
   const [label, setLabel] = useState<string>(initial?.label ?? '');
   const [endpoint, setEndpoint] = useState(initial?.endpoint ?? '');
   const [imageEndpoint, setImageEndpoint] = useState(initial?.imageEndpoint ?? '');
+  const [toolCallCodec, setToolCallCodec] = useState<'native' | 'qnml'>(
+    initial?.toolCallCodec ?? 'native'
+  );
   const [rotationStrategy, setRotationStrategy] = useState(
     initial?.rotationStrategy ?? 'round_robin'
   );
@@ -103,6 +106,7 @@ export const CloudProviderEditor = ({
           imageEndpoint: imageEndpoint.trim(),
           modelImageEndpoints: imageMap,
           rotationStrategy,
+          toolCallCodec,
           slug,
           label: label.trim() || slug,
           endpoint: endpoint.trim(),
@@ -284,6 +288,24 @@ export const CloudProviderEditor = ({
           <option value="least_busy">Least busy</option>
           <option value="priority_weighted">Priority weighted</option>
         </select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="cloud-provider-tool-codec" className="text-xs text-content-secondary">
+          Tool-call format
+        </Label>
+        <select
+          id="cloud-provider-tool-codec"
+          value={toolCallCodec}
+          onChange={event => setToolCallCodec(event.target.value as 'native' | 'qnml')}
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
+          <option value="native">Native API (recommended)</option>
+          <option value="qnml">QNML tags (Qwen / 2API compatible)</option>
+        </select>
+        <p className="text-xs text-content-muted">
+          For gateways that return tagged tool calls as text. OpenHuman validates declared tool
+          permissions and buffers tool-enabled streams before displaying the response. Ordinary
+          chat streams normally.
+        </p>
       </div>
       <div>
         <Label htmlFor="cloud-provider-ca-cert" className="text-xs text-content-secondary">
