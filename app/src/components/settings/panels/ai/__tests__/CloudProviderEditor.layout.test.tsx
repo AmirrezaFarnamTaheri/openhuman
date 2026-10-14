@@ -25,7 +25,7 @@ describe('CloudProviderEditor layout', () => {
     const scrollable = dialog.querySelector('.overflow-y-auto');
     expect(scrollable).toBeTruthy();
     expect(scrollable?.className).toContain('min-h-0');
-    expect(scrollable?.contains(screen.getByLabelText(/Per-model protocol overrides/))).toBe(true);
+    expect(scrollable?.contains(screen.getByLabelText('settings.ai.modelTransportOverridesLabel'))).toBe(true);
     const buttons = Array.from(dialog.querySelectorAll('button'));
     expect(buttons.some(button => button.textContent?.includes('common.cancel'))).toBe(true);
     expect(buttons.some(button => button.textContent?.includes('settings.ai.addProvider'))).toBe(true);

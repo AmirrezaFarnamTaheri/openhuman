@@ -106,12 +106,12 @@ export const CloudProviderEditor = ({
       }
       if (!validModelFleetEndpoint(endpoint)) {
         throw new Error(
-          'Provider endpoint must be a valid http(s) base URL without embedded credentials.'
+          t('settings.ai.providerEndpointInvalid')
         );
       }
       if (!validModelFleetImageEndpoint(imageEndpoint)) {
         throw new Error(
-          'Image endpoints require HTTPS or loopback HTTP, without URL credentials.'
+          t('settings.ai.imageEndpointInvalid')
         );
       }
       const imageMap = parseModelImageEndpoints(modelImageMappingText);
@@ -266,7 +266,7 @@ export const CloudProviderEditor = ({
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-image-endpoint" className="text-xs text-content-secondary">
-          Image / vision API base URL (optional)
+          {t('settings.ai.imageEndpointLabel')}
         </Label>
         <TextField
           id="cloud-provider-image-endpoint"
@@ -276,13 +276,12 @@ export const CloudProviderEditor = ({
           placeholder="https://images.example.com/v1"
         />
         <p className="text-xs text-content-muted">
-          Use a separate API base for messages that contain images. Empty inherits the standard
-          endpoint.
+          {t('settings.ai.imageEndpointHelp')}
         </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-image-models" className="text-xs text-content-secondary">
-          Image model endpoint overrides (model-id = URL, one per line)
+          {t('settings.ai.imageModelOverridesLabel')}
         </Label>
         <textarea
           id="cloud-provider-image-models"
@@ -296,7 +295,7 @@ export const CloudProviderEditor = ({
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-model-transports" className="text-xs text-content-secondary">
-          Per-model protocol overrides (model-id = protocol, one per line)
+          {t('settings.ai.modelTransportOverridesLabel')}
         </Label>
         <textarea
           id="cloud-provider-model-transports"
@@ -308,42 +307,38 @@ export const CloudProviderEditor = ({
           placeholder="response-model = responses"
         />
         <p className="text-xs text-content-muted">
-          Use responses or chat_completions only for models that support those protocols.
-          Unlisted models keep native Auto routing. Codex OAuth requires Responses.
-          Responses output currently completes as one buffered result rather than incremental SSE.
+          {t('settings.ai.modelTransportOverridesHelp')}
         </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-rotation" className="text-xs text-content-secondary">
-          Multiple-key selection strategy
+          {t('settings.ai.rotationStrategyLabel')}
         </Label>
         <select
           id="cloud-provider-rotation"
           value={rotationStrategy}
           onChange={event => setRotationStrategy(event.target.value as typeof rotationStrategy)}
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
-          <option value="round_robin">Round robin</option>
-          <option value="least_busy">Least busy</option>
-          <option value="priority_weighted">Priority weighted</option>
+          <option value="round_robin">{t('settings.ai.rotationRoundRobin')}</option>
+          <option value="least_busy">{t('settings.ai.rotationLeastBusy')}</option>
+          <option value="priority_weighted">{t('settings.ai.rotationPriorityWeighted')}</option>
         </select>
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-tool-codec" className="text-xs text-content-secondary">
-          Tool-call format
+          {t('settings.ai.toolCodecLabel')}
         </Label>
         <select
           id="cloud-provider-tool-codec"
           value={toolCallCodec}
           onChange={event => setToolCallCodec(event.target.value as 'native' | 'qnml' | 'tagged_json')}
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
-          <option value="native">Native API (recommended)</option>
-          <option value="qnml">QNML tags (Qwen / 2API compatible)</option>
-          <option value="tagged_json">Tagged JSON (web2api compatible)</option>
+          <option value="native">{t('settings.ai.toolCodecNative')}</option>
+          <option value="qnml">{t('settings.ai.toolCodecQnml')}</option>
+          <option value="tagged_json">{t('settings.ai.toolCodecTaggedJson')}</option>
         </select>
         <p className="text-xs text-content-muted">
-          For gateways that return tagged tool calls as text. OpenHuman validates declared tool
-          permissions and buffers tool-enabled streams before displaying the response. Ordinary
-          chat streams normally.
+          {t('settings.ai.toolCodecHelp')}
         </p>
       </div>
       <div>
