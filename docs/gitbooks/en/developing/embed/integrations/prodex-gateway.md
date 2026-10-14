@@ -37,7 +37,7 @@ rpm_limit = 60
 
 **Do not enter `PRODEX_GATEWAY_TOKEN`, an admin token or a Codex OAuth session token into OpenHuman.** An administrator token can access gateway management endpoints; the OpenHuman provider entry needs only a data-plane virtual key with the model/budget/scope restrictions appropriate to the user.
 
-The documented default API root is `http://127.0.0.1:4000/v1`. If the gateway is remote, configure a trusted, authenticated TLS endpoint and edit the corresponding OpenHuman provider URL. `127.0.0.1` always means the host executing the **OpenHuman core**, not necessarily the browser, the phone, or the machine where the gateway was installed.
+The documented default API root is `http://127.0.0.1:4000/v1`. If the gateway is remote, configure a trusted, authenticated TLS endpoint and edit the corresponding OpenHuman provider URL. The built-in `prodex` route rejects non-loopback HTTP destinations and URLs containing credentials, query parameters or fragments *before* looking up a stored bearer key. `127.0.0.1` always means the host executing the **OpenHuman core**, not necessarily the browser, the phone, or the machine where the gateway was installed.
 
 In **Settings → AI → Add provider**, select **Prodex Gateway**, enter the inference-scoped virtual key, and verify connectivity. OpenHuman discovers models from `/v1/models`. Choose a provider alias or model exposed by Prodex; the route is `prodex:<model-id>` inside OpenHuman's existing routing grammar. If model discovery cannot run, use the standard custom-provider editor and confirm the exact upstream model ID separately.
 
