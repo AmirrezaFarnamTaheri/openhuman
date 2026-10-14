@@ -268,16 +268,31 @@ async fn list_configured_models_inner(
         routing.account_id.is_some()
     );
 
+    // Catalogue probing carries bearer or x-api-key credentials. reqwest only
+    // strips a fixed set of sensitive headers when redirecting across origins:
+    // x-api-key is NOT on that list. Disallow redirects altogether, including
+    // same-origin redirects, instead of letting a /models probe forward a secret
+    // to a second URL. Keep the platform TLS, proxy, CA and timeout policies.
     let service_key = "providers.list_models";
-    let client = if let Some(pem) = config
+    let mut client_builder = crate::config::apply_runtime_proxy_to_builder(
+        crate::util::tls::tls_client_builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .redirect(reqwest::redirect::Policy::none()),
+        service_key,
+    );
+    if let Some(pem) = config
         .cloud_provider_ca_certs
         .get(entry.slug.trim())
         .filter(|pem| !pem.is_empty())
     {
-        crate::util::tls::client_with_ca_bundle_with_timeouts(pem, service_key, 30, 10)?
-    } else {
-        crate::config::build_runtime_proxy_client_with_timeouts(service_key, 30, 10)
-    };
+        for cert in crate::util::tls::parse_ca_bundle(pem)? {
+            client_builder = client_builder.add_root_certificate(cert);
+        }
+    }
+    let client = client_builder
+        .build()
+        .map_err(|_| "Could not build secure provider catalogue probe client".to_string())?;
 
     // Managed backend (`openhuman`) needs a different URL *and* a different
     // credential than every BYOK provider above, so neither `entry.endpoint`

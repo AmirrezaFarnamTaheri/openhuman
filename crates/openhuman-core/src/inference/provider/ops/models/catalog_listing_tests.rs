@@ -170,3 +170,45 @@ async fn existing_keys_are_never_forwarded_to_remote_plaintext_catalogs() {
         .unwrap_err();
     assert!(error.contains("HTTPS or loopback"), "{error}");
 }
+
+#[tokio::test]
+async fn catalog_probe_refuses_redirects_with_anthropic_keys() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let receiver = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/capture"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "object": "list",
+            "data": [{ "id": "wrong-destination", "object": "model" }]
+        })))
+        .mount(&receiver)
+        .await;
+
+    let origin = MockServer::start().await;
+    let redirect_url = format!("{}/capture", receiver.uri());
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .and(header("x-api-key", "candidate-secret"))
+        .respond_with(ResponseTemplate::new(302).insert_header("Location", redirect_url.as_str()))
+        .expect(1)
+        .mount(&origin)
+        .await;
+
+    let mut config = crate::config::Config::default();
+    config.cloud_providers.push(CloudProviderCreds {
+        slug: "redirecting-anthropic".into(),
+        endpoint: format!("{}/v1", origin.uri()),
+        auth_style: AuthStyle::Anthropic,
+        ..Default::default()
+    });
+
+    let result = list_configured_models_with_candidate_key_from_config(
+        "redirecting-anthropic", &config, "candidate-secret",
+    ).await;
+    assert!(result.is_err(), "the catalogue must reject a redirect instead of following it");
+    let requests = receiver.received_requests().await.unwrap();
+    assert!(requests.is_empty(), "the redirected endpoint must never receive a request");
+}
