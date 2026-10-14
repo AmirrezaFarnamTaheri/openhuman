@@ -126,3 +126,38 @@ fn prefers_last_fenced_block() {
     assert_eq!(d.action, TriageAction::Drop);
     assert_eq!(d.reason, "never mind");
 }
+
+#[test]
+fn rejects_mismatched_and_unrelated_target_agent_ids() {
+    for (action, target, expected) in [
+        ("react", "orchestrator", "trigger_reactor"),
+        ("escalate", "trigger_reactor", "orchestrator"),
+        ("react", "shell", "trigger_reactor"),
+        ("escalate", "admin_agent", "orchestrator"),
+    ] {
+        let reply = format!(
+            r#"{{"action":"{action}","target_agent":"{target}","prompt":"do something","reason":"test"}}"#
+        );
+        let error = parse_triage_decision(&reply).unwrap_err();
+        assert!(
+            matches!(error, ParseError::WrongTarget { expected: target, .. } if target == expected),
+            "unexpected classification for {action} -> {target}: {error:?}"
+        );
+    }
+}
+
+#[test]
+fn action_specific_target_agent_ids_remain_valid() {
+    for (action, target) in [
+        ("react", "trigger_reactor"),
+        ("escalate", "orchestrator"),
+    ] {
+        let reply = format!(
+            r#"{{"action":"{action}","target_agent":"{target}","prompt":"handle event","reason":"test"}}"#
+        );
+        assert_eq!(
+            parse_triage_decision(&reply).unwrap().target_agent.as_deref(),
+            Some(target),
+        );
+    }
+}
