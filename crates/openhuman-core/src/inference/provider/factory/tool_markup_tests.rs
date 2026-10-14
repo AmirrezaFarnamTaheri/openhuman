@@ -275,6 +275,122 @@ async fn auto_choice_may_return_ordinary_text_without_tool_execution() {
     assert_eq!(response.text(), "A normal answer");
 }
 
+
+#[test]
+fn tagged_json_parallel_and_single_tool_calls_share_native_validation() {
+    let parallel = r#"<think>check the relevant files</think>
+<tool_calls>[{"name":"read_file","arguments":{"path":"README.md","line":3}},{"name":"shell","arguments":{"command":"pwd"}}]</tool_calls>"#;
+    let tagged = parse_tagged_json_output(parallel, &declared())
+        .unwrap()
+        .expect("tagged model output");
+    assert_eq!(tagged.thinking.as_deref(), Some("check the relevant files"));
+    assert_eq!(tagged.calls.len(), 2);
+    assert_eq!(tagged.calls[0].arguments, json!({"path":"README.md","line":3}));
+    assert_eq!(tagged.calls[1].arguments, json!({"command":"pwd"}));
+    assert_ne!(tagged.calls[0].id, tagged.calls[1].id);
+
+    let single = r#"<tool_call>{"name":"shell","arguments":{"command":"echo hello"}}</tool_call>"#;
+    let tagged = parse_tagged_json_output(single, &declared()).unwrap().unwrap();
+    assert_eq!(tagged.calls.len(), 1);
+    assert_eq!(tagged.calls[0].name, "shell");
+    assert_eq!(tagged.calls[0].arguments["command"], "echo hello");
+}
+
+#[test]
+fn tagged_json_terminal_answers_strip_tags_and_keep_thinking_private() {
+    let response = response("<think>reason privately</think><final_answer>Hello there</final_answer>".into());
+    let converted = rewrite_tagged_json_response(response, &declared()).unwrap();
+    assert_eq!(converted.message.content.len(), 2);
+    assert!(matches!(
+        converted.message.content[0],
+        ContentBlock::Thinking { .. }
+    ));
+    assert_eq!(converted.message.content[1], ContentBlock::Text("Hello there".into()));
+    assert_eq!(converted.finish_reason.as_deref(), Some("stop"));
+
+    let ordinary = response("ordinary assistant response".into());
+    let unchanged = rewrite_tagged_json_response(ordinary.clone(), &declared()).unwrap();
+    assert_eq!(unchanged.message, ordinary.message);
+}
+
+#[test]
+fn tagged_json_bounded_parser_rejects_undeclared_or_wrongly_typed_tool_calls() {
+    for output in [
+        r#"<tool_calls>[{"name":"delete_everything","arguments":{}}]</tool_calls>"#,
+        r#"<tool_calls>[{"name":"read_file","arguments":{"path":4}}]</tool_calls>"#,
+        r#"<tool_calls>[{"name":"read_file","arguments":"README.md"}]</tool_calls>"#,
+        r#"<tool_calls>{"name":"read_file","arguments":{"path":"README.md"}}</tool_calls>"#,
+        r#"<tool_calls>[]</tool_calls>"#,
+        r#"<tool_calls>[{"name":"read_file","arguments":{"path":"README.md"}}]"#,
+        r#"<tool_call>{"name":"read_file","arguments":{"path":"README.md"}}#,
+        r#"<think>reasoning</think>"#,
+        r#"<final_answer>answer</final_answer><tool_calls>[{"name":"shell","arguments":{"command":"pwd"}}]</tool_calls>"#,
+    ] {
+        assert!(parse_tagged_json_output(output, &declared()).is_err(), "invalid tagged JSON accepted: {output}");
+    }
+    let too_many = format!(
+        "<tool_calls>[{}]</tool_calls>",
+        (0..17)
+            .map(|_| r#"{"name":"shell","arguments":{"command":"pwd"}}"#)
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    assert!(parse_tagged_json_output(&too_many, &declared()).is_err());
+    let oversized = format!("<final_answer>{}</final_answer>", "x".repeat(256 * 1024));
+    assert!(parse_tagged_json_output(&oversized, &declared()).is_err());
+}
+
+#[test]
+fn tagged_json_does_not_execute_tool_tag_examples_embedded_in_prose() {
+    let prose = r#"For example: <tool_call>{"name":"shell","arguments":{"command":"pwd"}}</tool_call>"#;
+    assert!(parse_tagged_json_output(prose, &declared()).unwrap().is_none());
+    let parsed = parse_tagged_json_output(
+        "<final_answer>The text '<tool_call>' is documentation.</final_answer>",
+        &declared()
+    ).unwrap().unwrap();
+    assert!(parsed.calls.is_empty());
+    assert_eq!(parsed.answer.as_deref(), Some("The text '<tool_call>' is documentation."));
+}
+
+#[tokio::test]
+async fn tagged_json_tool_choice_and_streaming_use_native_contracts() {
+    use futures::StreamExt;
+    use tinyinference_llm::model::ToolChoice;
+
+    let adapter = TextToolCompatModel::new(
+        Arc::new(FakeTaggedModel {
+            body: r#"<think>need file</think><tool_calls>[{"name":"read_file","arguments":{"path":"README.md"}}]</tool_calls>"#.into(),
+        }),
+        ToolCallCodec::TaggedJson,
+    );
+    let request = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::Tool("read_file".into()),
+        ..Default::default()
+    };
+    let events: Vec<ModelStreamItem> = adapter.stream(&(), request).await.unwrap().collect().await;
+    assert_eq!(events.len(), 2);
+    let ModelStreamItem::Completed(response) = &events[1] else {
+        panic!("expected typed completion, not text fragments");
+    };
+    assert_eq!(response.message.tool_calls.len(), 1);
+    assert_eq!(response.message.tool_calls[0].name, "read_file");
+    assert!(response.message.content.iter().any(|block| matches!(block, ContentBlock::Thinking { .. })));
+
+    let forbidden = TextToolCompatModel::new(
+        Arc::new(FakeTaggedModel {
+            body: r#"<tool_call>{"name":"shell","arguments":{"command":"pwd"}}</tool_call>"#.into(),
+        }),
+        ToolCallCodec::TaggedJson,
+    );
+    let no_tools = ModelRequest {
+        tools: declared(),
+        tool_choice: ToolChoice::None,
+        ..Default::default()
+    };
+    assert!(forbidden.invoke(&(), no_tools).await.is_err());
+}
+
 struct FakeTaggedModel {
     body: String,
 }
