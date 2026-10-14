@@ -70,6 +70,8 @@ async fn drive_with(
     harness.register_model("mock", Arc::new(ScriptedModel::new(responses)));
     harness.register_tool(Arc::new(FakeTool::returning("lookup", "ok")));
     harness.register_tool(Arc::new(FakeTool::returning("todo", "ok")));
+    harness.register_tool(Arc::new(FakeTool::returning("file_write", "ok")));
+    harness.register_tool(Arc::new(FakeTool::returning("delegate_coding", "ok")));
     harness.with_policy(RunPolicy {
         limits: RunLimits::default()
             .with_max_model_calls(max_model_calls)
@@ -338,4 +340,19 @@ fn finish_check_requires_verification_after_latest_write_or_commit() {
     assert!(check.contains("after the last write"));
     assert!(check.contains("latest exact commit"));
     assert!(check.contains("stale"));
+}
+
+
+#[tokio::test]
+async fn installed_middleware_checks_a_single_code_write_before_final_answer() {
+    let (checks, text) = drive(1, "file_write", false, Some("orchestrator")).await;
+    assert_eq!(checks, 1, "the check must be dispatched by real harness middleware");
+    assert_eq!(text, "checked");
+}
+
+#[tokio::test]
+async fn installed_middleware_checks_a_single_delegate_handoff() {
+    let (checks, text) = drive(1, "delegate_coding", false, Some("orchestrator")).await;
+    assert_eq!(checks, 1, "delegated work must be verified by its root orchestrator");
+    assert_eq!(text, "checked");
 }
