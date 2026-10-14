@@ -356,6 +356,7 @@ async fn partial_catalog_must_not_confirm_unique_dependencies_or_impact() {
     })).await;
     assert_eq!(result["scan_complete"], false);
     assert_eq!(result["edges"][0]["status"], "catalog_incomplete");
+    assert_eq!(result["edges"][0]["observed_candidate"], "b.ts");
     assert!(result["edges"][0]["to"].is_null());
     assert_eq!(result["impact"], json!([]));
     assert_eq!(result["impact_omitted_reason"], "incomplete_catalog");
@@ -370,4 +371,21 @@ async fn explicitly_addressed_symlink_file_cannot_bypass_scan_exclusion() {
     std::os::unix::fs::symlink(project.path().join("target.rs"), project.path().join("link.rs")).unwrap();
     let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
     assert!(tool.execute(json!({"operation":"scan","path":"link.rs"})).await.is_err());
+}
+
+
+#[tokio::test]
+async fn scoped_graph_reports_projection_scope_without_claiming_repository_coverage() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("pkg")).unwrap();
+    std::fs::write(project.path().join("pkg/main.ts"), "export const local = 1;\n").unwrap();
+    std::fs::write(project.path().join("outside.ts"), "export const external = 1;\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"graph","path":"pkg"})).await;
+    assert_eq!(result["scan_complete"], true);
+    assert_eq!(result["scope_path"], "pkg");
+    assert_eq!(result["scope_is_workspace"], false);
+    assert_eq!(result["impact_exhaustive"], false);
+    assert_eq!(result["nodes"].as_array().unwrap().len(), 1);
 }
