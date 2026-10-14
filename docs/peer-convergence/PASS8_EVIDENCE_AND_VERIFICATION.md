@@ -1,0 +1,39 @@
+# Pass 8: Evidence, provider presets, and verified completion
+
+## Scope and proof boundary
+
+The 20 additional peer ZIP archives yielded 25,264 central-directory entries, 10,750 eligible source candidates, and 82,739 lexical declaration occurrences. A second strict fingerprint analysis indexed 9,768 source files and 1,045,322 normalized 12-line windows. Only the Mem0/Ruflo alert-dialog scaffolding yielded 108 exact cross-peer windows. Neither method-name overlap nor absence of exact code windows establishes semantic equivalence or difference.
+
+## Actual code committed on this PR
+
+1. Source Evidence: opt-in SHA-256 evidence, per-file host authorization, bounded scans, pagination, hash-checked line retrieval, explicit partial results and JSON-safe output.
+2. Derived Source Graph: Rust module syntax, JS/TS relative imports/requires and dynamic literal imports, plus Python relative from-imports. Edges are syntactic observations, not full parser/AST or runtime dataflow. Ambiguous, unresolved and partial catalogs never justify definitive dependency impact.
+3. Root TinyAgents final-verification middleware: short consequential edits, git operations and native delegation/handoff tools now trigger a requirements check even below the previous five-round threshold. The check requires tests after the last write, latest exact commit checks and observable exit status.
+4. Four new key-only, OpenAI-compatible provider presets on both Rust and frontend catalogs: Cohere (https://api.cohere.ai/compatibility/v1), TokenRouter (https://api.tokenrouter.io/v1), BytePlus ModelArk Asia Pacific (https://ark.ap-southeast.bytepluses.com/api/v3) and Europe (https://ark.eu-west.bytepluses.com/api/v3). API keys and endpoints are region-scoped for BytePlus. No model-level quota, entitlement or pricing is implied.
+
+## Executed checks
+
+| Check | Evidence | What it does not verify |
+| --- | --- | --- |
+| Jev model-router peer fixtures | 60 passed, 1 skipped | OpenHuman inference, Rust |
+| Canny command classifier | 7 offline exit-status fixtures passed | Entire Vitest suite or Rust integration |
+| Python import AST versus regex | 2,936 Python peer files parsed, 481 relative-from import matches | Runtime module resolution or Rust code |
+| Cross-language presets | 4 labels/endpoints/auth styles matched in the fetched Rust and UI sources | Authentication and provider model availability |
+| Archive provenance | All 20 ZIPs SHA-256 hashed | Licenses, manual function-by-function semantic review |
+
+## Second-order architecture
+
+- Evidence and source graph must be derived within OpenHuman SecurityPolicy/workspace boundaries, not a second authoritative file database.
+- Hard model/capability/billing constraints must be checked before probabilistic Jev/System-One ranking.
+- Real verified software completion requires persisted post-edit test, commit, CI and execution receipts from the existing TinyAgents ledger. Model prompts alone do NOT constitute such receipts.
+- Memory capture and deletion must remain scoped, provenance-aware and consented via the existing memory owner.
+- Per-application automation and artifacts must reuse approved typed tools and native document/rendering engines; no unmanaged parallel agent runners.
+- Operator UX must distinguish unobserved, incomplete, stale, failed and verified states.
+
+## Critical unfinished release gates
+
+No Rust compiler/cargo existed in the execution container. The changed Rust modules have NOT been cargo-checked, fmt-checked, clippy-checked, test-run or measured for coverage. No workflows appeared for the latest exact connector-pushed PR head at the point of inspection. An older successful run is not proof of this PR head. Frontend/Tauri full builds, live provider smoke tests, source graph parser benchmarks and adversarial cross-platform path tests remain unverified. Draft PR #8 must NOT be merged.
+
+A ZIP license is determined by its actual source terms, not a direction to assume all projects are MIT; preserve provenance and resolve notices before distributing copied code.
+
+More details: SOURCE_EVIDENCE.md, NEW_PEERS_PASS7.md, SECOND_ORDER_JEV_9ROUTER_CONDUIT.md. Full archive-method and source-hash audit evidence is in the separately delivered pass-8 bundle.
