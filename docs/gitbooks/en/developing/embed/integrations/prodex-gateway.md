@@ -64,6 +64,24 @@ curl -fsS http://127.0.0.1:4000/v1/models \
 
 No actual secrets or HTTP response bodies should be committed in diagnostics.
 
+## Read-only data-plane diagnostics
+
+The repository includes a standalone diagnostic that intentionally uses only the inference data plane, without querying gateway keys, identities, billing, ledger, guardrails, or admin endpoints. It never emits the bearer key or model-generated text to its report. By default it performs one bounded `GET /v1/models` request. A remote gateway must be HTTPS; only loopback HTTP is accepted. Redirects, URL-embedded credentials, malformed catalogs, duplicate model IDs, oversized responses and timeouts fail closed.
+
+```sh
+export PRODEX_GATEWAY_URL="http://127.0.0.1:4000/v1"
+export PRODEX_GATEWAY_CLIENT_KEY="replace-with-a-disposable-inference-scoped-key"
+node scripts/ci/prodex-gateway-smoke.mjs
+```
+
+A billable inference smoke test needs **both** an explicit opt-in and a model the gateway returned:
+
+```sh
+node scripts/ci/prodex-gateway-smoke.mjs --inference --model prodex-fast
+```
+
+That sends a short `POST /v1/chat/completions` prompt; it cannot assert all capability families, SSE continuation behavior, or quota correctness. The JSON report includes status and token totals only. For coverage without a running gateway, use `node --test scripts/__tests__/prodex-gateway-smoke.test.mjs` (also run by integration CI).
+
 ## Source and attribution
 
 This bridge was derived from the supplied **Prodex v0.437.10** architecture and documented gateway compatibility surface. Prodex source declares **Apache-2.0** in its `Cargo.toml` and `LICENSE`, not MIT. This integration is original glue code; adopting upstream Prodex implementation files would require retaining their applicable notices and license terms.
