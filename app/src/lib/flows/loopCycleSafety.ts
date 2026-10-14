@@ -1,8 +1,9 @@
 /**
  * Local, deterministic soundness check for authored tinyflows loop cycles.
  * The core still owns authoritative workflow validation and execution.
- * A loop controller must dominate every cycle in its strongly connected
- * component; merely finding one loop node in an SCC is insufficient.
+ * Every cycle must consume the budget of some loop controller OR be
+ * governed by TinyFlows' explicit trigger-level recursion/visit budget.
+ * Merely finding a loop node somewhere in the SCC is insufficient.
  */
 export interface LoopSafetyGraph {
   nodes: Array<{ id: string; kind: string; config?: Record<string, unknown> }>;
@@ -11,7 +12,7 @@ export interface LoopSafetyGraph {
 
 export interface LoopSafetyIssue {
   code:
-    | 'cycle_without_single_loop'
+    | 'cycle_without_bound'
     | 'unbounded_loop'
     | 'loop_side_entry'
     | 'loop_done_reenters'
@@ -26,6 +27,15 @@ const DEFAULT_LOOP_ITERATIONS = 25;
 export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue[] {
   const ids = new Set(graph.nodes.map(node => node.id));
   const byId = new Map(graph.nodes.map(node => [node.id, node]));
+  // TinyFlows supports run-level recursion_limit and max_node_visits as
+  // alternatives to a loop controller (see pinned validate/loops.rs).
+  const hasRunLevelBound = graph.nodes.some(node =>
+    node.kind === 'trigger' &&
+    ['recursion_limit', 'max_node_visits'].some(field => {
+      const value = node.config?.[field];
+      return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+    })
+  );
   const outgoing = new Map<string, string[]>();
   const reverse = new Map<string, string[]>();
   for (const id of ids) {
@@ -84,56 +94,69 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
     if (!cyclic) continue;
     members.sort();
     const loopNodes = members.filter(id => byId.get(id)?.kind === 'loop');
-    if (loopNodes.length !== 1) {
+    if (loopNodes.length === 0 && !hasRunLevelBound) {
       issues.push({
-        code: 'cycle_without_single_loop',
+        code: 'cycle_without_bound',
         nodeIds: members,
         message: 'Cyclic component [' + members.join(', ') +
-          '] must contain exactly one loop controller (found ' + loopNodes.length + ').',
+          '] needs a loop controller or a trigger recursion/visit bound.',
       });
       continue;
     }
-    const head = loopNodes[0];
-    const configuredCap = byId.get(head)?.config?.max_iterations;
-    const maxIterations = configuredCap === undefined ? DEFAULT_LOOP_ITERATIONS : configuredCap;
-    if (
-      typeof maxIterations !== 'number' ||
-      !Number.isInteger(maxIterations) ||
-      maxIterations < 1 ||
-      maxIterations > MAX_LOOP_ITERATIONS
-    ) {
-      issues.push({
-        code: 'unbounded_loop',
-        nodeIds: [head],
-        message: 'Loop ' + head + ' must have max_iterations between 1 and ' + MAX_LOOP_ITERATIONS + '.',
-      });
+    // An SCC may contain more than one controller: the native engine supports
+    // that topology. Validate each configured controller independently.
+    for (const head of loopNodes) {
+      const configuredCap = byId.get(head)?.config?.max_iterations;
+      const maxIterations = configuredCap === undefined ? DEFAULT_LOOP_ITERATIONS : configuredCap;
+      if (
+        typeof maxIterations !== 'number' ||
+        !Number.isInteger(maxIterations) ||
+        maxIterations < 1 ||
+        maxIterations > MAX_LOOP_ITERATIONS
+      ) {
+        issues.push({
+          code: 'unbounded_loop',
+          nodeIds: [head],
+          message: 'Loop ' + head + ' must have max_iterations between 1 and ' + MAX_LOOP_ITERATIONS + '.',
+        });
+      }
     }
     for (const edge of graph.edges) {
-      if (memberSet.has(edge.to_node) && !memberSet.has(edge.from_node) && edge.to_node !== head) {
+      if (
+        loopNodes.length > 0 &&
+        memberSet.has(edge.to_node) &&
+        !memberSet.has(edge.from_node) &&
+        !loopNodes.includes(edge.to_node)
+      ) {
         issues.push({
           code: 'loop_side_entry',
           nodeIds: [edge.from_node, edge.to_node],
-          message: 'External flow must enter the cyclic component through loop ' + head +
-            ', not ' + edge.to_node + '.',
+          message: 'External flow must enter a cyclic component through a loop controller, not ' +
+            edge.to_node + '.',
         });
       }
-      if (edge.from_node === head && memberSet.has(edge.to_node) && edge.from_port === 'done') {
+      if (
+        loopNodes.includes(edge.from_node) &&
+        memberSet.has(edge.to_node) &&
+        edge.from_port === 'done'
+      ) {
         issues.push({
           code: 'loop_done_reenters',
-          nodeIds: [head, edge.to_node],
-          message: 'Loop ' + head + ' done port must exit its cyclic component.',
+          nodeIds: [edge.from_node, edge.to_node],
+          message: 'Loop ' + edge.from_node + ' done port must exit its cyclic component.',
         });
       }
     }
+    if (hasRunLevelBound) continue;
 
-    // Removing the loop head removes every allowed back-edge. If the residual
-    // graph is cyclic, a path can repeat indefinitely without consuming the
-    // loop's iteration budget (a flaw in SCC-count-only validators).
-    const residual = members.filter(id => id !== head);
+    // All native loop nodes are removed, not just one. Every residual cycle
+    // would bypass *every* controller and could repeat without consuming a
+    // loop's iteration counter. A trigger-level bound (above) instead covers it.
+    const residual = members.filter(id => !loopNodes.includes(id));
     const indegree = new Map(residual.map(id => [id, 0]));
     for (const node of residual) {
       for (const next of outgoing.get(node)!) {
-        if (next !== head && memberSet.has(next)) indegree.set(next, indegree.get(next)! + 1);
+        if (indegree.has(next)) indegree.set(next, indegree.get(next)! + 1);
       }
     }
     const ready = residual.filter(id => indegree.get(id) === 0);
@@ -142,7 +165,7 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
       const node = ready.pop()!;
       removed++;
       for (const next of outgoing.get(node)!) {
-        if (next !== head && memberSet.has(next)) {
+        if (indegree.has(next)) {
           const value = indegree.get(next)! - 1;
           indegree.set(next, value);
           if (value === 0) ready.push(next);
@@ -154,8 +177,8 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
       issues.push({
         code: 'loop_bypass_cycle',
         nodeIds: offenders,
-        message: 'Cyclic component contains a cycle bypassing loop ' + head +
-          ': [' + offenders.join(', ') + '].',
+        message: 'Cyclic component contains a cycle bypassing every loop controller: [' +
+          offenders.join(', ') + '].',
       });
     }
   }

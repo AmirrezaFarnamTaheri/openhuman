@@ -18,15 +18,44 @@ describe('validateLoopCycleSafety', () => {
     })).toEqual([]);
   });
 
-  it('rejects ordinary cycles with no loop and cycles with two loop controllers', () => {
+  it('rejects cycles that have neither a loop controller nor an explicit run bound', () => {
     expect(validateLoopCycleSafety({
       nodes: [node('a'), node('b')],
       edges: [edge('a', 'b'), edge('b', 'a')],
-    }).map(issue => issue.code)).toEqual(['cycle_without_single_loop']);
+    }).map(issue => issue.code)).toEqual(['cycle_without_bound']);
+  });
+
+  it('accepts a run-level visit budget instead of a controller, as TinyFlows does', () => {
+    const nodes = [
+      node('t', 'trigger', { max_node_visits: 12 }),
+      node('a'),
+      node('b'),
+    ];
+    expect(validateLoopCycleSafety({
+      nodes,
+      edges: [edge('t', 'a'), edge('a', 'b'), edge('b', 'a')],
+    })).toEqual([]);
+    expect(validateLoopCycleSafety({
+      nodes: [node('t', 'trigger', { recursion_limit: 5 }), node('a')],
+      edges: [edge('t', 'a'), edge('a', 'a')],
+    })).toEqual([]);
+  });
+
+  it('accepts multiple loop controllers when every cycle crosses a controller', () => {
     expect(validateLoopCycleSafety({
       nodes: [node('a', 'loop'), node('b', 'loop')],
       edges: [edge('a', 'b', 'body'), edge('b', 'a', 'body')],
-    }).map(issue => issue.code)).toEqual(['cycle_without_single_loop']);
+    })).toEqual([]);
+  });
+
+  it('keeps bypass-cycle detection even when multiple loop controllers are present', () => {
+    expect(validateLoopCycleSafety({
+      nodes: [node('headA', 'loop'), node('headB', 'loop'), node('a'), node('b')],
+      edges: [
+        edge('headA', 'headB', 'body'), edge('headB', 'a', 'body'),
+        edge('a', 'b'), edge('b', 'a'), edge('b', 'headA'),
+      ],
+    }).map(issue => issue.code)).toEqual(['loop_bypass_cycle']);
   });
 
   it('rejects a hidden cycle that bypasses the bounded loop controller', () => {
@@ -67,7 +96,7 @@ describe('validateLoopCycleSafety', () => {
   it('rejects a self-cycle without a loop', () => {
     expect(validateLoopCycleSafety({
       nodes: [node('a')], edges: [edge('a', 'a')],
-    }).map(issue => issue.code)).toEqual(['cycle_without_single_loop']);
+    }).map(issue => issue.code)).toEqual(['cycle_without_bound']);
   });
 
   it('validates a 14k-node imported DAG without recursion overflow', () => {
