@@ -8,6 +8,12 @@ The local file-level audit enumerated **all 2,544 files** in **3,052 archive ent
 
 The offline source checks passed the crate boundaries (41 packages, 131 edges), provider catalog (82 models, 7 provider families), 23 JS CI-runner tests, application/domain/provider-SPI/production/runtime-hotpath guards. Several other checks failed because they reference absent source. In particular, dedicated `src/bin/prodex-gateway.rs`, `src/bin/prodex-control-plane.rs`, and `src/enterprise_serve.rs` are absent; `scripts/ci/enterprise-binaries-guard.mjs` fails, as do auth, control-plane and gateway core/HTTP guards looking for non-existent crates. The normal CLI gateway implementation **does exist** under `crates/prodex-app/src/app_commands/gateway.rs`; do not conflate the two. There are no broken explicit Rust `#[path]` references in this snapshot.
 
+## Fine-grained duplicate-implementation screening
+
+A token-aware Rust lexer (comments and whitespace ignored, literal syntax retained) examined **1,870 Rust files** and fingerprinted **12,958 functions/methods** with at least 30 meaningful tokens. It identified **74 repeated-body groups**, including **18 cross-crate groups**; there were no tokenizer failures. Notable real-source candidates are the backoff sort key/restart relaxation in `prodex-runtime-proxy` versus `prodex-runtime-store`, the circuit startup restore helper in `prodex-app` versus `prodex-runtime-proxy`, session-file compression detection in `prodex-session-store` versus `prodex-shared-codex-fs`, and log field parsing in `prodex-runtime-doctor` versus `prodex-runtime-proxy`.
+
+These are **candidate code duplication locations, not automatically equivalent ownership or contracts**. Preserve Prodex's implementation behind the external gateway; do not transplant two duplicate peers into OpenHuman. The downloadable archive audit includes exact SHA256 body fingerprints, source paths, line numbers, token counts, and the reconstruction script.
+
 ## Crate-group decisions
 
 | Layer / Prodex source | Relationship to OpenHuman | Decision |
