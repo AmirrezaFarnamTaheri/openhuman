@@ -37,9 +37,17 @@ pub(super) struct InferenceCloudProviderUpdate {
     /// Model-id-specific image URL overrides, keyed within the provider group.
     #[serde(default)]
     model_image_endpoints: std::collections::HashMap<String, String>,
+    /// Optional exact model-id-to-Responses transport selection.
+    #[serde(default)]
+    model_transports: std::collections::HashMap<
+        String,
+        crate::config::schema::cloud_providers::ModelTransport,
+    >,
     /// Credential strategy: round_robin | least_busy | priority_weighted.
     #[serde(default)]
     rotation_strategy: Option<String>,
+    #[serde(default)]
+    tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
     #[serde(default)]
     ca_cert_pem: Option<String>,
     // keep until v0.66 (review after 2027-01-11): incoming RPC discriminator
@@ -263,6 +271,27 @@ pub(super) fn handle_inference_update_model_settings(
                                     entry.model_image_endpoints,
                                     entry.rotation_strategy,
                                 )?;
+                            if entry.model_transports.len() > 512
+                                || entry.model_transports.keys().any(|id| {
+                                    id.is_empty()
+                                        || id.len() > 200
+                                        || id != id.trim()
+                                        || id.chars().any(char::is_control)
+                                })
+                            {
+                                return Err(
+                                    "model transport overrides require 1-200 printable model ids and at most 512 entries".to_string()
+                                );
+                            }
+                            if auth_style == AuthStyle::Anthropic
+                                && entry.model_transports.values().any(|mode| {
+                                    *mode == crate::config::schema::cloud_providers::ModelTransport::Responses
+                                })
+                            {
+                                return Err(
+                                    "Responses transport cannot use Anthropic Messages authentication".into()
+                                );
+                            }
                             let provider = CloudProviderCreds {
                                 id,
                                 slug,
@@ -271,7 +300,9 @@ pub(super) fn handle_inference_update_model_settings(
                                 auth_style,
                                 image_endpoint,
                                 model_image_endpoints,
+                                model_transports: entry.model_transports,
                                 rotation_strategy,
+                                tool_call_codec: entry.tool_call_codec,
                                 default_model: entry.default_model,
                             };
                             Ok(provider)
