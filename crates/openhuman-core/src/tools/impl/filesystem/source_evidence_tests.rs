@@ -219,3 +219,46 @@ async fn graph_inherits_scan_limits_and_does_not_claim_complete_impact() {
     assert_eq!(graph["nodes"].as_array().unwrap().len(), 2);
     assert_eq!(graph["impact_exhaustive"], false);
 }
+
+
+#[tokio::test]
+async fn scan_pagination_has_stable_order_and_explicit_continuation() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    for index in 0..5 {
+        std::fs::write(project.path().join(format!("{index}.rs")), format!("fn f{index}() {{}}\n")).unwrap();
+    }
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let first = run(&tool, json!({"operation":"scan","max_files":2})).await;
+    assert_eq!(first["files"][0]["path"], "0.rs");
+    assert_eq!(first["files"][1]["path"], "1.rs");
+    assert_eq!(first["complete"], false);
+    assert_eq!(first["next_after_path"], "1.rs");
+
+    let second = run(&tool, json!({
+        "operation":"scan","max_files":2,"after_path":first["next_after_path"]
+    })).await;
+    assert_eq!(second["files"][0]["path"], "2.rs");
+    assert_eq!(second["files"][1]["path"], "3.rs");
+    assert_eq!(second["next_after_path"], "3.rs");
+
+    let third = run(&tool, json!({
+        "operation":"scan","max_files":2,"after_path":second["next_after_path"]
+    })).await;
+    assert_eq!(third["files"].as_array().unwrap().len(), 1);
+    assert_eq!(third["files"][0]["path"], "4.rs");
+    assert_eq!(third["complete"], true);
+    assert_eq!(third["next_after_path"], Value::Null);
+}
+
+#[tokio::test]
+async fn traversal_cannot_be_smuggled_as_pagination_marker() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("safe.rs"), "fn safe() {}").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let invalid = tool.execute(json!({
+        "operation":"scan","after_path":"../etc/passwd"
+    })).await;
+    assert!(invalid.is_err());
+}
