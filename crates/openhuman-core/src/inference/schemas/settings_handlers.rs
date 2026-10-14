@@ -344,3 +344,38 @@ where
 {
     Value::deserialize(deserializer).map(Some)
 }
+
+#[cfg(test)]
+mod tool_codec_update_contract_tests {
+    use super::*;
+    use crate::config::schema::cloud_providers::ToolCallCodec;
+
+    #[test]
+    fn rpc_tool_codec_field_keeps_json_tagged_or_qnml_selection() {
+        for (wire, expected) in [
+            ("native", ToolCallCodec::Native),
+            ("qnml", ToolCallCodec::Qnml),
+            ("tagged_json", ToolCallCodec::TaggedJson),
+        ] {
+            let input: InferenceCloudProviderUpdate = serde_json::from_value(
+                serde_json::json!({
+                    "slug": "peer-gateway",
+                    "endpoint": "https://example.net/v1",
+                    "tool_call_codec": wire,
+                }),
+            )
+            .expect("valid codec name");
+            assert_eq!(input.tool_call_codec, expected);
+        }
+    }
+
+    #[test]
+    fn older_provider_update_payload_defaults_to_native_tool_calls() {
+        let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "legacy",
+            "endpoint": "https://example.net/v1"
+        }))
+        .unwrap();
+        assert_eq!(input.tool_call_codec, ToolCallCodec::Native);
+    }
+}
