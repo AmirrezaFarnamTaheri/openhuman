@@ -406,6 +406,43 @@ fn image_model_endpoint_overrides_require_https_outside_loopback() {
 }
 
 #[test]
+fn qnml_codec_defaults_to_native_and_rejects_unknown_wire_formats() {
+    use crate::config::schema::cloud_providers::{CloudProviderCreds, ToolCallCodec};
+
+    let legacy: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "existing-gateway",
+        "endpoint": "https://gateway.example/v1"
+    }))
+    .unwrap();
+    assert_eq!(legacy.tool_call_codec, ToolCallCodec::Native);
+    assert!(
+        serde_json::to_value(&legacy)
+            .unwrap()
+            .get("tool_call_codec")
+            .is_none(),
+        "a legacy config should not acquire a new serialized default"
+    );
+
+    let opted: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "qwen-gateway",
+        "endpoint": "http://127.0.0.1:4000/v1",
+        "tool_call_codec": "qnml"
+    }))
+    .unwrap();
+    assert_eq!(opted.tool_call_codec, ToolCallCodec::Qnml);
+    assert_eq!(
+        serde_json::to_value(&opted).unwrap()["tool_call_codec"],
+        "qnml"
+    );
+
+    let unknown: Result<CloudProviderCreds, _> = serde_json::from_value(serde_json::json!({
+        "slug": "qwen-gateway",
+        "tool_call_codec": "execute_arbitrary_text"
+    }));
+    assert!(unknown.is_err(), "unsupported tool codecs must fail closed");
+}
+
+#[test]
 fn additional_fork_cloud_presets_are_represented_exactly_once() {
     for slug in [
         "tokendance",
