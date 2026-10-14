@@ -265,6 +265,50 @@ export const BUILTIN_CLOUD_PROVIDERS: BuiltinCloudProvider[] = [
     tone: TONE.rose,
     keyPlaceholder: 'llmtr-...',
   },
+  // Verified OpenAI-compatible endpoints sourced from the peer convergence review.
+  // Presets do not imply that any particular model or account has free entitlement.
+  {
+    slug: 'aionlabs',
+    label: 'Aion Labs',
+    endpoint: 'https://api.aionlabs.ai/v1',
+    authStyle: 'bearer',
+    tone: TONE.indigo,
+  },
+  {
+    slug: 'sambanova',
+    label: 'SambaNova',
+    endpoint: 'https://api.sambanova.ai/v1',
+    authStyle: 'bearer',
+    tone: TONE.orange,
+  },
+  {
+    slug: 'ovhcloud',
+    label: 'OVHcloud AI Endpoints',
+    endpoint: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1',
+    authStyle: 'bearer',
+    tone: TONE.sky,
+  },
+  {
+    slug: 'nebius',
+    label: 'Nebius Token Factory',
+    endpoint: 'https://api.tokenfactory.nebius.com/v1',
+    authStyle: 'bearer',
+    tone: TONE.violet,
+  },
+  {
+    slug: 'llm7',
+    label: 'LLM7.io',
+    endpoint: 'https://api.llm7.io/v1',
+    authStyle: 'bearer',
+    tone: TONE.teal,
+  },
+  {
+    slug: 'glhf',
+    label: 'glhf.chat',
+    endpoint: 'https://glhf.chat/api/openai/v1',
+    authStyle: 'bearer',
+    tone: TONE.fuchsia,
+  },
   // External local gateway; its bearer token is distinct from direct-provider credentials.
   {
     slug: 'prodex',
