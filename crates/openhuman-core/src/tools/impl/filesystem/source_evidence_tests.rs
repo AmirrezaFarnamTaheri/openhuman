@@ -262,3 +262,28 @@ async fn traversal_cannot_be_smuggled_as_pagination_marker() {
     })).await;
     assert!(invalid.is_err());
 }
+
+
+#[tokio::test]
+async fn non_utf8_source_is_not_silently_reported_as_complete() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("binary.rs"), [0xff, 0xfe, 0x00]).unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"scan"})).await;
+    assert_eq!(result["complete"], false);
+    assert_eq!(result["files"].as_array().unwrap().len(), 0);
+    assert_eq!(result["truncated_reason"], "unreadable_or_unsupported_file");
+}
+
+#[tokio::test]
+async fn oversized_source_is_reported_as_partial_without_allocating_file_contents() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("huge.rs"), vec![b'x'; 256 * 1024 + 1]).unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"scan"})).await;
+    assert_eq!(result["complete"], false);
+    assert_eq!(result["truncated_reason"], "oversize_file");
+    assert_eq!(result["files"].as_array().unwrap().len(), 0);
+}
