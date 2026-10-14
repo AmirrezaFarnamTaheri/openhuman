@@ -17,6 +17,10 @@ use tinyinference_llm::model::{
 
 use super::key_pool::{self, KeyFailure, RotationStrategy};
 
+// Guard against amplifying a provider-wide 401/429 incident across the entire
+// configured key fleet. Four total attempts (initial + three fallbacks) per call.
+const MAX_KEY_ATTEMPTS_PER_CALL: usize = 4;
+
 /// Detect actual image input (not merely a vision-capable model).
 pub(super) fn request_has_image(request: &ModelRequest) -> bool {
     request.messages.iter().any(|message| {
@@ -214,7 +218,11 @@ impl ChatModel<()> for CredentialFleetModel {
         let image = request_has_image(&request);
         let mut tried = Vec::new();
         let mut last_error = None;
-        while let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
+        loop {
+            if tried.len() >= MAX_KEY_ATTEMPTS_PER_CALL {
+                break;
+            }
+            let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
             &self.scope,
             &self.keys,
             &tried,
@@ -223,7 +231,9 @@ impl ChatModel<()> for CredentialFleetModel {
                 .correlation
                 .as_ref()
                 .map(|correlation| correlation.run_id.as_str()),
-        ) {
+            ) else {
+                break;
+            };
             tried.push(index);
             let lease = Lease::from_reserved(&self.scope, &key);
             match self
@@ -262,7 +272,11 @@ impl ChatModel<()> for CredentialFleetModel {
         let image = request_has_image(&request);
         let mut tried = Vec::new();
         let mut last_error = None;
-        while let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
+        loop {
+            if tried.len() >= MAX_KEY_ATTEMPTS_PER_CALL {
+                break;
+            }
+            let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
             &self.scope,
             &self.keys,
             &tried,
@@ -271,7 +285,9 @@ impl ChatModel<()> for CredentialFleetModel {
                 .correlation
                 .as_ref()
                 .map(|correlation| correlation.run_id.as_str()),
-        ) {
+            ) else {
+                break;
+            };
             tried.push(index);
             let lease = Lease::from_reserved(&self.scope, &key);
             let mut live = match self
