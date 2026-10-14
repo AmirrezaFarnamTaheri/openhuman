@@ -303,3 +303,71 @@ async fn global_path_traversal_budget_bounds_sparse_directory_trees() {
     assert_eq!(result["truncated_reason"], "max_entries");
     assert!(result["files"].as_array().unwrap().len() <= 2);
 }
+
+
+#[tokio::test]
+async fn scan_serializes_large_escaped_matches_without_corrupting_json() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let line = format!("MATCH {}\n", "\u{0007}".repeat(155));
+    for index in 0..20 {
+        std::fs::write(project.path().join(format!("{index:02}.rs")), line.repeat(3)).unwrap();
+    }
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let output = tool.execute(json!({"operation":"scan","query":"MATCH"})).await.unwrap();
+    assert!(!output.is_error);
+    let raw = output.output();
+    assert!(raw.len() <= 26_000, "oversized JSON result: {}", raw.len());
+    let result: Value = serde_json::from_str(raw).expect("valid bounded JSON");
+    assert_eq!(result["complete"], false);
+    assert_eq!(result["truncated_reason"], "max_response_bytes");
+}
+
+#[tokio::test]
+async fn verify_serializes_long_escaped_lines_with_resume_cursor() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let line = format!("MATCH {}\n", "\u{0007}".repeat(155));
+    std::fs::write(project.path().join("file.rs"), line.repeat(80)).unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let scan = run(&tool, json!({"operation":"scan"})).await;
+    let sha = scan["files"][0]["source_hash"].as_str().unwrap();
+    let output = run(&tool, json!({
+        "operation":"verify","path":"file.rs","expected_sha256":sha,
+        "start_line":1,"end_line":80
+    })).await;
+    assert!(output.to_string().len() <= 26_000);
+    assert_eq!(output["verified"], true);
+    assert_eq!(output["lines_complete"], false);
+    let last = output["lines"].as_array().unwrap().last().unwrap()["line"].as_u64().unwrap();
+    assert_eq!(output["next_line"], last + 1);
+}
+
+#[tokio::test]
+async fn partial_catalog_must_not_confirm_unique_dependencies_or_impact() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("a.ts"), "import './b';\n").unwrap();
+    std::fs::write(project.path().join("b.ts"), "export const b = 1;\n").unwrap();
+    std::fs::write(project.path().join("c.ts"), "export const c = 1;\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({
+        "operation":"graph","max_files":2,"focus_path":"b.ts"
+    })).await;
+    assert_eq!(result["scan_complete"], false);
+    assert_eq!(result["edges"][0]["status"], "catalog_incomplete");
+    assert!(result["edges"][0]["to"].is_null());
+    assert_eq!(result["impact"], json!([]));
+    assert_eq!(result["impact_omitted_reason"], "incomplete_catalog");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn explicitly_addressed_symlink_file_cannot_bypass_scan_exclusion() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("target.rs"), "fn target() {}\n").unwrap();
+    std::os::unix::fs::symlink(project.path().join("target.rs"), project.path().join("link.rs")).unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    assert!(tool.execute(json!({"operation":"scan","path":"link.rs"})).await.is_err());
+}
