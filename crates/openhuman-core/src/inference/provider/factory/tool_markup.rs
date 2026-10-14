@@ -9,7 +9,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde_json::{Map, Value};
-use tinyinference_llm::message::ContentBlock;
+use tinyinference_llm::message::{ContentBlock, Message};
 use tinyinference_llm::model::{
     ChatModel, DeferredHandle, DeferredStatus, InputModality, InputSource, ModelProfile,
     ModelRequest, ModelResponse, ModelStream, ModelStreamItem, StreamAccumulator, ToolChoice,
@@ -160,6 +160,60 @@ fn allowed_qnml_tools(request: &ModelRequest) -> Vec<ToolSchema> {
     }
 }
 
+const MAX_TOOL_PROMPT_BYTES: usize = 64 * 1024;
+
+/// Text-based 2API gateways may reject native OpenAI tool definitions entirely.
+/// The explicit compatibility choice supplies the protocol contract as model
+/// instructions and removes the native function-call request fields. The
+/// *original* per-request declarations still gate every decoded call later.
+fn prepare_compat_request(
+    mut request: ModelRequest,
+    codec: ToolCallCodec,
+) -> tinyinference_llm::Result<ModelRequest> {
+    if codec == ToolCallCodec::Native {
+        return Ok(request);
+    }
+    let declared = allowed_qnml_tools(&request);
+    if declared.is_empty() {
+        if matches!(request.tool_choice, ToolChoice::Required | ToolChoice::Tool(_)) {
+            return Err(invalid("selected or required tool was not declared"));
+        }
+        if codec == ToolCallCodec::Qnml {
+            // Without tools the QNML provider behaves like an ordinary model.
+            return Ok(request);
+        }
+    }
+    let tools_json = serde_json::to_string(&declared)
+        .map_err(|_| invalid("unable to serialize declared tools"))?;
+    if tools_json.len() > MAX_TOOL_PROMPT_BYTES {
+        return Err(invalid("declared tool schema exceeds protocol prompt limit"));
+    }
+    let require_tool = matches!(request.tool_choice, ToolChoice::Required | ToolChoice::Tool(_));
+    let instruction = match codec {
+        ToolCallCodec::Qnml => format!(
+            "2API tool transport: return a complete QNML tool_calls envelope when invoking a tool.              Use <|QNML|tool_calls> followed by one or more              <|QNML|invoke name=\\\"EXACT_DECLARED_NAME\\\"> blocks, each parameter encoded as              <|QNML|parameter name=\\\"PARAMETER\\\"><![CDATA[value]]></|QNML|parameter>,              with </|QNML|invoke> and </|QNML|tool_calls> closing tags.              Output ordinary assistant text when no tool is needed.              Never produce undeclared commands; do not invent tool names or arguments.              Tool requirement: {}. Declared tool schemas (JSON): {}",
+            if require_tool { "at least one call required" } else { "call only when needed" },
+            tools_json,
+        ),
+        ToolCallCodec::TaggedJson => format!(
+            "2API tagged-JSON transport: respond with exactly one terminal block.              When calling declared tools, output              <tool_calls>[{{\\\"name\\\":\\\"EXACT_DECLARED_NAME\\\",\\\"arguments\\\":{{}}}}]</tool_calls>,              using valid JSON objects matching the provided schemas.              Otherwise output <final_answer>your answer</final_answer>.              Optional <think>reasoning</think> blocks may precede the terminal block.              No text outside these blocks and never send undeclared tool calls.              Tool requirement: {}. Declared tool schemas (JSON): {}",
+            if require_tool { "at least one call required" }
+            else if matches!(request.tool_choice, ToolChoice::None) { "tools are disabled" }
+            else { "call only when needed" },
+            tools_json,
+        ),
+        ToolCallCodec::Native => unreachable!("handled above"),
+    };
+    request.messages.insert(0, Message::system(instruction));
+    request.tools.clear();
+    request.tool_choice = ToolChoice::None;
+    // The message list has changed, so previously computed stable-prefix
+    // cache segments must not claim the old native-tool transcript identity.
+    request.prompt_fingerprint = None;
+    request.cache_segments.clear();
+    Ok(request)
+}
+
 /// A provider's accepted wire format is not permission to silently weaken
 /// the tool-choice contract. In particular, Required and Tool(name) need at
 /// least one actual tool call, even when the gateway returns ordinary prose.
@@ -267,7 +321,8 @@ impl ChatModel<()> for TextToolCompatModel {
     ) -> tinyinference_llm::Result<ModelResponse> {
         let declared = allowed_qnml_tools(&request);
         let choice = request.tool_choice.clone();
-        let response = self.inner.invoke(state, request).await?;
+        let prepared = prepare_compat_request(request, self.codec)?;
+        let response = self.inner.invoke(state, prepared).await?;
         enforce_tool_choice(rewrite_text_codec_response(response, &declared, self.codec)?, &choice)
     }
 
@@ -288,7 +343,8 @@ impl ChatModel<()> for TextToolCompatModel {
             return self.inner.stream(state, request).await;
         }
         let codec = self.codec;
-        let mut original = self.inner.stream(state, request).await?;
+        let prepared = prepare_compat_request(request, self.codec)?;
+        let mut original = self.inner.stream(state, prepared).await?;
         let metadata = original.metadata().clone();
         let terminal = async move {
             let mut accumulator = StreamAccumulator::new();
