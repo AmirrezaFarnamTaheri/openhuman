@@ -291,7 +291,7 @@ impl Default for CloudProviderCreds {
 
 /// Normalize settings provided over either model-settings RPC surface.
 /// Reject embedded URL credentials, unsupported schemes and duplicate trimmed ids.
-type NormalizedFleetConfig = (
+pub type NormalizedFleetConfig = (
     Option<String>,
     std::collections::HashMap<String, String>,
     Option<String>,
