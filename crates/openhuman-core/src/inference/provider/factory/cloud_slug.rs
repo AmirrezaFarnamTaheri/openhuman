@@ -52,6 +52,14 @@ pub(super) fn prodex_gateway_endpoint_is_safe(endpoint: &str) -> bool {
     }
 }
 
+/// The downstream gateway owns provider/account selection and sticky retry
+/// affinity. A second OpenHuman key fleet for this slug would fragment quota
+/// accounting and might send a provider continuation to another gateway key.
+pub(super) fn prodex_has_single_virtual_key(raw: &str) -> bool {
+    let keys = super::key_pool::parse_api_keys(raw);
+    keys.len() == 1 && !keys[0].trim().is_empty()
+}
+
 /// Look up a `cloud_providers` entry by slug and build the provider.
 /// The shared resolution for a `<slug>:<model>` cloud provider — the cloud
 /// `cloud_providers` entry, the effective model id (with `default_model`
@@ -349,6 +357,11 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     } else {
         vec![key.clone()]
     };
+    if slug == "prodex" && !prodex_has_single_virtual_key(&key) {
+        return Some(Err(anyhow::anyhow!(
+            "Prodex Gateway requires exactly one inference-scoped virtual key; rotate upstream provider accounts in Prodex"
+        )));
+    }
     if codex.using_oauth && keys.len() > 1 {
         return Some(Err(anyhow::anyhow!(
             "OpenAI Codex OAuth credentials cannot be mixed with API keys"
