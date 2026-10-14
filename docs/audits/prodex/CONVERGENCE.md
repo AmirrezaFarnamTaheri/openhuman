@@ -38,6 +38,7 @@ The offline source checks passed the crate boundaries (41 packages, 131 edges), 
 ## Changes currently implemented in this PR
 
 - Native Prodex gateway preset in Rust and frontend catalogs, default loopback URL and model picker.
+- Early route validation blocks remote plaintext HTTP and URL-embedded secrets for the `prodex` slug (includes localhost and IPv4/IPv6 loopback regression cases).
 - Responses API capability gate (Prodex implements `/v1/responses`).
 - Offline tests for preset uniqueness, canonical endpoint, Bearer auth and scoped discovery.
 - Documentation with explicit `policy.toml` virtual-key example, usage isolation and admin-token warning.
