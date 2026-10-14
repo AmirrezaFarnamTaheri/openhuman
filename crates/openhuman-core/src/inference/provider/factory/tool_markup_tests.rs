@@ -4,6 +4,10 @@ use tinyinference_llm::message::{AssistantMessage, MessageDelta};
 use tinyinference_llm::model::{ModelRequest, ModelResponse, ModelStreamItem};
 use tinyinference_llm::tool::ToolSchema;
 
+fn qnml_adapter(inner: Arc<dyn ChatModel<()>>) -> TextToolCompatModel {
+    TextToolCompatModel::new(inner, ToolCallCodec::Qnml)
+}
+
 fn declared() -> Vec<ToolSchema> {
     vec![
         ToolSchema::new(
@@ -128,7 +132,7 @@ async fn qnml_does_not_upgrade_markup_into_tools_when_tool_choice_is_none() {
     use futures::StreamExt;
     use tinyinference_llm::model::ToolChoice;
 
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: qnml_two_calls().to_owned(),
     }));
     let request = ModelRequest {
@@ -162,7 +166,7 @@ async fn qnml_cannot_call_a_different_declared_tool_than_explicitly_selected() {
     use futures::StreamExt;
     use tinyinference_llm::model::ToolChoice;
 
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: qnml_two_calls().to_owned(),
     }));
     let request = ModelRequest {
@@ -189,7 +193,7 @@ async fn qnml_cannot_call_a_different_declared_tool_than_explicitly_selected() {
 #[tokio::test]
 async fn explicit_no_tools_policy_never_executes_tagged_calls() {
     use tinyinference_llm::model::ToolChoice;
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: qnml_two_calls().into(),
     }));
     let request = ModelRequest {
@@ -204,7 +208,7 @@ async fn explicit_no_tools_policy_never_executes_tagged_calls() {
 #[tokio::test]
 async fn named_tool_choice_rejects_other_declared_tools() {
     use tinyinference_llm::model::ToolChoice;
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: qnml_two_calls().into(),
     }));
     let request = ModelRequest {
@@ -220,7 +224,7 @@ async fn required_tool_policy_rejects_plain_text_from_qnml_gateway() {
     use futures::StreamExt;
     use tinyinference_llm::model::ToolChoice;
 
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: "I cannot use tools right now".to_owned(),
     }));
     let request = ModelRequest {
@@ -245,7 +249,7 @@ async fn named_tool_policy_rejects_plain_text_without_the_selected_tool() {
     use futures::StreamExt;
     use tinyinference_llm::model::ToolChoice;
 
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: "Finished without tool calls".into(),
     }));
     let request = ModelRequest {
@@ -263,7 +267,7 @@ async fn named_tool_policy_rejects_plain_text_without_the_selected_tool() {
 async fn auto_choice_may_return_ordinary_text_without_tool_execution() {
     use tinyinference_llm::model::ToolChoice;
 
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: "A normal answer".to_owned(),
     }));
     let response = adapter.invoke(&(), ModelRequest {
@@ -414,7 +418,7 @@ impl ChatModel<()> for FakeTaggedModel {
 #[tokio::test]
 async fn qnml_stream_buffers_tool_markup_and_emits_one_normalized_terminal_result() {
     use futures::StreamExt;
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: qnml_two_calls().to_string(),
     }));
     let request = ModelRequest {
@@ -435,7 +439,7 @@ async fn qnml_stream_buffers_tool_markup_and_emits_one_normalized_terminal_resul
 #[tokio::test]
 async fn ordinary_chat_stream_still_emits_native_text_deltas() {
     use futures::StreamExt;
-    let adapter = QnmlCompatModel::new(Arc::new(FakeTaggedModel {
+    let adapter = qnml_adapter(Arc::new(FakeTaggedModel {
         body: "ordinary answer".into(),
     }));
     let stream = adapter.stream(&(), ModelRequest::default()).await.unwrap();
