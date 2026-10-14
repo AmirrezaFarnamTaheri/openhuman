@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 import { SOURCES, decide, latestPrRun } from "../ci/ci-gate.mjs";
 
-const [EX63, HOSTED, LITE] = SOURCES;
+const [EX63, HOSTED] = SOURCES;
 
 function entry(source, id, status, conclusion, job) {
   return {
@@ -13,37 +15,36 @@ function entry(source, id, status, conclusion, job) {
   };
 }
 
-test("the EX63 lanes passing wins and cancels the hosted runs still going", () => {
+test("the EX63 lanes passing cancels hosted runs still working", () => {
   const verdict = decide([
     entry(EX63, 1, "completed", "success", {
       status: "completed",
       conclusion: "success",
     }),
-    entry(HOSTED, 2, "completed", "success", {
-      status: "completed",
-      conclusion: "skipped",
+    entry(HOSTED, 2, "in_progress", null, {
+      status: "in_progress",
+      conclusion: null,
     }),
-    entry(LITE, 3, "in_progress", null, null),
   ]);
   assert.equal(verdict.state, "success");
   assert.equal(verdict.description, "CI Fast passed");
   assert.equal(verdict.targetUrl, "https://jobs/1");
-  assert.deepEqual(verdict.cancel, [{ id: 3, name: "CI Lite" }]);
+  assert.deepEqual(verdict.cancel, [{ id: 2, name: "CI Fast (hosted)" }]);
 });
 
-test("CI Lite passing first also passes the gate, and never cancels the EX63", () => {
+test("hosted CI passing first also passes the gate without cancelling EX63", () => {
   const verdict = decide([
     entry(EX63, 1, "in_progress", null, {
       status: "in_progress",
       conclusion: null,
     }),
-    entry(LITE, 3, "completed", "success", {
+    entry(HOSTED, 3, "completed", "success", {
       status: "completed",
       conclusion: "success",
     }),
   ]);
   assert.equal(verdict.state, "success");
-  assert.equal(verdict.description, "CI Lite passed");
+  assert.equal(verdict.description, "CI Fast (hosted) passed");
   assert.deepEqual(verdict.cancel, []);
 });
 
@@ -57,19 +58,18 @@ test("a skipped decisive job is not a pass: an outsider's CI Fast run is pending
       status: "queued",
       conclusion: null,
     }),
-    entry(LITE, 3, "queued", null, null),
   ]);
   assert.equal(verdict.state, "pending");
-  assert.equal(verdict.description, "Waiting on CI Fast (hosted), CI Lite");
+  assert.equal(verdict.description, "Waiting on CI Fast (hosted)");
 });
 
-test("an EX63 failure waits for CI Lite instead of failing the gate early", () => {
+test("an EX63 failure waits for hosted CI instead of failing early", () => {
   const verdict = decide([
     entry(EX63, 1, "completed", "failure", {
       status: "completed",
       conclusion: "failure",
     }),
-    entry(LITE, 3, "in_progress", null, null),
+    entry(HOSTED, 3, "in_progress", null, null),
   ]);
   assert.equal(verdict.state, "pending");
 });
@@ -80,24 +80,20 @@ test("everything finished with no pass fails and points at the failed job", () =
       status: "completed",
       conclusion: "failure",
     }),
-    entry(HOSTED, 2, "completed", "success", {
-      status: "completed",
-      conclusion: "skipped",
-    }),
-    entry(LITE, 3, "completed", "failure", {
+    entry(HOSTED, 2, "completed", "failure", {
       status: "completed",
       conclusion: "failure",
     }),
   ]);
   assert.equal(verdict.state, "failure");
-  assert.equal(verdict.description, "CI Fast: failure; CI Lite: failure");
+  assert.equal(verdict.description, "CI Fast: failure; CI Fast (hosted): failure");
   assert.equal(verdict.targetUrl, "https://jobs/1");
 });
 
 test("finished flows whose decisive jobs never ran fail rather than pass", () => {
   const verdict = decide([
     entry(EX63, 1, "completed", "cancelled", null),
-    entry(LITE, 3, "completed", "cancelled", {
+    entry(HOSTED, 3, "completed", "cancelled", {
       status: "completed",
       conclusion: "skipped",
     }),
@@ -118,4 +114,13 @@ test("latestPrRun ignores push runs and picks the newest PR run", () => {
   ]);
   assert.equal(run.id, 3);
   assert.equal(latestPrRun([{ id: 2, event: "push", created_at: "x" }]), null);
+});
+
+test("every CI Gate source references a tracked workflow", () => {
+  for (const source of SOURCES) {
+    const path = fileURLToPath(
+      new URL(`../../.github/workflows/${source.workflow}`, import.meta.url),
+    );
+    assert.ok(existsSync(path), `CI Gate references a missing workflow: ${source.workflow}`);
+  }
 });
