@@ -31,7 +31,7 @@ describe('Codex OAuth account selector', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(authListProviderCredentials).mockResolvedValue({
-      result: [account('oauth', true), account('oauth-another', false), account('api-key', false)],
+      result: [account('oauth', true), account('oauth-another', false), {...account('api-key', false), kind: 'token'}],
     } as never);
     vi.mocked(authActivateProviderCredentials).mockResolvedValue({ result: account('oauth-another', true) } as never);
     vi.mocked(authRemoveProviderCredentials).mockResolvedValue({ result: { removed: true } } as never);
