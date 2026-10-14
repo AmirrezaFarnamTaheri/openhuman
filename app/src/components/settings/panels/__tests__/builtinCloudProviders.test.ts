@@ -41,7 +41,7 @@ describe('builtinCloudProviders', () => {
     ['ovhcloud', 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1'],
     ['nebius', 'https://api.tokenfactory.nebius.com/v1'],
     ['llm7', 'https://api.llm7.io/v1'],
-    ['glhf', 'https://glhf.chat/api/openai/v1'],
+    ['synthetic', 'https://api.synthetic.new/openai/v1'],
   ] as const)('registers verified peer endpoint %s with bearer authentication', (slug, endpoint) => {
     expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
     expect(authStyleForBuiltinCloudProvider(slug)).toBe('bearer');
