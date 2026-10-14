@@ -109,7 +109,7 @@ export const CloudProviderEditor = ({
           t('settings.ai.providerEndpointInvalid')
         );
       }
-      if ((apiKey.trim() || hasExistingKey) && !validModelFleetImageEndpoint(endpoint)) {
+      if ((Boolean(apiKey.trim()) || hasExistingKey) && !validModelFleetImageEndpoint(endpoint)) {
         throw new Error(t('settings.ai.keyedEndpointInvalid'));
       }
       if (!validModelFleetImageEndpoint(imageEndpoint)) {
