@@ -309,34 +309,32 @@ describe('VoicePanel', () => {
     expect(saveBtn).toBeDisabled();
   });
 
-  it('shows an error when persistProviders fails', async () => {
+  it('does not mark failed voice routing as saved and keeps the change retryable', async () => {
     runtime.voiceSettings = makeVoiceSettings({
       voiceProviders: [ELEVENLABS_PROVIDER],
       sttProvider: { kind: 'external', providerSlug: 'elevenlabs', model: 'scribe_v1' },
       ttsProvider: { kind: 'cloud' },
     });
-
     vi.mocked(openhumanVoiceSetProviders).mockRejectedValueOnce(new Error('RPC timeout'));
 
     renderWithProviders(<VoicePanel />, { initialEntries: ['/settings/voice'] });
-
-    // Wait for the initial load to complete (elevenlabs seeded from voiceSettings).
     const sttSelect = (await screen.findByTestId('stt-provider-select')) as HTMLSelectElement;
     await waitFor(() => expect(sttSelect.value).toBe('elevenlabs'));
 
-    // Freeze subsequent loadData calls so the error set by persistProviders is
-    // not cleared by the automatic reload that fires in saveRouting after
-    // persistProviders() returns (without re-throwing).
-    vi.mocked(openhumanGetVoiceServerSettings).mockImplementation(
-      () => new Promise(() => {}) // hang — prevents error being wiped by reload
-    );
-
-    // Change provider and click save to trigger the RPC error.
     fireEvent.change(sttSelect, { target: { value: 'cloud' } });
     const saveBtn = screen.getByTestId('save-voice-routing');
     fireEvent.click(saveBtn);
+    await screen.findByText('RPC timeout');
 
-    await waitFor(() => expect(screen.getByText('RPC timeout')).toBeInTheDocument());
+    expect(screen.queryByText(/Voice providers saved/i)).not.toBeInTheDocument();
+    expect(sttSelect).toHaveValue('cloud');
+    expect(saveBtn).toBeEnabled();
+
+    // A retry after the one-shot server failure must persist successfully.
+    fireEvent.click(saveBtn);
+    await waitFor(() => expect(openhumanVoiceSetProviders).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/Voice providers saved/i)).toBeInTheDocument();
+    await waitFor(() => expect(saveBtn).toBeDisabled());
   });
 
   it('renders a preset select and calls persistProviders when a Piper voice preset is changed', async () => {
