@@ -22,8 +22,8 @@ pub use credential::{
 };
 pub use gated_services::{start_credential_gated_services, stop_credential_gated_services};
 pub use provider_credentials::{
-    list_provider_credentials, list_provider_credentials_by_prefix, remove_provider_credentials,
-    store_provider_credentials,
+    activate_provider_credentials, list_provider_credentials, list_provider_credentials_by_prefix,
+    remove_provider_credentials, store_provider_credentials,
 };
 pub use secrets::{decrypt_secret, encrypt_secret};
 pub use session_query::{auth_get_session_token_json, auth_get_state};
