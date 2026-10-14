@@ -56,6 +56,26 @@ fn should_try_next_catalog_key(status: u16, has_more: bool) -> bool {
     has_more && matches!(status, 401 | 403)
 }
 
+/// A 200 response to /models is proof of catalogue reachability, NOT proof
+/// of an accepted API key: some vendors intentionally expose a public model
+/// catalogue. Check whether an otherwise identical request with no credential
+/// is rejected. This is only an authentication-evidence probe; it cannot prove
+/// billable inference access and must never send the candidate secret.
+async fn catalogue_requires_credential(
+    client: &reqwest::Client,
+    models_url: &str,
+    auth_style: AuthStyle,
+) -> bool {
+    let mut request = client.get(models_url);
+    if auth_style == AuthStyle::Anthropic {
+        request = request.header("anthropic-version", "2023-06-01");
+    }
+    matches!(
+        request.send().await,
+        Ok(response) if matches!(response.status().as_u16(), 401 | 403)
+    )
+}
+
 /// OpenRouter's /key preflight returns a sanitized error string. Only
 /// explicit HTTP auth failures permit trying another key.
 fn should_retry_openrouter_key(error: &str, has_more: bool) -> bool {
@@ -457,7 +477,11 @@ async fn list_configured_models_inner(
     for (position, candidate_key) in candidates.iter().enumerate() {
         let has_more = position + 1 < candidates.len();
         checked_keys += 1;
-        if is_openrouter_provider(&entry.slug, &entry.endpoint) {
+        // An explicit authenticated /key validation is stronger evidence than
+        // a /models response. For every other vendor, compare to an anonymous
+        // control request before calling the key verified.
+        let using_key_preflight = is_openrouter_provider(&entry.slug, &entry.endpoint);
+        if using_key_preflight {
             match validate_openrouter_api_key(&client, &routing.endpoint, candidate_key).await {
                 Ok(()) => {}
                 Err(error) if should_retry_openrouter_key(&error, has_more) => {
@@ -542,7 +566,9 @@ async fn list_configured_models_inner(
 
         authenticated = matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
             && !candidate_key.is_empty()
-            && attempt.status().is_success();
+            && attempt.status().is_success()
+            && (using_key_preflight
+                || catalogue_requires_credential(&client, &models_url, entry.auth_style).await);
         successful_response = Some(attempt);
         break;
     }

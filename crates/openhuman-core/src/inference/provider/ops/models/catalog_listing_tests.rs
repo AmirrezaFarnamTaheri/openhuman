@@ -329,3 +329,75 @@ async fn anonymous_candidate_cannot_be_used_as_managed_jwt_preview() {
     .await;
     assert!(result.is_err(), "JWT provider previews must never use this BYOK probe");
 }
+
+#[tokio::test]
+async fn public_model_catalogue_does_not_verify_api_key() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{ "id": "free-listing", "object": "model" }]
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let mut config = crate::config::Config::default();
+    config.cloud_providers.push(CloudProviderCreds {
+        slug: "public-models".into(),
+        endpoint: format!("{}/v1", server.uri()),
+        auth_style: AuthStyle::Bearer,
+        ..Default::default()
+    });
+    let response = list_configured_models_with_candidate_key_from_config(
+        "public-models", &config, "invalid-but-present-key",
+    ).await.expect("public catalogue remains browseable");
+    assert_eq!(response.value["models"][0]["id"], "free-listing");
+    assert_eq!(response.value["fleet_probe"]["authenticated"], false);
+    assert_eq!(response.value["fleet_probe"]["checked_keys"], 1);
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(requests.iter().any(|request| request.headers.get("authorization").is_none()));
+}
+
+#[tokio::test]
+async fn private_catalogue_proves_key_only_when_anonymous_control_is_rejected() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .and(header("authorization", "Bearer good-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{ "id": "protected-model", "object": "model" }]
+        })))
+        .with_priority(1)
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(401))
+        .with_priority(10)
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut config = crate::config::Config::default();
+    config.cloud_providers.push(CloudProviderCreds {
+        slug: "protected-models".into(),
+        endpoint: format!("{}/v1", server.uri()),
+        auth_style: AuthStyle::Bearer,
+        ..Default::default()
+    });
+    let response = list_configured_models_with_candidate_key_from_config(
+        "protected-models", &config, "good-key",
+    ).await.unwrap();
+    assert_eq!(response.value["fleet_probe"]["authenticated"], true);
+    assert_eq!(response.value["fleet_probe"]["checked_keys"], 1);
+    assert_eq!(response.value["fleet_probe"]["rejected_keys"], 0);
+}
