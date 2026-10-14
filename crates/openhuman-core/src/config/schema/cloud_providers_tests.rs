@@ -386,6 +386,24 @@ fn additional_fork_cloud_presets_are_represented_exactly_once() {
 }
 
 #[test]
+fn verified_peer_compatible_presets_have_expected_bearer_routes() {
+    for (slug, endpoint) in [
+        ("aionlabs", "https://api.aionlabs.ai/v1"),
+        ("sambanova", "https://api.sambanova.ai/v1"),
+        ("ovhcloud", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"),
+        ("nebius", "https://api.tokenfactory.nebius.com/v1"),
+        ("llm7", "https://api.llm7.io/v1"),
+        ("glhf", "https://glhf.chat/api/openai/v1"),
+    ] {
+        let preset = super::builtin_cloud_provider(slug).expect("verified peer preset");
+        assert_eq!(preset.endpoint, endpoint, "{slug} endpoint");
+        assert_eq!(preset.auth_style, AuthStyle::Bearer, "{slug} authentication");
+        assert!(!builtin_cloud_supports_responses_api(slug), "{slug} is chat-completions-only");
+        assert!(endpoint_host_is_chat_completions_only(endpoint), "{slug} endpoint must not fall back to Responses");
+    }
+}
+
+#[test]
 fn llmtr_preset_uses_provider_native_bearer_endpoint() {
     let preset = super::builtin_cloud_provider("llmtr").expect("LLMTR provider preset");
     assert_eq!(preset.label, "LLMTR");
