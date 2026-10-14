@@ -65,6 +65,13 @@ export function isSafeCloudEndpoint(raw) {
 
 export function assertCatalogParity(frontendSource, rustSource) {
   const frontend = new Map(parseFrontendProviders(frontendSource).map(row => [row.slug, row]));
+  // The Rust extras do not list provider-neutral vendor presets. Every UI
+  // builtin still receives user credentials and therefore needs a safe URL.
+  for (const entry of frontend.values()) {
+    if (!isSafeCloudEndpoint(entry.endpoint)) {
+      throw new Error(entry.slug + ' has an unsafe built-in endpoint');
+    }
+  }
   const rust = parseRustExtraProviders(rustSource);
   for (const entry of rust) {
     if (!isSafeCloudEndpoint(entry.endpoint)) throw new Error(entry.slug + ' has an unsafe built-in endpoint');
