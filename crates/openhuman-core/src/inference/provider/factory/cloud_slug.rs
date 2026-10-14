@@ -52,21 +52,29 @@ pub(super) fn prodex_gateway_endpoint_is_safe(endpoint: &str) -> bool {
     }
 }
 
-/// Validate *all* destinations that could receive the Prodex virtual key.
-/// Image-model overrides share its credential and must respect the same TLS/loopback
-/// and URL-userinfo policy, even if not selected by the current model.
-pub(super) fn prodex_gateway_destinations_are_safe(
+/// Any image route can receive this provider's scoped credential. The
+/// config-file loading path must not bypass the settings/RPC HTTPS rule.
+/// Validate even currently unused model overrides: future model switches must
+/// not silently expose an already-stored key over remote cleartext HTTP.
+pub(super) fn image_destinations_are_safe(
     entry: &crate::config::schema::cloud_providers::CloudProviderCreds,
 ) -> bool {
-    prodex_gateway_endpoint_is_safe(&entry.endpoint)
-        && entry
-            .image_endpoint
-            .as_deref()
-            .is_none_or(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
+    entry
+        .image_endpoint
+        .as_deref()
+        .is_none_or(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
         && entry
             .model_image_endpoints
             .values()
             .all(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
+}
+
+/// Prodex also requires a protected main gateway origin because its virtual
+/// key is not a general-purpose direct provider credential.
+pub(super) fn prodex_gateway_destinations_are_safe(
+    entry: &crate::config::schema::cloud_providers::CloudProviderCreds,
+) -> bool {
+    prodex_gateway_endpoint_is_safe(&entry.endpoint) && image_destinations_are_safe(entry)
 }
 
 /// The downstream gateway owns provider/account selection and sticky retry
@@ -118,6 +126,11 @@ pub(super) fn resolve_cloud_slug<'a>(
     if slug == "prodex" && !prodex_gateway_destinations_are_safe(entry) {
         anyhow::bail!(
             "[chat-factory] Prodex gateway endpoints require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
+        );
+    }
+    if !image_destinations_are_safe(entry) {
+        anyhow::bail!(
+            "[chat-factory] image endpoint overrides require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
         );
     }
 
