@@ -1433,3 +1433,33 @@ describe('credential-group model catalogue verification', () => {
     await expect(probeProviderModelFleet('openai')).rejects.toThrow(/401/);
   });
 });
+
+describe('public model catalog cannot authenticate a provider-editor credential', () => {
+  beforeEach(() => mockCallCoreRpc.mockReset());
+
+  it('rejects public listings when a bearer key is being configured', async () => {
+    mockCallCoreRpc.mockResolvedValue({
+      result: { models: [{ id: 'public' }],
+        fleet_probe: { authenticated: false, checked_keys: 1, rejected_keys: 0 } },
+    });
+    await expect(listProviderModels('chutes', 'wrong-key', {
+      slug: 'chutes', auth_style: 'bearer', endpoint: 'https://llm.chutes.ai/v1',
+    } as any)).rejects.toThrow(/publicly accessible/i);
+  });
+
+  it('accepts evidence of authenticated catalogue access', async () => {
+    mockCallCoreRpc.mockResolvedValue({
+      result: { models: [{ id: 'private' }],
+        fleet_probe: { authenticated: true, checked_keys: 1, rejected_keys: 0 } },
+    });
+    const models = await listProviderModels('private', 'good-key', {
+      slug: 'private', auth_style: 'bearer', endpoint: 'https://example.com/v1',
+    } as any);
+    expect(models).toHaveLength(1);
+  });
+
+  it('does not require key proof when simply browsing model names', async () => {
+    mockCallCoreRpc.mockResolvedValue({ result: { models: [{ id: 'public' }] } });
+    await expect(listProviderModels('chutes')).resolves.toHaveLength(1);
+  });
+});

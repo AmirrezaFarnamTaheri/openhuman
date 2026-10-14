@@ -110,27 +110,46 @@ describe('useCloudProviderEditorSubmit', () => {
     expect(persist).not.toHaveBeenCalled();
   });
 
-  it('passes an explicit blank key when the endpoint changes but no key was entered', async () => {
-    api.listProviderModels.mockResolvedValue([]);
+  it('blocks redirecting a saved key when the endpoint changes, even if verification is skipped', async () => {
     const existing = {
       id: 'p_existing', slug: 'existing', label: 'Existing',
       endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
       maskedKey: '••••stored',
     };
     const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
+    const persist = vi.fn();
     const { result } = renderHook(() => useCloudProviderEditorSubmit({
       editing: existing, draft: saved, saved,
-      persist: vi.fn().mockResolvedValue(undefined),
-      t: key => key, onDone: vi.fn(),
+      persist, t: key => key, onDone: vi.fn(),
     }));
     await act(async () => {
-      await result.current({ ...existing, endpoint: 'https://new.example/v1' }, '');
+      await expect(result.current(
+        { ...existing, endpoint: 'https://new.example/v1' }, '', { skipProbe: true }
+      )).rejects.toThrow(/requires a new API key/i);
     });
-    expect(api.listProviderModels).toHaveBeenCalledWith(
-      'existing', '',
-      expect.objectContaining({ endpoint: 'https://new.example/v1' })
-    );
+    expect(api.listProviderModels).not.toHaveBeenCalled();
     expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it('allows editing a label without probing or retransmitting a stored key', async () => {
+    const existing = {
+      id: 'p_existing', slug: 'existing', label: 'Existing',
+      endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
+      maskedKey: '••••stored',
+    };
+    const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
+    const persist = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: existing, draft: saved, saved,
+      persist, t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await result.current({ ...existing, label: 'Updated label' }, '');
+    });
+    expect(api.listProviderModels).not.toHaveBeenCalled();
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+    expect(persist).toHaveBeenCalledTimes(1);
   });
 
   it('does not store a new key when the backend rejects a proposed CA certificate', async () => {

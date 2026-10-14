@@ -44,6 +44,21 @@ export function useCloudProviderEditorSubmit({
         id,
         maskedKey: maskKeyLabel(apiKey ? true : next.maskedKey.startsWith('••••')),
       };
+      const previous = editing && editing !== 'new' ? editing : null;
+      const savedKeyExists = previous?.maskedKey.startsWith('••••') ?? false;
+      const changedDestination = previous !== null && (
+        previous.slug !== upserted.slug ||
+        previous.endpoint !== upserted.endpoint ||
+        (previous.caCertPem ?? '') !== (upserted.caCertPem ?? '')
+      );
+      if (savedKeyExists && changedDestination && !apiKey) {
+        // Even an explicit skipProbe must not route an existing saved key to a
+        // newly configured endpoint or trusted CA without replacement.
+        throw new Error(
+          'Changing the provider endpoint or certificate requires a new API key. ' +
+          'The previous saved credential cannot be forwarded to a new destination.'
+        );
+      }
 
       // Snapshot the prior persisted cloud_providers list so we can restore
       // it if the live probe fails.
@@ -97,7 +112,7 @@ export function useCloudProviderEditorSubmit({
         // A candidate credential is sent for this one-shot native read-only
         // probe but is neither persisted nor mixed with the saved key fleet.
         // Failed probes therefore leave the previous encrypted key untouched.
-        if (!opts?.skipProbe) {
+        if (!opts?.skipProbe && !(savedKeyExists && !changedDestination && !apiKey)) {
           try {
             await listProviderModels(upserted.slug, apiKey, previewProvider);
           } catch (probeErr) {

@@ -797,13 +797,35 @@ export async function flushCloudProviders(providers: CloudProviderCreds[]): Prom
  * config has been persisted to disk (i.e. before the user clicks Save).
  * Throws on error so callers can surface retry UI.
  */
+interface CatalogueCredentialEvidence {
+  authenticated?: boolean;
+  checked_keys?: number;
+  rejected_keys?: number;
+}
+
+/** Model catalogs can be public. HTTP 200 alone does not authenticate a key. */
+function verifyCatalogueCredential(probe?: CatalogueCredentialEvidence): void {
+  if (
+    probe?.authenticated !== true ||
+    !Number.isInteger(probe.checked_keys) ||
+    (probe.checked_keys ?? 0) < 1 ||
+    !Number.isInteger(probe.rejected_keys) ||
+    (probe.rejected_keys ?? 0) < 0 ||
+    (probe.rejected_keys ?? 0) >= (probe.checked_keys ?? 0)
+  ) {
+    throw new Error('Provider API key was not verified: /models may be publicly accessible.');
+  }
+}
+
 /** An optional candidate is used only for this read-only probe; never stored. */
 export async function listProviderModels(
   providerId: string,
   candidateApiKey?: string,
   previewProvider?: CloudProviderCreds
 ): Promise<ModelInfo[]> {
-  const res = await callCoreRpc<{ result: { models: ModelInfo[] } }>({
+  const res = await callCoreRpc<{
+    result: { models?: ModelInfo[]; fleet_probe?: CatalogueCredentialEvidence };
+  }>({
     method: 'openhuman.inference_list_models',
     params: {
       provider_id: providerId,
@@ -816,6 +838,12 @@ export async function listProviderModels(
         : {}),
     },
   });
+  // This is the provider-editor preview path. Unlike the ordinary model
+  // picker, it must verify a proposed bearer/Anthropic credential, not just
+  // prove that an unauthenticated catalogue URL exists.
+  if (previewProvider && ['bearer', 'anthropic'].includes(previewProvider.auth_style)) {
+    verifyCatalogueCredential(res?.result?.fleet_probe);
+  }
   return res?.result?.models ?? [];
 }
 
