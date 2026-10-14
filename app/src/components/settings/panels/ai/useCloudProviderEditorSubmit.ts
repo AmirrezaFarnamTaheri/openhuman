@@ -56,6 +56,7 @@ export function useCloudProviderEditorSubmit({
         image_endpoint: p.imageEndpoint ?? '',
         model_image_endpoints: p.modelImageEndpoints ?? {},
         rotation_strategy: p.rotationStrategy ?? 'round_robin',
+          tool_call_codec: p.toolCallCodec ?? 'native',
         ca_cert_pem: p.caCertPem ?? '',
         auth_style: p.authStyle,
       }));
@@ -78,6 +79,7 @@ export function useCloudProviderEditorSubmit({
             image_endpoint: p.imageEndpoint ?? '',
             model_image_endpoints: p.modelImageEndpoints ?? {},
             rotation_strategy: p.rotationStrategy ?? 'round_robin',
+          tool_call_codec: p.toolCallCodec ?? 'native',
             ca_cert_pem: p.caCertPem ?? '',
             auth_style: p.authStyle,
           }));
