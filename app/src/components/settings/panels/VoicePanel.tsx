@@ -296,23 +296,47 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
    * Called after the user enters an API key and clicks Save.
    */
   const handleEnableExternalProvider = useCallback(
-    async (slug: string, apiKey: string) => {
+    async (
+      slug: string,
+      apiKey: string,
+      nativeTts?: { endpoint: string; model: string; voice: string }
+    ) => {
       if (!voiceSettings) return;
       setIsSavingPendingKey(true);
       setError(null);
       try {
+        if (slug === 'kokoro') {
+          const endpoint = nativeTts?.endpoint.trim() ?? '';
+          const model = nativeTts?.model.trim() ?? '';
+          const voice = nativeTts?.voice.trim() ?? '';
+          let url: URL;
+          try {
+            url = new URL(endpoint);
+          } catch {
+            throw new Error('Kokoro endpoint must be a valid HTTP(S) URL ending in /v1.');
+          }
+          const host = url.hostname.replace(/^\\[|\\]$/g, '').toLowerCase();
+          const loopback = host === 'localhost' || host === '::1' || /^127(?:\\.\\d{1,3}){3}$/.test(host);
+          const secure = url.protocol === 'https:' || (url.protocol === 'http:' && loopback);
+          if (!secure || url.username || url.password || url.search || url.hash ||
+              !url.pathname.replace(/\\/+$/, '').endsWith('/v1') ||
+              !model || !voice || model.length > 128 || voice.length > 128) {
+            throw new Error('Kokoro needs HTTPS or loopback HTTP /v1 plus a valid model and voice.');
+          }
+        }
         const meta = BUILTIN_VOICE_PROVIDER_META[slug];
         const BUILTIN_ENDPOINTS: Record<string, string> = {
           deepgram: 'https://api.deepgram.com/v1',
           elevenlabs: 'https://api.elevenlabs.io/v1',
           openai: 'https://api.openai.com/v1',
+          kokoro: 'http://127.0.0.1:8880/v1',
         };
         const newProvider: VoiceProviderView = {
-          id: '',
+          id: voiceSettings.voiceProviders.find(p => p.slug === slug)?.id ?? '',
           slug,
           label: meta?.label ?? slug,
-          endpoint: BUILTIN_ENDPOINTS[slug] ?? '',
-          auth_style: 'bearer',
+          endpoint: slug === 'kokoro' ? nativeTts!.endpoint.trim() : (BUILTIN_ENDPOINTS[slug] ?? ''),
+          auth_style: slug === 'kokoro' ? 'none' : 'bearer',
           capability: meta?.capability ?? 'both',
           stt_api_style:
             slug === 'deepgram'
@@ -330,10 +354,17 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
                   ? 'scribe_v1'
                   : null,
           default_tts_voice:
-            slug === 'openai' ? 'alloy' : slug === 'elevenlabs' ? 'JBFqnCBsd6RMkjVDRZzb' : null,
+            slug === 'kokoro'
+              ? nativeTts!.voice.trim()
+              : slug === 'openai'
+                ? 'alloy'
+                : slug === 'elevenlabs'
+                  ? 'JBFqnCBsd6RMkjVDRZzb'
+                  : null,
+          default_tts_model: slug === 'kokoro' ? nativeTts!.model.trim() : null,
           has_api_key: false,
         };
-        if (apiKey) {
+        if (apiKey && slug !== 'kokoro') {
           await setVoiceProviderKey(slug, apiKey);
           newProvider.has_api_key = true;
         }
@@ -472,6 +503,7 @@ const VoicePanel = ({ embedded = false, scrollable = true }: VoicePanelProps = {
             setPendingKeyValue={setPendingKeyValue}
             isSavingPendingKey={isSavingPendingKey}
             handleEnableExternalProvider={handleEnableExternalProvider}
+            existingKokoro={voiceSettings?.voiceProviders.find(p => p.slug === 'kokoro')}
             ttsVoice={ttsVoice}
             setTtsVoice={setTtsVoice}
             piperVoicePresets={piperVoicePresets}
