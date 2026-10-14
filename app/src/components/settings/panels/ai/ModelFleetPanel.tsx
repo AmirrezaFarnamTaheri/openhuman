@@ -15,6 +15,7 @@ import TextField from '../../../ui/TextField';
 import type { AISettings, CloudProvider } from './aiPanelTypes';
 import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
 import { summarizeFleetHealth } from './fleetHealthInsights';
+import { validProdexDestination } from './prodexEndpointPolicy';
 import {
   fleetModelKey, syncModelPresets, applyModelBulkPatch,
   validModelFleetEndpoint, syncConfiguredProviderPresets, updateSelectedGroupSettings,
@@ -134,6 +135,10 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     if (!clear && !validModelFleetEndpoint(groupImageUrl)) {
       throw new Error('The image endpoint must be a valid http(s) base URL.');
     }
+    if (!clear && selectedProviders.has('prodex') && groupImageUrl.trim() &&
+      !validProdexDestination(groupImageUrl.trim())) {
+      throw new Error('Prodex image endpoints require HTTPS or loopback HTTP without URL credentials.');
+    }
     const next = updateSelectedGroupSettings(providers, selectedProviders, clear
       ? { imageEndpoint: '' }
       : {
@@ -153,6 +158,10 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     }
     if (!remove && (!modelImageUrl.trim() || !validModelFleetEndpoint(modelImageUrl))) {
       throw new Error('Enter a valid image API base URL for the model.');
+    }
+    if (!remove && effectiveGroup === 'prodex' &&
+      !validProdexDestination(modelImageUrl.trim())) {
+      throw new Error('Prodex model image endpoints require HTTPS or loopback HTTP without URL credentials.');
     }
     const next = providers.map(p => {
       if (p.slug !== effectiveGroup) return p;
