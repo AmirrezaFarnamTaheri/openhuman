@@ -51,6 +51,7 @@ export function LoopForm({ config, onChange, upstreamOptions }: LoopFormProps) {
         // the same one: without these the spinner walks into 0 and negatives,
         // and the editor happily builds a graph the core then refuses to save.
         min={1}
+        max={100}
         step={1}
         onChange={v => onChange({ max_iterations: v })}
         testId="node-config-loop-max-iterations"
