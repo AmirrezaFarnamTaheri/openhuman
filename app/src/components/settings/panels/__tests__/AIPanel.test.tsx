@@ -746,7 +746,7 @@ describe('AIPanel', () => {
     fireEvent.change(screen.getByPlaceholderText('https://api.openai.com/v1'), {
       target: { value: 'https://my-resource.openai.azure.com/openai/v1' },
     });
-    fireEvent.change(screen.getByLabelText(/API Key/i), { target: { value: 'sk-test-key' } });
+    fireEvent.change(screen.getByLabelText(/^API key$/i), { target: { value: 'sk-test-key' } });
 
     fireEvent.click(screen.getByRole('button', { name: /^Add Provider$/i }));
 
@@ -781,7 +781,7 @@ describe('AIPanel', () => {
 
     // Second attempt: the probe would now succeed, but the key write rejects.
     vi.mocked(setCloudProviderKey).mockRejectedValueOnce(new Error('keyring is locked'));
-    fireEvent.change(screen.getByLabelText(/API Key/i), { target: { value: 'sk-test-key' } });
+    fireEvent.change(screen.getByLabelText(/^API key$/i), { target: { value: 'sk-test-key' } });
     fireEvent.click(screen.getByRole('button', { name: /^Add Provider$/i }));
 
     expect(await screen.findByText(/keyring is locked/i)).toBeInTheDocument();
@@ -953,7 +953,7 @@ describe('AIPanel', () => {
     );
     // The input for the API key should be visible.
     const dialog = screen.getByRole('dialog', { name: /Connect OpenAI/i });
-    expect(within(dialog).getByLabelText(/API key/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/^API key$/i)).toBeInTheDocument();
     expect(
       within(dialog).queryByRole('button', { name: /Sign in with ChatGPT \/ Codex/i })
     ).not.toBeInTheDocument();
@@ -1044,7 +1044,7 @@ describe('AIPanel', () => {
     renderWithProviders(<AIPanel />);
     await openProviderConnectDialog('deepseek');
     const dialog = await screen.findByRole('dialog', { name: /Connect DeepSeek/i });
-    fireEvent.change(within(dialog).getByLabelText(/API key/i), {
+    fireEvent.change(within(dialog).getByLabelText(/^API key$/i), {
       target: { value: 'sk-deepseek-123' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
@@ -1074,7 +1074,7 @@ describe('AIPanel', () => {
     renderWithProviders(<AIPanel />);
     await openProviderConnectDialog('deepseek');
     const dialog = await screen.findByRole('dialog', { name: /Connect DeepSeek/i });
-    fireEvent.change(within(dialog).getByLabelText(/API key/i), { target: { value: 'sk-bad' } });
+    fireEvent.change(within(dialog).getByLabelText(/^API key$/i), { target: { value: 'sk-bad' } });
     fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
 
     await waitFor(() => expect(clearCloudProviderKey).toHaveBeenCalledWith('deepseek'));
@@ -1090,7 +1090,7 @@ describe('AIPanel', () => {
     renderWithProviders(<AIPanel />);
     await openProviderConnectDialog('deepseek');
     const dialog = await screen.findByRole('dialog', { name: /Connect DeepSeek/i });
-    fireEvent.change(within(dialog).getByLabelText(/API key/i), {
+    fireEvent.change(within(dialog).getByLabelText(/^API key$/i), {
       target: { value: 'sk-revoked' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
@@ -1118,7 +1118,7 @@ describe('AIPanel', () => {
       renderWithProviders(<AIPanel />);
       await openProviderConnectDialog('deepseek');
       const dialog = await screen.findByRole('dialog', { name: /Connect DeepSeek/i });
-      fireEvent.change(within(dialog).getByLabelText(/API key/i), { target: { value: 'sk-bad' } });
+      fireEvent.change(within(dialog).getByLabelText(/^API key$/i), { target: { value: 'sk-bad' } });
       fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
 
       await waitFor(() =>
@@ -1156,7 +1156,7 @@ describe('AIPanel', () => {
       fireEvent.change(screen.getByPlaceholderText('https://api.openai.com/v1'), {
         target: { value: 'https://my-host.example.com/v1' },
       });
-      fireEvent.change(screen.getByLabelText(/API Key/i), { target: { value: 'sk-test-key' } });
+      fireEvent.change(screen.getByLabelText(/^API key$/i), { target: { value: 'sk-test-key' } });
       fireEvent.click(screen.getByRole('button', { name: /^Add Provider$/i }));
 
       await waitFor(() =>
@@ -1313,7 +1313,7 @@ describe('AIPanel', () => {
 
     await openProviderConnectDialog('sumopod');
     const dialog = await screen.findByRole('dialog', { name: /Connect SumoPod/i });
-    fireEvent.change(within(dialog).getByLabelText(/API key/i), {
+    fireEvent.change(within(dialog).getByLabelText(/^API key$/i), {
       target: { value: 'sk-sumopod-test' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
@@ -1345,7 +1345,7 @@ describe('AIPanel', () => {
 
     await openProviderConnectDialog('minimax');
     const dialog = await screen.findByRole('dialog', { name: /Connect MiniMax/i });
-    fireEvent.change(within(dialog).getByLabelText(/API key/i), {
+    fireEvent.change(within(dialog).getByLabelText(/^API key$/i), {
       target: { value: 'sk-minimax-test' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
@@ -1381,7 +1381,7 @@ describe('AIPanel', () => {
 
     await openProviderConnectDialog('openai');
     const dialog = await screen.findByRole('dialog', { name: /Connect OpenAI/i });
-    fireEvent.change(within(dialog).getByLabelText(/API key/i), {
+    fireEvent.change(within(dialog).getByLabelText(/^API key$/i), {
       target: { value: 'sk-bad-key' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
@@ -1397,7 +1397,7 @@ describe('AIPanel', () => {
     await openProviderConnectDialog('openrouter');
 
     const dialog = await screen.findByRole('dialog', { name: /Connect OpenRouter/i });
-    expect(within(dialog).getByLabelText(/API key/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/^API key$/i)).toBeInTheDocument();
     expect(
       within(dialog).getByRole('button', { name: /Sign in with OpenRouter/i })
     ).toBeInTheDocument();
@@ -1638,7 +1638,7 @@ describe('AIPanel', () => {
     );
 
     // Fill in a key and submit.
-    fireEvent.change(screen.getByLabelText(/API key/i), { target: { value: 'sk-bad-key' } });
+    fireEvent.change(screen.getByLabelText(/^API key$/i), { target: { value: 'sk-bad-key' } });
     fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
     // The panel silently catches the setCloudProviderKey error and does NOT
@@ -1746,7 +1746,7 @@ describe('AIPanel', () => {
     renderWithProviders(<AIPanel />);
     await openProviderConnectDialog('openai');
     const dialog = await screen.findByRole('dialog', { name: /Connect OpenAI/i });
-    fireEvent.change(within(dialog).getByLabelText(/API key/i), {
+    fireEvent.change(within(dialog).getByLabelText(/^API key$/i), {
       target: { value: 'sk-bad-key' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
