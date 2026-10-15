@@ -233,7 +233,12 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     let max_files = args.get("max_files").and_then(Value::as_u64).unwrap_or(MAX_FILES as u64).clamp(1, MAX_FILES as u64) as usize;
     let max_entries = args.get("max_entries").and_then(Value::as_u64).unwrap_or(MAX_VISITED_ENTRIES as u64).clamp(1, MAX_VISITED_ENTRIES as u64) as usize;
     let after = args.get("after_path").and_then(Value::as_str).unwrap_or("");
-    if after.len() > 180 || after.starts_with('/') || after.contains('\\') || after.chars().any(char::is_control)
+    // A backslash is a separator on Windows but a valid literal filename
+    // character on Unix. Cursors use the same canonical representation as
+    // relative() so a client can round-trip every reported safe path.
+    let invalid_backslash = cfg!(windows) && after.contains('\\');
+    if after.len() > 180 || after.starts_with('/') || invalid_backslash
+        || after.chars().any(char::is_control)
         || after.split('/').any(|part| part == ".." || (part.is_empty() && !after.is_empty())) {
         anyhow::bail!("invalid after_path cursor");
     }
