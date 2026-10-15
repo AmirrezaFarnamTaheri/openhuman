@@ -160,3 +160,13 @@ fn unrecognized_only_list_leaves_tools_unfiltered() {
 
 // #3762: enabling the App UI Control / App Automation tool is the opt-in
 // for the mutating click/type actions.
+
+#[test]
+fn source_evidence_is_explicitly_opt_in() {
+    let mut t = tools(&["file_read", "source_evidence"]);
+    filter_tools_by_user_preference(&mut t, &["file_read".to_string()]);
+    assert!(!names(&t).contains(&"source_evidence"));
+    let mut enabled = tools(&["file_read", "source_evidence"]);
+    filter_tools_by_user_preference(&mut enabled, &["source_evidence".to_string()]);
+    assert!(names(&enabled).contains(&"source_evidence"));
+}

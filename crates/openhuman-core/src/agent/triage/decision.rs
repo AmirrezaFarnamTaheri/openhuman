@@ -99,6 +99,11 @@ pub enum ParseError {
          but at least one was missing or empty"
     )]
     MissingTarget { action: &'static str },
+    #[error("action `{action}` may target only `{expected}`, not the selected agent")]
+    WrongTarget {
+        action: &'static str,
+        expected: &'static str,
+    },
 }
 
 /// Parse the triage agent's raw reply text into a [`TriageDecision`].
@@ -132,6 +137,25 @@ pub fn parse_triage_decision(llm_text: &str) -> Result<TriageDecision, ParseErro
         if !(has_target && has_prompt) {
             return Err(ParseError::MissingTarget {
                 action: decision.action.as_str(),
+            });
+        }
+    }
+
+    // A triage LLM is an untrusted classifier, not an agent permission
+    // authority. The prompt restricts each acting verdict to one known
+    // destination; validate that restriction here before any dispatch logic.
+    // This also blocks a syntactically valid JSON reply from escalating into
+    // a privileged unrelated agent by supplying its registry id.
+    let expected = match decision.action {
+        TriageAction::React => Some("trigger_reactor"),
+        TriageAction::Escalate => Some("orchestrator"),
+        TriageAction::Drop | TriageAction::Acknowledge => None,
+    };
+    if let Some(expected) = expected {
+        if decision.target_agent.as_deref() != Some(expected) {
+            return Err(ParseError::WrongTarget {
+                action: decision.action.as_str(),
+                expected,
             });
         }
     }

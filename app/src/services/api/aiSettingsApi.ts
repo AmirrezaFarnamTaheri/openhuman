@@ -373,7 +373,10 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
         n.image_endpoint !== p.image_endpoint ||
         JSON.stringify(n.model_image_endpoints ?? {}) !==
           JSON.stringify(p.model_image_endpoints ?? {}) ||
+        JSON.stringify(n.model_transports ?? {}) !==
+          JSON.stringify(p.model_transports ?? {}) ||
         n.rotation_strategy !== p.rotation_strategy ||
+        n.tool_call_codec !== p.tool_call_codec ||
         n.ca_cert_pem !== p.ca_cert_pem ||
         n.auth_style !== p.auth_style
       );
@@ -391,7 +394,9 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
           ca_cert_pem,
           image_endpoint,
           model_image_endpoints,
+          model_transports,
           rotation_strategy,
+          tool_call_codec,
         }) => ({
           id,
           slug,
@@ -401,7 +406,9 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
           ca_cert_pem,
           image_endpoint,
           model_image_endpoints,
+          model_transports,
           rotation_strategy,
+          tool_call_codec,
         })
       );
   }
@@ -790,11 +797,55 @@ export async function flushCloudProviders(providers: CloudProviderCreds[]): Prom
  * config has been persisted to disk (i.e. before the user clicks Save).
  * Throws on error so callers can surface retry UI.
  */
-export async function listProviderModels(providerId: string): Promise<ModelInfo[]> {
-  const res = await callCoreRpc<{ result: { models: ModelInfo[] } }>({
+interface CatalogueCredentialEvidence {
+  authenticated?: boolean;
+  checked_keys?: number;
+  rejected_keys?: number;
+}
+
+/** Model catalogs can be public. HTTP 200 alone does not authenticate a key. */
+function verifyCatalogueCredential(probe?: CatalogueCredentialEvidence): void {
+  const checked = probe?.checked_keys ?? Number.NaN;
+  const rejected = probe?.rejected_keys ?? Number.NaN;
+  if (
+    probe?.authenticated !== true ||
+    !Number.isInteger(checked) ||
+    checked < 1 ||
+    !Number.isInteger(rejected) ||
+    rejected < 0 ||
+    rejected >= checked
+  ) {
+    throw new Error('Provider API key was not verified: /models may be publicly accessible.');
+  }
+}
+
+/** An optional candidate is used only for this read-only probe; never stored. */
+export async function listProviderModels(
+  providerId: string,
+  candidateApiKey?: string,
+  previewProvider?: CloudProviderCreds
+): Promise<ModelInfo[]> {
+  const res = await callCoreRpc<{
+    result: { models?: ModelInfo[]; fleet_probe?: CatalogueCredentialEvidence };
+  }>({
     method: 'openhuman.inference_list_models',
-    params: { provider_id: providerId },
+    params: {
+      provider_id: providerId,
+      ...(candidateApiKey !== undefined ? { candidate_api_key: candidateApiKey } : {}),
+      ...(previewProvider
+        ? {
+            candidate_provider: previewProvider,
+            candidate_ca_cert_pem: previewProvider.ca_cert_pem ?? '',
+          }
+        : {}),
+    },
   });
+  // This is the provider-editor preview path. Unlike the ordinary model
+  // picker, it must verify a proposed bearer/Anthropic credential, not just
+  // prove that an unauthenticated catalogue URL exists.
+  if (previewProvider && ['bearer', 'anthropic'].includes(previewProvider.auth_style)) {
+    verifyCatalogueCredential(res?.result?.fleet_probe);
+  }
   return res?.result?.models ?? [];
 }
 

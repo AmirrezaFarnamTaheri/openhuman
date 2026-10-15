@@ -267,6 +267,45 @@ fn prodex_gateway_rejects_remote_plaintext_and_embedded_url_credentials() {
 }
 
 #[test]
+fn every_credentialed_provider_rejects_insecure_main_endpoints() {
+    for endpoint in [
+        "http://remote.example/v1",
+        "http://169.254.169.254/latest/meta-data",
+        "http://127.0.0.1.attacker.example/v1",
+        "https://user:password@provider.example/v1",
+        "https://provider.example/v1?api_key=secret",
+        "file:///tmp/provider",
+    ] {
+        for slug in ["custom-bearer", "custom-anthropic"] {
+            let mut provider = openai_entry("p_secure", slug);
+            provider.endpoint = endpoint.into();
+            provider.auth_style = if slug == "custom-bearer" {
+                AuthStyle::Bearer
+            } else {
+                AuthStyle::Anthropic
+            };
+            let config = config_with_providers(vec![provider]);
+            let error = cloud_slug::resolve_cloud_slug("chat", slug, "model", &config)
+                .err()
+                .expect("credentialed endpoint should be rejected before key lookup");
+            assert!(error.to_string().contains("HTTPS"), "{endpoint}: {error}");
+        }
+    }
+}
+
+#[test]
+fn credentialed_gateway_main_endpoints_allow_https_and_loopback_only() {
+    for endpoint in [
+        "https://models.example/v1",
+        "http://localhost:8000/v1",
+        "http://127.0.0.2:8000/v1",
+        "http://[::1]:8000/v1",
+    ] {
+        assert!(cloud_slug::prodex_gateway_endpoint_is_safe(endpoint), "{endpoint}");
+    }
+}
+
+#[test]
 fn prodex_gateway_uses_exactly_one_scoped_virtual_key() {
     assert!(cloud_slug::prodex_has_single_virtual_key(
         "vk-inference-one"
@@ -307,6 +346,48 @@ fn prodex_gateway_rejects_unsafe_default_and_model_image_destinations() {
             assert!(err.to_string().contains("HTTPS"), "{url}: {err}");
         }
     }
+}
+
+#[test]
+fn every_cloud_provider_rejects_unsafe_image_routes_loaded_directly_from_config() {
+    // UI and RPC validation do not cover a provider entry loaded directly
+    // from config.toml. The factory must enforce the same egress policy.
+    for url in [
+        "http://remote.example/v1",
+        "http://169.254.169.254/latest/meta-data",
+        "http://127.0.0.1.attacker.example/v1",
+        "https://user:secret@images.example/v1",
+        "https://images.example/v1?key=secret",
+        "file:///tmp/leak",
+    ] {
+        for by_model in [false, true] {
+            let mut provider = openai_entry("p_vision", "vision-cloud");
+            if by_model {
+                provider.model_image_endpoints.insert("vision-1".into(), url.into());
+            } else {
+                provider.image_endpoint = Some(url.into());
+            }
+            let config = config_with_providers(vec![provider]);
+            let error =
+                cloud_slug::resolve_cloud_slug("chat", "vision-cloud", "text-model", &config)
+                    .err()
+                    .expect("unsafe image route must fail before any credential lookup");
+            assert!(
+                error.to_string().contains("HTTPS"),
+                "{url} must be rejected for ordinary BYOK providers: {error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn ordinary_cloud_providers_allow_https_and_loopback_image_routes() {
+    let mut provider = openai_entry("p_vision", "vision-cloud");
+    provider.image_endpoint = Some("https://images.example/v1".into());
+    provider.model_image_endpoints.insert("vision-1".into(), "http://[::1]:4111/v1".into());
+    assert!(cloud_slug::image_destinations_are_safe(&provider));
+    provider.model_image_endpoints.insert("vision-2".into(), "http://remote.example/v1".into());
+    assert!(!cloud_slug::image_destinations_are_safe(&provider));
 }
 
 #[test]

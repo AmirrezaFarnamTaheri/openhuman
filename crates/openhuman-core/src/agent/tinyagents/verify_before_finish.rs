@@ -31,6 +31,16 @@ pub(super) const MIN_TOOL_ROUNDS: usize = 5;
 /// own, whatever its round count.
 pub(super) const TODO_TOOL: &str = "todo";
 
+/// Consequential single-round calls still require independent verification.
+/// The completion middleware only sees tool names, not command contents;
+/// do not treat generic shell/read-only calls as proof of mutation.
+const VERIFY_AFTER_TOOL: &[&str] = &[
+    "file_write", "edit_file", "apply_patch",
+    "spawn_subagent", "spawn_parallel_agents", "spawn_async_subagent",
+    "spawn_worker_thread", "continue_subagent", "steer_subagent",
+    "delegate", "git_operations", "run_workflow",
+];
+
 /// Opening words of the check, also how tests recognise it on a transcript.
 pub(super) const CHECK_MARKER: &str = "Before finishing";
 
@@ -72,6 +82,13 @@ test files), especially next to the deliverable, then confirm that what remains 
 what was asked for, no more. The same for actions: an irreversible change the request did \
 not ask for (rewriting history, deleting or resetting data, changing settings) is not an \
 improvement; if you believe one is warranted, say so in your answer instead of making it.\n\n\
+8. For code or configuration changes, evidence from before an edit is stale after the last write. \
+Re-run each applicable test, build or check on the final files. A CI run from an older commit \
+never verifies the latest exact commit; report the exact SHA and whether its checks actually \
+ran and passed. Missing, cancelled or skipped verification is not a passing result. \
+A command only proves a successful check when its exit status is observable: \
+pipelines without pipefail, a trailing || true, or a backgrounded test can hide \
+failures; such commands are not valid verification receipts.\n\n\
 Fix anything that fails and re-run the affected checks. If all holds, give your final \
 answer in full, since it replaces your previous reply.";
 
@@ -84,7 +101,10 @@ pub(super) fn applies(is_subagent: bool, agent_definition_id: Option<&str>) -> b
 
 /// Whether the turn's activity makes it a multi-step task worth checking.
 pub(super) fn should_check(activity: &FinishActivity) -> bool {
-    activity.tool_rounds >= MIN_TOOL_ROUNDS || activity.called(TODO_TOOL)
+    activity.tool_rounds >= MIN_TOOL_ROUNDS
+        || activity.called(TODO_TOOL)
+        || VERIFY_AFTER_TOOL.iter().any(|tool| activity.called(tool))
+        || activity.tools_called.iter().any(|tool| tool.starts_with("delegate_"))
 }
 
 /// The check, framed as harness text rather than a user message.

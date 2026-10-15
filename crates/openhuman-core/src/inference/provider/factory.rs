@@ -53,6 +53,7 @@ mod routing;
 mod subprocess_providers;
 mod tiers;
 mod turn_model;
+mod tool_markup;
 
 #[cfg(feature = "flows")]
 pub(crate) use access_gates::current_host_requires_session;
@@ -63,6 +64,11 @@ pub use chat_model::{
 };
 pub(crate) use credentials::openai_bearer_is_oauth;
 pub use credentials::{auth_key_for_slug, lookup_key_for_slug, redact_endpoint};
+
+/// Shared credential-bearing egress policy used by native chat and model discovery.
+pub(crate) fn credentialed_endpoint_is_safe(endpoint: &str) -> bool {
+    cloud_slug::prodex_gateway_endpoint_is_safe(endpoint)
+}
 pub(crate) use discovery::model_limits_request;
 pub(crate) use local_runtime::create_local_chat_model_from_string;
 pub(crate) use managed_backend::make_openhuman_backend_model;

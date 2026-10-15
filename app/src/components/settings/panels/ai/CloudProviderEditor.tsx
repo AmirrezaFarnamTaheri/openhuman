@@ -19,7 +19,12 @@ import {
   ProviderProbeError,
   slugifyCustomProviderName,
 } from './aiPanelTypes';
-import { parseModelImageEndpoints, validModelFleetEndpoint } from './modelFleetOps';
+import {
+  parseModelImageEndpoints,
+  parseModelTransportOverrides,
+  validModelFleetEndpoint,
+  validModelFleetImageEndpoint,
+} from './modelFleetOps';
 
 export const CloudProviderEditor = ({
   initial,
@@ -42,12 +47,20 @@ export const CloudProviderEditor = ({
   const [label, setLabel] = useState<string>(initial?.label ?? '');
   const [endpoint, setEndpoint] = useState(initial?.endpoint ?? '');
   const [imageEndpoint, setImageEndpoint] = useState(initial?.imageEndpoint ?? '');
+  const [toolCallCodec, setToolCallCodec] = useState<'native' | 'qnml' | 'tagged_json'>(
+    initial?.toolCallCodec ?? 'native'
+  );
   const [rotationStrategy, setRotationStrategy] = useState(
     initial?.rotationStrategy ?? 'round_robin'
   );
   const [modelImageMappingText, setModelImageMappingText] = useState(
     Object.entries(initial?.modelImageEndpoints ?? {})
       .map(([id, url]) => id + ' = ' + url)
+      .join('\n')
+  );
+  const [modelTransportText, setModelTransportText] = useState(
+    Object.entries(initial?.modelTransports ?? {})
+      .map(([id, protocol]) => id + ' = ' + protocol)
       .join('\n')
   );
   const [apiKey, setApiKey] = useState('');
@@ -91,18 +104,29 @@ export const CloudProviderEditor = ({
       if (slugError) {
         throw new Error(slugError);
       }
-      if (!validModelFleetEndpoint(imageEndpoint) || !validModelFleetEndpoint(endpoint)) {
+      if (!validModelFleetEndpoint(endpoint)) {
         throw new Error(
-          'Provider endpoints must be valid http(s) base URLs without embedded credentials.'
+          t('settings.ai.providerEndpointInvalid')
+        );
+      }
+      if ((Boolean(apiKey.trim()) || hasExistingKey) && !validModelFleetImageEndpoint(endpoint)) {
+        throw new Error(t('settings.ai.keyedEndpointInvalid'));
+      }
+      if (!validModelFleetImageEndpoint(imageEndpoint)) {
+        throw new Error(
+          t('settings.ai.imageEndpointInvalid')
         );
       }
       const imageMap = parseModelImageEndpoints(modelImageMappingText);
+      const modelTransports = parseModelTransportOverrides(modelTransportText);
       await onSubmit(
         {
           id: initial?.id ?? '',
           imageEndpoint: imageEndpoint.trim(),
           modelImageEndpoints: imageMap,
+          modelTransports,
           rotationStrategy,
+          toolCallCodec,
           slug,
           label: label.trim() || slug,
           endpoint: endpoint.trim(),
@@ -152,7 +176,9 @@ export const CloudProviderEditor = ({
       // Radix supplies all three, so re-apply that guard or an in-flight save
       // can be dismissed out from under itself.
       closePolicy={saving ? { escape: false, backdrop: false, button: false } : undefined}
-      contentClassName="space-y-3 px-4 py-3"
+      maxWidthClassName="max-w-lg"
+      panelClassName="flex max-h-[calc(100dvh-2rem)] flex-col"
+      contentClassName="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3"
       footer={
         <div className="flex items-center justify-end gap-2">
           <Button variant="secondary" size="xs" onClick={onClose} disabled={saving}>
@@ -243,7 +269,7 @@ export const CloudProviderEditor = ({
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-image-endpoint" className="text-xs text-content-secondary">
-          Image / vision API base URL (optional)
+          {t('settings.ai.imageEndpointLabel')}
         </Label>
         <TextField
           id="cloud-provider-image-endpoint"
@@ -253,13 +279,12 @@ export const CloudProviderEditor = ({
           placeholder="https://images.example.com/v1"
         />
         <p className="text-xs text-content-muted">
-          Use a separate API base for messages that contain images. Empty inherits the standard
-          endpoint.
+          {t('settings.ai.imageEndpointHelp')}
         </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-image-models" className="text-xs text-content-secondary">
-          Image model endpoint overrides (model-id = URL, one per line)
+          {t('settings.ai.imageModelOverridesLabel')}
         </Label>
         <textarea
           id="cloud-provider-image-models"
@@ -272,18 +297,52 @@ export const CloudProviderEditor = ({
         />
       </div>
       <div className="space-y-2">
+        <Label htmlFor="cloud-provider-model-transports" className="text-xs text-content-secondary">
+          {t('settings.ai.modelTransportOverridesLabel')}
+        </Label>
+        <textarea
+          id="cloud-provider-model-transports"
+          value={modelTransportText}
+          onChange={event => setModelTransportText(event.target.value)}
+          rows={3}
+          spellCheck={false}
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
+          placeholder="response-model = responses"
+        />
+        <p className="text-xs text-content-muted">
+          {t('settings.ai.modelTransportOverridesHelp')}
+        </p>
+      </div>
+      <div className="space-y-2">
         <Label htmlFor="cloud-provider-rotation" className="text-xs text-content-secondary">
-          Multiple-key selection strategy
+          {t('settings.ai.rotationStrategyLabel')}
         </Label>
         <select
           id="cloud-provider-rotation"
           value={rotationStrategy}
           onChange={event => setRotationStrategy(event.target.value as typeof rotationStrategy)}
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
-          <option value="round_robin">Round robin</option>
-          <option value="least_busy">Least busy</option>
-          <option value="priority_weighted">Priority weighted</option>
+          <option value="round_robin">{t('settings.ai.rotationRoundRobin')}</option>
+          <option value="least_busy">{t('settings.ai.rotationLeastBusy')}</option>
+          <option value="priority_weighted">{t('settings.ai.rotationPriorityWeighted')}</option>
         </select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="cloud-provider-tool-codec" className="text-xs text-content-secondary">
+          {t('settings.ai.toolCodecLabel')}
+        </Label>
+        <select
+          id="cloud-provider-tool-codec"
+          value={toolCallCodec}
+          onChange={event => setToolCallCodec(event.target.value as 'native' | 'qnml' | 'tagged_json')}
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
+          <option value="native">{t('settings.ai.toolCodecNative')}</option>
+          <option value="qnml">{t('settings.ai.toolCodecQnml')}</option>
+          <option value="tagged_json">{t('settings.ai.toolCodecTaggedJson')}</option>
+        </select>
+        <p className="text-xs text-content-muted">
+          {t('settings.ai.toolCodecHelp')}
+        </p>
       </div>
       <div>
         <Label htmlFor="cloud-provider-ca-cert" className="text-xs text-content-secondary">

@@ -1,5 +1,5 @@
 /**
- * Per-kind palette grouping for the 15 tinyflows `NodeKind`s, shared by the
+ * Per-kind palette grouping for the 17 supported editor `NodeKind`s, shared by the
  * canvas node renderer (`FlowNodeComponent`) and the editable canvas's node
  * palette (`NodePalette`). Kept dependency-free (no React) so both a rendered
  * `<Handle>`-bearing card and a plain palette button can pull the same
@@ -33,7 +33,7 @@ interface NodeKindMeta {
 }
 
 /**
- * The 15 `NodeKind`s in the order they should appear in the palette. Trigger
+ * The 17 editor-supported native `NodeKind`s in their palette order. Trigger
  * leads (every graph needs exactly one); the rest follow the logical grouping
  * of the `tinyflows::model::NodeKind` enum. `memory` (issue #5226) is
  * appended after `sub_workflow` — the design doc (`08-memory-node.md`)
@@ -61,6 +61,8 @@ const NODE_KINDS: NodeKind[] = [
   'memory',
   'dedup',
   'loop',
+  'scatter',
+  'gather',
 ];
 
 /** Per-kind palette group. See the module doc. */
@@ -89,6 +91,8 @@ const NODE_KIND_META: Record<NodeKind, NodeKindMeta> = {
   // then on `done`. A "logic" node — it routes the item stream back around
   // rather than calling out or reading state.
   loop: { group: 'logic' },
+  scatter: { group: 'logic' },
+  gather: { group: 'logic' },
 };
 
 /** Palette group render order. */
@@ -126,6 +130,17 @@ export const PALETTE_ENTRIES: PaletteEntry[] = NODE_KINDS.flatMap((kind): Palett
         group: 'actions',
         labelKey: 'flows.palette.ohTool',
         preset: { provider: 'openhuman' },
+      },
+    ];
+  }
+  if (kind === 'scatter') {
+    return [
+      {
+        key: kind,
+        kind,
+        group: meta.group,
+        labelKey: 'flows.nodeKind.scatter',
+        preset: { lanes: 8 },
       },
     ];
   }

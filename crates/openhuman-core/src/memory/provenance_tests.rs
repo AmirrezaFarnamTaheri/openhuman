@@ -43,3 +43,28 @@ fn no_namespace_plain_key_is_trusted() {
     // default (the bare-key tooling path doesn't reach this code).
     assert!(!connector_provenance_policy().is_potentially_untrusted(None, "user_pref:theme"));
 }
+
+#[test]
+fn peer_imported_source_prefixes_are_classified_as_external() {
+    let policy = connector_provenance_policy();
+    for key in [
+        "repo:code:readme",
+        "source:sha256:abc",
+        "code:src/lib.rs",
+        "github:project/repo",
+        "gitlab:group/project",
+        "conduit:graph-node",
+        "jev:ranked-evidence",
+        "typesafe:decision",
+        "9router:model-response",
+    ] {
+        assert!(policy.is_potentially_untrusted(None, key), "{key}");
+    }
+}
+
+#[test]
+fn peer_source_policy_preserves_local_user_namespace() {
+    let policy = connector_provenance_policy();
+    assert!(!policy.is_potentially_untrusted(Some("user"), "favorite-editor"));
+    assert!(!policy.is_potentially_untrusted(Some("working"), "current-project"));
+}

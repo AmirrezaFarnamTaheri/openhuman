@@ -55,6 +55,91 @@ impl From<&'static tinyinference_providers::builtin::BuiltinCloudProvider>
 /// provider-neutral catalog from `tinyinference-providers`
 /// ([`UPSTREAM_BUILTINS`]), mapped onto the host's [`AuthStyle`].
 pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
+    // 9Router is a user-managed local OpenAI-compatible inference gateway.
+    // The gateway owns its own upstream accounts and separate API-key policy.
+    BuiltinCloudProvider {
+        slug: "9router",
+        label: "9Router (Local Gateway)",
+        endpoint: "http://127.0.0.1:20128/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    // 9Router peer-derived API-key-only upstream presets. Non-key sessions
+    // still require their own native credential/admission protocols.
+    BuiltinCloudProvider {
+        slug: "hyperbolic",
+        label: "Hyperbolic",
+        endpoint: "https://api.hyperbolic.xyz/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "chutes",
+        label: "Chutes AI",
+        endpoint: "https://llm.chutes.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "featherless",
+        label: "Featherless AI",
+        endpoint: "https://api.featherless.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "poolside",
+        label: "Poolside",
+        endpoint: "https://inference.poolside.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "morph",
+        label: "Morph",
+        endpoint: "https://api.morphllm.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "perplexity",
+        label: "Perplexity API",
+        endpoint: "https://api.perplexity.ai",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "tencent-hunyuan",
+        label: "Tencent Hunyuan",
+        endpoint: "https://api.hunyuan.cloud.tencent.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "xiaomi-mimo",
+        label: "Xiaomi MiMo (API Key)",
+        endpoint: "https://api.xiaomimimo.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    // Key-only OpenAI-compatible peers with documented public base URLs.
+    // Model availability and per-model transport features are not implied.
+    BuiltinCloudProvider {
+        slug: "cohere",
+        label: "Cohere",
+        endpoint: "https://api.cohere.ai/compatibility/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "tokenrouter",
+        label: "TokenRouter",
+        endpoint: "https://api.tokenrouter.io/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    // Region-scoped ModelArk access; AP and EU keys are not interchangeable.
+    BuiltinCloudProvider {
+        slug: "byteplus-modelark-ap",
+        label: "BytePlus ModelArk (Asia Pacific)",
+        endpoint: "https://ark.ap-southeast.bytepluses.com/api/v3",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "byteplus-modelark-eu",
+        label: "BytePlus ModelArk (Europe)",
+        endpoint: "https://ark.eu-west.bytepluses.com/api/v3",
+        auth_style: AuthStyle::Bearer,
+    },
     // Opt-in loopback gateway; OpenHuman never forwards Codex OAuth credentials.
     BuiltinCloudProvider {
         slug: "prodex",
@@ -92,6 +177,44 @@ pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
         endpoint: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
         auth_style: AuthStyle::Bearer,
     },
+    // Verified direct OpenAI-compatible provider endpoints; capability and
+    // free-tier eligibility remain model/account-specific and must be discovered.
+    BuiltinCloudProvider {
+        slug: "aionlabs",
+        label: "Aion Labs",
+        endpoint: "https://api.aionlabs.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "sambanova",
+        label: "SambaNova",
+        endpoint: "https://api.sambanova.ai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "ovhcloud",
+        label: "OVHcloud AI Endpoints",
+        endpoint: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "nebius",
+        label: "Nebius Token Factory",
+        endpoint: "https://api.tokenfactory.nebius.com/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "llm7",
+        label: "LLM7.io",
+        endpoint: "https://api.llm7.io/v1",
+        auth_style: AuthStyle::Bearer,
+    },
+    BuiltinCloudProvider {
+        slug: "synthetic",
+        label: "Synthetic",
+        endpoint: "https://api.synthetic.new/openai/v1",
+        auth_style: AuthStyle::Bearer,
+    },
 ];
 
 pub static BUILTIN_CLOUD_PROVIDERS: LazyLock<Vec<BuiltinCloudProvider>> = LazyLock::new(|| {
@@ -125,7 +248,7 @@ pub fn is_builtin_cloud_slug(slug: &str) -> bool {
 /// Whether a built-in cloud provider exposes the OpenAI **Responses API**
 /// (`/v1/responses`).
 ///
-/// OpenAI and the optional Prodex gateway serve `/responses`; most other
+/// OpenAI, the optional Prodex gateway, Nebius, OpenRouter and xAI serve `/responses`; other
 /// built-ins (DeepSeek, Groq, Mistral, Fireworks, ...) are chat-completions-only.
 /// Enabling the chat-completions-404 → `/responses` fallback for those
 /// guarantees a second 404 against an endpoint that does not exist, which floods
@@ -139,7 +262,7 @@ pub fn is_builtin_cloud_slug(slug: &str) -> bool {
 /// a genuine OpenAI proxy that does support `/responses`, so the factory keeps
 /// the fallback for those.
 pub fn builtin_cloud_supports_responses_api(slug: &str) -> bool {
-    matches!(slug, "openai" | "prodex")
+    matches!(slug, "openai" | "prodex" | "nebius" | "openrouter" | "xai")
 }
 
 /// Extract the lowercased authority host from an endpoint URL, dropping the
@@ -206,7 +329,7 @@ pub fn host_is_builtin_cloud_provider(host: &str) -> bool {
 ///
 /// Derived entirely from [`BUILTIN_CLOUD_PROVIDERS`]: a host is chat-only when
 /// some built-in preset uses it AND no preset at that host advertises the
-/// Responses API (only OpenAI's `api.openai.com` does). This closes the
+/// Responses API (including Nebius, OpenRouter, xAI, and Prodex). This closes the
 /// custom-slug gap behind the builtin-slug gate
 /// ([`builtin_cloud_supports_responses_api`]): a user slug pointed at, e.g.,
 /// `integrate.api.nvidia.com` must never attempt `/responses` (TAURI-RUST-5A1),
@@ -258,6 +381,35 @@ impl AuthStyle {
     }
 }
 
+/// How an explicit 2API-style provider returns tool calls. The native wire
+/// format stays the default; QNML markup decoding requires user opt-in and
+/// validates every call against the request's native tool declarations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolCallCodec {
+    #[default]
+    Native,
+    Qnml,
+    TaggedJson,
+}
+impl ToolCallCodec {
+    pub fn is_native(&self) -> bool {
+        *self == Self::Native
+    }
+}
+
+/// Wire protocol selected for one concrete model. Auto preserves the
+/// registry's existing Codex/Anthropic/Chat Completions routing. Overrides are
+/// exact model-id matches, not provider-wide guesses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelTransport {
+    #[default]
+    Auto,
+    ChatCompletions,
+    Responses,
+}
+
 /// Endpoint config for one cloud LLM provider.
 ///
 /// **Note on secrets**: API keys are NOT stored on this struct. They live in
@@ -297,6 +449,16 @@ pub struct CloudProviderCreds {
     /// Optional selection strategy: round_robin (default), least_busy or priority_weighted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotation_strategy: Option<String>,
+    /// Opt-in parsing for Qwen/QNML text-encoded tool calls exposed by some
+    /// independent 2API gateways. Never alters native function-call output.
+    #[serde(default, skip_serializing_if = "ToolCallCodec::is_native")]
+    pub tool_call_codec: ToolCallCodec,
+
+    /// Explicit per-model transport. Unlisted model ids retain Auto routing;
+    /// no metadata or free-tier provider list can silently flip protocol.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub model_transports: std::collections::HashMap<String, ModelTransport>,
+
 
     /// Default provider-native model used by BYOK routes without a model suffix.
     // keep until v0.66 (review after 2027-01-11): active BYOK routes and the
@@ -316,9 +478,55 @@ impl Default for CloudProviderCreds {
             image_endpoint: None,
             model_image_endpoints: std::collections::HashMap::new(),
             rotation_strategy: None,
+            tool_call_codec: ToolCallCodec::Native,
+            model_transports: std::collections::HashMap::new(),
             default_model: None,
         }
     }
+}
+
+impl CloudProviderCreds {
+    /// The exact model's configured protocol, or registry behavior for
+    /// unknown models. No provider-name or endpoint heuristics are applied.
+    pub fn model_transport(&self, model: &str) -> ModelTransport {
+        self.model_transports.get(model).copied().unwrap_or_default()
+    }
+}
+
+/// Normalize model transport overrides received over RPC. Model ids are exact
+/// upstream wire ids, so silently trimming a key could route a different model.
+pub fn normalize_model_transports(
+    overrides: std::collections::HashMap<String, ModelTransport>,
+) -> Result<std::collections::HashMap<String, ModelTransport>, String> {
+    if overrides.len() > 512 {
+        return Err("too many model transport overrides (maximum 512)".into());
+    }
+    for id in overrides.keys() {
+        if id.is_empty()
+            || id.len() > 200
+            || id.trim() != id
+            || id.chars().any(char::is_control)
+        {
+            return Err("model transport id must be 1-200 printable, unpadded characters".into());
+        }
+    }
+    Ok(overrides)
+}
+
+/// Validate OpenAI-specific protocol routing against the credential wire format.
+/// Auto retains native Anthropic and managed routes; explicit protocol paths
+/// require an OpenAI-compatible Bearer or unauthenticated backend.
+pub fn normalize_model_transports_for_auth(
+    overrides: std::collections::HashMap<String, ModelTransport>,
+    auth_style: AuthStyle,
+) -> Result<std::collections::HashMap<String, ModelTransport>, String> {
+    let normalized = normalize_model_transports(overrides)?;
+    if !matches!(auth_style, AuthStyle::Bearer | AuthStyle::None)
+        && normalized.values().any(|mode| *mode != ModelTransport::Auto)
+    {
+        return Err("explicit OpenAI model transports require bearer or none authentication".into());
+    }
+    Ok(normalized)
 }
 
 /// Normalize settings provided over either model-settings RPC surface.
@@ -336,6 +544,12 @@ pub fn normalize_fleet_config(
 ) -> Result<NormalizedFleetConfig, String> {
     fn image_url(raw: &str) -> Result<String, String> {
         let value = raw.trim();
+        // Do not rely on WHATWG normalization for credential-bearing routes:
+        // it may silently discard embedded CR/LF/TAB and change the URL.
+        // The frontend uses the same explicit control-character boundary.
+        if value.chars().any(char::is_control) {
+            return Err("image endpoint contains embedded control characters".into());
+        }
         let url = reqwest::Url::parse(value)
             .map_err(|_| "image endpoint must be an absolute HTTP(S) URL".to_string())?;
         if !matches!(url.scheme(), "http" | "https")
@@ -348,6 +562,25 @@ pub fn normalize_fleet_config(
             return Err(
                 "image endpoint must be HTTP(S), with no credentials, query or fragment".into(),
             );
+        }
+        // Model Fleet may reuse the configured provider's API key for image
+        // routes. Sending it to a remote plain-HTTP image endpoint would leak
+        // the credential in transit. Explicit loopback development gateways
+        // keep working, including IPv6 localhost.
+        if url.scheme() == "http" {
+            let host = url
+                .host_str()
+                .unwrap_or_default()
+                .trim_matches(['[', ']']);
+            let loopback = host.eq_ignore_ascii_case("localhost")
+                || host
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback());
+            if !loopback {
+                return Err(
+                    "image endpoints must use HTTPS outside loopback hosts".to_string(),
+                );
+            }
         }
         Ok(value.to_owned())
     }

@@ -3,14 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { FLEET_MODEL_PRESETS } from '../modelFleetCatalog';
 import {
   applyModelBulkPatch,
+  createSingleFlightRunner,
   applyProviderBulkPatch,
   insertFleetKeysAtSelection,
   parseFleetApiKeys,
   parseModelImageEndpoints,
+  parseModelTransportOverrides,
   syncConfiguredProviderPresets,
   syncModelPresets,
   updateSelectedGroupSettings,
+  upsertModelImageEndpoint,
+  keyedProviderDestinationChanges,
   validModelFleetEndpoint,
+  validModelFleetImageEndpoint,
 } from '../modelFleetOps';
 
 const initial = {
@@ -88,7 +93,7 @@ describe('model-fleet preset management', () => {
       cost_per_1m_output: 100,
       context_window: 1,
     };
-    const result = syncModelPresets([initial, old]);
+    const result = syncModelPresets([initial, old], FLEET_MODEL_PRESETS, { updateExisting: true });
     expect(result.models.find(m => m.id === old.id && m.provider === old.provider)?.vision).toBe(
       preset.vision
     );
@@ -119,7 +124,7 @@ describe('model-fleet preset management', () => {
         model_image_endpoints: { vision: 'https://vision.example/v1' },
       },
     ];
-    const { providers, updated } = syncConfiguredProviderPresets(rows);
+    const { providers, updated } = syncConfiguredProviderPresets(rows, { updateExisting: true });
     expect(updated).toBe(1);
     expect(providers[0].label).toBe('My OpenRouter');
     expect(providers[0].image_endpoint).toBe(rows[0].image_endpoint);
@@ -133,7 +138,7 @@ describe('model-fleet preset management', () => {
         'model-x = https://vision.example/v1\nmodel-y = http://localhost:8000/v1'
       )
     ).toEqual({ 'model-x': 'https://vision.example/v1', 'model-y': 'http://localhost:8000/v1' });
-    expect(() => parseModelImageEndpoints('x = http://a.test\nx = http://b.test')).toThrow(
+    expect(() => parseModelImageEndpoints('x = https://a.test\nx = https://b.test')).toThrow(
       /Duplicate/
     );
     expect(() => parseModelImageEndpoints('x = ftp://a.test')).toThrow();
@@ -141,6 +146,75 @@ describe('model-fleet preset management', () => {
     expect(validModelFleetEndpoint('https://api.example.test/v1?token=abc')).toBe(false);
     expect(validModelFleetEndpoint('https://api.example.test/v1#fragment')).toBe(false);
     expect(validModelFleetEndpoint('http://127.0.0.1:8800/v1')).toBe(true);
+  });
+
+  it('blocks remote cleartext image endpoint overrides before credentials can be sent', () => {
+    expect(validModelFleetEndpoint('http://example.net/v1')).toBe(true);
+    for (const url of [
+      'http://example.net/v1',
+      'http://10.10.0.5:8000/v1',
+      'http://169.254.169.254/latest/meta-data',
+      'http://localhost.evil.test/v1',
+      'https://user:secret@images.example/v1',
+    ]) {
+      expect(validModelFleetImageEndpoint(url)).toBe(false);
+      expect(() => parseModelImageEndpoints('vision = ' + url)).toThrow();
+    }
+    for (const url of [
+      'https://images.example/v1',
+      'http://localhost:4000/v1',
+      'http://127.0.0.2:4000/v1',
+      'http://[::1]:4000/v1',
+    ]) {
+      expect(validModelFleetImageEndpoint(url)).toBe(true);
+      expect(parseModelImageEndpoints('vision = ' + url)).toEqual({ vision: url });
+    }
+    expect(validModelFleetImageEndpoint('')).toBe(true);
+  });
+
+  it('parses exact model transport overrides and rejects malformed or duplicated rows', () => {
+    expect(parseModelTransportOverrides(
+      'vendor/response = responses\nvendor/chat = chat_completions'
+    )).toEqual({
+      'vendor/response': 'responses',
+      'vendor/chat': 'chat_completions',
+    });
+    expect(parseModelTransportOverrides('')).toEqual({});
+    expect(() => parseModelTransportOverrides('x = responses\nx = auto')).toThrow(/Duplicate/);
+    expect(() => parseModelTransportOverrides('x = invalid')).toThrow(/Protocol/);
+    expect(() => parseModelTransportOverrides('  = responses')).toThrow();
+    expect(() => parseModelTransportOverrides('x =')).toThrow();
+    expect(() => parseModelTransportOverrides('x = responses\ny')).toThrow();
+    expect(() => parseModelTransportOverrides(
+      Array.from({ length: 513 }, (_, i) => 'model-' + i + ' = responses').join('\n')
+    )).toThrow(/512/);
+  });
+
+  it('matches the Rust 200-byte model ID boundary and rejects prototype-key pollution', () => {
+    const exactLimit = 'é'.repeat(100); // 200 bytes of UTF-8
+    const overLimit = 'é'.repeat(101); // 202 bytes, but only 101 JS code units
+    expect(parseModelTransportOverrides(`${exactLimit} = responses`)[exactLimit])
+      .toBe('responses');
+    expect(() => parseModelTransportOverrides(`${overLimit} = responses`)).toThrow(/200/);
+    expect(() => parseModelImageEndpoints(
+      `${overLimit} = https://images.example/v1`
+    )).toThrow(/200/);
+    const special = parseModelTransportOverrides('__proto__ = responses');
+    expect(Object.getPrototypeOf(special)).toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(special, '__proto__')).toBe(true);
+  });
+
+  it('rejects empty URL query and fragment delimiters before any credentialed probe', () => {
+    for (const url of [
+      'https://provider.example/v1?',
+      'https://provider.example/v1#',
+      'https://provider.example/v1?#',
+    ]) {
+      expect(validModelFleetEndpoint(url)).toBe(false);
+      expect(validModelFleetImageEndpoint(url)).toBe(false);
+      expect(() => parseModelImageEndpoints('vision = ' + url)).toThrow();
+    }
+    expect(validModelFleetEndpoint('https://provider.example/v1')).toBe(true);
   });
 
   it('changes a key rotation strategy without clearing the existing image endpoint', () => {
@@ -189,5 +263,203 @@ describe('model-fleet preset management', () => {
     expect(result[0].image_endpoint).toBe('https://new.test/v1');
     expect(result[0].model_image_endpoints).toEqual(rows[0].model_image_endpoints);
     expect(result[1]).toEqual(rows[1]);
+  });
+});
+
+
+describe('image credential transport boundaries', () => {
+  it('rejects remote plaintext image URLs through both bulk editing paths', () => {
+    const selected = new Set(['ordinary-provider']);
+    const groups = [{ slug: 'ordinary-provider', imageEndpoint: 'https://safe.example/v1' }];
+    const configured = [{ slug: 'ordinary-provider', image_endpoint: 'https://safe.example/v1' }];
+    for (const unsafe of [
+      'http://api.example/v1',
+      'http://10.0.0.2:8443/v1',
+      'http://169.254.169.254/latest/meta-data',
+      'http://localhost.evil.example/v1',
+    ]) {
+      expect(() => updateSelectedGroupSettings(groups, selected, { imageEndpoint: unsafe })).toThrow(
+        /HTTPS|loopback/
+      );
+      expect(() => applyProviderBulkPatch(configured, selected, { image_endpoint: unsafe })).toThrow(
+        /HTTPS|loopback/
+      );
+    }
+    expect(groups[0].imageEndpoint).toBe('https://safe.example/v1');
+  });
+
+  it('accepts HTTPS and actual loopback and preserves empty clearing operations', () => {
+    const selected = new Set(['ordinary-provider']);
+    const groups = [{ slug: 'ordinary-provider', imageEndpoint: '' }];
+    const configured = [{ slug: 'ordinary-provider', image_endpoint: '' }];
+    for (const safe of [
+      'https://vision.example/v1',
+      'http://127.0.0.1:3300/v1',
+      'http://[::1]:3300/v1',
+    ]) {
+      expect(updateSelectedGroupSettings(groups, selected, { imageEndpoint: safe })[0].imageEndpoint)
+        .toBe(safe);
+      expect(applyProviderBulkPatch(configured, selected, { image_endpoint: safe })[0].image_endpoint)
+        .toBe(safe);
+    }
+    expect(updateSelectedGroupSettings(groups, selected, { imageEndpoint: '' })[0].imageEndpoint).toBe('');
+    expect(applyProviderBulkPatch(configured, selected, { image_endpoint: null })[0].image_endpoint).toBeNull();
+  });
+});
+
+
+describe('Model Fleet single-flight persistence', () => {
+  it('prevents overlapping writes from rapid repeated clicks and releases after settlement', async () => {
+    const singleFlight = createSingleFlightRunner();
+    const events: string[] = [];
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const first = singleFlight(async () => {
+      events.push('first-start');
+      await blocked;
+      events.push('first-end');
+    });
+    await singleFlight(async () => {
+      events.push('duplicate-should-not-execute');
+    });
+    expect(events).toEqual(['first-start']);
+    release();
+    await first;
+    await singleFlight(async () => {
+      events.push('next-after-first-settled');
+    });
+    expect(events).toEqual(['first-start', 'first-end', 'next-after-first-settled']);
+  });
+
+  it('does not permanently lock the panel after a failed persistence call', async () => {
+    const singleFlight = createSingleFlightRunner();
+    await expect(singleFlight(async () => { throw new Error('failed write'); }))
+      .rejects.toThrow('failed write');
+    await expect(singleFlight(async () => 'recovered')).resolves.toBe('recovered');
+  });
+});
+
+
+describe('model fleet destination parsing safety', () => {
+  it('rejects embedded URL control characters that WHATWG URL silently strips', () => {
+    expect(validModelFleetEndpoint('https://host.example/v1/\npath')).toBe(false);
+    expect(validModelFleetImageEndpoint('https://host.example/v1/\timage')).toBe(false);
+    expect(validModelFleetImageEndpoint('http://127.0.0.1:8080/\rimage')).toBe(false);
+    expect(validModelFleetImageEndpoint('http://127.0.0.1:8080/v1')).toBe(true);
+    expect(validModelFleetImageEndpoint('https://images.example/v1')).toBe(true);
+  });
+
+  it('bounds model-to-image mappings at the same 512-entry limit as protocol overrides', () => {
+    const mappings = Array.from(
+      { length: 512 },
+      (_, index) => 'model-' + index + ' = https://images.example/v1'
+    );
+    expect(Object.keys(parseModelImageEndpoints(mappings.join('\n')))).toHaveLength(512);
+    expect(() => parseModelImageEndpoints([...mappings, 'overflow = https://images.example/v1'].join('\n')))
+      .toThrow(/512/);
+  });
+});
+
+
+describe('direct image mapping editor regression contract', () => {
+  it('keeps prototype-shaped model IDs as own serializable data keys', () => {
+    const existing = { vision: 'https://vision.example/v1' };
+    const inserted = upsertModelImageEndpoint(existing, '__proto__', 'https://images.example/v1');
+    expect(Object.getPrototypeOf(inserted)).toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(inserted, '__proto__')).toBe(true);
+    expect(JSON.parse(JSON.stringify(inserted))['__proto__']).toBe('https://images.example/v1');
+    expect(existing).toEqual({ vision: 'https://vision.example/v1' });
+    const removed = upsertModelImageEndpoint(inserted, '__proto__', null);
+    expect(Object.prototype.hasOwnProperty.call(removed, '__proto__')).toBe(false);
+    expect(removed.vision).toBe(existing.vision);
+  });
+
+  it('enforces the Rust UTF-8 model ID budget and credentialed transport policy', () => {
+    const existing = { vision: 'https://vision.example/v1' };
+    expect(() => upsertModelImageEndpoint(existing, 'é'.repeat(101), 'https://images.example/v1'))
+      .toThrow(/200/);
+    expect(() => upsertModelImageEndpoint(existing, 'danger', 'http://remote.example/v1'))
+      .toThrow(/HTTPS|loopback/);
+    expect(existing).toEqual({ vision: 'https://vision.example/v1' });
+  });
+
+  it('refuses a 513th mapping while allowing replacements and removals at capacity', () => {
+    const existing = Object.fromEntries(Array.from(
+      { length: 512 }, (_, index) => ['model-' + index, 'https://images.example/v1']
+    ));
+    expect(() => upsertModelImageEndpoint(existing, 'overflow', 'https://images.example/v1'))
+      .toThrow(/512/);
+    expect(Object.keys(upsertModelImageEndpoint(existing, 'model-0', 'https://new.example/v1')))
+      .toHaveLength(512);
+    expect(Object.keys(upsertModelImageEndpoint(existing, 'model-0', null)))
+      .toHaveLength(511);
+    expect(Object.keys(existing)).toHaveLength(512);
+  });
+});
+
+
+describe('consent-preserving catalog synchronization', () => {
+  it('imports missing model presets but leaves saved model overrides intact unless refreshed', () => {
+    const catalog = [{
+      id: 'model-x', provider: 'catalog', displayName: 'Model X',
+      vision: true, context_window: 64_000,
+      cost_per_1m_input: 2, cost_per_1m_cached_input: 1, cost_per_1m_output: 4,
+    }, {
+      id: 'model-y', provider: 'catalog', displayName: 'Model Y',
+      vision: false, context_window: 32_000,
+      cost_per_1m_input: 1, cost_per_1m_cached_input: 0.5, cost_per_1m_output: 2,
+    }];
+    const saved = [{ id: 'model-x', provider: 'catalog', vision: false,
+      context_window: 10_000, cost_per_1m_input: 100, cost_per_1m_output: 200 }];
+    const safe = syncModelPresets(saved, catalog, { updateExisting: false });
+    expect(safe.added).toBe(1);
+    expect(safe.updated).toBe(0);
+    expect(safe.models[0]).toEqual(saved[0]);
+    expect(safe.models[1].id).toBe('model-y');
+    const refreshed = syncModelPresets(saved, catalog, { updateExisting: true });
+    expect(refreshed.updated).toBe(1);
+    expect(refreshed.models[0].vision).toBe(true);
+    expect(refreshed.models[0].cost_per_1m_input).toBe(2);
+  });
+
+  it('does not replace user-configured provider endpoints without explicit opt-in', () => {
+    const saved = [{
+      id: 'p1', slug: 'openrouter', label: 'Custom',
+      endpoint: 'https://private-gateway.example/v1', auth_style: 'bearer' as const,
+      model_image_endpoints: { picture: 'https://images.example/v1' },
+    }];
+    const safe = syncConfiguredProviderPresets(saved, { updateExisting: false });
+    expect(safe.updated).toBe(0);
+    expect(safe.providers).toEqual(saved);
+    const refresh = syncConfiguredProviderPresets(saved, { updateExisting: true });
+    expect(refresh.updated).toBe(1);
+    expect(refresh.providers[0].endpoint).toBe('https://openrouter.ai/api/v1');
+    expect(refresh.providers[0].model_image_endpoints).toEqual(saved[0].model_image_endpoints);
+  });
+});
+
+
+describe('provider refresh credential boundaries', () => {
+  it('detects only destination or auth changes for providers with saved credentials', () => {
+    const before = [{
+      id: 'saved', endpoint: 'https://old.example/v1',
+      authStyle: 'bearer', maskedKey: '••••stored',
+    }, {
+      id: 'unkeyed', endpoint: 'https://old.example/v1',
+      authStyle: 'bearer', maskedKey: '',
+    }];
+    expect(keyedProviderDestinationChanges(before, [{
+      id: 'saved', endpoint: 'https://new.example/v1', authStyle: 'bearer',
+    }, {
+      id: 'unkeyed', endpoint: 'https://new.example/v1', authStyle: 'bearer',
+    }])).toEqual(['saved']);
+    expect(keyedProviderDestinationChanges(before, [{
+      id: 'saved', endpoint: 'https://old.example/v1', authStyle: 'bearer',
+    }])).toEqual([]);
+    expect(keyedProviderDestinationChanges(before, [{
+      id: 'saved', endpoint: 'https://old.example/v1', authStyle: 'anthropic',
+    }])).toEqual(['saved']);
   });
 });

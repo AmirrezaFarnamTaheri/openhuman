@@ -122,3 +122,32 @@ fn the_base_override_does_not_apply_to_the_tinyhumans_route() {
     let err = reason(resolve(&config, &env_with(&[])).err().expect("must fail"));
     assert!(err.contains("no TinyHumans credential"), "{err}");
 }
+
+
+#[test]
+fn typoed_explicit_jev_route_fails_closed_instead_of_spending_another_providers_key() {
+    let (_tmp, mut config) = config();
+    // An operator intended TypeSafe; an earlier parser mapped this spelling
+    // to Auto, which could select OpenRouter's stored BYOK credentials.
+    config.agent.tool_search.jev_route = "tyepsafe".into();
+    let env = env_with(&[
+        (TYPESAFE_API_KEY_ENV, "ts-key"),
+        (OPENROUTER_API_KEY_ENV, "or-key"),
+    ]);
+    let error = resolve(&config, &env).err().expect("invalid route must fail");
+    let message = error.to_string();
+    assert!(message.contains("unknown jev route"), "{message}");
+    assert!(!message.contains("ts-key"));
+    assert!(!message.contains("or-key"));
+}
+
+#[test]
+fn explicit_auto_and_blank_jev_route_remain_supported() {
+    for spelling in ["auto", "AUTO", " "] {
+        let (_tmp, mut config) = config();
+        config.agent.tool_search.jev_route = spelling.into();
+        let env = env_with(&[(TYPESAFE_API_KEY_ENV, "ts-key")]);
+        let selected = resolve(&config, &env).expect("auto route stays supported");
+        assert_eq!(selected.route, JevRoute::TypeSafe);
+    }
+}

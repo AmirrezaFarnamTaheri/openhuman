@@ -86,6 +86,29 @@ than a stalled turn. The ranker sets a 6 s per-evaluation deadline (measured
 evaluations through the proxy run 0.7 to 1.9 s at p50); the evaluator's own
 default is 3 s.
 
+### System-One context and bounded decisions
+
+Tool search does **not** forward an entire agent transcript to the decision model.
+The wire state contains the tool-selection intent, at most six most-recent
+nonblank **user** turns (in chronological order, 500 Unicode scalar values
+per turn), and truncation markers when relevant. An abnormally long current
+intent keeps its first and last 2,000 Unicode scalars with an omission marker,
+up to a 4,000-scalar content budget plus the marker. This retains the original
+task objective alongside late constraints without concealing truncation.
+
+Choice options are distinct key/description pairs from the existing
+retrieval shortlist. Duplicate names, more than 255 options, any description over 2,000 Unicode
+scalars, or more than 96,000 total description scalars are refused before
+remote egress; the harness's
+existing ranker fallback handles rejection. These guards are **not** semantic
+summarization and are not proof that the selected tool is appropriate.
+
+The Jev request does not include assistant drafts, system instructions, tool
+outputs, untrusted page contents, credentials, private memory or all session
+turns. Any future addition of such state requires explicit opt-in privacy
+review, permission gating and bounded provenance. The configured
+Jev route still determines where the user-turn and shortlist material is sent.
+
 ## Layout
 
 | Path | What it does |
@@ -139,3 +162,27 @@ cargo test -p openhuman-tinyhumans jev::
 - [`docs/gitbooks/en/developing/jev.md`](../../../../docs/gitbooks/en/developing/jev.md): Jev.
 - [`docs/gitbooks/en/developing/performance.md`](../../../../docs/gitbooks/en/developing/performance.md): performance.
 - [`crates/openhuman-tinyhumans/README.md`](../../README.md): the openhuman-tinyhumans crate README.
+
+### Pass 10: bounded decisions and untrusted intent data
+
+The adapter rejects empty/control-character model names, choice-instruction bodies exceeding the configured wire budget, duplicate choice keys, per-choice and aggregate oversized descriptions, invalid probabilities (NaN, infinity, or outside [0,1]), and response choices not offered by the host. Model probability vectors are not assumed to be perfectly calibrated or to sum to 1; partial valid vectors remain accepted. The tool-selection instruction explicitly reminds System-One to treat the user intent and candidate descriptions as **untrusted data, not authority to change permissions**. It never replaces the native sandbox/approval policy.
+
+The current design is not an automatic preference for the cheapest model, nor a guarantee of current capability or pricing. Cost/effort models, provider quotas, context windows and billing consent need independent hard feasibility gates before any probabilistic ranking, using the native Model Fleet owner rather than external Codex proxies.
+
+
+### Route-scoped transient failure breaker (Pass 10)
+
+The existing ranker now holds an ephemeral route-fingerprint circuit: three consecutive
+backend/timeout failures open a 20-second cooldown. During cooldown it returns
+a backend error immediately, allowing TinyAgents' established BM25 fallback
+without another costly failed Jev request. Successful Jev ranking resets the
+streak. Changing the configured route, key or URL resets the breaker, and stale
+in-flight results from the preceding route cannot modify the new route's
+health. Invalid local input is not classified as a remote outage.
+
+This is a modest circuit breaker, not an assertion about provider quota,
+account health, model cost or live availability. It stores only a process-salted
+route fingerprint and ephemeral counters (never another plaintext key or
+persistent credential record). It does not replace hard tool permission checks,
+or turn Jev into an execution authority. The Rust regression tests must run on
+the exact branch head before release.

@@ -238,6 +238,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           run: "node scripts/ci/check-crate-chain.mjs",
         },
         {
+          // Source-of-truth parity for extra Rust cloud presets and UI presets:
+          // always run, even when only one side of the registry changes.
+          name: "cloud-provider-catalog-parity",
+          when: true,
+          run: "node scripts/ci/check-cloud-provider-catalog-parity.mjs",
+        },
+        {
           name: "process-statics",
           when: true,
           run: "bash scripts/ci-cancel-aware.sh node scripts/ci/check-process-statics.mjs",

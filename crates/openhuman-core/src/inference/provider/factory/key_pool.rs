@@ -10,7 +10,19 @@ use std::time::{Duration, Instant};
 
 const DEFAULT_COOLDOWN: Duration = Duration::from_secs(60);
 const MAX_COOLDOWN: Duration = Duration::from_secs(300);
+
+/// Progressive cooldown adopted from 9Router's account fallback design, while
+/// preserving OpenHuman's existing 60s first-rate-limit policy. Provider
+/// Retry-After wins when supplied and is capped to prevent years-long lockout.
+fn quota_cooldown(streak: u32, retry_after_ms: Option<u64>) -> Duration {
+    if let Some(retry_ms) = retry_after_ms {
+        return Duration::from_millis(retry_ms).min(MAX_COOLDOWN);
+    }
+    let shift = streak.saturating_sub(1).min(3);
+    DEFAULT_COOLDOWN.saturating_mul(1 << shift).min(MAX_COOLDOWN)
+}
 const SESSION_BINDING_TTL: Duration = Duration::from_secs(30 * 60);
+const MAX_STICKY_RUN_ID_BYTES: usize = 256;
 
 #[derive(Clone)]
 struct KeyHealth {
@@ -23,6 +35,9 @@ struct KeyHealth {
     last_used: Option<Instant>,
     consecutive_successes: u64,
     consecutive_failures: u64,
+    /// Rate-limit-only streak for progressive quota backoff. General model
+    /// errors must not lengthen the next 429 cooldown.
+    consecutive_rate_limits: u32,
 }
 impl KeyHealth {
     fn new(id: u64) -> Self {
@@ -36,6 +51,7 @@ impl KeyHealth {
             last_used: None,
             consecutive_successes: 0,
             consecutive_failures: 0,
+            consecutive_rate_limits: 0,
         }
     }
     fn available(&self, now: Instant) -> bool {
@@ -155,6 +171,38 @@ pub fn choose_key_for_run(
     strategy: RotationStrategy,
     run_id: Option<&str>,
 ) -> Option<(usize, String)> {
+    choose_key_for_run_impl(scope, configured, excluded, strategy, run_id, false)
+}
+
+/// Choose and reserve an active lease in one lock acquisition.
+///
+/// Model Fleet callers must use this instead of a separate `choose_key` and
+/// `acquire`: with least_busy, concurrent requests would otherwise all observe
+/// zero active requests and stampede onto the same credential.
+pub fn choose_key_and_acquire_for_run(
+    scope: &str,
+    configured: &[String],
+    excluded: &[usize],
+    strategy: RotationStrategy,
+    run_id: Option<&str>,
+) -> Option<(usize, String)> {
+    choose_key_for_run_impl(scope, configured, excluded, strategy, run_id, true)
+}
+
+fn choose_key_for_run_impl(
+    scope: &str,
+    configured: &[String],
+    excluded: &[usize],
+    strategy: RotationStrategy,
+    run_id: Option<&str>,
+    reserve_lease: bool,
+) -> Option<(usize, String)> {
+    // Correlation IDs are user-influenced in JSON-RPC requests. They are
+    // advisory; unsafe or oversized IDs may still select a key, but must not
+    // persist unbounded strings in the 30-minute affinity cache.
+    let run_id = run_id.filter(|id| {
+        !id.is_empty() && id.len() <= MAX_STICKY_RUN_ID_BYTES && !id.chars().any(char::is_control)
+    });
     let mut pools = registry()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -218,10 +266,22 @@ pub fn choose_key_for_run(
     };
     pool.next = (selected + 1) % pool.keys.len();
     pool.keys[selected].last_used = Some(now);
+    if reserve_lease {
+        // Do this before unlocking so the next least-busy selection observes
+        // the in-flight reservation; Lease::from_reserved owns its release.
+        pool.keys[selected].active += 1;
+    }
     if let Some(run) = run_id.filter(|id| !id.is_empty()) {
         // A bounded cache prevents unbounded correlation IDs in long-lived apps.
         if pool.sticky.len() >= 512 && !pool.sticky.contains_key(run) {
-            if let Some(oldest) = pool.sticky.keys().next().cloned() {
+            // HashMap iteration order is arbitrary; evict the binding that
+            // expires first so active sessions retain their affinity.
+            if let Some(oldest) = pool
+                .sticky
+                .iter()
+                .min_by_key(|(_, (_, expires))| *expires)
+                .map(|(session, _)| session.clone())
+            {
                 pool.sticky.remove(&oldest);
             }
         }
@@ -298,28 +358,41 @@ fn record_result_by_id(
             entry.successes += 1;
             entry.consecutive_successes += 1;
             entry.consecutive_failures = 0;
-            entry.cooldown_until = None;
+            entry.consecutive_rate_limits = 0;
+            // A success from a parallel in-flight request is not evidence that
+            // another request's active 429 cooldown has been lifted.
+            entry.cooldown_until = entry
+                .cooldown_until
+                .filter(|until| *until > Instant::now());
         }
         Some(KeyFailure::Authentication) => {
             entry.failures += 1;
             entry.consecutive_failures += 1;
             entry.consecutive_successes = 0;
+            entry.consecutive_rate_limits = 0;
             entry.evicted = true;
         }
         Some(KeyFailure::RateLimited) => {
             entry.failures += 1;
             entry.consecutive_failures += 1;
             entry.consecutive_successes = 0;
-            let delay = Duration::from_millis(
-                retry_after_ms.unwrap_or(DEFAULT_COOLDOWN.as_millis() as u64),
-            )
-            .min(MAX_COOLDOWN);
-            entry.cooldown_until = Some(Instant::now() + delay);
+            entry.consecutive_rate_limits = entry.consecutive_rate_limits.saturating_add(1);
+            let delay = quota_cooldown(entry.consecutive_rate_limits, retry_after_ms);
+            let until = Instant::now() + delay;
+            // Competing 429 responses may specify different Retry-After delays.
+            // A later shorter delay must never preempt the longer deadline.
+            entry.cooldown_until = Some(
+                entry
+                    .cooldown_until
+                    .map_or(until, |previous| previous.max(until)),
+            );
         }
         Some(KeyFailure::Other) => {
             entry.failures += 1;
             entry.consecutive_failures += 1;
             entry.consecutive_successes = 0;
+            // Transport and request errors are not quota signals.
+            entry.consecutive_rate_limits = 0;
         }
     }
 }
@@ -409,6 +482,7 @@ pub fn reset(scope: &str) {
             entry.failures = 0;
             entry.consecutive_failures = 0;
             entry.consecutive_successes = 0;
+            entry.consecutive_rate_limits = 0;
         }
     }
 }

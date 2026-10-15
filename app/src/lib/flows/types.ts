@@ -36,7 +36,9 @@ export interface Position {
 }
 
 /**
- * The 15 node kinds `tinyflows` currently defines (`tinyflows::model::NodeKind`).
+ * The editable canvas exposes 17 native tinyflows node kinds (a supported subset
+ * of the pinned engine's broader NodeKind enum). Never invent frontend-only
+ * kinds; newer or unsupported kinds must still round-trip without crashing.
  * Wire values are `snake_case` (`#[serde(rename_all = "snake_case")]`).
  *
  * `memory` (issue #5226) is the 13th kind — declarative, in-graph memory
@@ -75,7 +77,9 @@ export type NodeKind =
   | 'sub_workflow'
   | 'memory'
   | 'dedup'
-  | 'loop';
+  | 'loop'
+  | 'scatter'
+  | 'gather';
 
 /**
  * A named connection point on a node. Mirrors `tinyflows::model::Port`.

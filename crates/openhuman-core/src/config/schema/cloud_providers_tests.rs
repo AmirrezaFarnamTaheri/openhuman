@@ -99,9 +99,12 @@ fn is_builtin_cloud_slug_matches_presets_only() {
 }
 
 #[test]
-fn only_openai_and_prodex_builtins_expose_responses_api() {
+fn only_explicit_known_responses_providers_advertise_the_endpoint() {
     assert!(builtin_cloud_supports_responses_api("openai"));
     assert!(builtin_cloud_supports_responses_api("prodex"));
+    assert!(builtin_cloud_supports_responses_api("nebius"));
+    assert!(builtin_cloud_supports_responses_api("openrouter"));
+    assert!(builtin_cloud_supports_responses_api("xai"));
     for slug in ["deepseek", "groq", "mistral", "fireworks", "together"] {
         assert!(
             !builtin_cloud_supports_responses_api(slug),
@@ -112,13 +115,13 @@ fn only_openai_and_prodex_builtins_expose_responses_api() {
 
 /// Drift guard (TAURI-RUST-5EN): couple the capability helper to the
 /// preset list so adding a new built-in that wrongly claims the Responses
-/// API — or renaming `openai` — fails CI rather than silently re-enabling
-/// the guaranteed-404 `/responses` fallback. OpenAI and the opt-in Prodex
-/// gateway serve `/v1/responses`; other built-ins are chat-completions-only.
+/// API — or renaming a known capable provider — fails CI rather than silently
+/// re-enabling the guaranteed-404 `/responses` fallback. OpenAI, Prodex,
+/// Nebius, OpenRouter and xAI serve `/v1/responses`; the remainder is chat-only unless verified.
 #[test]
 fn responses_api_capability_is_coupled_to_the_preset_list() {
     for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
-        let expected = matches!(provider.slug, "openai" | "prodex");
+        let expected = matches!(provider.slug, "openai" | "prodex" | "nebius" | "openrouter" | "xai");
         assert_eq!(
             builtin_cloud_supports_responses_api(provider.slug),
             expected,
@@ -304,6 +307,96 @@ fn builtin_table_is_the_upstream_catalog_plus_the_managed_route() {
 }
 
 #[test]
+fn per_model_protocol_override_round_trips_without_changing_legacy_defaults() {
+    use crate::config::schema::cloud_providers::{CloudProviderCreds, ModelTransport};
+
+    let entry: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "multi-protocol-gateway",
+        "endpoint": "https://router.example/v1",
+        "model_transports": {
+            "vendor/response-model": "responses"
+        }
+    }))
+    .expect("explicit model protocol should deserialize");
+    assert_eq!(
+        entry.model_transport("vendor/response-model"),
+        ModelTransport::Responses
+    );
+    assert_eq!(
+        entry.model_transport("vendor/chat-model"),
+        ModelTransport::Auto,
+        "unlisted models must preserve preexisting registry routing"
+    );
+    assert_eq!(
+        serde_json::to_value(&entry).unwrap()["model_transports"]["vendor/response-model"],
+        "responses"
+    );
+
+    let legacy: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "legacy", "endpoint": "https://legacy.example/v1"
+    }))
+    .unwrap();
+    assert_eq!(legacy.model_transport("any"), ModelTransport::Auto);
+    assert!(serde_json::to_value(&legacy)
+        .unwrap()
+        .get("model_transports")
+        .is_none());
+    assert!(serde_json::from_value::<CloudProviderCreds>(serde_json::json!({
+        "slug": "invalid", "endpoint": "https://example/v1",
+        "model_transports": {"model": "unsupported_protocol"}
+    }))
+    .is_err());
+}
+
+#[test]
+fn model_transport_overrides_reject_ambiguous_ids_and_unbounded_maps() {
+    use super::{normalize_model_transports, ModelTransport};
+    use std::collections::HashMap;
+    for name in ["", " padded", "padded ", "line\nbreak", "x\tbad"] {
+        let overrides = HashMap::from([(name.to_owned(), ModelTransport::Responses)]);
+        assert!(normalize_model_transports(overrides).is_err(), "invalid model id: {name:?}");
+    }
+    let too_many: HashMap<String, ModelTransport> = (0..513)
+        .map(|n| (format!("model-{n}"), ModelTransport::ChatCompletions))
+        .collect();
+    assert!(normalize_model_transports(too_many).is_err());
+    let approved = HashMap::from([
+        ("vendor/response".to_owned(), ModelTransport::Responses),
+        ("vendor/chat".to_owned(), ModelTransport::ChatCompletions),
+    ]);
+    assert_eq!(normalize_model_transports(approved.clone()).unwrap(), approved);
+}
+
+#[test]
+fn explicit_protocol_overrides_require_a_compatible_authentication_style() {
+    use super::{normalize_model_transports_for_auth, AuthStyle, ModelTransport};
+    use std::collections::HashMap;
+
+    let overrides = HashMap::from([
+        ("vendor/responses".to_string(), ModelTransport::Responses),
+        ("vendor/chat".to_string(), ModelTransport::ChatCompletions),
+    ]);
+    for auth in [AuthStyle::Anthropic, AuthStyle::OpenhumanJwt] {
+        assert!(
+            normalize_model_transports_for_auth(overrides.clone(), auth).is_err(),
+            "an incompatible auth scheme cannot persist OpenAI protocol overrides"
+        );
+    }
+    for auth in [AuthStyle::Bearer, AuthStyle::None] {
+        assert_eq!(
+            normalize_model_transports_for_auth(overrides.clone(), auth).unwrap(),
+            overrides
+        );
+    }
+    // Legacy/default policies must remain compatible with existing Anthropic providers.
+    let automatic = HashMap::from([("claude".to_string(), ModelTransport::Auto)]);
+    assert_eq!(
+        normalize_model_transports_for_auth(automatic.clone(), AuthStyle::Anthropic).unwrap(),
+        automatic
+    );
+}
+
+#[test]
 fn image_endpoint_presets_round_trip_and_default_without_mapping() {
     let entry: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
         "id": "a",
@@ -369,6 +462,88 @@ fn reject_invalid_image_endpoints_and_unknown_strategy() {
 }
 
 #[test]
+fn image_model_endpoint_overrides_require_https_outside_loopback() {
+    use std::collections::HashMap;
+
+    for url in [
+        "http://images.example/v1",
+        "http://169.254.169.254/latest/meta-data",
+        "http://localhost.bad.example/v1",
+        "http://10.0.0.20:8080/v1",
+    ] {
+        assert!(
+            super::normalize_fleet_config(Some(url.to_owned()), HashMap::new(), None).is_err(),
+            "unsafe HTTP image group endpoint accepted: {url}"
+        );
+        let mut overrides = HashMap::new();
+        overrides.insert("vision".to_owned(), url.to_owned());
+        assert!(
+            super::normalize_fleet_config(None, overrides, None).is_err(),
+            "unsafe HTTP per-model endpoint accepted: {url}"
+        );
+    }
+    for url in [
+        "http://localhost:4000/v1",
+        "http://127.0.0.2:4000/v1",
+        "http://[::1]:4000/v1",
+        "https://images.example/v1",
+    ] {
+        assert!(
+            super::normalize_fleet_config(Some(url.to_owned()), HashMap::new(), None).is_ok(),
+            "safe image endpoint rejected: {url}"
+        );
+    }
+}
+
+#[test]
+fn qnml_codec_defaults_to_native_and_rejects_unknown_wire_formats() {
+    use crate::config::schema::cloud_providers::{CloudProviderCreds, ToolCallCodec};
+
+    let legacy: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "existing-gateway",
+        "endpoint": "https://gateway.example/v1"
+    }))
+    .unwrap();
+    assert_eq!(legacy.tool_call_codec, ToolCallCodec::Native);
+    assert!(
+        serde_json::to_value(&legacy)
+            .unwrap()
+            .get("tool_call_codec")
+            .is_none(),
+        "a legacy config should not acquire a new serialized default"
+    );
+
+    let opted: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "qwen-gateway",
+        "endpoint": "http://127.0.0.1:4000/v1",
+        "tool_call_codec": "qnml"
+    }))
+    .unwrap();
+    assert_eq!(opted.tool_call_codec, ToolCallCodec::Qnml);
+    let tagged: CloudProviderCreds = serde_json::from_value(serde_json::json!({
+        "slug": "tagged-gateway",
+        "endpoint": "https://compat.example/v1",
+        "tool_call_codec": "tagged_json"
+    }))
+    .unwrap();
+    assert_eq!(tagged.tool_call_codec, ToolCallCodec::TaggedJson);
+    assert_eq!(
+        serde_json::to_value(&tagged).unwrap()["tool_call_codec"],
+        "tagged_json"
+    );
+    assert_eq!(
+        serde_json::to_value(&opted).unwrap()["tool_call_codec"],
+        "qnml"
+    );
+
+    let unknown: Result<CloudProviderCreds, _> = serde_json::from_value(serde_json::json!({
+        "slug": "qwen-gateway",
+        "tool_call_codec": "execute_arbitrary_text"
+    }));
+    assert!(unknown.is_err(), "unsupported tool codecs must fail closed");
+}
+
+#[test]
 fn additional_fork_cloud_presets_are_represented_exactly_once() {
     for slug in [
         "tokendance",
@@ -382,6 +557,33 @@ fn additional_fork_cloud_presets_are_represented_exactly_once() {
             .collect();
         assert_eq!(rows.len(), 1, "{slug} must have one canonical preset");
         assert_eq!(rows[0].auth_style, AuthStyle::Bearer);
+    }
+}
+
+#[test]
+fn verified_peer_compatible_presets_have_expected_bearer_routes() {
+    for (slug, endpoint) in [
+        ("aionlabs", "https://api.aionlabs.ai/v1"),
+        ("sambanova", "https://api.sambanova.ai/v1"),
+        ("ovhcloud", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"),
+        ("nebius", "https://api.tokenfactory.nebius.com/v1"),
+        ("llm7", "https://api.llm7.io/v1"),
+        ("synthetic", "https://api.synthetic.new/openai/v1"),
+    ] {
+        let preset = super::builtin_cloud_provider(slug).expect("verified peer preset");
+        assert_eq!(preset.endpoint, endpoint, "{slug} endpoint");
+        assert_eq!(preset.auth_style, AuthStyle::Bearer, "{slug} authentication");
+        let supports_responses = slug == "nebius";
+        assert_eq!(
+            builtin_cloud_supports_responses_api(slug),
+            supports_responses,
+            "{slug} Responses-API capability"
+        );
+        assert_eq!(
+            endpoint_host_is_chat_completions_only(endpoint),
+            !supports_responses,
+            "{slug} endpoint fallback gate"
+        );
     }
 }
 
@@ -412,4 +614,51 @@ fn prodex_gateway_is_a_builtin_responses_capable_bearer_provider() {
         !endpoint_host_is_chat_completions_only(preset.endpoint),
         "must not treat gateway as chat-only"
     );
+}
+
+#[test]
+fn peer_router_key_only_provider_presets_keep_transport_parity() {
+    for (slug, label, endpoint) in [
+        ("cohere", "Cohere", "https://api.cohere.ai/compatibility/v1"),
+        ("tokenrouter", "TokenRouter", "https://api.tokenrouter.io/v1"),
+        ("byteplus-modelark-ap", "BytePlus ModelArk (Asia Pacific)", "https://ark.ap-southeast.bytepluses.com/api/v3"),
+        ("byteplus-modelark-eu", "BytePlus ModelArk (Europe)", "https://ark.eu-west.bytepluses.com/api/v3"),
+    ] {
+        let provider = super::builtin_cloud_provider(slug).expect("key-based peer preset");
+        assert_eq!(provider.label, label);
+        assert_eq!(provider.endpoint, endpoint);
+        assert_eq!(provider.auth_style, AuthStyle::Bearer);
+        assert!(!builtin_cloud_supports_responses_api(slug),
+            "unverified Responses API support must not enable that transport");
+    }
+}
+
+
+#[test]
+fn image_routes_reject_embedded_control_characters_before_url_normalization() {
+    use std::collections::HashMap;
+    // RFC/WHATWG URL parsers may discard embedded horizontal tabs and line
+    // breaks. The endpoint used with a bearer key must not be silently altered.
+    for endpoint in [
+        "https://images.example/v1/\timage",
+        "https://images.example/v1/\nimage",
+        "http://127.0.0.1:8080/v1/\rimage",
+    ] {
+        assert!(
+            super::normalize_fleet_config(Some(endpoint.to_owned()), HashMap::new(), None).is_err(),
+            "provider image endpoint normalized embedded controls: {endpoint:?}"
+        );
+        let mut per_model = HashMap::new();
+        per_model.insert("vision".to_owned(), endpoint.to_owned());
+        assert!(
+            super::normalize_fleet_config(None, per_model, None).is_err(),
+            "model image route normalized embedded controls: {endpoint:?}"
+        );
+    }
+    assert!(super::normalize_fleet_config(
+        Some("https://images.example/v1".to_owned()), HashMap::new(), None
+    ).is_ok());
+    assert!(super::normalize_fleet_config(
+        Some("http://[::1]:8080/v1".to_owned()), HashMap::new(), None
+    ).is_ok());
 }

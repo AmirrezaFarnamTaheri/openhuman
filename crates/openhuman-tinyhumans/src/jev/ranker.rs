@@ -7,7 +7,7 @@ use std::{
     sync::Mutex,
 };
 
-use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{future::Future, pin::Pin, sync::Arc, time::{Duration, Instant}};
 
 use openhuman_embed::__host::agent::tinyagents::discovery::{
     embedding_provider_is_usable, embedding_tool_ranker_in,
@@ -44,6 +44,47 @@ pub struct TinyHumansJevRanker {
     /// a stalled proxy into a BM25 fallback inside the turn.
     deadline: Duration,
     cached: Mutex<Option<Cached>>,
+    circuit: Mutex<JevCircuit>,
+}
+const JEV_FAILURE_LIMIT: u8 = 3;
+const JEV_CIRCUIT_COOLDOWN: Duration = Duration::from_secs(20);
+
+/// A route-scoped, ephemeral breaker. All permission/credential checks still
+/// happen in current(), so an open circuit cannot bypass authorization.
+#[derive(Debug, Default)]
+struct JevCircuit {
+    route: Option<u64>,
+    failures: u8,
+    open_until: Option<Instant>,
+}
+impl JevCircuit {
+    fn can_attempt(&mut self, route: u64, now: Instant) -> bool {
+        if self.route != Some(route) {
+            self.route = Some(route);
+            self.failures = 0;
+            self.open_until = None;
+        }
+        if let Some(until) = self.open_until {
+            if now < until { return false; }
+            self.open_until = None;
+            self.failures = 0;
+        }
+        true
+    }
+    fn record_failure(&mut self, route: u64, now: Instant) {
+        if self.route.is_none() { self.route = Some(route); }
+        if self.route != Some(route) { return; }
+        self.failures = self.failures.saturating_add(1);
+        if self.failures >= JEV_FAILURE_LIMIT {
+            self.open_until = Some(now + JEV_CIRCUIT_COOLDOWN);
+        }
+    }
+    fn record_success(&mut self, route: u64) {
+        if self.route == Some(route) {
+            self.failures = 0;
+            self.open_until = None;
+        }
+    }
 }
 
 /// Default per-evaluation deadline; see `TinyHumansJevRanker::deadline`.
@@ -92,6 +133,7 @@ impl TinyHumansJevRanker {
             env: Arc::new(route::process_env),
             deadline: DEFAULT_DEADLINE,
             cached: Mutex::new(None),
+            circuit: Mutex::new(JevCircuit::default()),
         }
     }
 
@@ -121,7 +163,7 @@ impl TinyHumansJevRanker {
     /// load, which a `tool_search` (one model round trip plus a network call)
     /// dwarfs, and the benefit is that sign-in, sign-out and a backend URL
     /// change are all honoured by the next search.
-    async fn current(&self) -> Result<JevRanker, RankError> {
+    async fn current(&self) -> Result<(JevRanker, u64), RankError> {
         let config = (self.load_config)()
             .await
             .map_err(|error| RankError::Backend {
@@ -141,7 +183,7 @@ impl TinyHumansJevRanker {
             .as_ref()
             .filter(|entry| entry.fingerprint == fingerprint)
         {
-            return Ok(entry.ranker.clone());
+            return Ok((entry.ranker.clone(), fingerprint));
         }
         let client_config = resolved.client;
         let client = Client::new(client_config)
@@ -174,7 +216,7 @@ impl TinyHumansJevRanker {
             ranker: ranker.clone(),
             retriever,
         });
-        Ok(ranker)
+        Ok((ranker, fingerprint))
     }
 }
 
@@ -234,10 +276,32 @@ impl ToolRanker for TinyHumansJevRanker {
         candidates: &[RankCandidate],
         limit: usize,
     ) -> Result<Vec<RankHit>, RankError> {
-        let ranker = self.current().await?;
-        let ranking = ranker
-            .rank_detailed(intent, context, candidates, limit)
-            .await?;
+        let (ranker, route_fingerprint) = self.current().await?;
+        {
+            let mut circuit = self.circuit.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !circuit.can_attempt(route_fingerprint, Instant::now()) {
+                return Err(RankError::backend(
+                    "System-One temporary circuit is open after repeated errors; use BM25 fallback",
+                ));
+            }
+        }
+        let ranking = match ranker.rank_detailed(intent, context, candidates, limit).await {
+            Ok(ranking) => {
+                self.circuit.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .record_success(route_fingerprint);
+                ranking
+            }
+            Err(error) => {
+                if matches!(&error, RankError::Timeout | RankError::Backend { .. }) {
+                    self.circuit.lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .record_failure(route_fingerprint, Instant::now());
+                }
+                return Err(error);
+            }
+        };
         log::debug!(
             "[tool-search] jev ranked {} of {} shown (families={:?} choice_confidence={:.2} needs_tool={:?} none={:.2} latency_ms={} attempts={} input_tokens={:?})",
             ranking.hits.len(),

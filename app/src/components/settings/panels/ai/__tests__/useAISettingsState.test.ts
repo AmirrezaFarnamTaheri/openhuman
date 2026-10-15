@@ -49,6 +49,35 @@ async function mountLoaded() {
 }
 
 describe('useAISettings().save — save-time provider re-probe', () => {
+  it('retains saved per-model routing through the panel client config round-trip', async () => {
+    api.loadAISettings.mockResolvedValueOnce({
+      cloudProviders: [{
+        id: 'p_mixed',
+        slug: 'mixed',
+        label: 'Mixed gateway',
+        endpoint: 'https://router.example/v1',
+        auth_style: 'bearer',
+        model_transports: { 'response-model': 'responses' },
+        has_api_key: true,
+      }],
+      routing: EMPTY_SETTINGS.routing,
+      modelRegistry: [],
+      defaultModel: '',
+    });
+    const { result } = await mountLoaded();
+    expect(result.current.saved.cloudProviders[0].modelTransports).toEqual({
+      'response-model': 'responses',
+    });
+    await act(async () => {
+      const saved = await result.current.save();
+      expect(saved).toBe(true);
+    });
+    expect(api.saveAISettings).toHaveBeenCalledTimes(1);
+    expect(api.saveAISettings.mock.calls[0][1].cloudProviders[0].model_transports).toEqual({
+      'response-model': 'responses',
+    });
+  });
+
   it('does not probe a claude-code (CLI login) provider', async () => {
     const { result } = await mountLoaded();
 

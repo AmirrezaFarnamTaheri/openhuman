@@ -7,7 +7,7 @@
  * stays trivially unit-testable.
  */
 import type { ModelRegistryEntry } from '../../../../services/api/aiSettingsApi';
-import type { AuthStyle } from '../../../../utils/tauriCommands/config';
+import type { AuthStyle, ModelTransport } from '../../../../utils/tauriCommands/config';
 import {
   authStyleForBuiltinCloudProvider,
   BUILTIN_CLOUD_PROVIDER_META,
@@ -28,7 +28,9 @@ export type CloudProvider = {
   maskedKey: string;
   imageEndpoint?: string;
   modelImageEndpoints?: Record<string, string>;
+  modelTransports?: Record<string, ModelTransport>;
   rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
+  toolCallCodec?: 'native' | 'qnml' | 'tagged_json';
   caCertPem?: string;
 };
 

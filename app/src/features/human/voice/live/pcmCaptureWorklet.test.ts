@@ -95,6 +95,45 @@ describe('pcm-capture-processor asset', () => {
     expect(view.getInt16(2, true)).toBe(Math.floor(0.25 * 0x7fff));
   });
 
+  it('keeps bounded per-quantum state instead of copying a carry buffer', () => {
+    const Ctor = loadProcessor(48_000)[PCM_CAPTURE_PROCESSOR_NAME];
+    const proc = new Ctor({ processorOptions: { targetSampleRate: 16_000, frameSamples: 1_600 } });
+    expect(proc).not.toHaveProperty('carry');
+    for (let i = 0; i < 10; i++) {
+      expect(proc.process([[new Float32Array(128).fill(0.5)]])).toBe(true);
+    }
+    expect(proc).not.toHaveProperty('carry');
+    expect(frames(proc)).toHaveLength(0);
+  });
+
+  it('transfers completed PCM frames rather than copying their ArrayBuffers', () => {
+    const Ctor = loadProcessor(16_000)[PCM_CAPTURE_PROCESSOR_NAME];
+    const proc = new Ctor({ processorOptions: { targetSampleRate: 16_000, frameSamples: 4 } });
+    proc.process([[new Float32Array([0, 0.5, -0.5, 0])]]);
+    const [frame] = frames(proc);
+    expect(proc.port.postMessage).toHaveBeenCalledWith(frame, [frame]);
+    expect(new Int16Array(frame)).toEqual(new Int16Array([0, 16383, -16384, 0]));
+  });
+
+  it('resamples 44.1 kHz identically across differently sized render quanta', () => {
+    const Ctor = loadProcessor(44_100)[PCM_CAPTURE_PROCESSOR_NAME];
+    const input = Float32Array.from(
+      { length: 44_100 },
+      (_, index) => Math.sin((2 * Math.PI * 1000 * index) / 44_100) * 0.5
+    );
+    const capture = (quantum: number) => {
+      const proc = new Ctor({ processorOptions: { targetSampleRate: 16_000, frameSamples: 1_600 } });
+      for (let i = 0; i < input.length; i += quantum) {
+        proc.process([[input.subarray(i, i + quantum)]]);
+      }
+      return frames(proc).map(frame => Array.from(new Int16Array(frame)));
+    };
+    const regular = capture(128);
+    expect(regular).toHaveLength(10);
+    expect(regular.every(frame => frame.length === 1600)).toBe(true);
+    expect(capture(53)).toEqual(regular);
+  });
+
   it('keeps running with no input connected', () => {
     const Ctor = loadProcessor(48_000)[PCM_CAPTURE_PROCESSOR_NAME];
     const proc = new Ctor(undefined);

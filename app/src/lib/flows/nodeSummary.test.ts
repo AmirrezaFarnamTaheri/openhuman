@@ -53,6 +53,8 @@ const STRINGS: Record<string, string> = {
   'flows.nodeSummary.memory.recall': 'Recalls memory',
   'flows.nodeSummary.dedup.withKey': 'Skips items already seen by {key}',
   'flows.nodeSummary.dedup.default': 'Skips items already processed',
+  'flows.nodeSummary.scatter': 'Run the following steps in parallel lanes',
+  'flows.nodeSummary.gather': 'Collect lane results in input order',
   'flows.cron.customSchedule': 'Custom schedule ({expr})',
   'flows.cron.noScheduleSet': 'No schedule set',
   'flows.cron.weekdays': 'weekdays',
@@ -153,6 +155,15 @@ describe('describeNode', () => {
       'Recalls memory (user)'
     );
     expect(describeNode('memory', { operation: 'search' }, [], t, locale)).toBe('Searches memory');
+  });
+
+  it('describes native scatter/gather controls without inventing parallel node kinds', () => {
+    expect(describeNode('scatter', { lanes: 8 }, [], t, locale)).toBe(
+      'Run the following steps in parallel lanes'
+    );
+    expect(describeNode('gather', { release: 'quorum' }, [], t, locale)).toBe(
+      'Collect lane results in input order'
+    );
   });
 
   it('describes dedup by its key expression, and falls back generically when unset', () => {

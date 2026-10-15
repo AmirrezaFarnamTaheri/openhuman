@@ -14,6 +14,7 @@ fn entry(slug: &str, endpoint: &str, auth_style: AuthStyle) -> CloudProviderCred
 fn build<'a>(entry: &CloudProviderCreds, model: &str, key: &'a str) -> CloudBuild<'a> {
     CloudBuild {
         spec: cloud_provider_spec(entry, model),
+        transport: entry.model_transport(model),
         auth_style: registry_auth_style(entry.auth_style).expect("not managed"),
         key,
         temperature_override: None,
@@ -114,4 +115,89 @@ fn prodex_gateway_discovers_models_with_the_scoped_virtual_key() {
         .headers
         .iter()
         .any(|(key, value)| { key == "Authorization" && value == "Bearer vk-scoped" }));
+}
+
+#[test]
+fn explicit_responses_transport_is_model_scoped_and_changes_the_native_route() {
+    use crate::config::schema::cloud_providers::ModelTransport;
+    let mut creds = entry("mixed", "https://router.example/v1", AuthStyle::Bearer);
+    creds.model_transports.insert("response-model".into(), ModelTransport::Responses);
+    creds.model_transports.insert("chat-model".into(), ModelTransport::ChatCompletions);
+    let responses = build_cloud_model(build(&creds, "response-model", "scoped-key")).unwrap();
+    let chat = build_cloud_model(build(&creds, "chat-model", "scoped-key")).unwrap();
+    let fallback = build_cloud_model(build(&creds, "unconfigured-model", "scoped-key")).unwrap();
+    assert!(
+        responses.profile().unwrap().hoists_system_messages,
+        "the Responses adapter must use Responses-specific system handling"
+    );
+    assert!(!chat.profile().unwrap().hoists_system_messages);
+    assert!(!fallback.profile().unwrap().hoists_system_messages);
+}
+
+#[test]
+fn explicit_transport_fails_closed_for_noncompatible_auth_or_codex_oauth() {
+    use crate::config::schema::cloud_providers::ModelTransport;
+    let anthropic = entry("anthropic", "https://api.anthropic.com/v1", AuthStyle::Anthropic);
+    let mut invalid = build(&anthropic, "claude", "sk-ant");
+    invalid.transport = ModelTransport::Responses;
+    assert!(build_cloud_model(invalid).is_err());
+
+    let openai = entry("openai", "https://api.openai.com/v1", AuthStyle::Bearer);
+    let oauth = OpenAiCodexRouting {
+        endpoint: "https://chatgpt.com/backend-api/codex".into(),
+        using_oauth: true,
+        account_id: None,
+    };
+    let mut invalid = build(&openai, "gpt", "oauth-token");
+    invalid.codex = Some(&oauth);
+    invalid.transport = ModelTransport::ChatCompletions;
+    assert!(build_cloud_model(invalid).is_err());
+}
+
+#[tokio::test]
+async fn explicit_model_transport_uses_the_selected_wire_path() {
+    use crate::config::schema::cloud_providers::ModelTransport;
+    use std::time::Duration;
+    use tinyinference_llm::message::Message;
+    use tinyinference_llm::model::ModelRequest;
+
+    let (sender, mut receiver) = tokio::sync::mpsc::channel::<String>(4);
+    let app = axum::Router::new().fallback(move |uri: axum::http::Uri| {
+        let sender = sender.clone();
+        async move {
+            sender.send(uri.path().to_owned()).await.unwrap();
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                axum::Json(serde_json::json!({
+                    "error": { "message": "test fixture stop", "type": "invalid_request_error" }
+                })),
+            )
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let mut creds = entry("mixed-api", &endpoint, AuthStyle::Bearer);
+    creds.model_transports.insert("use-responses".into(), ModelTransport::Responses);
+    creds.model_transports.insert("use-chat".into(), ModelTransport::ChatCompletions);
+    for (model_id, expected) in [
+        ("use-responses", "/v1/responses"),
+        ("use-chat", "/v1/chat/completions"),
+        ("unconfigured", "/v1/chat/completions"),
+    ] {
+        let model = build_cloud_model(build(&creds, model_id, "sk-test")).unwrap();
+        let _ = model.invoke(&(), ModelRequest {
+            messages: vec![Message::user("ping")],
+            ..Default::default()
+        }).await;
+        let actual = tokio::time::timeout(Duration::from_secs(5), receiver.recv())
+            .await
+            .expect("provider request did not reach local test listener")
+            .expect("listener closed unexpectedly");
+        assert_eq!(actual, expected, "model {model_id} used wrong wire API");
+    }
+    server.abort();
 }

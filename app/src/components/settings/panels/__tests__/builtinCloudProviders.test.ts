@@ -28,10 +28,50 @@ describe('builtinCloudProviders', () => {
       'bearer',
     ],
     ['llmtr', 'https://llmtr.com/v1', 'bearer'],
+    ['9router', 'http://127.0.0.1:20128/v1', 'bearer'],
     ['prodex', 'http://127.0.0.1:4000/v1', 'bearer'],
   ] as const)('maps %s to its endpoint and auth style', (slug, endpoint, authStyle) => {
     expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
     expect(authStyleForBuiltinCloudProvider(slug)).toBe(authStyle);
+  });
+
+
+  it.each([
+    ['aionlabs', 'https://api.aionlabs.ai/v1'],
+    ['sambanova', 'https://api.sambanova.ai/v1'],
+    ['ovhcloud', 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1'],
+    ['nebius', 'https://api.tokenfactory.nebius.com/v1'],
+    ['llm7', 'https://api.llm7.io/v1'],
+    ['synthetic', 'https://api.synthetic.new/openai/v1'],
+  ] as const)('registers verified peer endpoint %s with bearer authentication', (slug, endpoint) => {
+    expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
+    expect(authStyleForBuiltinCloudProvider(slug)).toBe('bearer');
+  });
+
+  it('treats a local 9Router gateway as an optional external integration, not a saved account', () => {
+    const router = BUILTIN_CLOUD_PROVIDERS.find(provider => provider.slug === '9router');
+    expect(router).toMatchObject({
+      endpoint: 'http://127.0.0.1:20128/v1',
+      authStyle: 'bearer',
+      keyPlaceholder: '9Router inference API key',
+    });
+    expect(router).not.toHaveProperty('defaultApiKey');
+    expect(router?.endpoint).not.toMatch(/0\.0\.0\.0/);
+  });
+
+  it.each([
+    ['hyperbolic', 'https://api.hyperbolic.xyz/v1'],
+    ['chutes', 'https://llm.chutes.ai/v1'],
+    ['featherless', 'https://api.featherless.ai/v1'],
+    ['poolside', 'https://inference.poolside.ai/v1'],
+    ['morph', 'https://api.morphllm.com/v1'],
+    ['perplexity', 'https://api.perplexity.ai'],
+    ['tencent-hunyuan', 'https://api.hunyuan.cloud.tencent.com/v1'],
+    ['xiaomi-mimo', 'https://api.xiaomimimo.com/v1'],
+  ] as const)('maps 9Router peer API-key preset %s to an explicit secure base URL', (slug, endpoint) => {
+    expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
+    expect(authStyleForBuiltinCloudProvider(slug)).toBe('bearer');
+    expect(endpoint.startsWith('https://')).toBe(true);
   });
 
   it('prompts for a least-privilege inference key, not an administrator token', () => {
@@ -67,3 +107,14 @@ describe('builtinCloudProviders', () => {
     );
   });
 });
+
+  it.each([
+    ['cohere', 'Cohere', 'https://api.cohere.ai/compatibility/v1'],
+    ['tokenrouter', 'TokenRouter', 'https://api.tokenrouter.io/v1'],
+    ['byteplus-modelark-ap', 'BytePlus ModelArk (Asia Pacific)', 'https://ark.ap-southeast.bytepluses.com/api/v3'],
+    ['byteplus-modelark-eu', 'BytePlus ModelArk (Europe)', 'https://ark.eu-west.bytepluses.com/api/v3'],
+  ] as const)('exposes peer provider %s with documented compatible transport', (slug, label, endpoint) => {
+    const entry = BUILTIN_CLOUD_PROVIDERS.find(provider => provider.slug === slug);
+    expect(entry).toMatchObject({ label, endpoint, authStyle: 'bearer' });
+    expect(defaultEndpointForBuiltinCloudProvider(slug)).toBe(endpoint);
+  });

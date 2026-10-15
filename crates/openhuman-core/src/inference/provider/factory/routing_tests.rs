@@ -111,6 +111,22 @@ fn default_model_without_explicit_provider_keeps_managed_fallback() {
     }
 }
 
+/// Synthetic's recommended model aliases use colons inside the model ID.
+/// Only the first colon separates the provider slug; subsequent colons are
+/// opaque model syntax and must not be lost or interpreted as another provider.
+#[test]
+fn picked_synthetic_model_preserves_nested_colon_alias() {
+    let mut config = config_with_byok_provider();
+    config.cloud_providers[0].slug = "synthetic".to_string();
+    config.default_model = Some("synthetic:syn:large:text".to_string());
+
+    assert_eq!(
+        provider_for_role("chat", &config),
+        "synthetic:syn:large:text",
+        "provider selection must preserve a provider-native model alias"
+    );
+}
+
 /// A local runtime pick (`ollama:...`) routes the chat turn locally instead
 /// of the managed backend — same mechanism, no cloud provider involved.
 #[test]

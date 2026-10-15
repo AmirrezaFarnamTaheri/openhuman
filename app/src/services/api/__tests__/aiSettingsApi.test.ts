@@ -689,6 +689,59 @@ describe('saveAISettings', () => {
     expect(patch.cloud_providers![0].auth_style).toBe('anthropic');
   });
 
+  it('persists QNML tool-call compatibility and a later opt-out without losing provider settings', async () => {
+    const prev = makeSettings();
+    const enabled = makeSettings({
+      cloudProviders: [
+        {
+          ...prev.cloudProviders[0],
+          tool_call_codec: 'qnml',
+          image_endpoint: 'https://vision.example/v1',
+          rotation_strategy: 'least_busy',
+        },
+      ],
+    });
+    await saveAISettings(prev, enabled);
+    let patch = mockOpenhumanUpdateModelSettings.mock.calls[0][0];
+    expect(patch.cloud_providers?.[0]).toMatchObject({
+      tool_call_codec: 'qnml',
+      image_endpoint: 'https://vision.example/v1',
+      rotation_strategy: 'least_busy',
+    });
+
+    mockOpenhumanUpdateModelSettings.mockClear();
+    const disabled = makeSettings({
+      cloudProviders: [{ ...enabled.cloudProviders[0], tool_call_codec: 'native' }],
+    });
+    await saveAISettings(enabled, disabled);
+    patch = mockOpenhumanUpdateModelSettings.mock.calls[0][0];
+    expect(patch.cloud_providers?.[0].tool_call_codec).toBe('native');
+    expect(patch.cloud_providers?.[0].rotation_strategy).toBe('least_busy');
+  });
+
+  it('persists per-model protocol overrides and removes them on explicit reset', async () => {
+    const prev = makeSettings();
+    const mixed = makeSettings({
+      cloudProviders: [{
+        ...prev.cloudProviders[0],
+        model_transports: { 'response-model': 'responses' },
+      }],
+    });
+    await saveAISettings(prev, mixed);
+    expect(mockOpenhumanUpdateModelSettings.mock.calls[0][0].cloud_providers?.[0]).toMatchObject({
+      model_transports: { 'response-model': 'responses' },
+      slug: prev.cloudProviders[0].slug,
+      endpoint: prev.cloudProviders[0].endpoint,
+    });
+    mockOpenhumanUpdateModelSettings.mockClear();
+    const reset = makeSettings({
+      cloudProviders: [{ ...mixed.cloudProviders[0], model_transports: {} }],
+    });
+    await saveAISettings(mixed, reset);
+    expect(mockOpenhumanUpdateModelSettings.mock.calls[0][0].cloud_providers?.[0]
+      .model_transports).toEqual({});
+  });
+
   it('sends both providers and routing when both change', async () => {
     const prev = makeSettings({ cloudProviders: [] });
     const next = makeSettings({
@@ -1378,5 +1431,35 @@ describe('credential-group model catalogue verification', () => {
   it('propagates exhausted key-pool authentication failure', async () => {
     mockCallCoreRpc.mockRejectedValue(new Error('provider returned 401: invalid API key'));
     await expect(probeProviderModelFleet('openai')).rejects.toThrow(/401/);
+  });
+});
+
+describe('public model catalog cannot authenticate a provider-editor credential', () => {
+  beforeEach(() => mockCallCoreRpc.mockReset());
+
+  it('rejects public listings when a bearer key is being configured', async () => {
+    mockCallCoreRpc.mockResolvedValue({
+      result: { models: [{ id: 'public' }],
+        fleet_probe: { authenticated: false, checked_keys: 1, rejected_keys: 0 } },
+    });
+    await expect(listProviderModels('chutes', 'wrong-key', {
+      slug: 'chutes', auth_style: 'bearer', endpoint: 'https://llm.chutes.ai/v1',
+    } as Parameters<typeof listProviderModels>[2])).rejects.toThrow(/publicly accessible/i);
+  });
+
+  it('accepts evidence of authenticated catalogue access', async () => {
+    mockCallCoreRpc.mockResolvedValue({
+      result: { models: [{ id: 'private' }],
+        fleet_probe: { authenticated: true, checked_keys: 1, rejected_keys: 0 } },
+    });
+    const models = await listProviderModels('private', 'good-key', {
+      slug: 'private', auth_style: 'bearer', endpoint: 'https://example.com/v1',
+    } as Parameters<typeof listProviderModels>[2]);
+    expect(models).toHaveLength(1);
+  });
+
+  it('does not require key proof when simply browsing model names', async () => {
+    mockCallCoreRpc.mockResolvedValue({ result: { models: [{ id: 'public' }] } });
+    await expect(listProviderModels('chutes')).resolves.toHaveLength(1);
   });
 });

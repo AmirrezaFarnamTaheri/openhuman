@@ -52,21 +52,29 @@ pub(super) fn prodex_gateway_endpoint_is_safe(endpoint: &str) -> bool {
     }
 }
 
-/// Validate *all* destinations that could receive the Prodex virtual key.
-/// Image-model overrides share its credential and must respect the same TLS/loopback
-/// and URL-userinfo policy, even if not selected by the current model.
-pub(super) fn prodex_gateway_destinations_are_safe(
+/// Any image route can receive this provider's scoped credential. The
+/// config-file loading path must not bypass the settings/RPC HTTPS rule.
+/// Validate even currently unused model overrides: future model switches must
+/// not silently expose an already-stored key over remote cleartext HTTP.
+pub(super) fn image_destinations_are_safe(
     entry: &crate::config::schema::cloud_providers::CloudProviderCreds,
 ) -> bool {
-    prodex_gateway_endpoint_is_safe(&entry.endpoint)
-        && entry
-            .image_endpoint
-            .as_deref()
-            .is_none_or(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
+    entry
+        .image_endpoint
+        .as_deref()
+        .is_none_or(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
         && entry
             .model_image_endpoints
             .values()
             .all(|url| url.trim().is_empty() || prodex_gateway_endpoint_is_safe(url.trim()))
+}
+
+/// Prodex also requires a protected main gateway origin because its virtual
+/// key is not a general-purpose direct provider credential.
+pub(super) fn prodex_gateway_destinations_are_safe(
+    entry: &crate::config::schema::cloud_providers::CloudProviderCreds,
+) -> bool {
+    prodex_gateway_endpoint_is_safe(&entry.endpoint) && image_destinations_are_safe(entry)
 }
 
 /// The downstream gateway owns provider/account selection and sticky retry
@@ -118,6 +126,21 @@ pub(super) fn resolve_cloud_slug<'a>(
     if slug == "prodex" && !prodex_gateway_destinations_are_safe(entry) {
         anyhow::bail!(
             "[chat-factory] Prodex gateway endpoints require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
+        );
+    }
+    if !image_destinations_are_safe(entry) {
+        anyhow::bail!(
+            "[chat-factory] image endpoint overrides require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
+        );
+    }
+    // This is not Prodex-specific: every Bearer/Anthropic direct-provider
+    // route can forward a stored account secret. Validate the main endpoint
+    // even for config.toml imports and dormant model profiles.
+    if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        && !prodex_gateway_endpoint_is_safe(&entry.endpoint)
+    {
+        anyhow::bail!(
+            "[chat-factory] credentialed provider endpoints require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
         );
     }
 
@@ -250,6 +273,15 @@ pub(super) fn resolve_cloud_slug<'a>(
     let bearer_is_oauth = slug == "openai" && openai_bearer_is_oauth(config);
     let codex = resolve_openai_codex_routing(config, slug, &entry.endpoint, &key, bearer_is_oauth)
         .map_err(anyhow::Error::msg)?;
+    // Re-check the actual endpoint after Codex routing, not just the saved
+    // base, so an alternate transport cannot downgrade the credential.
+    if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        && !prodex_gateway_endpoint_is_safe(cloud_base_url(entry, &codex))
+    {
+        anyhow::bail!(
+            "[chat-factory] resolved credential endpoint requires HTTPS or loopback HTTP"
+        );
+    }
 
     Ok(CloudSlugResolution {
         entry,
@@ -526,23 +558,30 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         crate::security::egress::EgressDescriptor::inference(&slug, &effective_model, true),
     );
 
-    let http = match config
-        .cloud_provider_ca_certs
-        .get(&slug)
-        .filter(|pem| !pem.is_empty())
-    {
-        Some(pem) => {
-            let label = if anthropic_native {
-                "provider.anthropic"
-            } else {
-                "provider.compatible"
-            };
-            match crate::util::tls::client_with_ca_bundle(pem, label) {
-                Ok(http) => Some(http),
-                Err(error) => return Some(Err(anyhow::anyhow!(error))),
-            }
-        }
-        None => None,
+    // Always pin credentialed native inference requests to their configured
+    // origin. Redirects could carry custom authentication headers (x-api-key)
+    // to another URL, because reqwest only strips a fixed header allowlist.
+    // This preserves platform TLS, user proxy routing and optional private CAs.
+    let service_key = if anthropic_native {
+        "provider.anthropic"
+    } else {
+        "provider.compatible"
+    };
+    let http = match crate::util::tls::credentialed_client_builder(
+        service_key,
+        config
+            .cloud_provider_ca_certs
+            .get(&slug)
+            .map(String::as_str)
+            .filter(|pem| !pem.is_empty()),
+    )
+    .and_then(|builder| {
+        builder
+            .build()
+            .map_err(|_| "Could not build secure provider inference HTTP client".to_string())
+    }) {
+        Ok(client) => Some(client),
+        Err(error) => return Some(Err(anyhow::anyhow!(error))),
     };
     let auth_style = cloud_spec::registry_auth_style(entry.auth_style)
         .expect("managed JWT entries returned above");
@@ -575,8 +614,9 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
                 headers.push((OPENAI_CODEX_ACCOUNT_HEADER.to_owned(), id.to_owned()));
             }
         }
-        cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
+        let native = cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
             spec,
+            transport: entry.model_transport(&effective_model),
             auth_style: auth_style.clone(),
             key: credential,
             temperature_override,
@@ -587,7 +627,15 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             user_agent: user_agent.as_deref(),
             codex: account_route.as_ref().or(codex_route),
             http: http.clone(),
-        })
+        })?;
+        if entry.tool_call_codec.is_native() {
+            Ok(native)
+        } else {
+            Ok(Arc::new(super::tool_markup::TextToolCompatModel::new(
+                native,
+                entry.tool_call_codec,
+            )))
+        }
     };
     let models: Vec<Arc<dyn ChatModel<()>>> = match keys
         .iter()

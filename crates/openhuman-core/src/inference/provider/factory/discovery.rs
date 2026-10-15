@@ -70,6 +70,7 @@ pub(crate) fn model_limits_request(
     let (extra_headers, temperature_unsupported) = (Vec::new(), Vec::new());
     super::cloud_spec::cloud_discovery_request(&super::cloud_spec::CloudBuild {
         spec: super::cloud_spec::cloud_provider_spec(resolution.entry, &resolution.effective_model),
+        transport: resolution.entry.model_transport(&resolution.effective_model),
         auth_style,
         key: resolution.key.as_str(),
         temperature_override: None,

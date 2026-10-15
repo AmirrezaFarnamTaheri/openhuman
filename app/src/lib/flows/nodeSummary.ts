@@ -175,6 +175,10 @@ export function describeNode(
       }
       return t('flows.nodeSummary.loop.upTo').replace('{max}', String(max ?? 25));
     }
+    case 'scatter':
+      return t('flows.nodeSummary.scatter');
+    case 'gather':
+      return t('flows.nodeSummary.gather');
     default:
       return '';
   }

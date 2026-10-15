@@ -31,7 +31,10 @@ use tinyinference_llm::catalog::{
 #[cfg(test)]
 use catalog_listing::resolve_local_runtime_key;
 
-pub use catalog_listing::{list_configured_models, list_configured_models_from_config};
+pub use catalog_listing::{
+    list_configured_models, list_configured_models_from_config,
+    list_configured_models_with_candidate_key,
+};
 pub use local_runtime::synthesize_local_runtime_entry;
 
 // Cross-submodule wiring: each submodule reaches these through `use super::*;`

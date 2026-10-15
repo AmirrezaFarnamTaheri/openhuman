@@ -93,3 +93,107 @@ pub(super) fn container_environment() -> Option<std::collections::BTreeMap<Strin
     }
     Some(env)
 }
+
+/// Recognize only a simple top-level test/build/lint invocation whose OS
+/// process exit is propagated by the shell tool. Deliberately conservative:
+/// pipes, redirections, quoting, shell expansion and chained commands are
+/// excluded because a green wrapper may hide a failed check.
+/// A stable, low-cardinality command *category*, never a command string.
+/// This lets the journal distinguish "tests failed then formatter passed"
+/// from "tests failed then tests were rerun successfully" without storing
+/// arguments, paths, stdout, stderr, credentials or hashes.
+fn verification_kind(command: &str) -> Option<&'static str> {
+    let source = command.trim();
+    if source.is_empty()
+        || source.chars().any(|c| {
+            matches!(c, '|' | '&' | ';' | '<' | '>' | '$' | '\x60' | '\\' | '\'' | '"' | '#' | '\n' | '\r')
+        })
+    {
+        return None;
+    }
+    let args: Vec<&str> = source.split_whitespace().collect();
+    if args.iter().any(|arg| {
+        matches!(
+            *arg,
+            "-h" | "-V" | "--help" | "--version" | "--list" |
+            "-list" | "--collect-only" | "--no-run" | "--dry-run" |
+            "--if-present" | "--passWithNoTests"
+        )
+    }) {
+        return None;
+    }
+    match args.as_slice() {
+        ["cargo", "test", ..] => Some("cargo_test"),
+        ["cargo", "check", ..] => Some("cargo_check"),
+        ["cargo", "clippy", ..] => Some("cargo_clippy"),
+        ["cargo", "build", ..] => Some("cargo_build"),
+        ["cargo", "fmt", "--check", ..] => Some("cargo_fmt"),
+        ["pytest", ..] | ["python" | "python3", "-m", "pytest", ..] => Some("pytest"),
+        ["python" | "python3", "-m", "unittest", ..] => Some("python_unittest"),
+        ["go", "test", ..] => Some("go_test"),
+        ["go", "vet", ..] => Some("go_vet"),
+        ["go", "build", ..] => Some("go_build"),
+        ["node", "--test", ..] => Some("node_test"),
+        ["pnpm", "test", ..] => Some("pnpm_test"),
+        ["pnpm", "lint", ..] => Some("pnpm_lint"),
+        ["pnpm", "build", ..] => Some("pnpm_build"),
+        ["pnpm", "exec", "vitest", "run", ..] => Some("vitest"),
+        ["npm", "test", ..] => Some("npm_test"),
+        ["npm", "run", "test", ..] => Some("npm_test"),
+        ["npm", "run", "build", ..] => Some("npm_build"),
+        ["npm", "run", "lint", ..] => Some("npm_lint"),
+        ["npm", "run", "typecheck", ..] => Some("npm_typecheck"),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+pub(super) fn is_verification_command(command: &str) -> bool {
+    verification_kind(command).is_some()
+}
+
+/// Host-only observation integrated into the existing TinyAgents ToolCompleted
+/// event and durable journal, NOT the model's tool-result text. No command
+/// string, CLI argument, output, key, or potentially sensitive hash is stored.
+/// This is a *local check observation*, not task verification/CI freshness.
+pub(super) fn append_verification_receipt(
+    result: &mut ToolResult,
+    command: &str,
+    authorized: bool,
+) {
+    let Some(check_kind) = verification_kind(command) else {
+        return;
+    };
+    let passed = authorized && !result.is_error;
+    let status = if !authorized {
+        "not_executed"
+    } else if passed {
+        "passed"
+    } else {
+        "failed_or_unobserved"
+    };
+    let fact = serde_json::json!({
+        "recognized": true,
+        "check_kind": check_kind,
+        "passed": passed,
+        "status": status,
+        "exit_status": if passed { "zero" } else { "unknown" },
+        "scope": "local_check_only",
+        "task_verified": false
+    });
+    match result.metadata.as_mut() {
+        Some(serde_json::Value::Object(existing)) => {
+            existing.insert("openhuman_local_check_v1".to_owned(), fact);
+        }
+        Some(_) => {
+            // Preserve unrelated non-object metadata rather than overwriting it.
+        }
+        None => {
+            result.metadata = Some(serde_json::json!({"openhuman_local_check_v1":fact}));
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "shell_verification_tests.rs"]
+mod verification_tests;

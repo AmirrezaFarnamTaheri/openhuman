@@ -30,6 +30,9 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { fleetTranslations } from "../app/src/lib/i18n/fleetTranslations";
+import { parallelFlowTranslations } from "../app/src/lib/i18n/parallelFlowTranslations";
+
 const __filename = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(__filename), "..");
 const I18N_DIR = path.join(ROOT, "app/src/lib/i18n");
@@ -179,7 +182,11 @@ function parseArgs(argv: string[]): CliOptions {
 async function loadLocale(locale: string): Promise<Record<string, string>> {
   const p = path.join(I18N_DIR, `${locale}.ts`);
   const mod = await import(pathToFileURL(p).href);
-  return mod.default as Record<string, string>;
+  return {
+    ...(mod.default as Record<string, string>),
+    ...(fleetTranslations[locale as keyof typeof fleetTranslations] ?? {}),
+    ...(parallelFlowTranslations[locale as keyof typeof parallelFlowTranslations] ?? {}),
+  };
 }
 
 /** Strip placeholders {…}, URLs, and bracketed/parenthetical literals, then return lowercase words. */

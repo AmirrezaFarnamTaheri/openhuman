@@ -1,7 +1,7 @@
 use super::shell_description::{command_param_description, shell_description};
 #[cfg(feature = "modules")]
 use super::shell_support::container_environment;
-use super::shell_support::{command_failure, exec_result, python_utf8_env, tool_timeout_message};
+use super::shell_support::{append_verification_receipt, command_failure, exec_result, python_utf8_env, tool_timeout_message};
 use crate::agent::host_runtime::RuntimeAdapter;
 use crate::config::Config;
 use crate::security::{AuditLogger, CommandExecutionLog, SecurityPolicy};
@@ -294,7 +294,7 @@ impl ShellTool {
         let requested_timeout = args.get("timeout_secs").and_then(|v| v.as_u64());
 
         let start = Instant::now();
-        let (allowed, result) = self
+        let (allowed, mut result) = self
             .run_with_security_in_context(command, requested_timeout, context)
             .await;
         let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -308,6 +308,10 @@ impl ShellTool {
         let approved = self.external_effect_with_args(&args);
         // emit_audit signature is (command, approved, allowed, …) — keep that order.
         self.emit_audit(command, approved, allowed, !result.is_error, duration_ms);
+        // Use the already-observed OS process outcome rather than a model's
+        // textual claim. Metadata is host-only, persisted through the same
+        // TinyAgents ToolCompleted event; no parallel verification store.
+        append_verification_receipt(&mut result, command, allowed);
         Ok(result)
     }
 }

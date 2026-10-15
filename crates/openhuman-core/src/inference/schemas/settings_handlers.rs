@@ -41,6 +41,13 @@ pub(super) struct InferenceCloudProviderUpdate {
     #[serde(default)]
     rotation_strategy: Option<String>,
     #[serde(default)]
+    tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
+    #[serde(default)]
+    model_transports: std::collections::HashMap<
+        String,
+        crate::config::schema::cloud_providers::ModelTransport,
+    >,
+    #[serde(default)]
     ca_cert_pem: Option<String>,
     // keep until v0.66 (review after 2027-01-11): incoming RPC discriminator
     // remains accepted until shipped-client parameter coverage exists.
@@ -87,6 +94,13 @@ pub(super) struct InferenceUpdateLocalSettingsParams {
 #[derive(Debug, Deserialize)]
 pub(super) struct InferenceListModelsParams {
     provider_id: String,
+    /// Optional one-shot BYOK candidate; never saved to the credential store.
+    #[serde(default)]
+    candidate_api_key: Option<String>,
+    #[serde(default)]
+    candidate_provider: Option<crate::config::schema::cloud_providers::CloudProviderCreds>,
+    #[serde(default)]
+    candidate_ca_cert_pem: Option<String>,
 }
 
 pub(super) fn handle_inference_resolve_model(params: Map<String, Value>) -> ControllerFuture {
@@ -272,6 +286,12 @@ pub(super) fn handle_inference_update_model_settings(
                                 image_endpoint,
                                 model_image_endpoints,
                                 rotation_strategy,
+                                tool_call_codec: entry.tool_call_codec,
+                                model_transports:
+                                    crate::config::schema::cloud_providers::normalize_model_transports_for_auth(
+                                        entry.model_transports,
+                                        auth_style,
+                                    )?,
                                 default_model: entry.default_model,
                             };
                             Ok(provider)
@@ -321,6 +341,17 @@ pub(super) fn handle_inference_update_local_settings(
 pub(super) fn handle_inference_list_models(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let request = deserialize_params::<InferenceListModelsParams>(params)?;
+        if request.candidate_api_key.is_some() || request.candidate_provider.is_some() {
+            return to_json(
+                crate::inference::provider::ops::list_configured_models_with_candidate_key(
+                    &request.provider_id,
+                    request.candidate_api_key.as_deref().unwrap_or(""),
+                    request.candidate_provider,
+                    request.candidate_ca_cert_pem,
+                )
+                .await?,
+            );
+        }
         to_json(crate::inference::rpc::inference_list_models(&request.provider_id).await?)
     })
 }
@@ -343,4 +374,74 @@ where
     D: Deserializer<'de>,
 {
     Value::deserialize(deserializer).map(Some)
+}
+
+#[cfg(test)]
+mod tool_codec_update_contract_tests {
+    use super::*;
+    use crate::config::schema::cloud_providers::ToolCallCodec;
+
+    #[test]
+    fn rpc_tool_codec_field_keeps_json_tagged_or_qnml_selection() {
+        for (wire, expected) in [
+            ("native", ToolCallCodec::Native),
+            ("qnml", ToolCallCodec::Qnml),
+            ("tagged_json", ToolCallCodec::TaggedJson),
+        ] {
+            let input: InferenceCloudProviderUpdate = serde_json::from_value(
+                serde_json::json!({
+                    "slug": "peer-gateway",
+                    "endpoint": "https://example.net/v1",
+                    "tool_call_codec": wire,
+                }),
+            )
+            .expect("valid codec name");
+            assert_eq!(input.tool_call_codec, expected);
+        }
+    }
+
+    #[test]
+    fn older_provider_update_payload_defaults_to_native_tool_calls() {
+        let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "legacy",
+            "endpoint": "https://example.net/v1"
+        }))
+        .unwrap();
+        assert_eq!(input.tool_call_codec, ToolCallCodec::Native);
+        assert!(input.model_transports.is_empty());
+    }
+
+    #[test]
+    fn rpc_model_transports_preserve_exact_model_ids_and_protocols() {
+        use crate::config::schema::cloud_providers::{normalize_model_transports, ModelTransport};
+
+        let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "mixed-gateway",
+            "endpoint": "https://example.net/v1",
+            "model_transports": {
+                "vendor/responses-v2": "responses",
+                "legacy-chat": "chat_completions",
+                "default": "auto"
+            }
+        }))
+        .expect("valid wire transport selection");
+
+        let routes = normalize_model_transports(input.model_transports).unwrap();
+        assert_eq!(routes["vendor/responses-v2"], ModelTransport::Responses);
+        assert_eq!(routes["legacy-chat"], ModelTransport::ChatCompletions);
+        assert_eq!(routes["default"], ModelTransport::Auto);
+    }
+
+    #[test]
+    fn rpc_model_transports_reject_invalid_ids_before_persistence() {
+        use crate::config::schema::cloud_providers::normalize_model_transports;
+
+        let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+            "slug": "mixed-gateway",
+            "endpoint": "https://example.net/v1",
+            "model_transports": {" padded-model ": "responses"}
+        }))
+        .expect("serde permits the key; normalization validates it");
+        assert!(normalize_model_transports(input.model_transports).is_err());
+    }
 }

@@ -17,6 +17,10 @@ use tinyinference_llm::model::{
 
 use super::key_pool::{self, KeyFailure, RotationStrategy};
 
+// Guard against amplifying a provider-wide 401/429 incident across the entire
+// configured key fleet. Four total attempts (initial + three fallbacks) per call.
+const MAX_KEY_ATTEMPTS_PER_CALL: usize = 4;
+
 /// Detect actual image input (not merely a vision-capable model).
 pub(super) fn request_has_image(request: &ModelRequest) -> bool {
     request.messages.iter().any(|message| {
@@ -37,6 +41,34 @@ struct RetryDecision {
     failure: KeyFailure,
     after_ms: Option<u64>,
 }
+/// A 403 is ambiguous: providers also return it for unsupported models,
+/// denied tools and malformed requests. Never evict a credential based on
+/// loose substring matches (e.g. `invalid_model`, `unauthorized_model`).
+/// Only documented credential-scoped code families permit another key.
+fn forbidden_key_failure(code: &str) -> Option<KeyFailure> {
+    match code.trim().to_ascii_lowercase().as_str() {
+        "invalid_api_key"
+        | "invalid_api_key_error"
+        | "api_key_invalid"
+        | "invalid_token"
+        | "invalid_credentials"
+        | "authentication_error"
+        | "unauthorized"
+        | "unauthorized_client"
+        | "revoked"
+        | "key_revoked"
+        | "api_key_revoked"
+        | "token_revoked" => Some(KeyFailure::Authentication),
+        "quota_exhausted"
+        | "quota_exceeded"
+        | "insufficient_quota"
+        | "resource_exhausted"
+        | "rate_limit_exceeded"
+        | "rate_limit_error"
+        | "rate_limited" => Some(KeyFailure::RateLimited),
+        _ => None,
+    }
+}
 fn classify(
     status: Option<u16>,
     code: Option<&str>,
@@ -45,22 +77,7 @@ fn classify(
     let failure = match status {
         Some(401) => KeyFailure::Authentication,
         Some(429) => KeyFailure::RateLimited,
-        Some(403)
-            if code.is_some_and(|c| {
-                let c = c.to_ascii_lowercase();
-                c.contains("invalid") || c.contains("unauthorized") || c.contains("revoked")
-            }) =>
-        {
-            KeyFailure::Authentication
-        }
-        Some(403)
-            if code.is_some_and(|c| {
-                let c = c.to_ascii_lowercase();
-                c.contains("quota") || c.contains("rate_limit") || c.contains("resource_exhausted")
-            }) =>
-        {
-            KeyFailure::RateLimited
-        }
+        Some(403) => forbidden_key_failure(code?)?,
         _ => return None,
     };
     Some(RetryDecision {
@@ -131,8 +148,8 @@ struct Lease {
     key: String,
 }
 impl Lease {
-    fn new(scope: &str, key: &str) -> Self {
-        key_pool::acquire(scope, key);
+    /// The key-pool selector has already reserved this active lease atomically.
+    fn from_reserved(scope: &str, key: &str) -> Self {
         Self {
             scope: scope.to_owned(),
             key: key.to_owned(),
@@ -198,7 +215,14 @@ impl ChatModel<()> for CredentialFleetModel {
         self.models.first().and_then(|model| model.profile())
     }
     fn supports_input(&self, modality: InputModality, mime: &str, source: InputSource) -> bool {
-        let models = self.image_models.as_ref().unwrap_or(&self.models);
+        // An alternate image route is only selected when the request actually
+        // carries an image. Audio/video/document inputs still use the primary
+        // models, so capability probes must reflect that same route.
+        let models = if modality == InputModality::Image {
+            self.image_models.as_ref().unwrap_or(&self.models)
+        } else {
+            &self.models
+        };
         models
             .first()
             .is_some_and(|model| model.supports_input(modality, mime, source))
@@ -214,18 +238,24 @@ impl ChatModel<()> for CredentialFleetModel {
         let image = request_has_image(&request);
         let mut tried = Vec::new();
         let mut last_error = None;
-        while let Some((index, key)) = key_pool::choose_key_for_run(
-            &self.scope,
-            &self.keys,
-            &tried,
-            self.strategy,
-            request
-                .correlation
-                .as_ref()
-                .map(|correlation| correlation.run_id.as_str()),
-        ) {
+        loop {
+            if tried.len() >= MAX_KEY_ATTEMPTS_PER_CALL {
+                break;
+            }
+            let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
+                &self.scope,
+                &self.keys,
+                &tried,
+                self.strategy,
+                request
+                    .correlation
+                    .as_ref()
+                    .map(|correlation| correlation.run_id.as_str()),
+            ) else {
+                break;
+            };
             tried.push(index);
-            let lease = Lease::new(&self.scope, &key);
+            let lease = Lease::from_reserved(&self.scope, &key);
             match self
                 .route(index, image)
                 .invoke(state, request.clone())
@@ -262,18 +292,24 @@ impl ChatModel<()> for CredentialFleetModel {
         let image = request_has_image(&request);
         let mut tried = Vec::new();
         let mut last_error = None;
-        while let Some((index, key)) = key_pool::choose_key_for_run(
-            &self.scope,
-            &self.keys,
-            &tried,
-            self.strategy,
-            request
-                .correlation
-                .as_ref()
-                .map(|correlation| correlation.run_id.as_str()),
-        ) {
+        loop {
+            if tried.len() >= MAX_KEY_ATTEMPTS_PER_CALL {
+                break;
+            }
+            let Some((index, key)) = key_pool::choose_key_and_acquire_for_run(
+                &self.scope,
+                &self.keys,
+                &tried,
+                self.strategy,
+                request
+                    .correlation
+                    .as_ref()
+                    .map(|correlation| correlation.run_id.as_str()),
+            ) else {
+                break;
+            };
             tried.push(index);
-            let lease = Lease::new(&self.scope, &key);
+            let lease = Lease::from_reserved(&self.scope, &key);
             let mut live = match self
                 .route(index, image)
                 .stream(state, request.clone())
