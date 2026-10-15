@@ -898,3 +898,30 @@ fn file_descriptor_identity_detects_atomic_source_replacement() {
     assert!(!same_file_identity(&before, &after),
         "atomically replacing a validated file must invalidate its provenance");
 }
+
+
+#[tokio::test]
+async fn oversized_string_arguments_fail_before_attempting_any_path_resolution() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    for (field, request) in [
+        ("path", json!({"operation":"scan","path":"x".repeat(4097)})),
+        ("query", json!({
+            "operation":"scan", "path":"missing-source.rs", "query":"a".repeat(129)
+        })),
+        ("after_path", json!({
+            "operation":"scan", "path":"missing-source.rs", "after_path":"x".repeat(181)
+        })),
+        ("focus_path", json!({
+            "operation":"graph", "path":"missing-source.rs", "focus_path":"x".repeat(181)
+        })),
+        ("expected_sha256", json!({
+            "operation":"verify", "path":"missing-source.rs", "expected_sha256":"f".repeat(65)
+        })),
+    ] {
+        let message = tool.execute(request).await.unwrap_err().to_string();
+        assert!(message.contains(field), "expected early {field} validation, got: {message}");
+        assert!(!message.contains("No such file"), "filesystem was consulted before validation");
+    }
+}
