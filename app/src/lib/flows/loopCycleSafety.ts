@@ -52,6 +52,27 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
     incoming.get(edge.to_node)!.push(edge);
   }
 
+  // Match TinyFlows' per-node validation: an invalid loop config is a
+  // problem even when that loop is not currently wired into a cycle.
+  const issues: LoopSafetyIssue[] = [];
+  for (const node of graph.nodes) {
+    if (node.kind !== 'loop') continue;
+    const configuredCap = node.config?.max_iterations;
+    const maxIterations = configuredCap === undefined ? DEFAULT_LOOP_ITERATIONS : configuredCap;
+    if (
+      typeof maxIterations !== 'number' ||
+      !Number.isInteger(maxIterations) ||
+      maxIterations < 1 ||
+      maxIterations > MAX_LOOP_ITERATIONS
+    ) {
+      issues.push({
+        code: 'unbounded_loop',
+        nodeIds: [node.id],
+        message: 'Loop ' + node.id + ' must have max_iterations between 1 and ' + MAX_LOOP_ITERATIONS + '.',
+      });
+    }
+  }
+
   // Iterative Kosaraju avoids recursion exhaustion on large imported graphs.
   const visited = new Set<string>();
   const finishing: string[] = [];
@@ -76,7 +97,6 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
   }
 
   const assigned = new Set<string>();
-  const issues: LoopSafetyIssue[] = [];
   for (let i = finishing.length - 1; i >= 0; i--) {
     const root = finishing[i];
     if (assigned.has(root)) continue;
@@ -107,24 +127,6 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
           '] needs a loop controller or a trigger recursion/visit bound.',
       });
       continue;
-    }
-    // An SCC may contain more than one controller: the native engine supports
-    // that topology. Validate each configured controller independently.
-    for (const head of loopNodes) {
-      const configuredCap = byId.get(head)?.config?.max_iterations;
-      const maxIterations = configuredCap === undefined ? DEFAULT_LOOP_ITERATIONS : configuredCap;
-      if (
-        typeof maxIterations !== 'number' ||
-        !Number.isInteger(maxIterations) ||
-        maxIterations < 1 ||
-        maxIterations > MAX_LOOP_ITERATIONS
-      ) {
-        issues.push({
-          code: 'unbounded_loop',
-          nodeIds: [head],
-          message: 'Loop ' + head + ' must have max_iterations between 1 and ' + MAX_LOOP_ITERATIONS + '.',
-        });
-      }
     }
     // Every edge has exactly one target component; scanning only incoming
     // edges to members avoids O(cyclic SCCs * all edges) on large workflows.
