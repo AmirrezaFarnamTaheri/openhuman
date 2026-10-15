@@ -87,13 +87,13 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
 
     const inputPrice = model.cost_per_1m_input;
     const outputPrice = model.cost_per_1m_output;
-    const hasPrices =
-      knownNonnegative(inputPrice) &&
-      inputPrice > 0 &&
-      knownNonnegative(outputPrice) &&
-      outputPrice > 0;
-    const estimated = hasPrices
-      ? (inputTokens * inputPrice + outputTokens * outputPrice) / 1_000_000
+    // A saved price is required only for a token component actually used.
+    // Zero prices with positive usage still mean unknown, not verified free.
+    const inputKnown = inputTokens === 0 || (knownNonnegative(inputPrice) && inputPrice > 0);
+    const outputKnown = outputTokens === 0 || (knownNonnegative(outputPrice) && outputPrice > 0);
+    const estimated = inputKnown && outputKnown
+      ? ((inputTokens === 0 ? 0 : inputTokens * (inputPrice as number)) +
+         (outputTokens === 0 ? 0 : outputTokens * (outputPrice as number))) / 1_000_000
       : null;
     const estimatedCostUSD =
       estimated !== null && Number.isFinite(estimated) ? estimated : null;
