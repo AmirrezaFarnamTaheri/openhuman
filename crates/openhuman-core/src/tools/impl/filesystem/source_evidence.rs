@@ -230,10 +230,10 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
             if !ignored(&next, false) && (after.is_empty() || relative(root, &next).as_str() > after) {
                 entries.push(next);
             }
-            if entries.len() > max_files {
-                truncated = Some("max_files");
-                break;
-            }
+            // Collect all files within the independent traversal budget
+            // before selecting a page. A depth-first walk is not globally
+            // sorted: a/child.rs can be visited before a.rs although a.rs
+            // precedes it in the cursor order.
         } else if metadata.is_dir() && !ignored(&next, true) {
             if depth >= MAX_DEPTH { truncated = Some("max_depth"); continue; }
             if policy.validate_path(&next.to_string_lossy()).await.is_err() { continue; }
@@ -247,7 +247,12 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
             for child in children.into_iter().rev() { paths.push((child, depth+1)); }
         }
     }
-    entries.sort();
+    entries.sort_by_cached_key(|path| relative(root, path));
+    // Only offer a continuation cursor when every eligible name was seen.
+    // Entry/depth/fanout truncation means an unseen earlier name may exist.
+    if entries.len() > max_files && truncated.is_none() {
+        truncated = Some("max_files");
+    }
     let mut files = Vec::new();
     let mut graph_docs = Vec::new();
     let mut total = 0usize;
@@ -362,6 +367,19 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
         graph["truncated_reason"] = json!(truncated);
         graph["observed_bytes"] = json!(source_bytes);
         if !catalog_complete { graph["edges_complete"] = json!(false); }
+        // build_graph bounds its own output, but adding scope and observed
+        // candidates can enlarge the returned graph. Bound the FINAL envelope
+        // before TinyTools applies its text-based output clipping.
+        while graph.to_string().len() > MAX_JSON_RESPONSE_BYTES {
+            let Some(removed) = graph["edges"].as_array_mut().and_then(Vec::pop) else {
+                anyhow::bail!("graph node envelope exceeds the bounded output budget");
+            };
+            let _ = removed;
+            graph["edges_complete"] = json!(false);
+            graph["edge_truncated_reason"] = json!("max_response_bytes");
+            graph["impact"] = json!([]);
+            graph["impact_omitted_reason"] = json!("bounded_edges");
+        }
         return Ok(graph);
     }
     let mut response = json!({
