@@ -172,7 +172,7 @@ fn rust_mod_pattern() -> &'static Regex {
 }
 fn js_from_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
-    pattern(&PATTERN, r#"^\s*(?:import|export)\b.*?\bfrom\s*['"](\.[^'"]+)['"]"#)
+    pattern(&PATTERN, r#"^\s*(?:import|export)\b.*?\b(from)\s*['"](\.[^'"]+)['"]"#)
 }
 fn js_side_effect_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
@@ -350,8 +350,15 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
                 // Conservative: ignore explicit comment-only lines.
                 if line.trim_start().starts_with("//") { continue; }
                 let mut found = Vec::new();
+                // The keyword at the start and the from-clause itself must
+                // both be visible code. Without the second check, an ordinary
+                // "export { x }; // from './fake'" creates a phantom edge.
                 if let Some(captures) = js_from_pattern().captures(line)
-                    .or_else(|| js_side_effect_pattern().captures(line))
+                    .filter(|captures| is_code(captures, 0, &code_mask)
+                        && is_code(captures, 1, &code_mask)) {
+                    found.push(("import", captures[2].to_string()));
+                }
+                if let Some(captures) = js_side_effect_pattern().captures(line)
                     .or_else(|| js_require_pattern().captures(line))
                     .filter(|captures| is_code(captures, 0, &code_mask)) {
                     found.push(("import", captures[1].to_string()));
