@@ -80,7 +80,6 @@ export function useCloudProviderEditorSubmit({
             image_endpoint: p.imageEndpoint ?? '',
             model_image_endpoints: p.modelImageEndpoints ?? {},
             model_transports: p.modelTransports ?? {},
-        model_transports: p.modelTransports ?? {},
             rotation_strategy: p.rotationStrategy ?? 'round_robin',
             tool_call_codec: p.toolCallCodec ?? 'native',
             ca_cert_pem: p.caCertPem ?? '',
