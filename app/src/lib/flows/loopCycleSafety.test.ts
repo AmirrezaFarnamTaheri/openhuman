@@ -148,4 +148,48 @@ describe('validateLoopCycleSafety', () => {
       edge('n' + index, 'n' + (index + 1)));
     expect(validateLoopCycleSafety({ nodes, edges })).toEqual([]);
   });
+
+  it('indexes incident edges rather than rescanning all edges for every bounded cycle', () => {
+    const nodes = Array.from({ length: 96 }, (_, i) => [
+      node('head-' + i, 'loop'),
+      node('work-' + i),
+    ]).flat();
+    const edges = Array.from({ length: 96 }, (_, i) => [
+      edge('head-' + i, 'work-' + i, 'body'),
+      edge('work-' + i, 'head-' + i),
+    ]).flat();
+    let fullEdgeIterations = 0;
+    const monitored = new Proxy(edges, {
+      get(target, key, receiver) {
+        if (key === Symbol.iterator) {
+          return function* () {
+            fullEdgeIterations += 1;
+            yield* target;
+          };
+        }
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    expect(validateLoopCycleSafety({ nodes, edges: monitored })).toEqual([]);
+    expect(fullEdgeIterations).toBeLessThanOrEqual(3);
+  });
+
+  it('preserves original edge order when emitting multiple loop-side and done-port issues', () => {
+    const issues = validateLoopCycleSafety({
+      nodes: [
+        node('head', 'loop'), node('work'),
+        node('outside1'), node('outside2'),
+      ],
+      edges: [
+        edge('outside1', 'work'),
+        edge('head', 'work', 'done'),
+        edge('outside2', 'work'),
+        edge('work', 'head'),
+      ],
+    });
+    expect(issues.map(issue => issue.code)).toEqual([
+      'loop_side_entry', 'loop_done_reenters', 'loop_side_entry',
+    ]);
+  });
+
 });
