@@ -93,3 +93,89 @@ pub(super) fn container_environment() -> Option<std::collections::BTreeMap<Strin
     }
     Some(env)
 }
+
+/// Recognize only a simple top-level test/build/lint invocation whose OS
+/// process exit is propagated by the shell tool. Deliberately conservative:
+/// pipes, redirections, quoting, shell expansion and chained commands are
+/// excluded because a green wrapper may hide a failed check.
+pub(super) fn is_verification_command(command: &str) -> bool {
+    let source = command.trim();
+    if source.is_empty()
+        || source.chars().any(|c| {
+            matches!(c, '|' | '&' | ';' | '<' | '>' | '$' | '`' | '\\' | '\'' | '"' | '#' | '\n' | '\r')
+        })
+    {
+        return false;
+    }
+    let args: Vec<&str> = source.split_whitespace().collect();
+    if args.is_empty() {
+        return false;
+    }
+    if args.iter().any(|arg| {
+        matches!(
+            *arg,
+            "--help" | "--version" | "--list" | "--no-run" |
+            "--if-present" | "--passWithNoTests"
+        )
+    }) {
+        return false;
+    }
+    match args.as_slice() {
+        ["cargo", "test" | "check" | "clippy" | "build", ..] => true,
+        ["cargo", "fmt", "--check", ..] => true,
+        ["pytest", ..] => true,
+        ["python" | "python3", "-m", "pytest" | "unittest", ..] => true,
+        ["go", "test" | "vet" | "build", ..] => true,
+        ["node", "--test", ..] => true,
+        ["pnpm", "test" | "lint" | "build", ..] => true,
+        ["pnpm", "exec", "vitest", "run", ..] => true,
+        ["npm", "test", ..] => true,
+        ["npm", "run", "build" | "lint" | "test" | "typecheck", ..] => true,
+        _ => false,
+    }
+}
+
+/// Host-only observation integrated into the existing TinyAgents ToolCompleted
+/// event and durable journal, NOT the model's tool-result text. No command
+/// string, CLI argument, output, key, or potentially sensitive hash is stored.
+/// This is a *local check observation*, not task verification/CI freshness.
+pub(super) fn append_verification_receipt(
+    result: &mut ToolResult,
+    command: &str,
+    authorized: bool,
+) {
+    if !is_verification_command(command) {
+        return;
+    }
+    let passed = authorized && !result.is_error;
+    let status = if !authorized {
+        "not_executed"
+    } else if passed {
+        "passed"
+    } else {
+        "failed_or_unobserved"
+    };
+    let fact = serde_json::json!({
+        "recognized": true,
+        "passed": passed,
+        "status": status,
+        "exit_status": if passed { "zero" } else { "unknown" },
+        "scope": "local_check_only",
+        "task_verified": false
+    });
+    match result.metadata.as_mut() {
+        Some(serde_json::Value::Object(existing)) => {
+            existing.insert("openhuman_local_check_v1".to_owned(), fact);
+        }
+        Some(_) => {
+            // Preserve unrelated non-object metadata rather than overwriting it.
+        }
+        None => {
+            result.metadata = Some(serde_json::json!({"openhuman_local_check_v1":fact}));
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "shell_verification_tests.rs"]
+mod verification_tests;
