@@ -295,7 +295,7 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
                 path: label.clone(), source_hash: digest.clone(), content: text.to_owned(),
             });
         }
-        let matches: Vec<Value> = if query.is_empty() || locate_mode { Vec::new() } else {
+        let matches: Vec<Value> = if query.is_empty() || locate_mode || graph_mode { Vec::new() } else {
             let all: Vec<_> = text.lines().enumerate()
                 .filter(|(_,line)| line.contains(query)).collect();
             if all.len() > MAX_MATCHES { truncated.get_or_insert("max_matches_per_file"); }
