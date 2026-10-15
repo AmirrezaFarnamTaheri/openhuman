@@ -513,6 +513,22 @@ pub fn normalize_model_transports(
     Ok(overrides)
 }
 
+/// Validate OpenAI-specific protocol routing against the credential wire format.
+/// Auto retains native Anthropic and managed routes; explicit protocol paths
+/// require an OpenAI-compatible Bearer or unauthenticated backend.
+pub fn normalize_model_transports_for_auth(
+    overrides: std::collections::HashMap<String, ModelTransport>,
+    auth_style: AuthStyle,
+) -> Result<std::collections::HashMap<String, ModelTransport>, String> {
+    let normalized = normalize_model_transports(overrides)?;
+    if !matches!(auth_style, AuthStyle::Bearer | AuthStyle::None)
+        && normalized.values().any(|mode| *mode != ModelTransport::Auto)
+    {
+        return Err("explicit OpenAI model transports require bearer or none authentication".into());
+    }
+    Ok(normalized)
+}
+
 /// Normalize settings provided over either model-settings RPC surface.
 /// Reject embedded URL credentials, unsupported schemes and duplicate trimmed ids.
 pub type NormalizedFleetConfig = (
