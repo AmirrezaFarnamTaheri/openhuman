@@ -785,3 +785,60 @@ async fn source_evidence_excludes_workspace_auth_material_without_hiding_auth_so
             "sensitive path must be refused: {secret}");
     }
 }
+
+
+#[tokio::test]
+async fn malformed_operation_and_path_never_fall_back_to_workspace_wide_scan() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("visible.rs"), "fn visible() {}\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    for malformed in [
+        json!([]),
+        json!(null),
+        json!({"operation": null}),
+        json!({"operation": false}),
+        json!({"operation": "sacn"}),
+        json!({"path": null}),
+        json!({"path": 7}),
+        json!({"path": ""}),
+        json!({"operation": "scan", "path": {"name": "visible.rs"}}),
+        json!({"operation": "scan", "query": ["visible"]}),
+        json!({"operation": "scan", "query": null}),
+    ] {
+        assert!(
+            tool.execute(malformed.clone()).await.is_err(),
+            "malformed request must fail closed, not scan root: {malformed}"
+        );
+    }
+    // A correctly omitted optional operation/path retains documented defaults.
+    let valid = run(&tool, json!({})).await;
+    assert_eq!(valid["operation"], "scan");
+    assert_eq!(valid["files"][0]["path"], "visible.rs");
+}
+
+#[tokio::test]
+async fn malformed_numeric_and_filter_arguments_do_not_silently_use_defaults() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("visible.rs"), "fn visible() {}\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    for malformed in [
+        json!({"max_files": "1"}),
+        json!({"max_files": 0}),
+        json!({"max_files": 33}),
+        json!({"max_entries": -1}),
+        json!({"max_edges": 0}),
+        json!({"max_results": 6}),
+        json!({"start_line": "1"}),
+        json!({"start_column": -1}),
+        json!({"operation":"graph", "focus_path": 12}),
+        json!({"operation":"scan", "after_path": false}),
+        json!({"operation":"verify", "path":"visible.rs", "expected_sha256": null}),
+    ] {
+        assert!(
+            tool.execute(malformed.clone()).await.is_err(),
+            "invalid argument should be refused before reading: {malformed}"
+        );
+    }
+}
