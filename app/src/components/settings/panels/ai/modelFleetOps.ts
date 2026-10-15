@@ -62,6 +62,23 @@ export function insertFleetKeysAtSelection(
   return next;
 }
 
+/** Refuse overlapping asynchronous settings writes, including multiple
+ * clicks before React can render a disabled button. A rejected write releases
+ * the lock so a later corrected request can retry.
+ */
+export function createSingleFlightRunner() {
+  let active = false;
+  return async function runSingleFlight<T>(task: () => Promise<T>): Promise<T | undefined> {
+    if (active) return undefined;
+    active = true;
+    try {
+      return await task();
+    } finally {
+      active = false;
+    }
+  };
+}
+
 export const fleetModelKey = (provider: string, id: string) => provider + '\0' + id;
 
 export function syncModelPresets(
