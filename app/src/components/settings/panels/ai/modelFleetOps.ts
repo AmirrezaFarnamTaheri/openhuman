@@ -185,6 +185,10 @@ export function applyProviderBulkPatch<T extends { slug: string }>(
 export function validModelFleetEndpoint(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return true; // Blank clears the override.
+  // WHATWG URL parsing silently removes tab/newline controls in the middle
+  // of a URL, potentially changing the endpoint the user actually entered.
+  // Reject such ambiguous destinations before provider credentials are used.
+  if (/[\u0000-\u001f\u007f]/u.test(trimmed)) return false;
   try {
     const url = new URL(trimmed);
     return (
@@ -281,6 +285,7 @@ export function parseModelTransportOverrides(input: string): Record<string, Mode
 /** Explicit model-id-to-endpoint group keys, one `model-id = https://...` per line. */
 export function parseModelImageEndpoints(input: string): Record<string, string> {
   const endpoints: Record<string, string> = Object.create(null) as Record<string, string>;
+  let count = 0;
   for (const line of input.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const sep = line.indexOf('=');
@@ -296,6 +301,7 @@ export function parseModelImageEndpoints(input: string): Record<string, string> 
     if (Object.prototype.hasOwnProperty.call(endpoints, id)) {
       throw new Error('Duplicate image model mapping: ' + id);
     }
+    if (++count > 512) throw new Error('At most 512 image model mappings are supported.');
     endpoints[id] = url;
   }
   return endpoints;
