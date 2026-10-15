@@ -235,3 +235,44 @@ describe('model-fleet preset management', () => {
     expect(result[1]).toEqual(rows[1]);
   });
 });
+
+
+describe('image credential transport boundaries', () => {
+  it('rejects remote plaintext image URLs through both bulk editing paths', () => {
+    const selected = new Set(['ordinary-provider']);
+    const groups = [{ slug: 'ordinary-provider', imageEndpoint: 'https://safe.example/v1' }];
+    const configured = [{ slug: 'ordinary-provider', image_endpoint: 'https://safe.example/v1' }];
+    for (const unsafe of [
+      'http://api.example/v1',
+      'http://10.0.0.2:8443/v1',
+      'http://169.254.169.254/latest/meta-data',
+      'http://localhost.evil.example/v1',
+    ]) {
+      expect(() => updateSelectedGroupSettings(groups, selected, { imageEndpoint: unsafe })).toThrow(
+        /HTTPS|loopback/
+      );
+      expect(() => applyProviderBulkPatch(configured, selected, { image_endpoint: unsafe })).toThrow(
+        /HTTPS|loopback/
+      );
+    }
+    expect(groups[0].imageEndpoint).toBe('https://safe.example/v1');
+  });
+
+  it('accepts HTTPS and actual loopback and preserves empty clearing operations', () => {
+    const selected = new Set(['ordinary-provider']);
+    const groups = [{ slug: 'ordinary-provider', imageEndpoint: '' }];
+    const configured = [{ slug: 'ordinary-provider', image_endpoint: '' }];
+    for (const safe of [
+      'https://vision.example/v1',
+      'http://127.0.0.1:3300/v1',
+      'http://[::1]:3300/v1',
+    ]) {
+      expect(updateSelectedGroupSettings(groups, selected, { imageEndpoint: safe })[0].imageEndpoint)
+        .toBe(safe);
+      expect(applyProviderBulkPatch(configured, selected, { image_endpoint: safe })[0].image_endpoint)
+        .toBe(safe);
+    }
+    expect(updateSelectedGroupSettings(groups, selected, { imageEndpoint: '' })[0].imageEndpoint).toBe('');
+    expect(applyProviderBulkPatch(configured, selected, { image_endpoint: null })[0].image_endpoint).toBeNull();
+  });
+});
