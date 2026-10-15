@@ -197,7 +197,9 @@ export function validModelFleetEndpoint(value: string): boolean {
       !url.username &&
       !url.password &&
       !url.search &&
-      !url.hash
+      !url.hash &&
+      !trimmed.includes('?') &&
+      !trimmed.includes('#')
     );
   } catch {
     return false;
@@ -267,7 +269,7 @@ export function parseModelTransportOverrides(input: string): Record<string, Mode
     if (separator < 1) throw new Error('Each model protocol override must be model-id = protocol.');
     const id = line.slice(0, separator).trim();
     const protocol = line.slice(separator + 1).trim();
-    if (!id || id.length > 200 || /\p{Cc}/u.test(id)) {
+    if (!id || new TextEncoder().encode(id).length > 200 || /\p{Cc}/u.test(id)) {
       throw new Error('Model ids must be 1-200 printable characters.');
     }
     if (!['auto', 'chat_completions', 'responses'].includes(protocol)) {
@@ -292,7 +294,7 @@ export function parseModelImageEndpoints(input: string): Record<string, string> 
     if (sep < 1) throw new Error('Each image model mapping must be model-id = base URL.');
     const id = line.slice(0, sep).trim();
     const url = line.slice(sep + 1).trim();
-    if (!id || id.length > 200 || /\p{Cc}/u.test(id)) {
+    if (!id || new TextEncoder().encode(id).length > 200 || /\p{Cc}/u.test(id)) {
       throw new Error('Image model ids must be nonempty and at most 200 characters.');
     }
     if (!url || !validModelFleetImageEndpoint(url)) {
