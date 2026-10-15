@@ -357,7 +357,8 @@ fn tagged_json_terminal_answers_strip_tags_and_keep_thinking_private() {
 
 #[test]
 fn tagged_json_bounded_parser_rejects_undeclared_or_wrongly_typed_tool_calls() {
-    for output in [
+    // Preserve the malformed-sample count to catch adjacent raw-string merging.
+    let malformed: [&str; 9] = [
         r#"<tool_calls>[{"name":"delete_everything","arguments":{}}]</tool_calls>"#,
         r#"<tool_calls>[{"name":"read_file","arguments":{"path":4}}]</tool_calls>"#,
         r#"<tool_calls>[{"name":"read_file","arguments":"README.md"}]</tool_calls>"#,
@@ -367,7 +368,8 @@ fn tagged_json_bounded_parser_rejects_undeclared_or_wrongly_typed_tool_calls() {
         r#"<tool_call>{"name":"read_file","arguments":{"path":"README.md"}}"#,
         r#"<think>reasoning</think>"#,
         r#"<final_answer>answer</final_answer><tool_calls>[{"name":"shell","arguments":{"command":"pwd"}}]</tool_calls>"#,
-    ] {
+    ];
+    for output in malformed {
         assert!(parse_tagged_json_output(output, &declared()).is_err(), "invalid tagged JSON accepted: {output}");
     }
     let too_many = format!(
