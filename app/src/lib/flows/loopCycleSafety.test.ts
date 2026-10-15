@@ -42,50 +42,23 @@ describe('validateLoopCycleSafety', () => {
   });
 
 
-  it('does not let a disconnected bounded trigger authorize an unrelated cycle', () => {
-    const issues = validateLoopCycleSafety({
+  it('matches TinyFlows: one trigger recursion budget governs the full run', () => {
+    // Pinned tinyflows/validate/loops.rs uses graph.trigger() and applies
+    // its run-level budget globally, not per SCC reachability.
+    const graph = {
       nodes: [
-        node('safe-trigger', 'trigger', { max_node_visits: 10 }),
-        node('safe-task'),
-        node('unsafe-trigger', 'trigger'),
-        node('a'), node('b'),
+        node('t', 'trigger', { max_node_visits: 10 }),
+        node('isolated'), node('a'), node('b'),
       ],
       edges: [
-        edge('safe-trigger', 'safe-task'),
-        edge('unsafe-trigger', 'a'), edge('a', 'b'), edge('b', 'a'),
+        edge('t', 'isolated'), edge('a', 'b'), edge('b', 'a'),
       ],
-    });
-    expect(issues.map(issue => issue.code)).toEqual(['cycle_without_bound']);
-    expect(issues[0].nodeIds).toEqual(['a', 'b']);
-  });
-
-  it('refuses a cycle reachable through any unbounded trigger even if another is bounded', () => {
-    const issues = validateLoopCycleSafety({
-      nodes: [
-        node('bounded', 'trigger', { recursion_limit: 5 }),
-        node('unbounded', 'trigger'), node('a'), node('b'),
-      ],
-      edges: [
-        edge('bounded', 'a'), edge('unbounded', 'b'),
-        edge('a', 'b'), edge('b', 'a'),
-      ],
-    });
-    expect(issues.map(issue => issue.code)).toEqual(['cycle_without_bound']);
-  });
-
-  it('allows run-level bounds only for cycles reachable exclusively from bounded triggers', () => {
-    const issues = validateLoopCycleSafety({
-      nodes: [
-        node('t1', 'trigger', { max_node_visits: 10 }),
-        node('t2', 'trigger', { recursion_limit: 3 }),
-        node('unrelated', 'trigger'), node('a'), node('b'),
-      ],
-      edges: [
-        edge('t1', 'a'), edge('t2', 'b'),
-        edge('a', 'b'), edge('b', 'a'),
-      ],
-    });
-    expect(issues).toEqual([]);
+    };
+    expect(validateLoopCycleSafety(graph)).toEqual([]);
+    expect(validateLoopCycleSafety({
+      ...graph,
+      nodes: [node('t', 'trigger'), ...graph.nodes.slice(1)],
+    }).map(issue => issue.code)).toEqual(['cycle_without_bound']);
   });
 
   it('accepts multiple loop controllers when every cycle crosses a controller', () => {
