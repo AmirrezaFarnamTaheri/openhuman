@@ -368,6 +368,35 @@ fn model_transport_overrides_reject_ambiguous_ids_and_unbounded_maps() {
 }
 
 #[test]
+fn explicit_protocol_overrides_require_a_compatible_authentication_style() {
+    use super::{normalize_model_transports_for_auth, AuthStyle, ModelTransport};
+    use std::collections::HashMap;
+
+    let overrides = HashMap::from([
+        ("vendor/responses".to_string(), ModelTransport::Responses),
+        ("vendor/chat".to_string(), ModelTransport::ChatCompletions),
+    ]);
+    for auth in [AuthStyle::Anthropic, AuthStyle::OpenhumanJwt] {
+        assert!(
+            normalize_model_transports_for_auth(overrides.clone(), auth).is_err(),
+            "an incompatible auth scheme cannot persist OpenAI protocol overrides"
+        );
+    }
+    for auth in [AuthStyle::Bearer, AuthStyle::None] {
+        assert_eq!(
+            normalize_model_transports_for_auth(overrides.clone(), auth).unwrap(),
+            overrides
+        );
+    }
+    // Legacy/default policies must remain compatible with existing Anthropic providers.
+    let automatic = HashMap::from([("claude".to_string(), ModelTransport::Auto)]);
+    assert_eq!(
+        normalize_model_transports_for_auth(automatic.clone(), AuthStyle::Anthropic).unwrap(),
+        automatic
+    );
+}
+
+#[test]
 fn image_endpoint_presets_round_trip_and_default_without_mapping() {
     let entry: super::CloudProviderCreds = serde_json::from_value(serde_json::json!({
         "id": "a",
