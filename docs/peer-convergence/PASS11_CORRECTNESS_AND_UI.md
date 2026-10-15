@@ -23,6 +23,22 @@ All changed behavior has focused regression cases in `source_graph_tests.rs`, `s
 - **UI/API convergence:** Validate sensitive endpoint transport at form, bulk helper and Rust execution boundaries. Avoid changing existing managed/non-credentialed generic endpoint behavior unnecessarily.
 - **Memory/skills/artifacts:** These larger planes remain incomplete; import only capabilities with explicit workspace scope, consent, provenance, retention/deletion and native render/verification contracts.
 
+## Concurrent settings persistence safety
+
+The Model Fleet panel previously checked only the React `busy` state in its
+mutation handler. Two clicks in the same render frame can both observe
+`busy=false` and issue overlapping writes from stale prop snapshots. A small
+pure `createSingleFlightRunner` now acquires an imperative lock before an
+asynchronous mutation and releases it in `finally`, including after a failed
+save. Model Fleet's shared `run` handler holds one stable runner in a React
+ref, suppressing a second write until the first settles. Existing visual
+disabled controls remain in place as user feedback.
+
+Focused Vitest regressions specify duplicate suppression and post-error
+recovery. Three isolated Node 22 smoke cases covering equivalent single-flight
+logic and the image URL predicate executed successfully; this is **not** an
+OpenHuman module import, UI mount, or substitute for its Vitest/E2E runs.
+
 ## Reference-suite findings and limitations
 
 The earlier 17-peer archive audit (1,372 members; 980 indexed files; 8,404 declaration records) remains available in the conversation evidence bundle. This pass additionally attempted offline peer tests: Blink's three Node invocations failed on Bun-only imports, Hono's on missing dev dependency, Stanley reported 22 passing/14 failing with missing dependencies among failures, Pi discovered zero tests, and Switchboard could not finish its bounded suite because of missing dependencies and incompatible TypeScript child execution. These do not prove functional peer failures.
