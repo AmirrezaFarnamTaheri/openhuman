@@ -401,7 +401,9 @@ const maturationEnglish = {
   "fleet.enabled": "Enabled",
   "fleet.disabled": "Disabled",
   "fleet.leaveBlank": "Leave blank to keep",
-  "fleet.bulkContextAria": "Bulk context tokens"
+  "fleet.bulkContextAria": "Bulk context tokens",
+  "fleet.prodexImageError": "Prodex image endpoints require HTTPS or loopback HTTP without URL credentials.",
+  "fleet.prodexModelImageError": "Prodex model image endpoints require HTTPS or loopback HTTP without URL credentials."
 } as const;
 
 const maturationLocales: Record<Locale, Partial<Record<keyof typeof maturationEnglish, string>>> = {
