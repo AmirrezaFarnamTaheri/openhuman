@@ -120,14 +120,15 @@ fn excluded_ancestor(root: &Path, path: &Path) -> bool {
     relative.components().any(|part| {
         let std::path::Component::Normal(name) = part else { return false; };
         let Some(name) = name.to_str() else { return true; };
-        SKIP_DIRS.contains(&name) || name.starts_with(".cache")
+        let lower = name.to_ascii_lowercase();
+        SKIP_DIRS.contains(&lower.as_str()) || lower.starts_with(".cache")
     })
 }
 
 fn ignored(path: &Path, directory: bool) -> bool {
     let Some(name) = path.file_name().and_then(|x| x.to_str()) else { return true };
-    if directory { return SKIP_DIRS.contains(&name) || name.starts_with(".cache"); }
     let lower = name.to_ascii_lowercase();
+    if directory { return SKIP_DIRS.contains(&lower.as_str()) || lower.starts_with(".cache"); }
     SKIP_FILES.contains(&lower.as_str()) ||
         lower.starts_with(".env.") ||
         lower.ends_with(".pem") || lower.ends_with(".key") ||
