@@ -151,6 +151,31 @@ To make one provider the default for everything that is not pinned, set `primary
 
 BYOK gets your provider's capabilities, not OpenHuman's. Before you pin `vision_provider`, confirm the model accepts image input. Before you pin `embeddings_provider`, confirm the provider serves an embeddings endpoint. Not every chat provider does.
 
+### Estimate suitability and token costs without changing a route
+
+The **Model Fleet** settings panel includes a read-only *Model suitability and cost preview*.
+Enter estimated total input tokens, output tokens, an optional budget, and whether
+vision is required. You can also enter **cached input tokens**, which must be a
+subset of total input—not an additional token count. Its estimate is:
+
+```
+cost = (input - cached_input) * input_price / 1_000_000
+     + cached_input * cached_input_price / 1_000_000
+     + output * output_price / 1_000_000
+```
+
+The preview requires a saved positive price only for a component with nonzero
+usage. Missing, invalid, or zero saved prices for **used** components are treated
+as *unknown*, not automatically free. A zero-token component contributes zero
+without requiring its unused price. Fractional or unsafe context-window
+metadata is also *unknown*, not a verified model capability.
+
+The output distinguishes saved-metadata fit, unknown eligibility, and exclusion
+by context, vision, or estimated cost. **It does not verify current provider
+availability, account quota, entitlement, pricing, or authentication**, and it
+never changes your configured workload routes. Confirm current pricing and
+capabilities with your provider before enabling a model for production.
+
 ## Mixing routes
 
 The workload fields are independent. A common privacy-minded setup keeps recurring background work on-device and saves a strong cloud model for the turns that need it:
