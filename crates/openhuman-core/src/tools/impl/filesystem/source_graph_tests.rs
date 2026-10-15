@@ -400,3 +400,22 @@ mod genuine;
     assert_eq!(edges.len(), 1);
     assert_eq!(edges[0]["to"], "src/genuine.rs");
 }
+
+
+#[test]
+fn js_from_import_must_be_outside_trailing_comments() {
+    let docs = vec![
+        source("src/main.ts", r#"
+            const value = 1;
+            export { value }; // from './phantom'
+            export { value }; /* from './phantom' */
+            export { value } from './real';
+        "#),
+        source("src/phantom.ts", "export const falseEdge = true;\n"),
+        source("src/real.ts", "export const value = 2;\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1, "commented from must not create a dependency");
+    assert_eq!(edges[0]["to"], "src/real.ts");
+}
