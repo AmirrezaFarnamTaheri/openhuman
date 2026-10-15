@@ -28,14 +28,14 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
   const ids = new Set(graph.nodes.map(node => node.id));
   const byId = new Map(graph.nodes.map(node => [node.id, node]));
   // TinyFlows supports run-level recursion_limit and max_node_visits as
-  // alternatives to a loop controller (see pinned validate/loops.rs).
-  const hasRunLevelBound = graph.nodes.some(node =>
-    node.kind === 'trigger' &&
+  // alternatives to a loop controller. A budget belongs to its trigger's
+  // execution, not to every disconnected component in the editor. We must
+  // also reject cycles reachable from *any* unbounded trigger.
+  const triggerHasBound = (node: LoopSafetyGraph['nodes'][number]): boolean =>
     ['recursion_limit', 'max_node_visits'].some(field => {
       const value = node.config?.[field];
       return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
-    })
-  );
+    });
   const outgoing = new Map<string, string[]>();
   const reverse = new Map<string, string[]>();
   for (const id of ids) {
@@ -47,6 +47,31 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
     outgoing.get(edge.from_node)!.push(edge.to_node);
     reverse.get(edge.to_node)!.push(edge.from_node);
   }
+
+  // Multi-source traversal is O(nodes + edges) regardless of the number of
+  // triggers. A single global boolean would incorrectly let an unrelated,
+  // bounded trigger authorize another trigger's unbounded cycle.
+  const reachableFrom = (starts: string[]): Set<string> => {
+    const seen = new Set(starts);
+    const queue = [...starts];
+    for (let index = 0; index < queue.length; index++) {
+      for (const next of outgoing.get(queue[index]) ?? []) {
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    return seen;
+  };
+  const boundedTriggers: string[] = [];
+  const unboundedTriggers: string[] = [];
+  for (const node of graph.nodes) {
+    if (node.kind !== 'trigger') continue;
+    (triggerHasBound(node) ? boundedTriggers : unboundedTriggers).push(node.id);
+  }
+  const boundedReachable = reachableFrom(boundedTriggers);
+  const unboundedReachable = reachableFrom(unboundedTriggers);
 
   // Iterative Kosaraju avoids recursion exhaustion on large imported graphs.
   const visited = new Set<string>();
@@ -93,6 +118,11 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
     const cyclic = members.length > 1 || outgoing.get(root)!.includes(root);
     if (!cyclic) continue;
     members.sort();
+    // Every entry path needs a bound. An unreachable SCC has no proven
+    // trigger budget, and an unbounded trigger defeats a bounded peer.
+    const hasRunLevelBound =
+      members.some(id => boundedReachable.has(id)) &&
+      !members.some(id => unboundedReachable.has(id));
     const loopNodes = members.filter(id => byId.get(id)?.kind === 'loop');
     if (loopNodes.length === 0 && !hasRunLevelBound) {
       issues.push({
