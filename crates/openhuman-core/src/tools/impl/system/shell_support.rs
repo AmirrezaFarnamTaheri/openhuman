@@ -98,19 +98,20 @@ pub(super) fn container_environment() -> Option<std::collections::BTreeMap<Strin
 /// process exit is propagated by the shell tool. Deliberately conservative:
 /// pipes, redirections, quoting, shell expansion and chained commands are
 /// excluded because a green wrapper may hide a failed check.
-pub(super) fn is_verification_command(command: &str) -> bool {
+/// A stable, low-cardinality command *category*, never a command string.
+/// This lets the journal distinguish "tests failed then formatter passed"
+/// from "tests failed then tests were rerun successfully" without storing
+/// arguments, paths, stdout, stderr, credentials or hashes.
+fn verification_kind(command: &str) -> Option<&'static str> {
     let source = command.trim();
     if source.is_empty()
         || source.chars().any(|c| {
-            matches!(c, '|' | '&' | ';' | '<' | '>' | '$' | '`' | '\\' | '\'' | '"' | '#' | '\n' | '\r')
+            matches!(c, '|' | '&' | ';' | '<' | '>' | '$' | '\x60' | '\\' | '\'' | '"' | '#' | '\n' | '\r')
         })
     {
-        return false;
+        return None;
     }
     let args: Vec<&str> = source.split_whitespace().collect();
-    if args.is_empty() {
-        return false;
-    }
     if args.iter().any(|arg| {
         matches!(
             *arg,
@@ -119,21 +120,35 @@ pub(super) fn is_verification_command(command: &str) -> bool {
             "--if-present" | "--passWithNoTests"
         )
     }) {
-        return false;
+        return None;
     }
     match args.as_slice() {
-        ["cargo", "test" | "check" | "clippy" | "build", ..] => true,
-        ["cargo", "fmt", "--check", ..] => true,
-        ["pytest", ..] => true,
-        ["python" | "python3", "-m", "pytest" | "unittest", ..] => true,
-        ["go", "test" | "vet" | "build", ..] => true,
-        ["node", "--test", ..] => true,
-        ["pnpm", "test" | "lint" | "build", ..] => true,
-        ["pnpm", "exec", "vitest", "run", ..] => true,
-        ["npm", "test", ..] => true,
-        ["npm", "run", "build" | "lint" | "test" | "typecheck", ..] => true,
-        _ => false,
+        ["cargo", "test", ..] => Some("cargo_test"),
+        ["cargo", "check", ..] => Some("cargo_check"),
+        ["cargo", "clippy", ..] => Some("cargo_clippy"),
+        ["cargo", "build", ..] => Some("cargo_build"),
+        ["cargo", "fmt", "--check", ..] => Some("cargo_fmt"),
+        ["pytest", ..] | ["python" | "python3", "-m", "pytest", ..] => Some("pytest"),
+        ["python" | "python3", "-m", "unittest", ..] => Some("python_unittest"),
+        ["go", "test", ..] => Some("go_test"),
+        ["go", "vet", ..] => Some("go_vet"),
+        ["go", "build", ..] => Some("go_build"),
+        ["node", "--test", ..] => Some("node_test"),
+        ["pnpm", "test", ..] => Some("pnpm_test"),
+        ["pnpm", "lint", ..] => Some("pnpm_lint"),
+        ["pnpm", "build", ..] => Some("pnpm_build"),
+        ["pnpm", "exec", "vitest", "run", ..] => Some("vitest"),
+        ["npm", "test", ..] => Some("npm_test"),
+        ["npm", "run", "test", ..] => Some("npm_test"),
+        ["npm", "run", "build", ..] => Some("npm_build"),
+        ["npm", "run", "lint", ..] => Some("npm_lint"),
+        ["npm", "run", "typecheck", ..] => Some("npm_typecheck"),
+        _ => None,
     }
+}
+
+pub(super) fn is_verification_command(command: &str) -> bool {
+    verification_kind(command).is_some()
 }
 
 /// Host-only observation integrated into the existing TinyAgents ToolCompleted
@@ -145,9 +160,9 @@ pub(super) fn append_verification_receipt(
     command: &str,
     authorized: bool,
 ) {
-    if !is_verification_command(command) {
+    let Some(check_kind) = verification_kind(command) else {
         return;
-    }
+    };
     let passed = authorized && !result.is_error;
     let status = if !authorized {
         "not_executed"
@@ -158,6 +173,7 @@ pub(super) fn append_verification_receipt(
     };
     let fact = serde_json::json!({
         "recognized": true,
+        "check_kind": check_kind,
         "passed": passed,
         "status": status,
         "exit_status": if passed { "zero" } else { "unknown" },
