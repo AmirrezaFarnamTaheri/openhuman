@@ -657,3 +657,17 @@ async fn graph_does_not_treat_unused_literal_query_as_truncated_file_evidence() 
     assert_eq!(response["edges"][0]["status"], "resolved");
     assert_eq!(response["edges"][0]["to"], "b.ts");
 }
+
+
+#[tokio::test]
+async fn scanned_long_line_excerpt_contains_the_search_hit() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("long.rs"), format!("{}needle\n", "x".repeat(240))).unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"scan","query":"needle"})).await;
+    let hit = &result["files"][0]["matches"][0];
+    assert!(hit["text"].as_str().unwrap().contains("needle"));
+    assert!(hit["column_start"].as_u64().unwrap() > 1);
+    assert_eq!(hit["excerpt_truncated"], true);
+}
