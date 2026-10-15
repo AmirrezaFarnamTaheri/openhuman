@@ -137,6 +137,7 @@ fn evidence(doc: &SourceDocument, query: &BTreeSet<String>) -> (BTreeSet<String>
                 "line": line_number + 1,
                 "column_start": start + 1,
                 "line_char_count": line_chars,
+                "excerpt_truncated": start > 0 || line_chars > MAX_LINE_CHARS,
                 "text": line.chars().skip(start).take(MAX_LINE_CHARS).collect::<String>(),
                 "matched_terms": hits
             }));
