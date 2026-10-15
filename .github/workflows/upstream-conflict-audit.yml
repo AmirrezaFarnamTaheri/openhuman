@@ -1,0 +1,79 @@
+name: Upstream full-history conflict audit
+
+on:
+  push:
+    branches:
+      - sync/upstream-conflict-audit-20261016
+    paths:
+      - .github/workflows/upstream-conflict-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.repository == 'AmirrezaFarnamTaheri/openhuman'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout complete fork history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Inspect clean merge without touching any GitHub branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "upstream-audit[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/tinyhumansai/openhuman.git
+          git fetch --no-tags upstream +refs/heads/main:refs/remotes/upstream/main
+          mkdir -p upstream-audit
+          git rev-parse HEAD > upstream-audit/fork-head.txt
+          git rev-parse upstream/main > upstream-audit/upstream-head.txt
+          git merge-base HEAD upstream/main > upstream-audit/merge-base.txt
+          git rev-list --left-right --count HEAD...upstream/main > upstream-audit/divergence.txt
+          git log --format='%H %s' upstream/main..HEAD > upstream-audit/fork-exclusive-commits.txt
+          git cherry -v upstream/main HEAD > upstream-audit/patch-equivalences.txt
+          set +e
+          git merge --no-commit --no-ff upstream/main > upstream-audit/merge-attempt.log 2>&1
+          status=$?
+          set -e
+          echo "$status" > upstream-audit/merge-exit.txt
+          git status --porcelain=v1 > upstream-audit/working-tree-status.txt
+          git diff --name-only --diff-filter=U > upstream-audit/conflict-paths.txt
+          git diff --numstat > upstream-audit/unstaged-numstat.txt
+          {
+            echo "## Fork and upstream integration audit"
+            echo "Fork head: $(cat upstream-audit/fork-head.txt)"
+            echo "Upstream head: $(cat upstream-audit/upstream-head.txt)"
+            echo "Merge base: $(cat upstream-audit/merge-base.txt)"
+            echo "Fork-only and upstream-only commit counts: $(cat upstream-audit/divergence.txt)"
+            echo "Fork-exclusive commits: $(wc -l < upstream-audit/fork-exclusive-commits.txt)"
+            echo "Patch-equivalent fork commits (-): $(grep -c '^-' upstream-audit/patch-equivalences.txt || true)"
+            echo "Merge exit status: $status"
+            echo "Conflicted paths: $(wc -l < upstream-audit/conflict-paths.txt)"
+            echo ""
+            echo "### Conflict paths"
+            cat upstream-audit/conflict-paths.txt
+            echo ""
+            echo "### Merge diagnostic"
+            tail -n 70 upstream-audit/merge-attempt.log
+          } > upstream-audit/report.txt
+          cat upstream-audit/report.txt
+          {
+            echo '### Upstream conflict audit'
+            echo '~~~'
+            head -n 110 upstream-audit/report.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+          git merge --abort || true
+      - name: Retain machine-readable audit and full conflict list
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-conflict-audit
+          path: upstream-audit/
+          if-no-files-found: warn
+          retention-days: 30
