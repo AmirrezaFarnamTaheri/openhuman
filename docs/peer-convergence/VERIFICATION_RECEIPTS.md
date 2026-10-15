@@ -40,3 +40,19 @@ gh workflow run ci-full.yml -R AmirrezaFarnamTaheri/openhuman --ref feat/peer-pr
 ```
 
 These commands are **not** recorded as having been executed. After a run, check that its `head_sha` is the final PR head and inspect failing jobs before marking the PR ready to merge. Do not use old commits' green checks.
+
+
+## Latest check precedence
+
+An earlier successful local command is not a passing status for the run when
+a **later recognized build, test, or lint command fails**. The journal-derived
+summary now tracks the latest known failure offset separately and reports
+`failed_local_check` if that failure is newer than the last passed command,
+even if a missing `ToolStarted` event means the mutation/unknown-command
+heuristic did not invalidate the old success. A later observed passing check
+may restore `local_check_observed`, but never `task_verified=true`.
+
+This is an ordering/freshness rule for already recorded local tool outcomes,
+not a claim of test coverage, production correctness, or final-commit CI.
+Focused regression tests were added for failure-after-pass and
+pass-after-failure sequences; Rust compilation remains a merge gate.
