@@ -96,18 +96,45 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const [visionAction, setVisionAction] = useState<'keep' | 'on' | 'off'>('keep');
   const [contextAction, setContextAction] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [refreshExistingModels, setRefreshExistingModels] = useState(false);
+  const [confirmProviderRefresh, setConfirmProviderRefresh] = useState(false);
 
   const providers = settings.cloudProviders;
   const effectiveGroup = providers.some(p => p.slug === group) ? group : (providers[0]?.slug ?? '');
   const activeProvider = providers.find(p => p.slug === effectiveGroup);
-  const providerPresetDelta = useMemo(
-    () => syncConfiguredProviderPresets(providers.map(p => ({ ...p, auth_style: p.authStyle }))),
+  const providerRefreshPreview = useMemo(
+    () => syncConfiguredProviderPresets(
+      providers.map(p => ({ ...p, auth_style: p.authStyle })),
+      { updateExisting: true }
+    ),
     [providers]
   );
-  const modelDelta = useMemo(
-    () => syncModelPresets(settings.modelRegistry),
+  const providerPresetDelta = useMemo(
+    () => syncConfiguredProviderPresets(
+      providers.map(p => ({ ...p, auth_style: p.authStyle })),
+      { updateExisting: confirmProviderRefresh }
+    ),
+    [providers, confirmProviderRefresh]
+  );
+  const modelRefreshPreview = useMemo(
+    () => syncModelPresets(settings.modelRegistry, undefined, { updateExisting: true }),
     [settings.modelRegistry]
   );
+  const modelDelta = useMemo(
+    () => syncModelPresets(settings.modelRegistry, undefined, {
+      updateExisting: refreshExistingModels,
+    }),
+    [settings.modelRegistry, refreshExistingModels]
+  );
+  const modelChanges = useMemo(() => {
+    const before = new Map(settings.modelRegistry.map(model => [keyOf(model), model]));
+    return modelDelta.models
+      .filter(model => {
+        const original = before.get(keyOf(model));
+        return !original || JSON.stringify(original) !== JSON.stringify(model);
+      })
+      .map(model => ({ model, original: before.get(keyOf(model)) }));
+  }, [settings.modelRegistry, modelDelta.models]);
   const presetNames = useMemo(
     () => new Map(FLEET_MODEL_PRESETS.map(p => [fleetModelKey(p.provider, p.id), p.displayName])),
     []
@@ -154,6 +181,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     void run(
       async () => {
         await persist({ ...settings, modelRegistry: modelDelta.models });
+        setRefreshExistingModels(false);
         setSelectedModels(new Set());
       },
       t('settings.ai.fleet.synced', 'Model presets synchronized without changing your credentials.')
@@ -166,7 +194,18 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           const { auth_style, ...existing } = p;
           return { ...existing, authStyle: auth_style };
         });
+        // Never silently send an existing encrypted key to a newly configured
+        // host or re-interpret its auth header. Re-enter the key via the editor.
+        for (const before of providers) {
+          const after = next.find(candidate => candidate.id === before.id);
+          if (after && before.maskedKey.startsWith('••••') &&
+            (before.endpoint !== after.endpoint || before.authStyle !== after.authStyle)) {
+            throw new Error(t('settings.ai.fleet.reauthRequired',
+              'Re-enter the API key in the provider editor before changing its endpoint or authentication.'));
+          }
+        }
         await persist({ ...settings, cloudProviders: next });
+        setConfirmProviderRefresh(false);
       },
       t('settings.ai.fleet.providerSynced', 'Configured provider presets synchronized.')
     );
