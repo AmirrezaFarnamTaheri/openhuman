@@ -56,7 +56,8 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
   requirements: ModelRequirements
 ): ModelFeasibilityReport<T> {
   const { inputTokens, outputTokens, requiresVision, maxEstimatedCostUSD } = requirements;
-  const cachedInputTokens = requirements.cachedInputTokens ?? 0;
+  const cachedInputTokens = requirements.cachedInputTokens === undefined
+    ? 0 : requirements.cachedInputTokens;
   if (
     !Number.isSafeInteger(cachedInputTokens) || cachedInputTokens < 0 ||
     cachedInputTokens > inputTokens ||
