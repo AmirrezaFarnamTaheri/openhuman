@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { FLEET_MODEL_PRESETS } from '../modelFleetCatalog';
 import {
   applyModelBulkPatch,
+  createSingleFlightRunner,
   applyProviderBulkPatch,
   insertFleetKeysAtSelection,
   parseFleetApiKeys,
@@ -274,5 +275,39 @@ describe('image credential transport boundaries', () => {
     }
     expect(updateSelectedGroupSettings(groups, selected, { imageEndpoint: '' })[0].imageEndpoint).toBe('');
     expect(applyProviderBulkPatch(configured, selected, { image_endpoint: null })[0].image_endpoint).toBeNull();
+  });
+});
+
+
+describe('Model Fleet single-flight persistence', () => {
+  it('prevents overlapping writes from rapid repeated clicks and releases after settlement', async () => {
+    const singleFlight = createSingleFlightRunner();
+    const events: string[] = [];
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const first = singleFlight(async () => {
+      events.push('first-start');
+      await blocked;
+      events.push('first-end');
+    });
+    await singleFlight(async () => {
+      events.push('duplicate-should-not-execute');
+    });
+    expect(events).toEqual(['first-start']);
+    release();
+    await first;
+    await singleFlight(async () => {
+      events.push('next-after-first-settled');
+    });
+    expect(events).toEqual(['first-start', 'first-end', 'next-after-first-settled']);
+  });
+
+  it('does not permanently lock the panel after a failed persistence call', async () => {
+    const singleFlight = createSingleFlightRunner();
+    await expect(singleFlight(async () => { throw new Error('failed write'); }))
+      .rejects.toThrow('failed write');
+    await expect(singleFlight(async () => 'recovered')).resolves.toBe('recovered');
   });
 });
