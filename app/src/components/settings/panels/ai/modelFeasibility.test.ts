@@ -122,3 +122,46 @@ describe('one-sided and zero-token cost estimates', () => {
     expect(result.rows[0].reasons).toContain('unknown_price');
   });
 });
+
+
+describe('cached-input token suitability (within total input)', () => {
+  it('separately prices uncached input, cached input, and output tokens', () => {
+    const result = assessModelFeasibility([
+      model('cache', {
+        cost_per_1m_input: 10,
+        cost_per_1m_cached_input: 1,
+        cost_per_1m_output: 20,
+      }),
+    ], req({ inputTokens: 1000, cachedInputTokens: 800, outputTokens: 100 }));
+    expect(result.rows[0].estimatedCostUSD).toBeCloseTo(0.0048, 8);
+    expect(result.rows[0].status).toBe('metadata_fit');
+  });
+
+  it('keeps the estimate unknown when cached tokens were used but their price is missing', () => {
+    const result = assessModelFeasibility([
+      model('cache-price-unavailable', {
+        cost_per_1m_input: 10,
+        cost_per_1m_cached_input: undefined,
+        cost_per_1m_output: 20,
+      }),
+    ], req({ inputTokens: 1000, cachedInputTokens: 800, outputTokens: 100 }));
+    expect(result.rows[0].estimatedCostUSD).toBeNull();
+    expect(result.rows[0].reasons).toContain('unknown_price');
+  });
+
+  it('does not require cached pricing when cached-input usage is zero', () => {
+    const result = assessModelFeasibility([
+      model('not-cached', { cost_per_1m_cached_input: undefined }),
+    ], req({ cachedInputTokens: 0 }));
+    expect(result.rows[0].status).toBe('metadata_fit');
+    expect(result.rows[0].estimatedCostUSD).toBe(0.005);
+  });
+
+  it('rejects impossible cached-input volumes and non-integer counts', () => {
+    for (const cachedInputTokens of [-1, 1.5, 1001, Number.POSITIVE_INFINITY]) {
+      expect(() => assessModelFeasibility([
+        model('cache'),
+      ], req({ inputTokens: 1000, cachedInputTokens }))).toThrow(/Invalid/);
+    }
+  });
+});
