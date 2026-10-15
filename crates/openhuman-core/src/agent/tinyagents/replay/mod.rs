@@ -6,6 +6,7 @@
 //! [`schemas`] for the three `agent`-namespace controllers and [`ops`] for the
 //! workspace-parameterized read logic.
 
+mod local_checks;
 pub(crate) mod ops;
 mod schemas;
 
