@@ -151,3 +151,10 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
     selectionIsAdvisory: true,
   };
 }
+
+/** Present microcosts conservatively: positive usage must not look free. */
+export function formatEstimatedModelCost(cost: number | null): string {
+  if (cost === null || !Number.isFinite(cost) || cost < 0) return 'Cost unknown';
+  if (cost > 0 && cost < 0.0001) return '<$0.0001';
+  return 'Est. $' + cost.toFixed(4);
+}
