@@ -76,6 +76,28 @@ fn validate_source_args(args: &Value) -> anyhow::Result<()> {
         anyhow::bail!("path cannot be an empty string; omit it to use the workspace");
     }
     for (key, maximum) in [
+        ("path", 4096usize),
+        ("query", 128),
+        ("after_path", 180),
+        ("focus_path", 180),
+    ] {
+        if let Some(value) = map.get(key).and_then(Value::as_str) {
+            if value.len() > maximum {
+                anyhow::bail!("{key} exceeds the {maximum}-byte limit");
+            }
+        }
+    }
+    if let Some(digest) = map.get("expected_sha256").and_then(Value::as_str) {
+        if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            anyhow::bail!("expected_sha256 must be 64 hexadecimal characters");
+        }
+    }
+    if map.get("focus_path").and_then(Value::as_str)
+        .is_some_and(|value| value.chars().any(char::is_control))
+    {
+        anyhow::bail!("focus_path contains control characters");
+    }
+    for (key, maximum) in [
         ("max_files", MAX_FILES as u64),
         ("max_entries", MAX_VISITED_ENTRIES as u64),
         ("max_edges", 64),
