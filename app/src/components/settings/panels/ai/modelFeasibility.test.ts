@@ -165,3 +165,16 @@ describe('cached-input token suitability (within total input)', () => {
     }
   });
 });
+
+
+describe('saved context metadata validation', () => {
+  it('treats fractional, non-finite or unsafe context windows as unknown', () => {
+    for (const context_window of [1.5, Number.MAX_SAFE_INTEGER + 1, Number.POSITIVE_INFINITY, NaN]) {
+      const result = assessModelFeasibility([
+        model('invalid-context', { context_window }),
+      ], req({ inputTokens: 0, outputTokens: 0 }));
+      expect(result.rows[0].status).toBe('unknown');
+      expect(result.rows[0].reasons).toContain('unknown_context');
+    }
+  });
+});
