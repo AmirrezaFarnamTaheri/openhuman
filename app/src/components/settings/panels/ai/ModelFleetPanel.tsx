@@ -56,7 +56,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
   const refreshHealth = async () => {
     setHealthBusy(true);
     setHealthError('');
