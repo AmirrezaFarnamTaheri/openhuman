@@ -78,3 +78,41 @@ fn truncated_journal_and_started_mutations_do_not_prove_freshness() {
     assert!(!status.check_after_last_known_mutation);
     assert!(!status.task_verified);
 }
+
+
+#[test]
+fn a_later_failed_check_supersedes_earlier_success() {
+    let passed = passing_receipt();
+    let failed = json!({"openhuman_local_check_v1":{
+        "recognized": true, "passed": false, "status": "failed_or_unobserved",
+        "exit_status": "unknown", "scope": "local_check_only",
+        "task_verified": false
+    }});
+    let mut acc = LocalCheckAccumulator::default();
+    acc.record(1, "file_write", LocalToolEvent::Completed { metadata: None, error: false });
+    acc.record(2, "shell", LocalToolEvent::Completed { metadata: Some(&passed), error: false });
+    acc.record(3, "shell", LocalToolEvent::Completed { metadata: Some(&failed), error: true });
+    let result = acc.finish("run", true);
+    assert_eq!(result.passed_checks, 1);
+    assert_eq!(result.failed_checks, 1);
+    assert_eq!(result.status, "failed_local_check");
+    assert!(!result.check_after_last_known_mutation);
+}
+
+#[test]
+fn a_later_success_can_supersede_an_earlier_failed_check() {
+    let passed = passing_receipt();
+    let failed = json!({"openhuman_local_check_v1":{
+        "recognized": true, "passed": false, "status": "failed_or_unobserved",
+        "exit_status": "unknown", "scope": "local_check_only",
+        "task_verified": false
+    }});
+    let mut acc = LocalCheckAccumulator::default();
+    acc.record(1, "shell", LocalToolEvent::Completed { metadata: Some(&failed), error: true });
+    acc.record(2, "shell", LocalToolEvent::Completed { metadata: Some(&passed), error: false });
+    let result = acc.finish("run", true);
+    assert_eq!(result.failed_checks, 1);
+    assert_eq!(result.status, "local_check_observed");
+    assert!(result.check_after_last_known_mutation);
+    assert!(!result.task_verified);
+}
