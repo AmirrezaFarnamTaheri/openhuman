@@ -43,3 +43,37 @@ describe('ModelFeasibilityPreview cached input controls', () => {
     );
   });
 });
+
+
+describe('ModelFeasibilityPreview catalog browsing', () => {
+  const manyModels: ModelRegistryEntry[] = Array.from({ length: 17 }, (_, index) => ({
+    ...cachedModel, id: 'candidate-' + index,
+  }));
+
+  it('reveals additional sorted results on demand, not only the first eight', () => {
+    render(<ModelFeasibilityPreview models={manyModels} />);
+    expect(screen.queryByText('demo/candidate-16')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more models' }));
+    expect(screen.getByText('demo/candidate-15')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more models' }));
+    expect(screen.getByText('demo/candidate-16')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Show more models' })).toBeNull();
+  });
+
+  it('filters the full catalog by model identity and selected fit status', () => {
+    render(<ModelFeasibilityPreview models={manyModels} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search suitability results' }), {
+      target: { value: 'candidate-16' },
+    });
+    expect(screen.getByText('demo/candidate-16')).toBeTruthy();
+    expect(screen.queryByText('demo/candidate-1')).toBeNull();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter suitability status' }), {
+      target: { value: 'excluded' },
+    });
+    expect(screen.getByText('No models match these filters.')).toBeTruthy();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter suitability status' }), {
+      target: { value: 'metadata_fit' },
+    });
+    expect(screen.getByText('demo/candidate-16')).toBeTruthy();
+  });
+});
