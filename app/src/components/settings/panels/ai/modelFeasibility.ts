@@ -77,7 +77,7 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
   const rows: ModelFitRow<T>[] = models.map(model => {
     const reasons: ModelFitReason[] = [];
     const context = model.context_window;
-    if (!knownNonnegative(context) || context === 0) {
+    if (!knownNonnegative(context) || !Number.isSafeInteger(context) || context === 0) {
       reasons.push('unknown_context');
     } else if (context < demand) {
       reasons.push('context_too_small');
