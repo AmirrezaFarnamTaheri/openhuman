@@ -38,14 +38,17 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
     });
   const outgoing = new Map<string, string[]>();
   const reverse = new Map<string, string[]>();
+  const incoming = new Map<string, LoopSafetyGraph['edges']>();
   for (const id of ids) {
     outgoing.set(id, []);
     reverse.set(id, []);
+    incoming.set(id, []);
   }
   for (const edge of graph.edges) {
     if (!ids.has(edge.from_node) || !ids.has(edge.to_node)) continue;
     outgoing.get(edge.from_node)!.push(edge.to_node);
     reverse.get(edge.to_node)!.push(edge.from_node);
+    incoming.get(edge.to_node)!.push(edge);
   }
 
   // Multi-source traversal is O(nodes + edges) regardless of the number of
@@ -124,6 +127,7 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
       members.some(id => boundedReachable.has(id)) &&
       !members.some(id => unboundedReachable.has(id));
     const loopNodes = members.filter(id => byId.get(id)?.kind === 'loop');
+    const loopNodeIds = new Set(loopNodes);
     if (loopNodes.length === 0 && !hasRunLevelBound) {
       issues.push({
         code: 'cycle_without_bound',
@@ -151,30 +155,32 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
         });
       }
     }
-    for (const edge of graph.edges) {
-      if (
-        loopNodes.length > 0 &&
-        memberSet.has(edge.to_node) &&
-        !memberSet.has(edge.from_node) &&
-        !loopNodes.includes(edge.to_node)
-      ) {
-        issues.push({
-          code: 'loop_side_entry',
-          nodeIds: [edge.from_node, edge.to_node],
-          message: 'External flow must enter a cyclic component through a loop controller, not ' +
-            edge.to_node + '.',
-        });
-      }
-      if (
-        loopNodes.includes(edge.from_node) &&
-        memberSet.has(edge.to_node) &&
-        edge.from_port === 'done'
-      ) {
-        issues.push({
-          code: 'loop_done_reenters',
-          nodeIds: [edge.from_node, edge.to_node],
-          message: 'Loop ' + edge.from_node + ' done port must exit its cyclic component.',
-        });
+    // Every edge has exactly one target component; scanning only incoming
+    // edges to members avoids O(cyclic SCCs * all edges) on large workflows.
+    for (const member of members) {
+      for (const edge of incoming.get(member) ?? []) {
+        if (
+          loopNodes.length > 0 &&
+          !memberSet.has(edge.from_node) &&
+          !loopNodeIds.has(member)
+        ) {
+          issues.push({
+            code: 'loop_side_entry',
+            nodeIds: [edge.from_node, member],
+            message: 'External flow must enter a cyclic component through a loop controller, not ' +
+              member + '.',
+          });
+        }
+        if (
+          loopNodeIds.has(edge.from_node) &&
+          edge.from_port === 'done'
+        ) {
+          issues.push({
+            code: 'loop_done_reenters',
+            nodeIds: [edge.from_node, member],
+            message: 'Loop ' + edge.from_node + ' done port must exit its cyclic component.',
+          });
+        }
       }
     }
     if (hasRunLevelBound) continue;
