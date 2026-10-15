@@ -1,7 +1,7 @@
 /** Read-only cost/capability estimator. Never changes model routing or secrets. */
 import { useMemo, useState } from 'react';
 import type { ModelRegistryEntry } from '../../../../utils/tauriCommands/config';
-import { assessModelFeasibility, type ModelFitReason } from './modelFeasibility';
+import { assessModelFeasibility, formatEstimatedModelCost, type ModelFitReason } from './modelFeasibility';
 
 const reasonText: Record<ModelFitReason, string> = {
   context_too_small: 'Context smaller than input + output tokens',
@@ -97,9 +97,7 @@ export function ModelFeasibilityPreview({ models }: Props) {
                   </div>
                 </div>
                 <div className="shrink-0 text-content-secondary">
-                  {estimatedCostUSD === null
-                    ? 'Cost unknown'
-                    : 'Est. $' + estimatedCostUSD.toFixed(4)}
+                  {formatEstimatedModelCost(estimatedCostUSD)}
                 </div>
               </div>
             ))}
