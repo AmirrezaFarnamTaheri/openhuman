@@ -39,17 +39,20 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
   );
   const outgoing = new Map<string, string[]>();
   const reverse = new Map<string, string[]>();
-  const incoming = new Map<string, LoopSafetyGraph['edges']>();
+  // Keep original edge indices so diagnostics can be emitted in graph order
+  // without rescanning the entire edge list for every cyclic component.
+  const incomingIndices = new Map<string, number[]>();
   for (const id of ids) {
     outgoing.set(id, []);
     reverse.set(id, []);
-    incoming.set(id, []);
+    incomingIndices.set(id, []);
   }
-  for (const edge of graph.edges) {
+  for (let index = 0; index < graph.edges.length; index++) {
+    const edge = graph.edges[index];
     if (!ids.has(edge.from_node) || !ids.has(edge.to_node)) continue;
     outgoing.get(edge.from_node)!.push(edge.to_node);
     reverse.get(edge.to_node)!.push(edge.from_node);
-    incoming.get(edge.to_node)!.push(edge);
+    incomingIndices.get(edge.to_node)!.push(index);
   }
 
   // Match TinyFlows' per-node validation: an invalid loop config is a
@@ -128,15 +131,20 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
       });
       continue;
     }
-    // Every edge has exactly one target component; scanning only incoming
-    // edges to members avoids O(cyclic SCCs * all edges) on large workflows.
-    for (const member of members) {
-      for (const edge of incoming.get(member) ?? []) {
-        if (
-          loopNodes.length > 0 &&
-          !memberSet.has(edge.from_node) &&
-          !loopNodeIds.has(member)
-        ) {
+    // Each edge targets exactly one component. Visiting its incoming index
+    // avoids O(cyclic SCCs * all edges), and sorting by the original index
+    // preserves the user-authored ordering of independent diagnostics.
+    const incident = members
+      .flatMap(member => incomingIndices.get(member) ?? [])
+      .sort((a, b) => a - b);
+    for (const index of incident) {
+      const edge = graph.edges[index];
+      const member = edge.to_node;
+      if (
+        loopNodes.length > 0 &&
+        !memberSet.has(edge.from_node) &&
+        !loopNodeIds.has(member)
+      ) {
           issues.push({
             code: 'loop_side_entry',
             nodeIds: [edge.from_node, member],
@@ -154,7 +162,6 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
             message: 'Loop ' + edge.from_node + ' done port must exit its cyclic component.',
           });
         }
-      }
     }
     if (hasRunLevelBound) continue;
 
