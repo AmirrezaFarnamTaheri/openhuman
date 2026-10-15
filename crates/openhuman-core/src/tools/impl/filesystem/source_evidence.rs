@@ -54,7 +54,7 @@ fn validate_source_args(args: &Value) -> anyhow::Result<()> {
             "after_path" | "max_edges" | "max_results" | "focus_path" |
             "expected_sha256" | "start_line" | "end_line" | "start_column"
         ) {
-            anyhow::bail!("unrecognized source evidence argument: {key}");
+            anyhow::bail!("unrecognized source evidence argument");
         }
     }
     let operation = match map.get("operation") {
