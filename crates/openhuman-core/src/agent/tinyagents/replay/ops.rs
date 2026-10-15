@@ -48,3 +48,29 @@ pub(crate) async fn list_active_runs(
         .await
         .map_err(|e| anyhow::anyhow!("[agent] replay list_active_runs failed: {e}"))
 }
+
+/// Derive a bounded local-check report from the same durable event stream
+/// exposed by run_events. Never report task_verified=true: journal facts do
+/// not establish full code coverage, CI on the final commit, or hidden shell
+/// side effects. Reading remains workspace-scoped and has no side effects.
+pub(crate) async fn read_run_local_checks(
+    workspace: &Path,
+    run_id: &str,
+) -> anyhow::Result<super::local_checks::LocalCheckReport> {
+    const PAGE_SIZE: u64 = 256;
+    const MAX_PAGES: usize = 12;
+    let mut summary = super::local_checks::LocalCheckAccumulator::default();
+    let mut cursor = 0_u64;
+    for _ in 0..MAX_PAGES {
+        let page = read_run_events_page(workspace, run_id, cursor, PAGE_SIZE).await?;
+        for observed in &page.events {
+            summary.observe(observed);
+        }
+        match page.next_offset {
+            None => return Ok(summary.finish(run_id, true)),
+            Some(next) if next > cursor => cursor = next,
+            Some(_) => return Ok(summary.finish(run_id, false)),
+        }
+    }
+    Ok(summary.finish(run_id, false))
+}
