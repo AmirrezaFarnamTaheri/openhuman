@@ -171,7 +171,7 @@ fn long_line_excerpt_includes_matched_symbol_not_an_unrelated_prefix() {
     let sample = &found["results"][0]["evidence"][0];
     let snippet = sample["text"].as_str().unwrap();
     assert!(snippet.contains("sessionVerifier"), "locator must display matching evidence: {snippet}");
-    assert!(sample["excerpt_start_column"].as_u64().unwrap() > 1);
+    assert!(sample["column_start"].as_u64().unwrap() > 1);
     assert!(snippet.chars().count() <= 160);
 }
 
@@ -182,6 +182,6 @@ fn unicode_excerpts_count_columns_in_characters_not_utf8_bytes() {
     let found = rank_sources(&docs, "session verifier", 5);
     let sample = &found["results"][0]["evidence"][0];
     assert!(sample["text"].as_str().unwrap().contains("sessionVerifier"));
-    assert!(sample["excerpt_start_column"].as_u64().unwrap() > 1);
+    assert!(sample["column_start"].as_u64().unwrap() > 1);
     assert_eq!(sample["line"], 1);
 }
