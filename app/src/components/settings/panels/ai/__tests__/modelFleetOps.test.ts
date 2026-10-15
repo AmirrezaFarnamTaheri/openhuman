@@ -397,3 +397,44 @@ describe('direct image mapping editor regression contract', () => {
     expect(Object.keys(existing)).toHaveLength(512);
   });
 });
+
+
+describe('consent-preserving catalog synchronization', () => {
+  it('imports missing model presets but leaves saved model overrides intact unless refreshed', () => {
+    const catalog = [{
+      id: 'model-x', provider: 'catalog', displayName: 'Model X',
+      vision: true, context_window: 64_000,
+      cost_per_1m_input: 2, cost_per_1m_cached_input: 1, cost_per_1m_output: 4,
+    }, {
+      id: 'model-y', provider: 'catalog', displayName: 'Model Y',
+      vision: false, context_window: 32_000,
+      cost_per_1m_input: 1, cost_per_1m_cached_input: 0.5, cost_per_1m_output: 2,
+    }];
+    const saved = [{ id: 'model-x', provider: 'catalog', vision: false,
+      context_window: 10_000, cost_per_1m_input: 100, cost_per_1m_output: 200 }];
+    const safe = syncModelPresets(saved, catalog, { updateExisting: false });
+    expect(safe.added).toBe(1);
+    expect(safe.updated).toBe(0);
+    expect(safe.models[0]).toEqual(saved[0]);
+    expect(safe.models[1].id).toBe('model-y');
+    const refreshed = syncModelPresets(saved, catalog, { updateExisting: true });
+    expect(refreshed.updated).toBe(1);
+    expect(refreshed.models[0].vision).toBe(true);
+    expect(refreshed.models[0].cost_per_1m_input).toBe(2);
+  });
+
+  it('does not replace user-configured provider endpoints without explicit opt-in', () => {
+    const saved = [{
+      id: 'p1', slug: 'openrouter', label: 'Custom',
+      endpoint: 'https://private-gateway.example/v1', auth_style: 'bearer' as const,
+      model_image_endpoints: { picture: 'https://images.example/v1' },
+    }];
+    const safe = syncConfiguredProviderPresets(saved, { updateExisting: false });
+    expect(safe.updated).toBe(0);
+    expect(safe.providers).toEqual(saved);
+    const refresh = syncConfiguredProviderPresets(saved, { updateExisting: true });
+    expect(refresh.updated).toBe(1);
+    expect(refresh.providers[0].endpoint).toBe('https://openrouter.ai/api/v1');
+    expect(refresh.providers[0].model_image_endpoints).toEqual(saved[0].model_image_endpoints);
+  });
+});
