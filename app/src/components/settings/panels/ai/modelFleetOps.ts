@@ -83,7 +83,8 @@ export const fleetModelKey = (provider: string, id: string) => provider + '\0' +
 
 export function syncModelPresets(
   current: readonly ModelRegistryEntry[],
-  presets: readonly FleetModelPreset[] = FLEET_MODEL_PRESETS
+  presets: readonly FleetModelPreset[] = FLEET_MODEL_PRESETS,
+  options: { updateExisting?: boolean } = {}
 ): { models: ModelRegistryEntry[]; added: number; updated: number } {
   const next = current.map(entry => ({ ...entry }));
   const byKey = new Map(next.map((row, index) => [fleetModelKey(row.provider, row.id), index]));
@@ -105,7 +106,7 @@ export function syncModelPresets(
       byKey.set(key, next.length);
       next.push(entry);
       added++;
-    } else {
+    } else if (options.updateExisting === true) {
       const existing = next[idx];
       if (
         existing &&
@@ -145,13 +146,14 @@ export function applyModelBulkPatch(
 type ManagedFields = Pick<CloudProviderCreds, 'slug' | 'endpoint' | 'auth_style'>;
 type SyncedProvider<T extends ManagedFields> = Omit<T, 'endpoint' | 'auth_style'> & ManagedFields;
 export function syncConfiguredProviderPresets<T extends ManagedFields>(
-  providers: readonly T[]
+  providers: readonly T[],
+  options: { updateExisting?: boolean } = {}
 ): { providers: Array<SyncedProvider<T>>; updated: number } {
   const catalog = new Map(BUILTIN_CLOUD_PROVIDERS.map(p => [p.slug, p]));
   let updated = 0;
   const next: Array<SyncedProvider<T>> = providers.map(row => {
     const preset = catalog.get(row.slug);
-    if (!preset) return { ...row };
+    if (!preset || options.updateExisting !== true) return { ...row };
     if (row.endpoint === preset.endpoint && row.auth_style === preset.authStyle) return { ...row };
     updated++;
     // Existing labels, API-key reference, image mapping, and rotation preferences
