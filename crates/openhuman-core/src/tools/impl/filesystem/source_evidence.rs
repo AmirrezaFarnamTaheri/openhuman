@@ -45,6 +45,18 @@ fn validate_source_args(args: &Value) -> anyhow::Result<()> {
     let Some(map) = args.as_object() else {
         anyhow::bail!("source evidence arguments must be a JSON object");
     };
+    // This is an opt-in data-exposure tool: a typo in "operation" or "path"
+    // must not silently fall back to scanning every eligible workspace file.
+    // The same closed key set is advertised in the JSON schema.
+    for key in map.keys() {
+        if !matches!(key.as_str(),
+            "operation" | "path" | "query" | "max_files" | "max_entries" |
+            "after_path" | "max_edges" | "max_results" | "focus_path" |
+            "expected_sha256" | "start_line" | "end_line" | "start_column"
+        ) {
+            anyhow::bail!("unrecognized source evidence argument: {key}");
+        }
+    }
     let operation = match map.get("operation") {
         None => "scan",
         Some(Value::String(op)) => op.as_str(),
@@ -145,7 +157,7 @@ impl Tool for SourceEvidenceTool {
             "start_line":{"type":"integer","minimum":1},
             "end_line":{"type":"integer","minimum":1},
             "start_column":{"type":"integer","minimum":1,"description":"Optional one-based Unicode-scalar column offset for each returned excerpt"}
-        }})
+        },"additionalProperties":false})
     }
     fn max_result_size_chars(&self) -> Option<usize> { Some(30_000) }
     fn is_concurrency_safe(&self, _args: &Value) -> bool { true }
