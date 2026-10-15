@@ -15,9 +15,10 @@
 //!
 //! Needs a released TinyMCP library on `OPENHUMAN_MODULE_PATH` (the runner,
 //! `scripts/test-rust-e2e.sh`, stages the registry-pinned release) or a build
-//! from `scripts/modules/build.mjs tinymcp`. The integration target requires
-//! the explicit `e2e-test-support` feature and is run by the staged-module
-//! E2E runners, not the default unit suite. Its server is disabled and never dialled.
+//! from `scripts/modules/build.mjs tinymcp`, so the target is opt-in via
+//! `e2e-test-support` rather than included in a bare `cargo test`. Nothing here
+//! reaches the network: the server is a stub that is added disabled and never
+//! dialled.
 
 #![cfg(all(feature = "mcp", feature = "modules", feature = "storage-sqlite"))]
 
