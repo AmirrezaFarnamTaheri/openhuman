@@ -12,6 +12,7 @@ import {
   syncConfiguredProviderPresets,
   syncModelPresets,
   updateSelectedGroupSettings,
+  upsertModelImageEndpoint,
   validModelFleetEndpoint,
   validModelFleetImageEndpoint,
 } from '../modelFleetOps';
@@ -357,5 +358,42 @@ describe('model fleet destination parsing safety', () => {
     expect(Object.keys(parseModelImageEndpoints(mappings.join('\n')))).toHaveLength(512);
     expect(() => parseModelImageEndpoints([...mappings, 'overflow = https://images.example/v1'].join('\n')))
       .toThrow(/512/);
+  });
+});
+
+
+describe('direct image mapping editor regression contract', () => {
+  it('keeps prototype-shaped model IDs as own serializable data keys', () => {
+    const existing = { vision: 'https://vision.example/v1' };
+    const inserted = upsertModelImageEndpoint(existing, '__proto__', 'https://images.example/v1');
+    expect(Object.getPrototypeOf(inserted)).toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(inserted, '__proto__')).toBe(true);
+    expect(JSON.parse(JSON.stringify(inserted))['__proto__']).toBe('https://images.example/v1');
+    expect(existing).toEqual({ vision: 'https://vision.example/v1' });
+    const removed = upsertModelImageEndpoint(inserted, '__proto__', null);
+    expect(Object.prototype.hasOwnProperty.call(removed, '__proto__')).toBe(false);
+    expect(removed.vision).toBe(existing.vision);
+  });
+
+  it('enforces the Rust UTF-8 model ID budget and credentialed transport policy', () => {
+    const existing = { vision: 'https://vision.example/v1' };
+    expect(() => upsertModelImageEndpoint(existing, 'é'.repeat(101), 'https://images.example/v1'))
+      .toThrow(/200/);
+    expect(() => upsertModelImageEndpoint(existing, 'danger', 'http://remote.example/v1'))
+      .toThrow(/HTTPS|loopback/);
+    expect(existing).toEqual({ vision: 'https://vision.example/v1' });
+  });
+
+  it('refuses a 513th mapping while allowing replacements and removals at capacity', () => {
+    const existing = Object.fromEntries(Array.from(
+      { length: 512 }, (_, index) => ['model-' + index, 'https://images.example/v1']
+    ));
+    expect(() => upsertModelImageEndpoint(existing, 'overflow', 'https://images.example/v1'))
+      .toThrow(/512/);
+    expect(Object.keys(upsertModelImageEndpoint(existing, 'model-0', 'https://new.example/v1')))
+      .toHaveLength(512);
+    expect(Object.keys(upsertModelImageEndpoint(existing, 'model-0', null)))
+      .toHaveLength(511);
+    expect(Object.keys(existing)).toHaveLength(512);
   });
 });
