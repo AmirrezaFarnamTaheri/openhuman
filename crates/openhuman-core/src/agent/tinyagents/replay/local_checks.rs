@@ -31,6 +31,7 @@ pub(crate) struct LocalCheckReport {
 #[derive(Default)]
 pub(super) struct LocalCheckAccumulator {
     latest_pass: Option<u64>,
+    latest_failure: Option<u64>,
     last_possible_mutation: Option<u64>,
     passed: usize,
     failed: usize,
@@ -123,7 +124,10 @@ impl LocalCheckAccumulator {
                         self.latest_pass = Some(offset);
                         self.passed += 1;
                     }
-                    Some(_) => self.failed += 1,
+                    Some(_) => {
+                        self.failed += 1;
+                        self.latest_failure = Some(offset);
+                    },
                     None => {
                         // No proven read-only classification: the command might
                         // have written files even when the process exited zero.
@@ -137,12 +141,20 @@ impl LocalCheckAccumulator {
 
     pub(super) fn finish(self, run_id: &str, fully_paged: bool) -> LocalCheckReport {
         let complete = fully_paged && !self.has_event_gaps;
-        let fresh = complete
+        // The final recognized check takes precedence. An earlier green
+        // process cannot hide a later failed build/test/lint result, even
+        // when a backend omitted the corresponding ToolStarted event.
+        let later_failure = self.latest_failure.is_some_and(|failure| {
+            self.latest_pass.is_none_or(|passed| failure > passed)
+        });
+        let fresh = complete && !later_failure
             && self.latest_pass.is_some_and(|offset| {
                 self.last_possible_mutation.is_none_or(|last| offset > last)
             });
         let status = if !complete {
             "partial_journal"
+        } else if later_failure {
+            "failed_local_check"
         } else if self.latest_pass.is_some() && !fresh {
             "stale_local_check"
         } else if fresh {
