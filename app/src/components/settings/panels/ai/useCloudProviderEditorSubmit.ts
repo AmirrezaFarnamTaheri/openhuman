@@ -178,6 +178,17 @@ export function useCloudProviderEditorSubmit({
 
       let settingsPersisted = false;
       let settingsWriteAttempted = false;
+      let replacementKeyStored = false;
+      // Detach any active old-key route before replacing a key for a new
+      // destination. While detached, both an old key/new endpoint and a new
+      // key/old endpoint combination are impossible through live config.
+      const stagedRekey = savedKeyExists && changedDestination && Boolean(apiKey);
+      const detachedProviders = stagedRekey
+        ? list.filter(p => p.id !== previous?.id)
+        : list;
+      const detachedWireProviders = nextWireProviders.filter(
+        p => p.id !== previous?.id
+      );
       const previewProvider = nextWireProviders.find(p => p.slug === upserted.slug);
       if (!previewProvider) throw new Error('Provider preview entry not found');
       try {
@@ -198,26 +209,41 @@ export function useCloudProviderEditorSubmit({
           }
         }
 
-        // Persist the provider and other settings first. A failed settings
-        // write must not overwrite a working credential; the AuthService key
-        // replacement is the last irreversible operation in this flow.
-        settingsWriteAttempted = true;
-        await persist({ ...draft, cloudProviders: list });
-        settingsPersisted = true;
-        if (apiKey) {
+        if (stagedRekey) {
+          // Safety first: remove the old provider from live config before
+          // writing a key for a different destination. There is a brief,
+          // explicit availability gap, but no cross-endpoint key exposure.
+          settingsWriteAttempted = true;
+          await persist({ ...draft, cloudProviders: detachedProviders });
+          settingsPersisted = true;
           await setCloudProviderKey(upserted.slug, apiKey);
+          replacementKeyStored = true;
+          // Never restore the former endpoint after the new key has replaced
+          // it. If final persistence fails, keep the provider detached.
+          await persist({ ...draft, cloudProviders: list });
+        } else {
+          // New, non-retargeted providers keep the original config-first
+          // order so an unsuccessful settings write preserves existing keys.
+          settingsWriteAttempted = true;
+          await persist({ ...draft, cloudProviders: list });
+          settingsPersisted = true;
+          if (apiKey) {
+            await setCloudProviderKey(upserted.slug, apiKey);
+          }
         }
       } catch (error) {
         // Do not replay a stale whole-list rollback over concurrent edits.
         // The provider snapshot is reloaded only after an attempted write.
         let safeToResetLocalState = false;
         let conflictOrUnknown = false;
-        if (settingsWriteAttempted) {
+        if (settingsWriteAttempted && !replacementKeyStored) {
           try {
             const current = await loadAISettings();
             const observed = providerListFingerprint(current.cloudProviders);
             const prior = providerListFingerprint(priorWireProviders);
-            const attempted = providerListFingerprint(nextWireProviders);
+            const attempted = providerListFingerprint(
+              stagedRekey ? detachedWireProviders : nextWireProviders
+            );
             if (observed === attempted) {
               try {
                 await flushCloudProviders(priorWireProviders);
@@ -237,6 +263,17 @@ export function useCloudProviderEditorSubmit({
             conflictOrUnknown = true;
             console.warn('[ai-settings] provider state could not be verified; rollback skipped.');
           }
+        }
+        if (replacementKeyStored) {
+          // A completed key replacement cannot be undone without access to
+          // the previous secret. Never restore the old provider destination:
+          // doing so would forward the *new* key to the former endpoint.
+          const detail = redactCandidateSecrets(
+            error instanceof Error ? error.message : 'Provider save failed', apiKey
+          );
+          throw new Error(detail +
+            '. The replacement key is stored, but the provider may be detached. ' +
+            'Reload settings and retry the provider configuration.');
         }
         if (settingsPersisted && safeToResetLocalState) {
           // Restore the UI snapshot only when core state is confirmed restored.
