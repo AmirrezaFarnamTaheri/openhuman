@@ -266,7 +266,7 @@ export function upsertModelImageEndpoint(
   endpoint: string | null
 ): Record<string, string> {
   const id = modelId.trim();
-  if (!id || new TextEncoder().encode(id).length > 200 || /\\p{Cc}/u.test(id)) {
+  if (!id || new TextEncoder().encode(id).length > 200 || /\p{Cc}/u.test(id)) {
     throw new Error('Image model ids must be nonempty and at most 200 UTF-8 bytes.');
   }
   const next: Record<string, string> = Object.assign(Object.create(null), current);
