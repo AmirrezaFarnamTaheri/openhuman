@@ -185,7 +185,7 @@ describe('useCloudProviderEditorSubmit', () => {
     expect(persist).not.toHaveBeenCalled();
   });
 
-  it('compensates settings if secret storage fails after a successful preview', async () => {
+  it('leaves a retargeted provider detached if a key-store write fails ambiguously', async () => {
     api.listProviderModels.mockResolvedValue([]);
     api.setCloudProviderKey.mockRejectedValue(new Error('keyring locked'));
     const previous = {
@@ -207,12 +207,12 @@ describe('useCloudProviderEditorSubmit', () => {
         { ...previous, endpoint: 'https://new.example/v1' }, 'replacement-key'
       )).rejects.toThrow('keyring locked');
     });
-    expect(api.flushCloudProviders).toHaveBeenCalledTimes(1);
-    expect(api.flushCloudProviders).toHaveBeenCalledWith(expect.arrayContaining([
-      expect.objectContaining({ endpoint: 'https://old.example/v1' })
-    ]));
-    expect(persist).toHaveBeenCalledTimes(2);
-    expect(persist).toHaveBeenLastCalledWith(saved);
+    // An AuthService write may have committed even if its RPC rejected.
+    // Restoring the old destination could forward the replacement key there.
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
+    expect(api.loadAISettings).not.toHaveBeenCalled();
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(persist.mock.calls[0][0].cloudProviders).toEqual([]);
   });
 
   it('does not rewrite unchanged core settings after a rejected provider config save', async () => {
