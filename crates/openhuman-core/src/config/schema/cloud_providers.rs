@@ -528,6 +528,12 @@ pub fn normalize_fleet_config(
 ) -> Result<NormalizedFleetConfig, String> {
     fn image_url(raw: &str) -> Result<String, String> {
         let value = raw.trim();
+        // Do not rely on WHATWG normalization for credential-bearing routes:
+        // it may silently discard embedded CR/LF/TAB and change the URL.
+        // The frontend uses the same explicit control-character boundary.
+        if value.chars().any(char::is_control) {
+            return Err("image endpoint contains embedded control characters".into());
+        }
         let url = reqwest::Url::parse(value)
             .map_err(|_| "image endpoint must be an absolute HTTP(S) URL".to_string())?;
         if !matches!(url.scheme(), "http" | "https")
