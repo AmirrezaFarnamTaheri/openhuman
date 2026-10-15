@@ -3,8 +3,8 @@ use serde_json::json;
 
 fn passing_receipt() -> serde_json::Value {
     json!({"openhuman_local_check_v1":{
-        "recognized": true, "passed": true, "exit_status": "zero",
-        "scope": "local_check_only", "task_verified": false
+        "recognized": true, "passed": true, "status": "passed",
+        "exit_status": "zero", "scope": "local_check_only", "task_verified": false
     }})
 }
 
@@ -115,4 +115,40 @@ fn a_later_success_can_supersede_an_earlier_failed_check() {
     assert_eq!(result.status, "local_check_observed");
     assert!(result.check_after_last_known_mutation);
     assert!(!result.task_verified);
+}
+
+
+#[test]
+fn contradictory_or_incomplete_local_check_metadata_cannot_claim_success() {
+    let invalid = [
+        json!({"openhuman_local_check_v1":{
+            "recognized": true, "passed": true, "status": "not_executed",
+            "exit_status": "zero", "scope": "local_check_only",
+            "task_verified": false
+        }}),
+        json!({"openhuman_local_check_v1":{
+            "recognized": true, "passed": true,
+            "exit_status": "zero", "scope": "local_check_only",
+            "task_verified": false
+        }}),
+        json!({"openhuman_local_check_v1":{
+            "recognized": true, "passed": true, "status": "passed",
+            "exit_status": "zero", "scope": "local_check_only"
+        }}),
+        json!({"openhuman_local_check_v1":{
+            "recognized": true, "passed": false, "status": "passed",
+            "exit_status": "unknown", "scope": "local_check_only",
+            "task_verified": false
+        }}),
+    ];
+    for fact in invalid {
+        let mut acc = LocalCheckAccumulator::default();
+        acc.record(1, "shell", LocalToolEvent::Completed {
+            metadata: Some(&fact), error: false,
+        });
+        let report = acc.finish("run", true);
+        assert_eq!(report.passed_checks, 0, "invalid receipt: {fact}");
+        assert_eq!(report.status, "no_local_check");
+        assert_eq!(report.unclassified_shell_calls, 1);
+    }
 }
