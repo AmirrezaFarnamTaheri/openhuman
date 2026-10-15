@@ -1,6 +1,11 @@
 name: Upstream full-history conflict audit
 
 on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - .github/workflows/upstream-conflict-audit.yml
   push:
     branches:
       - sync/upstream-conflict-audit-20261016
@@ -25,6 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git switch --detach origin/main
           git config user.name "upstream-audit[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/tinyhumansai/openhuman.git
