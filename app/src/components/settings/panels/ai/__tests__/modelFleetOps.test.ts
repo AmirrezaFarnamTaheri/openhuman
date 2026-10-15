@@ -13,6 +13,7 @@ import {
   syncModelPresets,
   updateSelectedGroupSettings,
   upsertModelImageEndpoint,
+  keyedProviderDestinationChanges,
   validModelFleetEndpoint,
   validModelFleetImageEndpoint,
 } from '../modelFleetOps';
@@ -436,5 +437,29 @@ describe('consent-preserving catalog synchronization', () => {
     expect(refresh.updated).toBe(1);
     expect(refresh.providers[0].endpoint).toBe('https://openrouter.ai/api/v1');
     expect(refresh.providers[0].model_image_endpoints).toEqual(saved[0].model_image_endpoints);
+  });
+});
+
+
+describe('provider refresh credential boundaries', () => {
+  it('detects only destination or auth changes for providers with saved credentials', () => {
+    const before = [{
+      id: 'saved', endpoint: 'https://old.example/v1',
+      authStyle: 'bearer', maskedKey: '••••stored',
+    }, {
+      id: 'unkeyed', endpoint: 'https://old.example/v1',
+      authStyle: 'bearer', maskedKey: '',
+    }];
+    expect(keyedProviderDestinationChanges(before, [{
+      id: 'saved', endpoint: 'https://new.example/v1', authStyle: 'bearer',
+    }, {
+      id: 'unkeyed', endpoint: 'https://new.example/v1', authStyle: 'bearer',
+    }])).toEqual(['saved']);
+    expect(keyedProviderDestinationChanges(before, [{
+      id: 'saved', endpoint: 'https://old.example/v1', authStyle: 'bearer',
+    }])).toEqual([]);
+    expect(keyedProviderDestinationChanges(before, [{
+      id: 'saved', endpoint: 'https://old.example/v1', authStyle: 'anthropic',
+    }])).toEqual(['saved']);
   });
 });
