@@ -1,6 +1,8 @@
 //! Read-only local command-check evidence derived from the existing durable
 //! TinyAgents event journal. This is not a replacement ledger or a completion
 //! oracle: tool names and exit outcomes cannot prove full coverage of a task.
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 use serde_json::Value;
 use tinyagents_harness::events::AgentEvent;
@@ -21,6 +23,10 @@ pub(crate) struct LocalCheckReport {
     pub(crate) last_possible_mutation_offset: Option<u64>,
     pub(crate) passed_checks: usize,
     pub(crate) failed_checks: usize,
+    /// Safe category names only: command strings and arguments are never stored.
+    pub(crate) unresolved_check_kinds: Vec<String>,
+    /// Older receipts did not identify a check category and cannot prove a rerun.
+    pub(crate) unattributed_failures: usize,
     pub(crate) unclassified_shell_calls: usize,
     pub(crate) check_after_last_known_mutation: bool,
     pub(crate) journal_complete: bool,
@@ -31,8 +37,11 @@ pub(crate) struct LocalCheckReport {
 #[derive(Default)]
 pub(super) struct LocalCheckAccumulator {
     latest_pass: Option<u64>,
-    latest_failure: Option<u64>,
     last_possible_mutation: Option<u64>,
+    /// Last observed outcome by check family: cargo_test != cargo_fmt.
+    /// No command contents, source paths, or user-supplied identifiers.
+    checks_by_kind: BTreeMap<String, bool>,
+    unattributed_failures: usize,
     passed: usize,
     failed: usize,
     unknown_shell: usize,
@@ -42,17 +51,30 @@ pub(super) struct LocalCheckAccumulator {
 }
 
 fn may_change_source(tool: &str) -> bool {
-    matches!(
+    // Unknown plugin/MCP tools may write, run shell or delegate. The journal
+    // does not contain a trusted permission-level proof, so treating them as
+    // read-only would let them leave a stale check marked fresh. Allow only a
+    // deliberately small set of native, explicitly read-only tool names.
+    !matches!(
         tool,
-        "file_write" | "file_edit" | "edit_file" | "apply_patch" |
-        "file_delete" | "file_move" | "git_operations" |
-        "run_workflow" | "delegate" | "spawn_async_subagent" |
-        "spawn_worker_thread" | "spawn_parallel_agents" |
-        "continue_subagent" | "steer_subagent" | "shell"
+        "file_read" | "file_list" | "file_search" |
+        "grep" | "glob" | "source_evidence" | "current_time" |
+        "run_status" | "run_events" | "run_local_checks"
     )
 }
 
-fn trusted_local_fact(meta: Option<&Value>) -> Option<bool> {
+fn supported_check_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "cargo_test" | "cargo_check" | "cargo_clippy" | "cargo_build" | "cargo_fmt" |
+        "pytest" | "python_unittest" |
+        "go_test" | "go_vet" | "go_build" | "node_test" |
+        "pnpm_test" | "pnpm_lint" | "pnpm_build" | "vitest" |
+        "npm_test" | "npm_build" | "npm_lint" | "npm_typecheck"
+    )
+}
+
+fn trusted_local_fact(meta: Option<&Value>) -> Option<(bool, Option<&str>)> {
     let fact = meta?.get("openhuman_local_check_v1")?;
     if fact.get("recognized")?.as_bool() != Some(true)
         || fact.get("scope")?.as_str() != Some("local_check_only")
@@ -63,12 +85,17 @@ fn trusted_local_fact(meta: Option<&Value>) -> Option<bool> {
     // This host-only envelope is versioned. A contradictory tuple such as
     // passed=true/status=not_executed cannot become positive evidence even
     // if some future tool or adapter accidentally writes that metadata.
+    let kind = match fact.get("check_kind") {
+        Some(Value::String(name)) if supported_check_kind(name) => Some(name.as_str()),
+        Some(_) => return None, // an invented check category is not trusted
+        None => None, // backward compatibility: no basis to clear old failures
+    };
     let passed = fact.get("passed")?.as_bool()?;
     let status = fact.get("status")?.as_str()?;
     let exit = fact.get("exit_status")?.as_str()?;
     match (passed, status, exit) {
-        (true, "passed", "zero") => Some(true),
-        (false, "not_executed" | "failed_or_unobserved", "unknown") => Some(false),
+        (true, "passed", "zero") => Some((true, kind)),
+        (false, "not_executed" | "failed_or_unobserved", "unknown") => Some((false, kind)),
         _ => None,
     }
 }
@@ -126,13 +153,22 @@ impl LocalCheckAccumulator {
         if let LocalToolEvent::Completed { metadata, error } = event {
             if tool_name == "shell" {
                 match trusted_local_fact(metadata) {
-                    Some(true) if !error => {
+                    Some((true, kind)) if !error => {
                         self.latest_pass = Some(offset);
                         self.passed += 1;
+                        if let Some(kind) = kind {
+                            self.checks_by_kind.insert(kind.to_owned(), true);
+                        }
                     }
-                    Some(_) => {
+                    Some((_, kind)) => {
                         self.failed += 1;
-                        self.latest_failure = Some(offset);
+                        if let Some(kind) = kind {
+                            self.checks_by_kind.insert(kind.to_owned(), false);
+                        } else {
+                            // A legacy failure with no category cannot be
+                            // cleared by an unrelated later green command.
+                            self.unattributed_failures += 1;
+                        }
                     },
                     None => {
                         // No proven read-only classification: the command might
@@ -147,19 +183,21 @@ impl LocalCheckAccumulator {
 
     pub(super) fn finish(self, run_id: &str, fully_paged: bool) -> LocalCheckReport {
         let complete = fully_paged && !self.has_event_gaps;
-        // The final recognized check takes precedence. An earlier green
-        // process cannot hide a later failed build/test/lint result, even
-        // when a backend omitted the corresponding ToolStarted event.
-        let later_failure = self.latest_failure.is_some_and(|failure| {
-            self.latest_pass.is_none_or(|passed| failure > passed)
-        });
-        let fresh = complete && !later_failure
+        // A successful formatter cannot erase a failed test run. Only a
+        // later successful check of the SAME safe family resolves its failure.
+        let unresolved_check_kinds: Vec<String> = self.checks_by_kind.iter()
+            .filter(|(_, passed)| !**passed)
+            .map(|(kind, _)| kind.clone())
+            .collect();
+        let unresolved_failures = self.unattributed_failures > 0
+            || !unresolved_check_kinds.is_empty();
+        let fresh = complete && !unresolved_failures
             && self.latest_pass.is_some_and(|offset| {
                 self.last_possible_mutation.is_none_or(|last| offset > last)
             });
         let status = if !complete {
             "partial_journal"
-        } else if later_failure {
+        } else if unresolved_failures {
             "failed_local_check"
         } else if self.latest_pass.is_some() && !fresh {
             "stale_local_check"
@@ -177,6 +215,8 @@ impl LocalCheckAccumulator {
             last_possible_mutation_offset: self.last_possible_mutation,
             passed_checks: self.passed,
             failed_checks: self.failed,
+            unresolved_check_kinds,
+            unattributed_failures: self.unattributed_failures,
             unclassified_shell_calls: self.unknown_shell,
             check_after_last_known_mutation: fresh,
             journal_complete: complete,
