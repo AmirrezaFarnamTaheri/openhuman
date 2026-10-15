@@ -11,7 +11,7 @@ use super::types::{
     ComposioTriggerEvent, ComposioTriggerHistoryEntry, ComposioTriggerHistoryResult,
 };
 use crate::config::Config;
-use crate::modules::client::ModuleClient;
+use tinybus::module::ModuleClient;
 use tinyconnectors_bus::names::methods;
 
 static GLOBAL_TRIGGER_HISTORY: OnceLock<Arc<TriggerHistory>> = OnceLock::new();
@@ -36,7 +36,7 @@ impl TriggerHistory {
         if let Some(client) = self.fixture.as_ref() {
             return client.clone();
         }
-        ModuleClient::new(config.clone())
+        crate::modules::client(config.clone())
     }
 
     async fn ensure_lease(
@@ -87,7 +87,7 @@ impl TriggerHistory {
         let client = self.client(&config);
         // Keep ownership installation running if the caller is cancelled while
         // OpenArchive completes. A later close can still release the handle.
-        crate::core::runtime::spawn_scoped(async move {
+        tokio::spawn(async move {
             let mut guard = lease.lock_owned().await;
             Self::ensure_lease(&config, &mut guard, client).await?;
             Ok(guard)
@@ -157,7 +157,7 @@ impl TriggerHistory {
     /// Release the module resource while retaining all persisted documents.
     pub async fn close(&self) -> Result<(), String> {
         let lease = Arc::clone(&self.lease);
-        crate::core::runtime::spawn_scoped(async move {
+        tokio::spawn(async move {
             Self::release(&mut *lease.lock_owned().await).await
         })
         .await

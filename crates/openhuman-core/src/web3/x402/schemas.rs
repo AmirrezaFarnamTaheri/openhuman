@@ -3,6 +3,7 @@
 //! Wires `x402_get_summary`, `x402_list_payments`, and `x402_update_budget`
 //! into the global registry consumed by `crates/openhuman-core/src/core/all.rs`.
 
+use crate::core::runtime::DispatchCtx;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
@@ -108,12 +109,13 @@ pub fn schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_get_summary(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_get_summary(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        let config = crate::config::rpc::load_config_with_timeout()
+        let config = ctx
+            .load_config()
             .await
             .map_err(|error| format!("x402 get_summary: {error}"))?;
-        let summary = crate::modules::x402_service::summary(&config)
+        let summary = crate::modules::x402_service::summary(&ctx, &config)
             .await
             .map_err(|error| format!("x402 get_summary: {error}"))?;
         Ok(summary_value(summary))
@@ -127,16 +129,17 @@ struct ListPaymentsParams {
     limit: Option<u64>,
 }
 
-fn handle_list_payments(params: Map<String, Value>) -> ControllerFuture {
+fn handle_list_payments(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p: ListPaymentsParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("x402 list_payments params: {e}"))?;
 
-        let config = crate::config::rpc::load_config_with_timeout()
+        let config = ctx
+            .load_config()
             .await
             .map_err(|error| format!("x402 list_payments: {error}"))?;
         let limit = p.limit.unwrap_or(50).min(500);
-        let response = crate::modules::x402_service::list_payments(&config, limit)
+        let response = crate::modules::x402_service::list_payments(&ctx, &config, limit)
             .await
             .map_err(|error| format!("x402 list_payments: {error}"))?;
         Ok(payments_value(response.payments))
@@ -158,15 +161,17 @@ struct UpdateBudgetParams {
     monthly_max: Option<u64>,
 }
 
-fn handle_update_budget(params: Map<String, Value>) -> ControllerFuture {
+fn handle_update_budget(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let p: UpdateBudgetParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("x402 update_budget params: {e}"))?;
 
-        let config = crate::config::rpc::load_config_with_timeout()
+        let config = ctx
+            .load_config()
             .await
             .map_err(|error| format!("x402 update_budget: {error}"))?;
         let summary = crate::modules::x402_service::update_budget(
+            &ctx,
             &config,
             p.per_request_max,
             p.daily_max,

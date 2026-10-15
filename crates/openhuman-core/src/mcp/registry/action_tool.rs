@@ -120,6 +120,7 @@ impl Tool for InstalledServerTool {
 
 impl InstalledServerTool {
     async fn execute_inner(&self, arguments: Value) -> anyhow::Result<ToolResult> {
+        let tool_input = arguments.clone();
         let client = match McpConfiguredClient::for_config(&self.config) {
             Ok(client) => client,
             Err(_) => return Ok(ToolResult::error("MCP module is unavailable")),
@@ -180,6 +181,15 @@ impl InstalledServerTool {
             )
             .to_metadata(),
         );
+        let tool_meta = crate::mcp::ui::decorate::installed_tool(
+            &client,
+            &client_config,
+            &self.presentation.server_id,
+            &self.presentation.remote_name,
+        )
+        .await
+        .and_then(|listed| listed.meta);
+        crate::mcp::ui::decorate_result(tool_meta.as_ref(), &tool_input, &mut result);
         Ok(result)
     }
 }

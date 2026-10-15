@@ -41,7 +41,7 @@ pub struct TickReport {
 
 /// Start the loop. It runs until the process exits.
 pub fn spawn(host: Arc<ProfileHost>) -> tokio::task::JoinHandle<()> {
-    crate::core::runtime::spawn_scoped(async move {
+    tokio::spawn(async move {
         log::info!(
             "[profiles][background] started (every {}s)",
             TICK_INTERVAL.as_secs()

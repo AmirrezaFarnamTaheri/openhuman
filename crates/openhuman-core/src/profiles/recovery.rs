@@ -29,7 +29,9 @@ pub(crate) fn recover_workspace(id: &ProfileId, workspace_dir: &std::path::Path)
 /// store, which the workspace sweep cannot see: the profile's default
 /// session key is swept through the installed provider.
 pub(crate) fn recover_session_store(id: &ProfileId, context: &Arc<CoreContext>) {
-    let Some(provider) = crate::agent::session_store::installed() else {
+    let Some(provider) = crate::agent::session_store::installed_in(
+        &crate::core::runtime::DispatchCtx::new(Arc::clone(context)),
+    ) else {
         return;
     };
     if provider.workspace_dir().is_some() {
@@ -38,11 +40,13 @@ pub(crate) fn recover_session_store(id: &ProfileId, context: &Arc<CoreContext>) 
     }
     let key = crate::core::runtime::session_key(&crate::core::runtime::Tenant::of(context));
     let now = chrono::Utc::now().to_rfc3339();
-    match provider
-        .for_agent(&key)
-        .turn_states
-        .mark_all_interrupted(&now)
-    {
+    let recovered = CoreContext::sync_scope(Arc::clone(context), || {
+        provider
+            .for_agent(&key)
+            .turn_states
+            .mark_all_interrupted(&now)
+    });
+    match recovered {
         Ok(0) => {}
         Ok(turns) => {
             log::info!("[profiles] profile={id} recovered {turns} interrupted stored turn(s)");
@@ -53,7 +57,9 @@ pub(crate) fn recover_session_store(id: &ProfileId, context: &Arc<CoreContext>) 
         // Another replica may still be driving a run in a shared backend.
         return;
     }
-    match provider.run_ledger_for_agent(&key) {
+    let ledger =
+        CoreContext::sync_scope(Arc::clone(context), || provider.run_ledger_for_agent(&key));
+    match ledger {
         Ok(Some(ledger)) => {
             let swept = crate::storage::block_on(async move {
                 Ok(ledger.interrupt_orphaned_agent_runs().await)
@@ -73,3 +79,7 @@ pub(crate) fn recover_session_store(id: &ProfileId, context: &Arc<CoreContext>) 
         Err(error) => log::warn!("[profiles] profile={id} run ledger unavailable: {error}"),
     }
 }
+
+#[cfg(test)]
+#[path = "recovery_tests.rs"]
+mod tests;

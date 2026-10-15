@@ -25,11 +25,13 @@
 //! misconfigured deployment stops at boot instead of at its first write.
 
 pub mod agents;
+pub mod blob_sweep;
 pub mod config;
 pub mod documents;
 pub mod fence;
 pub mod fenced_backend;
 pub mod import;
+pub mod import_claim;
 pub mod lease;
 mod lease_documents;
 mod lease_local;
@@ -49,7 +51,8 @@ use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
 /// foreign file, and its `run_blocking` hands the closure a `rusqlite`
 /// connection anyway. The core has no `rusqlite` dependency of its own,
 /// tinystoragedrivers owns the one copy; the re-export goes when the importers
-/// do (the one-time legacy import window closes).
+/// do (the one-time legacy import window closes). Re-checked for #7768: both
+/// consumers are still present, so it stays.
 pub use tinystoragedrivers::sqlite::rusqlite;
 pub use tinystoragedrivers::{
     Blocking, CollectionSpec, DocumentStore, DocumentStoreExt, MemoryStorage, Precondition, Scope,
@@ -210,7 +213,7 @@ pub fn clear() -> bool {
 /// In SaaS mode, when the current task serves no profile.
 pub fn current_scope() -> Result<Scope, StorageError> {
     let saas = crate::core::runtime::mode::is_saas();
-    match crate::core::runtime::current_tenant() {
+    match crate::core::runtime::DispatchCtx::ambient().tenant() {
         Ok(tenant) => scope_from(tenant.profile.as_deref(), tenant.agent.as_deref(), saas),
         Err(no_tenant) => Err(StorageError::invalid_input(no_tenant.to_string())),
     }
@@ -335,6 +338,16 @@ pub fn scope_for_profile(profile_id: &str) -> Scope {
     let digest = sha2::Sha256::digest(profile_id.as_bytes());
     Scope::new(format!("profile-sha256:{}", hex::encode(digest)))
         .unwrap_or_else(|_| unreachable!("a sha256 hex scope is always valid"))
+}
+
+/// A stable key for a legacy import source (a workspace directory), for the
+/// marker document and once-per-process key of an importer. Two workspaces
+/// that share one explicit backend and scope must each import their own legacy
+/// files, so a marker names its source.
+pub fn source_key(source: &std::path::Path) -> String {
+    use sha2::Digest;
+    let digest = sha2::Sha256::digest(source.to_string_lossy().as_bytes());
+    hex::encode(&digest[..8])
 }
 
 #[cfg(test)]

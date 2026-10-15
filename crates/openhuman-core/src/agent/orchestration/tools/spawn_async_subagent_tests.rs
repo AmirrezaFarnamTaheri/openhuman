@@ -1,12 +1,12 @@
 use super::*;
-use crate::agent::harness::definition::AgentDefinitionRegistry;
-use crate::agent::harness::fork_context::{with_parent_context, ParentExecutionContext};
-use crate::agent::prompts::ToolCallFormat;
+use crate::agent::harness::fork_context::ParentExecutionContext;
+use crate::agent::harness::host_definition::AgentDefinitionRegistry;
 use crate::config::AgentConfig;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use tinytools::{ToolCallOptions, ToolRunContext};
+use tinytools_agent::dialect::ToolCallFormat;
 
 struct ThreadContext(&'static str);
 
@@ -77,6 +77,7 @@ async fn late_registration_refusal_aborts_the_worker_and_settles_its_durable_ses
     let join = tokio::spawn(std::future::pending::<()>());
     let (_tx, rx) = running_subagents::status_channel();
     let refused = running_subagents::register(
+        &crate::core::runtime::DispatchCtx::ambient(),
         "late-refusal-task".into(),
         "task_manager_agent".into(),
         "late-parent".into(),
@@ -175,7 +176,7 @@ fn accepted_message_hides_task_id_from_prose() {
 #[test]
 fn wait_only_fleet_omits_steering_guidance_and_instruction() {
     let fleet = FleetToolSet::from_scope(
-        &crate::agent::harness::definition::ToolScope::Named(vec!["wait_subagent".to_string()]),
+        &tinyagents_definition::ToolScope::Named(vec!["wait_subagent".to_string()]),
         &[],
     );
     assert!(fleet.can_wait());
@@ -396,6 +397,7 @@ fn attach_workflow_proposal_persists_thread_message_and_extends_summary() {
     use crate::threads::store::CreateConversationThread;
     let temp = tempfile::tempdir().expect("tempdir");
     conversations::ensure_thread(
+        &crate::core::runtime::DispatchCtx::ambient(),
         temp.path().to_path_buf(),
         CreateConversationThread {
             id: "thread-parent".into(),
@@ -413,6 +415,7 @@ fn attach_workflow_proposal_persists_thread_message_and_extends_summary() {
         r#"{"type":"workflow_proposal","persisted":false,"name":"Daily X Trending Email","graph":{"nodes":[],"edges":[]}}"#,
     )];
     let summary = attach_workflow_proposal(
+        &crate::core::runtime::DispatchCtx::ambient(),
         temp.path(),
         Some("thread-parent"),
         "sub-task-1",
@@ -429,8 +432,12 @@ fn attach_workflow_proposal_persists_thread_message_and_extends_summary() {
 
     // Proposal is durably persisted in the parent thread with rehydratable
     // metadata (this is what survives reload / a dropped socket event).
-    let messages =
-        conversations::get_messages(temp.path().to_path_buf(), "thread-parent").expect("messages");
+    let messages = conversations::get_messages(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        temp.path().to_path_buf(),
+        "thread-parent",
+    )
+    .expect("messages");
     let proposal_msg = messages
         .iter()
         .find(|m| m.id == "workflow-proposal:sub-task-1")
@@ -449,6 +456,7 @@ fn attach_workflow_proposal_persists_thread_message_and_extends_summary() {
 fn attach_workflow_proposal_without_proposal_returns_summary_unchanged() {
     let temp = tempfile::tempdir().expect("tempdir");
     let summary = attach_workflow_proposal(
+        &crate::core::runtime::DispatchCtx::ambient(),
         temp.path(),
         Some("thread-x"),
         "sub-task-2",
@@ -483,9 +491,9 @@ async fn missing_prompt_returns_error() {
 /// `agent` node, CLI, cron) must get a clear, actionable error instead of
 /// silently accepting the spawn and later dropping its result in
 /// `background_delivery`'s "headless batch" path. Sets up a real parent
-/// turn context (so the call gets past the `current_parent()` /
-/// allowlist / registry checks) but deliberately does NOT wrap the call
-/// without an explicit parent thread, so the child has no thread — the exact
+/// turn context (so the call gets past the parent-context /
+/// allowlist / registry checks) but deliberately gives the call
+/// no explicit parent thread, so the child has no thread — the exact
 /// condition that used to sail through to `tokio::spawn` and lose the
 /// result.
 #[tokio::test]
@@ -493,16 +501,18 @@ async fn errors_clearly_when_no_parent_thread_for_delivery() {
     let _ = AgentDefinitionRegistry::init_global_builtins();
     let workspace = tempfile::TempDir::new().expect("workspace");
 
-    let result = with_parent_context(parent_context(workspace.path()), async {
-        SpawnAsyncSubagentTool::new()
-            .execute(json!({
+    let result = SpawnAsyncSubagentTool::new()
+        .execute_under_parent(
+            json!({
                 "agent_id": "task_manager_agent",
                 "prompt": "investigate x",
-            }))
-            .await
-    })
-    .await
-    .unwrap();
+            }),
+            ToolCallOptions::default(),
+            None,
+            parent_context(workspace.path()),
+        )
+        .await
+        .unwrap();
 
     assert!(result.is_error);
     let out = result.output();
@@ -537,20 +547,18 @@ async fn guard_does_not_fire_when_parent_thread_is_bound() {
     let workspace = tempfile::TempDir::new().expect("workspace");
 
     let thread = ThreadContext("t-parent");
-    let result = with_parent_context(parent_context(workspace.path()), async {
-        SpawnAsyncSubagentTool::new()
-            .execute_with_context(
-                json!({
-                    "agent_id": "task_manager_agent",
-                    "prompt": "investigate x",
-                }),
-                ToolCallOptions::default(),
-                Some(&thread),
-            )
-            .await
-    })
-    .await
-    .unwrap();
+    let result = SpawnAsyncSubagentTool::new()
+        .execute_under_parent(
+            json!({
+                "agent_id": "task_manager_agent",
+                "prompt": "investigate x",
+            }),
+            ToolCallOptions::default(),
+            Some(&thread),
+            parent_context(workspace.path()),
+        )
+        .await
+        .unwrap();
 
     assert!(
         !result.output().contains("no parent chat thread"),
@@ -586,6 +594,7 @@ fn parent_context(workspace_dir: &Path) -> ParentExecutionContext {
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     }
 }
 

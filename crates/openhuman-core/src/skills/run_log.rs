@@ -186,6 +186,7 @@ pub fn format_event(ev: &AgentProgress) -> Option<String> {
         AgentProgress::TextDelta { .. }
         | AgentProgress::ThinkingDelta { .. }
         | AgentProgress::ToolCallArgsDelta { .. }
+        | AgentProgress::ToolCallProgress { .. }
         | AgentProgress::TurnCostUpdated { .. }
         | AgentProgress::ModelCallCompleted { .. }
         | AgentProgress::SubagentTextDelta { .. }
@@ -206,7 +207,7 @@ pub fn format_event(ev: &AgentProgress) -> Option<String> {
 pub async fn drain_to_log(
     mut rx: Receiver<AgentProgress>,
     path: PathBuf,
-) -> Option<crate::agent::turn_stop::TurnStop> {
+) -> Option<tinyagents_harness::turn_stop::TurnStop> {
     let mut stop = None;
     while let Some(ev) = rx.recv().await {
         if let Some(line) = format_event(&ev) {

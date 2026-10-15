@@ -200,7 +200,7 @@ pub fn start_sync(config: &Config, id: Option<&str>) -> MemoryResult<Vec<String>
     for claim in claims {
         started.push(claim.source().id.clone());
         let config = config.clone();
-        crate::core::runtime::spawn_scoped(async move {
+        crate::core::runtime::DispatchCtx::ambient().spawn(async move {
             let result = match config
                 .memory
                 .sources

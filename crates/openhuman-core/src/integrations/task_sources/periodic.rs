@@ -8,6 +8,7 @@
 //! process-global map, and errors are logged and swallowed so the loop
 //! never unwinds.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -80,7 +81,7 @@ pub fn start_periodic_poll() {
         tracing::debug!("[task_sources:periodic] scheduler already running, skipping start");
         return;
     }
-    crate::core::runtime::spawn_scoped(async move {
+    tokio::spawn(async move {
         tracing::info!(
             tick_seconds = TICK_SECONDS,
             "[task_sources:periodic] scheduler starting"
@@ -100,7 +101,10 @@ async fn run_loop() {
         // `local`, then every agent that keeps its sources in its own storage
         // scope (`crate::storage::agents`).
         for (agent, result) in
-            crate::storage::agents::for_each_live_scope("task_sources", run_one_tick).await
+            crate::storage::agents::for_each_live_scope(&DispatchCtx::host_default(), "task_sources", |ctx| async move {
+                run_one_tick(&ctx).await
+            })
+            .await
         {
             if let Err(e) = result {
                 tracing::warn!(error = %e, agent = agent.as_deref().unwrap_or("local"), "[task_sources:periodic] tick failed (continuing)");
@@ -111,8 +115,9 @@ async fn run_loop() {
 
 /// Run a single scheduler tick. `pub(crate)` so tests can drive ticks
 /// without the real `interval`.
-pub(crate) async fn run_one_tick() -> Result<(), String> {
-    let config = config_rpc::load_config_with_timeout()
+pub(crate) async fn run_one_tick(ctx: &DispatchCtx) -> Result<(), String> {
+    let config = ctx
+        .load_config()
         .await
         .map_err(|e| format!("load_config: {e}"))?;
 
@@ -160,7 +165,7 @@ pub(crate) async fn run_one_tick() -> Result<(), String> {
         // Record the attempt up front so a slow/failing fetch doesn't
         // re-fire every tick.
         record_poll(&source.id);
-        let outcome = pipeline::run_source_once(&config, &source, FetchReason::Periodic).await;
+        let outcome = pipeline::run_source_once(ctx, &config, &source, FetchReason::Periodic).await;
         fired += 1;
         tracing::debug!(
             source_id = %source.id,

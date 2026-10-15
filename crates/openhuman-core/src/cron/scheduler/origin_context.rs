@@ -3,6 +3,7 @@
 //! preamble saying the run is unattended.
 
 use crate::config::Config;
+use crate::core::runtime::DispatchCtx;
 use {
     crate::cron::channel_bridge, tinyflows_schedule::types::CronJob,
     tinyflows_schedule::types::JobOrigin,
@@ -53,10 +54,15 @@ pub(crate) fn bounded_tail(
 }
 
 /// The origin conversation's recent messages, oldest first.
-async fn origin_messages(config: &Config, origin: &JobOrigin) -> Vec<(String, String)> {
+async fn origin_messages(
+    ctx: &DispatchCtx,
+    config: &Config,
+    origin: &JobOrigin,
+) -> Vec<(String, String)> {
     match origin {
         JobOrigin::Web { thread_id, .. } => {
             match crate::threads::store::blocking::get_messages(
+                ctx.clone(),
                 config.workspace_dir.clone(),
                 thread_id.clone(),
             )
@@ -99,7 +105,12 @@ pub(crate) fn compose_current_prompt(job_id: &str, name: &str, prompt: &str, tai
 
 /// The prompt a job runs with. `isolated` (and an origin-less job) keeps the
 /// plain tagged prompt; `current` and `main` get the context and preamble.
-pub(crate) async fn build_run_prompt(config: &Config, job: &CronJob, name: &str) -> String {
+pub(crate) async fn build_run_prompt(
+    ctx: &DispatchCtx,
+    config: &Config,
+    job: &CronJob,
+    name: &str,
+) -> String {
     let prompt = job.prompt.clone().unwrap_or_default();
     use tinyflows_schedule::types::SessionTarget;
     match (&job.session_target, &job.origin) {
@@ -113,7 +124,7 @@ pub(crate) async fn build_run_prompt(config: &Config, job: &CronJob, name: &str)
             }
             let tail = match origin {
                 Some(origin) => {
-                    let messages = origin_messages(config, origin).await;
+                    let messages = origin_messages(ctx, config, origin).await;
                     bounded_tail(&messages, CONTEXT_MAX_MESSAGES, CONTEXT_MAX_CHARS)
                 }
                 None => String::new(),

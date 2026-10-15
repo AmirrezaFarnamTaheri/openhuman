@@ -5,11 +5,11 @@ use super::credentials::hydrate_channel_credentials;
 use crate::channels::runtime::dispatch::RuntimeChannelMessage;
 use crate::config::Config;
 use crate::modules::channel_runtime::ChannelRuntimeLease;
-use crate::modules::client::{ModuleCallError, ModuleClient, ModuleObjectClient};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, Weak};
+use tinybus::module::{ModuleCallError, ModuleClient, ModuleObjectClient};
 use tinychannels_bus::module_runtime::{
     ChannelIngressKind, ChannelMessagePreparation, ConfiguredChannelInfo,
 };
@@ -41,15 +41,16 @@ struct ModuleChannel {
 
 impl ModuleChannelRuntime {
     pub(super) async fn prepare(
+        dispatch_ctx: &crate::core::runtime::DispatchCtx,
         config: Arc<Config>,
         context: Arc<OnceLock<Weak<crate::channels::context::ChannelRuntimeContext>>>,
         dispatch: mpsc::Sender<RuntimeChannelMessage>,
     ) -> Result<Self> {
-        let client = ModuleClient::new((*config).clone());
+        let client = crate::modules::client((*config).clone());
         // Queued deliveries from before the storage contract move into the
         // module's storage before it starts and reads its queue. Best effort:
         // a failure is retried at the next start, never fatal to channels.
-        match super::delivery_import::import_legacy_delivery(&config.workspace_dir).await {
+        match super::delivery_import::import_legacy_delivery(dispatch_ctx, &config.workspace_dir).await {
             Ok(outcome) => tracing::debug!("[channels] legacy delivery import: {outcome:?}"),
             Err(error) => {
                 tracing::warn!("[channels] legacy delivery import failed, will retry: {error:#}");

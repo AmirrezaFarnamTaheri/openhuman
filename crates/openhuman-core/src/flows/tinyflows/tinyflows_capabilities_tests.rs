@@ -6,7 +6,7 @@ use super::*;
 fn build_capabilities_constructs_every_slot_without_panicking() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let caps = build_capabilities(config, "test:build");
+    let caps = build_capabilities(config, "test:build", None);
     assert!(caps.tasks.is_some(), "Tinyflows task nodes need a runner");
     assert!(
         caps.approvals.is_none(),
@@ -54,7 +54,7 @@ async fn http_adapter_rejects_host_outside_strict_allowlist() {
 async fn engine_run_drives_trigger_to_http_request_through_the_real_seam() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
-    let caps = build_capabilities(config, "test:smoke");
+    let caps = build_capabilities(config, "test:smoke", None);
 
     // A deterministically-blocked loopback URL with `on_error: continue` so
     // the run completes even though the (real, SSRF-guarded) HTTP adapter
@@ -109,7 +109,11 @@ async fn code_adapter_javascript_runs_when_isolated_and_refuses_when_isolation_i
         &config.workspace_dir,
         &config.action_dir,
     ));
-    let runner = OpenHumanCode { config, security };
+    let runner = OpenHumanCode {
+        config,
+        security,
+        approval: Default::default(),
+    };
 
     let input = json!([{ "json": { "n": 7 } }]);
     match runner
@@ -447,7 +451,7 @@ fn harness_model_default_override_forwards_raw_byok_models_verbatim() {
 fn route_for_agent_ref_selects_harness_for_definitions_else_fallback() {
     // Ensure the global registry is populated (idempotent no-op if another test
     // already initialised it; builtins are always present either way).
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     // A shipped harness definition → full-loop harness path.
     assert_eq!(route_for_agent_ref("workflow_builder"), AgentRoute::Harness);

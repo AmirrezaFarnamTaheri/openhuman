@@ -124,7 +124,9 @@ impl HostExecutor {
                     run_job_command(&config, self.binding.security.as_ref(), job).await;
                 (success, output, None)
             }
-            JobType::Agent => run_agent_job_for_run(&config, job, run_id).await,
+            JobType::Agent => {
+                run_agent_job_for_run(&self.binding.dispatch_ctx(), &config, job, run_id).await
+            }
             JobType::Flow => (
                 false,
                 "flow jobs run through the trigger sink, not the executor".to_string(),

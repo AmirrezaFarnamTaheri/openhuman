@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet, Mode};
 use crate::tools::toolpacks::ToolGroups;
 
@@ -60,6 +61,7 @@ impl Worker {
         let task_handle = tokio::spawn(std::future::pending::<()>());
         let abort = task_handle.abort_handle();
         register(
+            &DispatchCtx::ambient(),
             task.clone(),
             "researcher".into(),
             PARENT.into(),
@@ -127,7 +129,7 @@ async fn control(function: &str, task: &str) -> serde_json::Value {
     if function == "steer" {
         params.insert("message".into(), serde_json::json!("ownership regression"));
     }
-    (controller.handler)(params)
+    (controller.handler)(DispatchCtx::ambient(), params)
         .await
         .expect("control response")
 }
@@ -146,6 +148,7 @@ async fn dispatched_control(function: &str, task: &str) -> Result<serde_json::Va
         params["message"] = serde_json::json!("scoped dispatch regression");
     }
     crate::core::invoke::invoke_method(
+        DispatchCtx::process_default(),
         crate::core::invoke::default_state(),
         &format!("openhuman.subagent_{function}"),
         params,
@@ -213,6 +216,7 @@ async fn saas_dispatch_exposes_only_the_callers_detached_worker_controls() {
         assert!(crate::core::all::schema_for_rpc_method(&method).is_none());
         assert!(
             crate::core::invoke::invoke_method(
+                DispatchCtx::process_default(),
                 crate::core::invoke::default_state(),
                 &method,
                 serde_json::json!({}),
@@ -224,7 +228,7 @@ async fn saas_dispatch_exposes_only_the_callers_detached_worker_controls() {
     })
     .await;
     CoreContext::scope(pair.alice.clone(), async {
-        assert!(resume_ref_for_task(&pair.a.task, PARENT).is_ok());
+        assert!(resume_ref_for_task(&DispatchCtx::ambient(), &pair.a.task, PARENT).is_ok());
     })
     .await;
     for function in ["steer", "cancel"] {
@@ -244,7 +248,7 @@ async fn unscoped_async_spawn_refuses_before_persisting_a_running_session() {
     use crate::agent::orchestration::subagent_sessions::SubagentSessionStore;
     use crate::agent::orchestration::tools::{SpawnAsyncSubagentDispatch, SpawnAsyncSubagentTool};
     use tinyagents_harness::tool::ToolDispatch;
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
     let workspace = tempfile::tempdir().unwrap();
     assert!(
         crate::storage::installed().is_none(),
@@ -271,11 +275,12 @@ async fn unscoped_async_spawn_refuses_before_persisting_a_running_session() {
         session_id: PARENT.into(),
         channel: "test".into(),
         connected_integrations: Vec::new(),
-        tool_call_format: crate::agent::prompts::ToolCallFormat::Native,
+        tool_call_format: tinytools_agent::dialect::ToolCallFormat::Native,
         session_key: "scope-refusal-parent".into(),
         session_parent_prefix: None,
         on_progress: None,
         run_queue: None,
+        host_env: Default::default(),
     };
     let run = crate::agent::tinyagents::host::OpenHumanRunContext::new()
         .with_parent(parent)
@@ -318,7 +323,7 @@ async fn unscoped_async_spawn_refuses_before_persisting_a_running_session() {
         sessions.is_empty(),
         "refused spawn must not create durable sessions: {sessions:?}"
     );
-    assert!(snapshot_for_parent(PARENT).is_empty());
+    assert!(snapshot_for_parent(&DispatchCtx::ambient(), PARENT).is_empty());
     assert!(
         std::fs::read_dir(workspace.path())
             .unwrap()
@@ -335,7 +340,9 @@ async fn same_parent_rosters_are_profile_isolated() {
     }
     let pair = Pair::new();
     for (ctx, own) in [(&pair.alice, &pair.a), (&pair.bob, &pair.b)] {
-        let tasks = CoreContext::sync_scope(ctx.clone(), || snapshot_for_parent(PARENT));
+        let tasks = CoreContext::sync_scope(ctx.clone(), || {
+            snapshot_for_parent(&DispatchCtx::ambient(), PARENT)
+        });
         assert_eq!(
             tasks.iter().map(|t| t.task_id.as_str()).collect::<Vec<_>>(),
             [own.task.as_str()]
@@ -354,19 +361,25 @@ async fn same_parent_resolution_and_wait_refuse_foreign_workers() {
     let pair = Pair::new();
     CoreContext::scope(pair.bob.clone(), async {
         assert!(matches!(
-            task_id_for_session(&pair.a.session, PARENT),
+            task_id_for_session(&DispatchCtx::ambient(), &pair.a.session, PARENT),
             Err(WaitError::NotOwned)
         ));
         assert!(matches!(
-            resume_ref_for_task(&pair.a.task, PARENT),
+            resume_ref_for_task(&DispatchCtx::ambient(), &pair.a.task, PARENT),
             Err(WaitError::NotOwned)
         ));
         assert!(matches!(
-            wait(&pair.a.task, PARENT, Duration::ZERO).await,
+            wait(
+                &DispatchCtx::ambient(),
+                &pair.a.task,
+                PARENT,
+                Duration::ZERO
+            )
+            .await,
             Err(WaitError::NotOwned)
         ));
         assert_eq!(
-            task_id_for_session(&pair.b.session, PARENT).unwrap(),
+            task_id_for_session(&DispatchCtx::ambient(), &pair.b.session, PARENT).unwrap(),
             pair.b.task
         );
     })
@@ -384,13 +397,26 @@ async fn same_parent_agent_steering_refuses_foreign_worker() {
     let pair = Pair::new();
     CoreContext::scope(pair.bob.clone(), async {
         assert_eq!(
-            steer(&pair.a.task, PARENT, "foreign".into(), QueueLane::Steer).await,
+            steer(
+                &DispatchCtx::ambient(),
+                &pair.a.task,
+                PARENT,
+                "foreign".into(),
+                QueueLane::Steer
+            )
+            .await,
             Err(SteerError::NotOwned)
         );
         assert_eq!(pair.a.queue.status().await.steers, 0);
-        steer(&pair.b.task, PARENT, "own".into(), QueueLane::Steer)
-            .await
-            .unwrap();
+        steer(
+            &DispatchCtx::ambient(),
+            &pair.b.task,
+            PARENT,
+            "own".into(),
+            QueueLane::Steer,
+        )
+        .await
+        .unwrap();
         assert_eq!(pair.b.queue.status().await.steers, 1);
     })
     .await;
@@ -431,7 +457,7 @@ async fn public_cancellation_refuses_another_profiles_task() {
             field(&control("cancel", &pair.a.task).await, "cancelled"),
             Some(false)
         );
-        assert!(resume_ref_for_task(&pair.b.task, PARENT).is_ok());
+        assert!(resume_ref_for_task(&DispatchCtx::ambient(), &pair.b.task, PARENT).is_ok());
         assert_eq!(
             field(&control("cancel", &pair.b.task).await, "cancelled"),
             Some(true)
@@ -440,7 +466,7 @@ async fn public_cancellation_refuses_another_profiles_task() {
     .await;
     CoreContext::scope(pair.alice.clone(), async {
         assert!(
-            resume_ref_for_task(&pair.a.task, PARENT).is_ok(),
+            resume_ref_for_task(&DispatchCtx::ambient(), &pair.a.task, PARENT).is_ok(),
             "foreign cancel leaves original worker live"
         );
     })
@@ -457,13 +483,20 @@ async fn missing_saas_scope_cannot_observe_or_control_workers() {
     }
     let pair = Pair::new();
     assert!(CoreContext::scoped().is_none());
-    assert!(snapshot_for_parent(PARENT).is_empty());
+    assert!(snapshot_for_parent(&DispatchCtx::ambient(), PARENT).is_empty());
     assert!(matches!(
-        resume_ref_for_task(&pair.a.task, PARENT),
+        resume_ref_for_task(&DispatchCtx::ambient(), &pair.a.task, PARENT),
         Err(WaitError::NotOwned)
     ));
     assert_eq!(
-        steer(&pair.a.task, PARENT, "unscoped".into(), QueueLane::Steer).await,
+        steer(
+            &DispatchCtx::ambient(),
+            &pair.a.task,
+            PARENT,
+            "unscoped".into(),
+            QueueLane::Steer
+        )
+        .await,
         Err(SteerError::NotOwned)
     );
     assert_eq!(
@@ -476,13 +509,13 @@ async fn missing_saas_scope_cannot_observe_or_control_workers() {
     );
     assert_eq!(pair.a.queue.status().await.steers, 0);
     CoreContext::sync_scope(pair.alice.clone(), || {
-        assert!(resume_ref_for_task(&pair.a.task, PARENT).is_ok())
+        assert!(resume_ref_for_task(&DispatchCtx::ambient(), &pair.a.task, PARENT).is_ok())
     });
     // A scoped kernel context without an admitted profile is not authority.
     CoreContext::scope(CoreContext::for_test(DomainSet::full(), None), async {
-        assert!(snapshot_for_parent(PARENT).is_empty());
+        assert!(snapshot_for_parent(&DispatchCtx::ambient(), PARENT).is_empty());
         assert!(matches!(
-            resume_ref_for_task(&pair.a.task, PARENT),
+            resume_ref_for_task(&DispatchCtx::ambient(), &pair.a.task, PARENT),
             Err(WaitError::NotOwned)
         ));
         assert_eq!(
@@ -507,7 +540,10 @@ async fn desktop_public_controls_remain_available_without_parent_scope() {
     }
     let directory = tempfile::tempdir().unwrap();
     let worker = Worker::register(directory.path());
-    assert_eq!(snapshot_for_parent(PARENT).len(), 1);
+    assert_eq!(
+        snapshot_for_parent(&DispatchCtx::ambient(), PARENT).len(),
+        1
+    );
     assert_eq!(
         field(&control("steer", &worker.task).await, "steered"),
         Some(true)
@@ -516,5 +552,69 @@ async fn desktop_public_controls_remain_available_without_parent_scope() {
     assert_eq!(
         field(&control("cancel", &worker.task).await, "cancelled"),
         Some(true)
+    );
+}
+
+/// The explicit context decides, with no task scope anywhere: a worker is
+/// reachable through its own profile's context and refused through another's,
+/// across awaits, from spawned tasks and concurrently.
+#[tokio::test]
+async fn saas_controls_follow_the_explicit_context_not_the_tasks_scope() {
+    if !child(
+        "saas_controls_follow_the_explicit_context_not_the_tasks_scope",
+        Mode::Saas,
+    ) {
+        return;
+    }
+    let pair = Pair::new();
+    let alice = DispatchCtx::new(pair.alice.clone());
+    let bob = DispatchCtx::new(pair.bob.clone());
+    let (a_task, b_task) = (pair.a.task.clone(), pair.b.task.clone());
+
+    // Not a single `CoreContext::scope` here: with the ambient reader the
+    // task would be unscoped, which fails closed in SaaS.
+    assert!(resume_ref_for_task(&alice, &a_task, PARENT).is_ok());
+    assert!(matches!(
+        resume_ref_for_task(&bob, &a_task, PARENT),
+        Err(WaitError::NotOwned)
+    ));
+    assert!(cancel_by_task(&bob, &a_task).is_none());
+    assert_eq!(
+        steer_control(&bob, &a_task, "x".into(), QueueLane::Steer).await,
+        Err(SteerError::NotOwned)
+    );
+    assert_eq!(pair.a.queue.status().await.steers, 0);
+    assert!(snapshot_for_parent(&bob, PARENT)
+        .iter()
+        .all(|worker| worker.task_id != a_task));
+
+    assert!(
+        cancel_by_task(&alice, &b_task).is_none(),
+        "alice cannot cancel bob's worker"
+    );
+
+    // Concurrent, across awaits, and from spawned tasks: each carries its own.
+    let spawned = |ctx: DispatchCtx, task: String| {
+        tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            let own = resume_ref_for_task(&ctx, &task, PARENT).is_ok();
+            tokio::task::yield_now().await;
+            let foreign = cancel_by_task(&ctx, &task).is_some();
+            (own, foreign)
+        })
+    };
+    let (a_side, b_side) = tokio::join!(
+        spawned(alice.clone(), a_task.clone()),
+        spawned(bob.clone(), b_task.clone())
+    );
+    assert_eq!(
+        a_side.unwrap(),
+        (true, true),
+        "alice reaches her own worker"
+    );
+    assert_eq!(b_side.unwrap(), (true, true), "bob reaches his own worker");
+    assert!(
+        resume_ref_for_task(&alice, &a_task, PARENT).is_err(),
+        "each cancel removed only that profile's worker, and it is gone"
     );
 }

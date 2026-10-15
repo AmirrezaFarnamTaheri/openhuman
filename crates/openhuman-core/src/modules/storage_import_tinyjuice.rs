@@ -93,7 +93,7 @@ async fn import_into(
 
     let dir = root.to_owned();
     let (originals, mut skipped) =
-        crate::core::runtime::spawn_blocking_scoped(move || read_originals(&dir, now))
+        tokio::task::spawn_blocking(move || read_originals(&dir, now))
             .await
             .context("the legacy reader panicked")??;
 

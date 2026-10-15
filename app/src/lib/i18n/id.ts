@@ -1315,7 +1315,9 @@ const messages: TranslationMap = {
   'chat.stallWarning.thinking':
     'Masih berpikir. Tidak ada keluaran baru selama 2 menit, tetapi agen masih bekerja. Tekan Berhenti jika ingin membatalkan.',
   'chat.stallWarning.working':
-    'Masih bekerja. Satu langkah sudah berjalan lebih dari 2 menit tanpa keluaran baru. Tekan Berhenti jika ingin membatalkan.',
+    'Tidak ada keluaran baru selama {duration}. Agen mungkin macet; tekan Hentikan untuk membatalkan.',
+  'chat.stallWarning.toolRunning':
+    '{tool}. Langkah panjang seperti build atau pemantauan CI bisa memakan waktu.',
   'chat.filter.tasks': 'Tugas',
   'chat.selectThread': 'Pilih thread',
   'chat.noThreads': 'Belum ada thread',
@@ -1882,6 +1884,23 @@ const messages: TranslationMap = {
   'conversations.tools.steps.other': '{count} langkah',
   'conversations.tools.working': 'Sedang bekerja',
   'conversations.tools.noOutput': 'Tidak ada keluaran',
+  'conversations.mcpUi.openInBrowser': 'Buka di browser',
+  'conversations.mcpUi.showQr': 'Tampilkan QR',
+  'conversations.mcpUi.hideQr': 'Sembunyikan QR',
+  'conversations.mcpUi.scanToOpen': 'Pindai dengan ponsel untuk membuka',
+  'conversations.mcpUi.openOnPhone': 'Buka di ponsel',
+  'conversations.mcpUi.copyLink': 'Salin tautan',
+  'conversations.mcpUi.copied': 'Disalin',
+  'conversations.mcpUi.linksLabel': 'Tautan dari alat ini',
+  'conversations.mcpUi.widgetTitle': 'Tampilan alat',
+  'conversations.mcpUi.widgetLoading': 'Memuat tampilan…',
+  'conversations.mcpUi.widgetUnavailable':
+    'Tampilan ini tidak lagi tersedia. Hubungkan ulang server untuk melihatnya lagi.',
+  'conversations.mcpUi.confirmTitle': 'Izinkan tindakan ini?',
+  'conversations.mcpUi.confirmBody':
+    'Tampilan ini ingin menjalankan {tool}. Ini dapat mengubah sesuatu di layanan tersebut.',
+  'conversations.mcpUi.confirmAllow': 'Izinkan',
+  'conversations.mcpUi.confirmDeny': 'Tolak',
   'conversations.tools.delegatedTo': 'Didelegasikan ke {agent}',
   'conversations.tools.parallelAgentsAggregating': 'Menggabungkan hasil',
   'conversations.tools.openInBrowser': 'Buka di peramban',
@@ -4843,6 +4862,8 @@ const messages: TranslationMap = {
   'conversations.tools.createDocument.done': 'Dokumen dibuat',
   'conversations.tools.createPresentation.active': 'Membuat presentasi',
   'conversations.tools.createPresentation.done': 'Presentasi dibuat',
+  'conversations.tools.showView.done': 'Tampilan ditampilkan',
+  'conversations.tools.showView.active': 'Menampilkan tampilan',
   'conversations.tools.recallMemories.active': 'Mengingat kembali memori',
   'conversations.tools.recallMemories.done': 'Memori diingat kembali',
   'conversations.tools.saveToMemory.active': 'Menyimpan ke memori',

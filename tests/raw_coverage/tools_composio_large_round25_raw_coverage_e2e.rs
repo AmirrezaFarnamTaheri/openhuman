@@ -166,6 +166,7 @@ async fn round25_direct_mode_ops_use_loopback_factory_for_tools_connections_and_
     assert_eq!(markdown.output(), "{\"tools\":[]}");
 
     let authorize = composio_authorize(
+        &openhuman_core::core::runtime::DispatchCtx::host_default(),
         &harness.config,
         " gmail ",
         Some(json!({ "ignored_in_direct": true })),

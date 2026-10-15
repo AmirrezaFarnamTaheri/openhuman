@@ -1318,7 +1318,9 @@ const messages: TranslationMap = {
   'chat.stallWarning.thinking':
     'Nadal myśli. Brak nowych danych od 2 minut, ale agent nadal pracuje. Naciśnij Zatrzymaj, jeśli chcesz anulować.',
   'chat.stallWarning.working':
-    'Nadal pracuje. Krok trwa ponad 2 minuty bez nowych danych. Naciśnij Zatrzymaj, jeśli chcesz anulować.',
+    'Brak nowych danych od {duration}. Agent mógł utknąć; naciśnij Zatrzymaj, aby anulować.',
+  'chat.stallWarning.toolRunning':
+    '{tool}. Długie kroki, takie jak kompilacje czy śledzenie CI, mogą chwilę potrwać.',
   'chat.filter.tasks': 'Zadania',
   'chat.selectThread': 'Wybierz wątek',
   'chat.noThreads': 'Brak wątków',
@@ -1888,6 +1890,23 @@ const messages: TranslationMap = {
   'conversations.tools.steps.other': 'Kroki: {count}',
   'conversations.tools.working': 'Pracuje',
   'conversations.tools.noOutput': 'Brak wyniku',
+  'conversations.mcpUi.openInBrowser': 'Otwórz w przeglądarce',
+  'conversations.mcpUi.showQr': 'Pokaż kod QR',
+  'conversations.mcpUi.hideQr': 'Ukryj kod QR',
+  'conversations.mcpUi.scanToOpen': 'Zeskanuj telefonem, aby otworzyć',
+  'conversations.mcpUi.openOnPhone': 'Otwórz na telefonie',
+  'conversations.mcpUi.copyLink': 'Kopiuj link',
+  'conversations.mcpUi.copied': 'Skopiowano',
+  'conversations.mcpUi.linksLabel': 'Linki z tego narzędzia',
+  'conversations.mcpUi.widgetTitle': 'Widok narzędzia',
+  'conversations.mcpUi.widgetLoading': 'Ładowanie widoku…',
+  'conversations.mcpUi.widgetUnavailable':
+    'Ten widok nie jest już dostępny. Połącz ponownie serwer, aby go zobaczyć.',
+  'conversations.mcpUi.confirmTitle': 'Zezwolić na tę akcję?',
+  'conversations.mcpUi.confirmBody':
+    'Ten widok chce uruchomić {tool}. Może to coś zmienić w tej usłudze.',
+  'conversations.mcpUi.confirmAllow': 'Zezwól',
+  'conversations.mcpUi.confirmDeny': 'Odmów',
   'conversations.tools.delegatedTo': 'Przekazano do {agent}',
   'conversations.tools.parallelAgentsAggregating': 'Agregowanie wyników',
   'conversations.tools.openInBrowser': 'Otwórz w przeglądarce',
@@ -4867,6 +4886,8 @@ const messages: TranslationMap = {
   'conversations.tools.createDocument.done': 'Utworzono dokument',
   'conversations.tools.createPresentation.active': 'Tworzenie prezentacji',
   'conversations.tools.createPresentation.done': 'Utworzono prezentację',
+  'conversations.tools.showView.done': 'Wyświetlono widok',
+  'conversations.tools.showView.active': 'Wyświetlanie widoku',
   'conversations.tools.recallMemories.active': 'Przywoływanie wspomnień',
   'conversations.tools.recallMemories.done': 'Przywołano wspomnienia',
   'conversations.tools.saveToMemory.active': 'Zapisywanie w pamięci',

@@ -92,7 +92,7 @@ pub(crate) async fn install(connection: &Connection) -> tinybus::Result<()> {
         .await
 }
 
-/// One foreground remix at a time per workspace and acting identity.
+/// One foreground remix at a time per workspace.
 ///
 /// The module reads its learned-state documents at the start of a remix and
 /// writes them at the end, so two remixes for one scope at once would each
@@ -104,13 +104,7 @@ static FOREGROUND: std::sync::LazyLock<
 > = std::sync::LazyLock::new(Default::default);
 
 fn scope_lock(config: &Config) -> std::sync::Arc<tokio::sync::Mutex<()>> {
-    let identity = crate::memory::scope::current().unwrap_or_default();
-    let key = format!(
-        "{}\0{}\0{}",
-        config.workspace_dir.display(),
-        identity.agent_id.as_deref().unwrap_or("-"),
-        identity.team.as_deref().unwrap_or("-")
-    );
+    let key = config.workspace_dir.display().to_string();
     FOREGROUND
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -122,6 +116,7 @@ fn scope_lock(config: &Config) -> std::sync::Arc<tokio::sync::Mutex<()>> {
 /// Remix one reply through the loaded module, serving its callbacks for
 /// `config`'s workspace meanwhile. `request.correlation` is set here.
 pub(crate) async fn remix(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     mut request: RemixRequest,
 ) -> Result<RemixResponse, String> {
@@ -129,14 +124,14 @@ pub(crate) async fn remix(
         return Err("the memes component is off".to_owned());
     }
     crate::modules::ensure_loaded(config, MODULE_ID).await?;
-    let runtime = crate::modules::host::runtime()
+    let runtime = crate::modules::runtime::runtime()
         .await
         .map_err(|error| format!("the module bus is not running: {error}"))?;
     let proxy = runtime
         .connection()
         .proxy(STATE_INTERFACE, REMIX_PATH, REMIX_INTERFACE)
         .map_err(|error| error.to_string())?;
-    let registration = callbacks::register(config);
+    let registration = callbacks::register(ctx, config);
     request.correlation = registration.correlation().to_owned();
     // A disabled request makes no callbacks and starts no research, so there
     // is nothing to keep the registration for.

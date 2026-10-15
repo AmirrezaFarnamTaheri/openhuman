@@ -332,7 +332,7 @@ async fn cron_agent_job_uses_agent_definition_tool_scope() {
     // than relied upon from another test: `install_for_tests` is
     // `Once`-guarded, so a test that omits it passes only while some
     // earlier test in the same binary happened to run first.
-    crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins()
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins()
         .expect("init built-in agent definitions");
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
@@ -341,7 +341,9 @@ async fn cron_agent_job_uses_agent_definition_tool_scope() {
     job.name = Some("morning_briefing".into());
     job.agent_id = Some("morning_briefing".into());
 
-    let built = build_agent_for_cron_job(&config, &job).expect("build cron agent");
+    let built =
+        build_agent_for_cron_job(&crate::core::runtime::DispatchCtx::ambient(), &config, &job)
+            .expect("build cron agent");
     let visible = built.agent.visible_tool_names_for_test();
 
     assert!(
@@ -542,9 +544,15 @@ async fn deliver_if_configured_skips_non_announce_mode() {
     let job = test_job("echo ok");
 
     // Default delivery mode is not "announce", so nothing is published.
-    assert!(deliver_if_configured(&config, &job, "x", true)
-        .await
-        .is_ok());
+    assert!(deliver_if_configured(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "x",
+        true
+    )
+    .await
+    .is_ok());
 }
 
 #[tokio::test]
@@ -601,9 +609,15 @@ async fn deliver_if_configured_publishes_event_for_announce_mode() {
     assert_eq!(received.load(Ordering::SeqCst), 1);
 
     // Also verify the function itself succeeds.
-    assert!(deliver_if_configured(&config, &job, "hello", true)
-        .await
-        .is_ok());
+    assert!(deliver_if_configured(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "hello",
+        true
+    )
+    .await
+    .is_ok());
 }
 
 #[test]

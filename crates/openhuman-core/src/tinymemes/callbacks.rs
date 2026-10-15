@@ -24,8 +24,7 @@ use tinymemes_bus::{
 
 use super::{docs, inference, jev, search};
 use crate::config::Config;
-use crate::core::runtime::CoreContext;
-use crate::memory::scope::MemoryIdentity;
+use crate::core::runtime::{CoreContext, DispatchCtx};
 
 /// How long an entry may live without its `End`.
 const MAX_AGE: Duration = Duration::from_secs(15 * 60);
@@ -33,41 +32,43 @@ const MAX_AGE: Duration = Duration::from_secs(15 * 60);
 /// The workspace one remix runs for, and who it runs for.
 ///
 /// Callbacks arrive on the module bus, outside the task that asked for the
-/// remix, so the caller's context and memory identity are captured when the
-/// remix is registered and re-entered for each callback ([`Session::enter`]).
+/// remix, so the caller's context is captured when the remix is registered and
+/// re-entered for each callback ([`Session::enter`]). A remix acts for the
+/// host, never for an agent, so there is no memory identity to carry.
 /// Only the caller's own scope counts, so in SaaS an unscoped caller's
 /// callbacks fail closed instead of acting as the operator.
 pub(super) struct Session {
     config: Config,
     jev: tokio::sync::OnceCell<Option<Arc<Client>>>,
     context: Option<Arc<CoreContext>>,
-    identity: Option<MemoryIdentity>,
 }
 
 impl Session {
-    pub(super) fn new(config: &Config) -> Self {
+    /// The dispatch context the registering caller runs under; the host's own
+    /// when it had none (a single-user process), which fails closed in SaaS.
+    pub(super) fn dispatch_ctx(&self) -> DispatchCtx {
+        match self.context.clone() {
+            Some(context) => DispatchCtx::new(context),
+            None => DispatchCtx::host_default(),
+        }
+    }
+
+    pub(super) fn new(ctx: &DispatchCtx, config: &Config) -> Self {
         Self {
             config: config.clone(),
             jev: tokio::sync::OnceCell::new(),
-            // Only the caller's own task scope is carried. Without one, a
+            // Only the caller's own context is carried. Without one, a
             // single-user process falls back to its default context on the
             // callback side as anywhere else, and SaaS fails closed.
-            context: CoreContext::scoped(),
-            identity: crate::memory::scope::current(),
+            context: ctx.core().cloned(),
         }
     }
 
     /// Run `fut` as the registering caller.
     pub(super) async fn enter<F: Future>(&self, fut: F) -> F::Output {
         let fut = Box::pin(fut);
-        let fut = async {
-            match self.context.clone() {
-                Some(context) => CoreContext::scope(context, fut).await,
-                None => fut.await,
-            }
-        };
-        match self.identity.clone() {
-            Some(identity) => crate::memory::scope::within(identity, fut).await,
+        match self.context.clone() {
+            Some(context) => CoreContext::scope(context, fut).await,
             None => fut.await,
         }
     }
@@ -113,14 +114,14 @@ impl Drop for Registration {
 }
 
 /// Register a remix for `config`'s workspace under a fresh correlation id.
-pub(super) fn register(config: &Config) -> Registration {
+pub(super) fn register(ctx: &DispatchCtx, config: &Config) -> Registration {
     let correlation = uuid::Uuid::new_v4().to_string();
     let mut sessions = registry();
     sessions.retain(|_, entry| entry.registered.elapsed() < MAX_AGE);
     sessions.insert(
         correlation.clone(),
         Entry {
-            session: Arc::new(Session::new(config)),
+            session: Arc::new(Session::new(ctx, config)),
             registered: Instant::now(),
         },
     );
@@ -206,7 +207,7 @@ async fn answer(session: &Session, member: &str, payload: Value) -> Result<Value
 }
 
 async fn complete(session: &Session, request: CompleteRequest) -> HostResult<String> {
-    inference::complete(&session.config, &request.system, &request.user)
+    inference::complete(&session.dispatch_ctx(), &session.config, &request.system, &request.user)
         .await
         .map_err(|error| {
             log::warn!("[tinymemes] complete callback failed: {error}");
@@ -240,7 +241,7 @@ async fn search(
     session: &Session,
     request: SearchRequest,
 ) -> HostResult<Vec<tinymemes_bus::SearchResult>> {
-    let Some(backend) = search::OpenHumanSearch::available(&session.config) else {
+    let Some(backend) = search::OpenHumanSearch::available(&session.dispatch_ctx(), &session.config) else {
         return Err(HostFailure::Unsupported);
     };
     backend
@@ -256,7 +257,7 @@ async fn search(
 async fn load_index(session: &Session, request: LoadIndexRequest) -> HostResult<Option<String>> {
     let config = session.config.clone();
     let kind: IndexKind = request.kind;
-    match crate::core::runtime::spawn_blocking_scoped(move || docs::load(&config, kind)).await {
+    match tokio::task::spawn_blocking(move || docs::load(&config, kind)).await {
         Ok(Ok(document)) => Ok(document),
         Ok(Err(error)) => {
             log::warn!("[tinymemes] cannot read index: {error}");
@@ -271,7 +272,7 @@ async fn load_index(session: &Session, request: LoadIndexRequest) -> HostResult<
 
 async fn save_index(session: &Session, request: SaveIndexRequest) -> HostResult<()> {
     let config = session.config.clone();
-    match crate::core::runtime::spawn_blocking_scoped(move || {
+    match tokio::task::spawn_blocking(move || {
         docs::save(&config, request.kind, request.json)
     })
     .await

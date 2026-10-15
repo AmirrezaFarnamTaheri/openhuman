@@ -16,7 +16,6 @@ use tinychannels_bus as traits;
 use tokio::sync::Barrier;
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn dispatch_publishes_tinychannels_inbound_envelope() {
     let observation = run_dispatch_harness(DispatchHarnessOptions {
         channel_name: "telegram".to_string(),
@@ -37,7 +36,6 @@ async fn dispatch_publishes_tinychannels_inbound_envelope() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn dispatch_preserves_supplied_tinychannels_inbound_envelope() {
     let supplied = tinychannels::ChannelInboundEnvelope {
         channel: tinychannels::channel::ChannelRef {
@@ -82,7 +80,6 @@ async fn dispatch_preserves_supplied_tinychannels_inbound_envelope() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn message_dispatch_processes_messages_in_parallel() {
     // Install a deterministic stub that takes 250ms per turn and records
     // the peak number of in-flight turns. This proves concurrency directly
@@ -145,6 +142,7 @@ async fn message_dispatch_processes_messages_in_parallel() {
             multimodal: crate::config::MultimodalConfig::default(),
             multimodal_files: crate::config::MultimodalFileConfig::default(),
             config: None,
+            core: None,
         });
 
         (channel_impl, runtime_ctx)
@@ -186,7 +184,6 @@ async fn message_dispatch_processes_messages_in_parallel() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn process_channel_message_cancels_scoped_typing_task() {
     let _bus_guard = use_real_agent_handler().await;
     let channel_impl = Arc::new(RecordingChannel::default());
@@ -221,6 +218,7 @@ async fn process_channel_message_cancels_scoped_typing_task() {
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     process_channel_message(
@@ -254,7 +252,6 @@ async fn process_channel_message_cancels_scoped_typing_task() {
 /// `dispatch.rs` ever reverts to calling `run_tool_call_loop` directly,
 /// this test will start failing because the stub handler won't be invoked.
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn dispatch_routes_through_agent_run_turn_bus_handler() {
     // Install a typed stub for `agent.run_turn` via the shared
     // `mock_agent_run_turn` helper. The returned guard holds the
@@ -311,6 +308,7 @@ async fn dispatch_routes_through_agent_run_turn_bus_handler() {
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     process_channel_message(
@@ -349,31 +347,65 @@ async fn dispatch_routes_through_agent_run_turn_bus_handler() {
     // that expects the real path sees a consistent registry.
 }
 
-#[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
-async fn channel_processed_event_records_resolved_agent_route() {
-    crate::core::bus::init().await.expect("bus init");
+/// Start draining the bus for the `ChannelMessageProcessed` event of
+/// `message_id` and hand it back through the returned handle.
+///
+/// The drain must run *while* the message is processed, not after: the
+/// process-wide bus is a bounded broadcast ring (`SIGNAL_BUFFER`), the full
+/// lib suite publishes from hundreds of parallel tests, and a receiver that
+/// is only polled once `process_channel_message` returns has its target event
+/// overwritten by then (the receiver reports `Lagged` and skips it). A fixed
+/// event-count budget on the scan has the same failure. Only wall-clock time
+/// bounds the wait.
+fn watch_for_channel_processed(message_id: &str) -> tokio::task::JoinHandle<DomainEvent> {
     let mut events = crate::core::bus::BUS
         .get()
         .expect("event bus should be initialized")
         .receiver();
-
-    let _bus_guard = mock_agent_run_turn(move |_req| async move {
-        Ok(AgentTurnResponse::with_resolved_route(
-            "CANNED_RESPONSE_FROM_RESOLVED_ROUTE",
-            "actual-provider",
-            "actual-model",
-        ))
+    let message_id = message_id.to_string();
+    tokio::spawn(async move {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            let event = tokio::time::timeout_at(deadline, events.recv())
+                .await
+                .unwrap_or_else(|_| {
+                    panic!("did not observe ChannelMessageProcessed for {message_id}")
+                })
+                .expect("the bus closed before the expected event arrived");
+            if matches!(
+                &event,
+                DomainEvent::ChannelMessageProcessed { message_id: id, .. } if *id == message_id
+            ) {
+                return event;
+            }
+        }
     })
-    .await;
+}
 
+fn unrelated_processed_event(n: usize) -> DomainEvent {
+    DomainEvent::ChannelMessageProcessed {
+        channel: "noise".into(),
+        message_id: format!("noise-{n}"),
+        sender: "noise".into(),
+        reply_target: "noise".into(),
+        content: String::new(),
+        thread_ts: None,
+        response: String::new(),
+        provider: "noise".into(),
+        model: "noise".into(),
+        elapsed_ms: 0,
+        success: true,
+        workspace_dir: std::env::temp_dir(),
+    }
+}
+
+async fn resolved_route_ctx() -> Arc<ChannelRuntimeContext> {
     let channel_impl = Arc::new(RecordingChannel::default());
-    let channel: Arc<dyn Channel> = channel_impl.clone();
-
+    let channel: Arc<dyn Channel> = channel_impl;
     let mut channels_by_name = HashMap::new();
     channels_by_name.insert(channel.name().to_string(), channel);
 
-    let runtime_ctx = Arc::new(ChannelRuntimeContext {
+    Arc::new(ChannelRuntimeContext {
         relay_thread: None,
         channels_by_name: Arc::new(channels_by_name),
         turn_model_source: Some(crate::agent::tinyagents::TurnModelSource::from_model(
@@ -397,12 +429,27 @@ async fn channel_processed_event_records_resolved_agent_route() {
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
-    });
+        core: None,
+    })
+}
+
+async fn run_resolved_route_message(message_id: &str, noise_after: usize) {
+    crate::core::bus::init().await.expect("bus init");
+    let watcher = watch_for_channel_processed(message_id);
+
+    let _bus_guard = mock_agent_run_turn(move |_req| async move {
+        Ok(AgentTurnResponse::with_resolved_route(
+            "CANNED_RESPONSE_FROM_RESOLVED_ROUTE",
+            "actual-provider",
+            "actual-model",
+        ))
+    })
+    .await;
 
     process_channel_message(
-        runtime_ctx,
+        resolved_route_ctx().await,
         traits::ChannelMessage {
-            id: "resolved-route-msg".to_string(),
+            id: message_id.to_string(),
             sender: "alice".to_string(),
             reply_target: "alice".to_string(),
             content: "hello from resolved route test".to_string(),
@@ -414,40 +461,46 @@ async fn channel_processed_event_records_resolved_agent_route() {
     )
     .await;
 
-    // Bound the scan so unrelated global event traffic can't hang the test;
-    // the target event is published by process_channel_message above.
-    let mut matched = false;
-    for _ in 0..50 {
-        let event = tokio::time::timeout(Duration::from_millis(200), events.recv())
-            .await
-            .expect("ChannelMessageProcessed event should be published");
-        let event = event.expect("the bus closed before the expected event arrived");
-
-        if let DomainEvent::ChannelMessageProcessed {
-            message_id,
-            provider,
-            model,
-            response,
-            success,
-            ..
-        } = event
-        {
-            if message_id != "resolved-route-msg" {
-                continue;
-            }
-
-            assert!(success);
-            assert_eq!(response, "CANNED_RESPONSE_FROM_RESOLVED_ROUTE");
-            assert_eq!(provider, "actual-provider");
-            assert_eq!(model, "actual-model");
-            matched = true;
-            break;
+    // Other tests share this bus: model a burst of their traffic landing
+    // right after our event, more than the ring holds.
+    tokio::task::yield_now().await;
+    // Paced in small bursts so other tests' receivers on the shared bus keep
+    // draining while this one floods it.
+    for n in 0..noise_after {
+        crate::core::bus::BUS.publish(unrelated_processed_event(n));
+        if n % 16 == 15 {
+            tokio::time::sleep(Duration::from_millis(1)).await;
         }
     }
-    assert!(
-        matched,
-        "did not observe ChannelMessageProcessed for resolved-route-msg"
-    );
+
+    let event = watcher.await.expect("watcher task");
+    let DomainEvent::ChannelMessageProcessed {
+        provider,
+        model,
+        response,
+        success,
+        ..
+    } = event
+    else {
+        unreachable!("wait_for_channel_processed returns only ChannelMessageProcessed");
+    };
+    assert!(success);
+    assert_eq!(response, "CANNED_RESPONSE_FROM_RESOLVED_ROUTE");
+    assert_eq!(provider, "actual-provider");
+    assert_eq!(model, "actual-model");
+}
+
+#[tokio::test]
+async fn channel_processed_event_records_resolved_agent_route() {
+    run_resolved_route_message("resolved-route-msg", 0).await;
+}
+
+/// Regression: the event used to be read only after the message finished, by
+/// which time a burst of other tests' events had overwritten it in the bounded
+/// bus ring, so the test failed only in the full parallel suite.
+#[tokio::test]
+async fn channel_processed_event_is_found_behind_a_flood_of_unrelated_events() {
+    run_resolved_route_message("resolved-route-flood-msg", 600).await;
 }
 
 /// Security regression for the `[FILE:…]` smuggling vector: a remote
@@ -459,7 +512,6 @@ async fn channel_processed_event_records_resolved_agent_route() {
 /// `prepare_messages_for_provider` rejects the marker with
 /// `TooManyFiles` before any disk access.
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn process_channel_message_hardens_multimodal_files_against_smuggled_markers() {
     let captured: Arc<Mutex<Option<crate::config::MultimodalFileConfig>>> =
         Arc::new(Mutex::new(None));
@@ -511,6 +563,7 @@ async fn process_channel_message_hardens_multimodal_files_against_smuggled_marke
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: permissive_operator_default,
         config: None,
+        core: None,
     });
 
     // Attacker-shaped message: an absolute-path FILE marker dropped
@@ -553,7 +606,6 @@ async fn process_channel_message_hardens_multimodal_files_against_smuggled_marke
 /// every inbound channel message, so `[FILE:./local.txt]` is also
 /// barred from reading server-local files.
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn process_channel_message_hardens_against_relative_path_markers() {
     let captured: Arc<Mutex<Option<crate::config::MultimodalFileConfig>>> =
         Arc::new(Mutex::new(None));
@@ -596,6 +648,7 @@ async fn process_channel_message_hardens_against_relative_path_markers() {
         multimodal: crate::config::MultimodalConfig::default(),
         multimodal_files: crate::config::MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     process_channel_message(
@@ -623,7 +676,6 @@ async fn process_channel_message_hardens_against_relative_path_markers() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the linked tinychannels-module fixture (tinybus epic, #7739)"]
 async fn dispatch_replies_with_timeout_notice_when_handler_exceeds_deadline() {
     let timed_out = run_dispatch_harness(DispatchHarnessOptions {
         channel_name: "email".to_string(),

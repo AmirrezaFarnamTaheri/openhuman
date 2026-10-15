@@ -138,7 +138,14 @@ fn capabilities_are_answered_for_an_object_the_grant_does_not_hold() {
         writable: true,
         ..StorageGrant::default()
     };
-    assert!(authorize(&documents_only, Object::Blobs, "Capabilities", &json!(null)).is_ok());
+    assert_eq!(
+        authorize(&documents_only, Object::Blobs, "Capabilities", &json!({})),
+        Ok(Plan::Answer(json!({
+            "presigned_urls": false,
+            "ttl": false,
+            "max_key_len": 0,
+        })))
+    );
     // Anything else on that object is still refused.
     assert_eq!(
         authorize(
@@ -285,24 +292,52 @@ fn schema_is_the_hosts_to_change() {
 }
 
 #[test]
-fn streamed_blobs_and_watches_are_refused_as_unsupported() {
+fn streamed_blobs_and_watches_follow_the_grant() {
     let g = grant();
-    assert_eq!(
+    // A streamed upload is a write to a granted blob prefix; a download a read.
+    assert!(matches!(
         authorize(&g, Object::Blobs, "PutStream", &json!({"key": "files/a"})),
-        Err(Denied::Unsupported)
-    );
-    assert_eq!(
+        Ok(Plan::Forward { write: true, .. })
+    ));
+    assert!(matches!(
         authorize(&g, Object::Blobs, "GetStream", &json!({"key": "files/a"})),
-        Err(Denied::Unsupported)
-    );
+        Ok(Plan::Forward { write: false, .. })
+    ));
+    for selector in ["PutStream", "GetStream"] {
+        assert_eq!(
+            authorize(&g, Object::Blobs, selector, &json!({"key": "elsewhere/a"})),
+            Err(Denied::Target),
+            "{selector}"
+        );
+    }
+    let mut read_only = grant();
+    read_only.writable = false;
     assert_eq!(
+        authorize(
+            &read_only,
+            Object::Blobs,
+            "PutStream",
+            &json!({"key": "files/a"})
+        ),
+        Err(Denied::ReadOnly)
+    );
+    assert!(matches!(
         authorize(
             &g,
             Object::Documents,
             "WatchOpen",
             &json!({"collection": "notes"})
         ),
-        Err(Denied::Unsupported)
+        Ok(Plan::Forward { write: false, .. })
+    ));
+    assert_eq!(
+        authorize(
+            &g,
+            Object::Documents,
+            "WatchOpen",
+            &json!({"collection": "not_mine"})
+        ),
+        Err(Denied::Target)
     );
 }
 
@@ -443,6 +478,7 @@ fn the_write_selectors_track_the_contract_selector_sets() {
             "Blobs.Delete",
             "Blobs.PresignPut",
             "Blobs.Put",
+            "Blobs.PutStream",
             "Documents.AtomicBatch",
             "Documents.AtomicBatchChecked",
             "Documents.Claim",

@@ -325,7 +325,7 @@ async fn launch(
     let driver = importer(config, bound.engine, consent, paused);
     let begin = {
         let driver = driver.clone();
-        crate::core::runtime::spawn_blocking_scoped(move || match mode {
+        crate::core::runtime::DispatchCtx::ambient().spawn_blocking(move || match mode {
             Mode::Import => driver.begin(),
             Mode::Retry => driver.begin_retry(),
             Mode::ResumeRetry => Ok(driver.begin_retry_resume()),
@@ -350,7 +350,7 @@ async fn launch(
         "[memory:import] run started"
     );
     let config = config.clone();
-    crate::core::runtime::spawn_scoped(async move {
+    crate::core::runtime::DispatchCtx::ambient().spawn(async move {
         if mode == Mode::Import {
             driver.run(begun).await;
         } else {

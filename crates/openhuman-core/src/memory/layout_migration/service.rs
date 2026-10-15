@@ -99,7 +99,7 @@ pub fn start(
         return false;
     }
     let guard = RunGuard(workspace);
-    crate::core::runtime::spawn_scoped(async move {
+    crate::core::runtime::DispatchCtx::ambient().spawn(async move {
         let _guard = guard;
         let outcome = lm::run(host.as_ref(), trigger, || {
             let paused = paused();

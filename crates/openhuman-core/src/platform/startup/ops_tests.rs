@@ -13,7 +13,7 @@ fn workspace_startup_migrates_transcripts_once() {
     fs::create_dir_all(legacy.parent().unwrap()).unwrap();
     fs::write(&legacy, "legacy transcript").unwrap();
 
-    run_workspace_migrations(workspace);
+    run_workspace_migrations(&crate::core::runtime::DispatchCtx::ambient(), workspace);
 
     let canonical = workspace.join("session_raw/1714000000_main.jsonl");
     let marker = workspace.join("state/migrations/session_layout_v1.done");
@@ -24,7 +24,7 @@ fn workspace_startup_migrates_transcripts_once() {
     // than re-running the migration on every process launch.
     fs::create_dir_all(legacy.parent().unwrap()).unwrap();
     fs::write(&legacy, "must remain legacy after marker").unwrap();
-    run_workspace_migrations(workspace);
+    run_workspace_migrations(&crate::core::runtime::DispatchCtx::ambient(), workspace);
 
     assert_eq!(fs::read_to_string(&canonical).unwrap(), "legacy transcript");
     assert_eq!(

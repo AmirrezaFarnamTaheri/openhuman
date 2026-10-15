@@ -240,6 +240,17 @@ fn fingerprint(route: &serde_json::Value) -> u64 {
     hasher.finish()
 }
 
+/// Under test, one route-dependent call at a time.
+///
+/// The module's route is process-global, and every call first sets it from its
+/// own caller's config (`ensure_routed`). libtest runs a crate's tests in one
+/// process, so a test with no session could switch the route to `none` between
+/// another test's CONFIGURE and its call. Holding this across both makes each
+/// call atomic with its route. ponytail: test-only; production callers with
+/// different routes can still interleave the same way, which this does not fix.
+#[cfg(test)]
+static ROUTE_TURN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Tell the module which route to use, if that answer has changed.
 ///
 /// The module is registered `Lazy`, so it is commonly loaded the first time
@@ -309,7 +320,7 @@ async fn ensure_routed(config: &Config, proxy: &Proxy) -> Result<(), String> {
 pub async fn proxy(config: &Config) -> Result<Proxy, String> {
     ops::ensure_loaded(config, MODULE_ID)
         .await
-        .map_err(|_| super::client::ModuleCallError::Unavailable.to_string())?;
+        .map_err(|_| tinybus::module::ModuleCallError::Unavailable.to_string())?;
     let proxy = proxy_to_serving().await?;
     ensure_routed(config, &proxy).await?;
     Ok(proxy)
@@ -320,9 +331,9 @@ pub async fn proxy(config: &Config) -> Result<Proxy, String> {
 async fn proxy_to_serving() -> Result<Proxy, String> {
     let record =
         registry::find(MODULE_ID).ok_or_else(|| format!("unknown module '{MODULE_ID}'"))?;
-    let runtime = super::host::runtime().await.map_err(|_| {
-        super::failure::report(record, super::failure::Reason::TransportFailed);
-        super::client::ModuleCallError::TransportFailed.to_string()
+    let runtime = super::runtime::runtime().await.map_err(|_| {
+        super::report::transport_failed(record);
+        tinybus::module::ModuleCallError::TransportFailed.to_string()
     })?;
     runtime
         .proxy(record.bus_name, record.object_path)
@@ -351,6 +362,8 @@ pub async fn reconcile_route_if_loaded(config: &Config) -> Result<(), String> {
     if ops::state_of(MODULE_ID) != ModuleState::Ready {
         return Ok(());
     }
+    #[cfg(test)]
+    let _turn = ROUTE_TURN.lock().await;
     let proxy = proxy_to_serving().await?;
     ensure_routed(config, &proxy).await
 }
@@ -372,7 +385,7 @@ pub(crate) async fn proxy_without_reconcile() -> Result<Proxy, String> {
 }
 
 fn bus_failure(member: &str, error: &tinybus::Error) -> String {
-    let outcome = super::client::report_proxy_failure(
+    let outcome = super::report::proxy_failure(
         registry::find(MODULE_ID).expect("registered connector module"),
         error,
     );
@@ -410,6 +423,8 @@ where
     Request: Serialize + Send,
     Reply: DeserializeOwned,
 {
+    #[cfg(test)]
+    let _turn = ROUTE_TURN.lock().await;
     let proxy = proxy(config).await?;
     proxy
         .call::<Reply>(member, (request,))
@@ -443,7 +458,7 @@ where
     const STATELESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
     ops::ensure_loaded(config, MODULE_ID)
         .await
-        .map_err(|_| super::client::ModuleCallError::Unavailable.to_string())?;
+        .map_err(|_| tinybus::module::ModuleCallError::Unavailable.to_string())?;
     let proxy = proxy_to_serving().await?.with_timeout(STATELESS_TIMEOUT);
     proxy
         .call_confidential::<Reply>(member, (request,))
@@ -460,6 +475,8 @@ pub async fn call_bare<Reply: DeserializeOwned>(
     config: &Config,
     member: &str,
 ) -> Result<Reply, String> {
+    #[cfg(test)]
+    let _turn = ROUTE_TURN.lock().await;
     let proxy = proxy(config).await?;
     proxy
         .call::<Reply>(member, ())

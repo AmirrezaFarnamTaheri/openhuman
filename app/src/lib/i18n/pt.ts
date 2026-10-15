@@ -1325,7 +1325,9 @@ const messages: TranslationMap = {
   'chat.stallWarning.thinking':
     'Ainda pensando. Nenhuma saída nova há 2 minutos, mas o agente continua trabalhando. Pressione Parar se quiser cancelar.',
   'chat.stallWarning.working':
-    'Ainda trabalhando. Uma etapa está rodando há mais de 2 minutos sem saída nova. Pressione Parar se quiser cancelar.',
+    'Nenhuma saída nova há {duration}. O agente pode estar travado; pressione Parar para cancelar.',
+  'chat.stallWarning.toolRunning':
+    '{tool}. Etapas longas, como builds ou o acompanhamento de CI, podem demorar.',
   'chat.filter.tasks': 'Tarefas',
   'chat.selectThread': 'Selecione uma conversa',
   'chat.noThreads': 'Nenhuma conversa ainda',
@@ -1893,6 +1895,23 @@ const messages: TranslationMap = {
   'conversations.tools.steps.other': '{count} etapas',
   'conversations.tools.working': 'Trabalhando',
   'conversations.tools.noOutput': 'Sem saída',
+  'conversations.mcpUi.openInBrowser': 'Abrir no navegador',
+  'conversations.mcpUi.showQr': 'Mostrar QR',
+  'conversations.mcpUi.hideQr': 'Ocultar QR',
+  'conversations.mcpUi.scanToOpen': 'Escaneie com o celular para abrir',
+  'conversations.mcpUi.openOnPhone': 'Abrir no celular',
+  'conversations.mcpUi.copyLink': 'Copiar link',
+  'conversations.mcpUi.copied': 'Copiado',
+  'conversations.mcpUi.linksLabel': 'Links desta ferramenta',
+  'conversations.mcpUi.widgetTitle': 'Visualização da ferramenta',
+  'conversations.mcpUi.widgetLoading': 'Carregando visualização…',
+  'conversations.mcpUi.widgetUnavailable':
+    'Esta visualização não está mais disponível. Reconecte o servidor para vê-la novamente.',
+  'conversations.mcpUi.confirmTitle': 'Permitir esta ação?',
+  'conversations.mcpUi.confirmBody':
+    'Esta visualização quer executar {tool}. Isso pode alterar algo nesse serviço.',
+  'conversations.mcpUi.confirmAllow': 'Permitir',
+  'conversations.mcpUi.confirmDeny': 'Negar',
   'conversations.tools.delegatedTo': 'Delegado a {agent}',
   'conversations.tools.parallelAgentsAggregating': 'Agregando resultados',
   'conversations.tools.openInBrowser': 'Abrir no navegador',
@@ -4873,6 +4892,8 @@ const messages: TranslationMap = {
   'conversations.tools.createDocument.done': 'Documento criado',
   'conversations.tools.createPresentation.active': 'Criando apresentação',
   'conversations.tools.createPresentation.done': 'Apresentação criada',
+  'conversations.tools.showView.done': 'Visualização mostrada',
+  'conversations.tools.showView.active': 'Mostrando uma visualização',
   'conversations.tools.recallMemories.active': 'Relembrando memórias',
   'conversations.tools.recallMemories.done': 'Memórias relembradas',
   'conversations.tools.saveToMemory.active': 'Salvando na memória',

@@ -112,8 +112,11 @@ impl FlowTriggerSubscriber {
     }
 
     /// The configuration to handle an event under (`super::owner::config_for_scope`).
-    pub(super) fn config_for_scope(&self) -> Arc<Config> {
-        super::owner::config_for_scope(&self.config)
+    pub(super) fn config_for_scope(
+        &self,
+        ctx: &crate::core::runtime::DispatchCtx,
+    ) -> Arc<Config> {
+        super::owner::config_for_scope(ctx, &self.config)
     }
 
     /// A `flow`-type cron job fired (`cron::scheduler`'s trigger sink calls
@@ -122,12 +125,19 @@ impl FlowTriggerSubscriber {
     /// enabled with a `schedule` trigger (it may have been disabled/edited
     /// since the job was registered), and dispatches it with an empty trigger
     /// payload.
-    pub(crate) async fn dispatch_schedule_tick(&self, flow_id: &str) {
-        super::owner::as_owner(&self.config, flow_id, self.handle_schedule_tick(flow_id)).await
+    pub(crate) async fn dispatch_schedule_tick(
+        &self,
+        host: &crate::core::runtime::DispatchCtx,
+        flow_id: &str,
+    ) {
+        super::owner::as_owner(host, &self.config, flow_id, |ctx| {
+            self.handle_schedule_tick(ctx, flow_id)
+        })
+        .await
     }
 
-    async fn handle_schedule_tick(&self, flow_id: &str) {
-        let config = self.config_for_scope();
+    async fn handle_schedule_tick(&self, ctx: crate::core::runtime::DispatchCtx, flow_id: &str) {
+        let config = self.config_for_scope(&ctx);
         let flow = match store::get_flow(&config, flow_id) {
             Ok(Some(flow)) => flow,
             Ok(None) => {
@@ -149,6 +159,7 @@ impl FlowTriggerSubscriber {
         }
         let inputs = pinned_trigger_inputs(&flow);
         self.spawn_run(
+            &ctx,
             flow_id.to_string(),
             Value::Null,
             inputs,
@@ -160,8 +171,14 @@ impl FlowTriggerSubscriber {
     /// an `app_event` trigger bound to this `toolkit`/`trigger_slug` and
     /// dispatches each match with the event payload as the run input
     /// (seeded into `run.trigger`, per the node-catalog contract).
-    async fn handle_app_event(&self, toolkit: &str, trigger_slug: &str, payload: &Value) {
-        let config = self.config_for_scope();
+    async fn handle_app_event(
+        &self,
+        ctx: crate::core::runtime::DispatchCtx,
+        toolkit: &str,
+        trigger_slug: &str,
+        payload: &Value,
+    ) {
+        let config = self.config_for_scope(&ctx);
         let (flows, skipped) = match store::list_enabled_flows(&config) {
             Ok(result) => result,
             Err(e) => {
@@ -181,6 +198,7 @@ impl FlowTriggerSubscriber {
                 matched += 1;
                 let inputs = pinned_trigger_inputs(&flow);
                 self.spawn_run(
+                    &ctx,
                     flow.id.clone(),
                     payload.clone(),
                     inputs,
@@ -201,6 +219,7 @@ impl FlowTriggerSubscriber {
     /// burst of matching `app_event`s cannot run the same flow concurrently.
     fn spawn_run(
         &self,
+        ctx: &crate::core::runtime::DispatchCtx,
         flow_id: String,
         input: Value,
         inputs: serde_json::Map<String, Value>,
@@ -211,9 +230,9 @@ impl FlowTriggerSubscriber {
             return;
         };
 
-        let config = self.config_for_scope();
+        let config = self.config_for_scope(ctx);
         // Scoped: the run keeps the owner's context the handler entered.
-        crate::core::runtime::spawn_scoped(async move {
+        ctx.spawn(async move {
             // Held for the lifetime of the run; released on drop (including
             // on panic) by `InFlightGuard`.
             let _guard = guard;
@@ -260,6 +279,9 @@ impl EventHandler<DomainEvent> for FlowTriggerSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) {
+        // Trigger events arrive over the host's socket or its own scheduler:
+        // the host's own tenant, and in SaaS none.
+        let host = crate::core::runtime::DispatchCtx::host_default();
         match event {
             // Every scope's flows may listen for this trigger: match them in
             // each, so each run starts as its flow's owner.
@@ -269,8 +291,8 @@ impl EventHandler<DomainEvent> for FlowTriggerSubscriber {
                 payload,
                 ..
             } => {
-                crate::storage::agents::for_each_live_scope("flows app_event", || {
-                    self.handle_app_event(toolkit, trigger, payload)
+                crate::storage::agents::for_each_live_scope(&host, "flows app_event", |ctx| {
+                    self.handle_app_event(ctx, toolkit, trigger, payload)
                 })
                 .await;
             }

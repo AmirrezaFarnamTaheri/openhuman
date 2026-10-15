@@ -70,6 +70,7 @@ serde_json = "1"
 # `openhuman-rpc`'s own: `http-client` (the relay client), `server` (the
 # embedded JSON-RPC server and `host::desktop`) and `jev` (the Jev-backed
 # `tool_search` ranker the product ships).
+tinymcp = { path = "../../vendor/tinymcp/crates/tinymcp", default-features = false, features = ["ui"] }
 openhuman-rpc = { path = "../openhuman-rpc", default-features = false, features = [
     "os-keyring",
     "http-client",
@@ -307,15 +308,6 @@ tinyinference-voice = { path = "../../vendor/tinyagents/vendor/tinyinference/cra
 # copy so the graph holds exactly one `tinybus` (one `Interface`, one
 # `Connection`) instead of a second one compiled only for the storage wire types.
 tinybus = { path = "../../vendor/tinybus/crates/tinybus" }
-
-[patch."https://github.com/tinyhumansai/tinystoragedrivers"]
-# tinyflows names the storage crates by git tag (v0.7.0); redirect them to the
-# copy tinyagents vendors so this world links one `DocumentStore` trait and one
-# `libsqlite3-sys`. Still needed although the versions agree: a git and a path
-# source are distinct packages. Mirrors the root Cargo.toml.
-tinystoragedrivers-core = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
-tinystoragedrivers-sqlite = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-sqlite" }
-tinystoragedrivers-secrets = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
 
 [patch.crates-io]
 # Keep reqwest defaults disabled in this independent Cargo world too. Without

@@ -29,6 +29,7 @@ use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolResult, ToolRunConte
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
+use crate::core::runtime::DispatchCtx;
 
 use super::error::MemoryError;
 use super::ops;
@@ -42,15 +43,19 @@ type TurnCitations = Mutex<HashMap<String, Vec<TurnCitation>>>;
 
 /// Citations `recall` produced during a thread's in-flight turn, drained by
 /// the chat surface once the turn returns ([`take_turn_citations`]).
-fn turn_citations() -> Arc<TurnCitations> {
-    crate::core::runtime::current_slot::<TurnCitations>()
+fn turn_citations(ctx: &DispatchCtx) -> Arc<TurnCitations> {
+    crate::core::runtime::slot_for::<TurnCitations>(ctx)
 }
 
-fn record_turn_citations(thread_id: &str, citations: &[tinymemory_api::Citation]) {
+fn record_turn_citations(
+    ctx: &DispatchCtx,
+    thread_id: &str,
+    citations: &[tinymemory_api::Citation],
+) {
     if citations.is_empty() {
         return;
     }
-    let citations_by_thread = turn_citations();
+    let citations_by_thread = turn_citations(ctx);
     let mut all = citations_by_thread
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -68,11 +73,11 @@ fn record_turn_citations(thread_id: &str, citations: &[tinymemory_api::Citation]
 /// Records `citations` for `thread_id`'s in-flight turn: what the turn's
 /// memory pack cited (`lifecycle::hooks::pre_turn`), beside what `recall`
 /// cites.
-pub fn record_pack_citations(thread_id: &str, citations: Vec<TurnCitation>) {
+pub fn record_pack_citations(ctx: &DispatchCtx, thread_id: &str, citations: Vec<TurnCitation>) {
     if citations.is_empty() {
         return;
     }
-    let citations_by_thread = turn_citations();
+    let citations_by_thread = turn_citations(ctx);
     let mut all = citations_by_thread
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -90,8 +95,8 @@ pub fn record_pack_citations(thread_id: &str, citations: Vec<TurnCitation>) {
 /// Drains the citations `recall` and the turn's pack produced for
 /// `thread_id` since the last drain.
 #[must_use]
-pub fn take_turn_citations(thread_id: &str) -> Vec<TurnCitation> {
-    turn_citations()
+pub fn take_turn_citations(ctx: &DispatchCtx, thread_id: &str) -> Vec<TurnCitation> {
+    turn_citations(ctx)
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .remove(thread_id)
@@ -129,6 +134,9 @@ pub struct CallFacts {
     pub agent_id: Option<String>,
     /// The provider-assigned tool-call id.
     pub tool_call_id: Option<String>,
+    /// The chat the call's turn is surfaced in, so the memory activity it
+    /// raises reaches that chat. `None` outside a chat turn.
+    pub chat: Option<crate::security::approval::ApprovalChatContext>,
     /// Where the agent's learnings go: its layout's learnings node.
     pub namespace: Namespace,
     /// What the agent may read and forget: its whole layout.
@@ -136,29 +144,31 @@ pub struct CallFacts {
 }
 
 impl CallFacts {
-    /// Gathers the facts from the run context and the turn's task-locals,
+    /// Gathers the facts from the run context,
     /// falling back to `config.action_dir` for the workspace.
     #[must_use]
     pub fn gather(config: &Config, context: Option<&dyn ToolRunContext>) -> Self {
         let workspace = context
             .and_then(ToolRunContext::workspace_root)
             .map(std::path::Path::to_path_buf)
-            .or_else(crate::agent::turn_workspace::current)
             .unwrap_or_else(|| config.action_dir.clone());
-        let identity = super::scope::current().unwrap_or_else(|| {
-            // Outside a scoped turn (a legacy driver), fall back to the
-            // parent context's agent, else the root.
-            crate::agent::harness::fork_context::current_parent()
-                .map_or_else(super::scope::MemoryIdentity::root, |parent| {
-                    super::scope::MemoryIdentity::agent(&parent.agent_definition_id)
-                })
-        });
+        // The acting identity is the run's own; direct dispatch (CLI, tests)
+        // has no run, and falls back to the spawning agent, else the root.
+        let identity =
+            crate::agent::tinyagents::host::run_context::memory_identity_for_tool(context)
+                .unwrap_or_else(|| {
+                    crate::agent::tinyagents::host::run_context::parent_agent_id_for_tool(context)
+                        .map_or_else(super::scope::MemoryIdentity::root, |parent_agent_id| {
+                            super::scope::MemoryIdentity::agent(&parent_agent_id)
+                        })
+                });
         Self {
             workspace: Some(workspace.display().to_string()),
             thread_id: context
                 .and_then(ToolRunContext::thread_id)
                 .map(str::to_string),
             tool_call_id: crate::tools::host_extensions::tool_call_id(context),
+            chat: crate::agent::tinyagents::host::run_context::approval_for_tool(context).chat,
             ..Self::of(config, &identity)
         }
     }
@@ -215,7 +225,12 @@ fn parse<T: serde::de::DeserializeOwned>(args: &Value) -> Result<T, String> {
 
 /// Runs one action. Errors become a model-visible tool error, never a hard
 /// failure, so the model can adapt (memory off, unsupported mode, …).
-pub async fn run_action(config: &Config, args: &Value, facts: &CallFacts) -> ToolResult {
+pub async fn run_action(
+    ctx: &DispatchCtx,
+    config: &Config,
+    args: &Value,
+    facts: &CallFacts,
+) -> ToolResult {
     let action = arg_str(args, "action").unwrap_or_default();
     tracing::debug!(action = %action, "[memory:tool] dispatch");
     let result: Result<Value, String> = match action.as_str() {
@@ -227,11 +242,13 @@ pub async fn run_action(config: &Config, args: &Value, facts: &CallFacts) -> Too
                     .await
                     .map(|view| {
                         if let Some(thread_id) = facts.thread_id.as_deref() {
-                            record_turn_citations(thread_id, &view.citations);
+                            record_turn_citations(ctx, thread_id, &view.citations);
                         }
                         BUS.publish(DomainEvent::MemoryRecalled {
                             query: question,
                             hit_count: view.citations.len(),
+                            thread_id: facts.chat.as_ref().map(|chat| chat.thread_id.clone()),
+                            client_id: facts.chat.as_ref().map(|chat| chat.client_id.clone()),
                         });
                         json!(view)
                     })
@@ -267,6 +284,8 @@ pub async fn run_action(config: &Config, args: &Value, facts: &CallFacts) -> Too
                         key: view.id.clone(),
                         category: kind.as_str().to_string(),
                         namespace: "learnings".to_string(),
+                        thread_id: facts.chat.as_ref().map(|chat| chat.thread_id.clone()),
+                        client_id: facts.chat.as_ref().map(|chat| chat.client_id.clone()),
                     });
                     json!({"id": view.id, "status": LEARN_STATUS})
                 })
@@ -358,6 +377,7 @@ impl Tool for MemoryTool {
         context: Option<&dyn ToolRunContext>,
     ) -> anyhow::Result<ToolResult> {
         let facts = CallFacts::gather(&self.config, context);
+        let dispatch = crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(context);
         let run_id = context
             .and_then(ToolRunContext::host_extension)
             .and_then(|any| any.downcast_ref::<tinyagents_harness::tool::ToolExecutionContext>())
@@ -370,7 +390,8 @@ impl Tool for MemoryTool {
         ) {
             let config = self.config.clone();
             let write_args = args.clone();
-            let queued = crate::core::runtime::spawn_blocking_scoped(move || {
+            let queued_root = facts.reach.at.clone();
+            let queued = crate::core::runtime::DispatchCtx::ambient().spawn_blocking(move || {
                 super::tool_writes::enqueue(&config, &write_args, &facts)
             })
             .await;
@@ -381,7 +402,7 @@ impl Tool for MemoryTool {
                     ))
                 }) {
                     Ok(value) => {
-                        super::tool_writes::schedule(self.config.clone());
+                        super::tool_writes::schedule(self.config.clone(), &queued_root);
                         ToolResult::success(value.to_string())
                     }
                     Err(error) => ToolResult::error(render_error(error)),
@@ -390,7 +411,7 @@ impl Tool for MemoryTool {
         }
         Ok(self
             .budget
-            .run(run_id, run_action(&self.config, &args, &facts))
+            .run(run_id, run_action(&dispatch, &self.config, &args, &facts))
             .await)
     }
 }

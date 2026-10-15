@@ -210,7 +210,7 @@ impl VoiceServer {
                             // event loop remains responsive to Release.
                             let (tx, rx) = tokio::sync::oneshot::channel();
                             let capture_config = app_config.clone();
-                            crate::core::runtime::spawn_scoped(async move {
+                            crate::core::runtime::DispatchCtx::ambient().spawn(async move {
                                 let expected_app = capture_expected_app_name(&capture_config).await;
                                 let result = audio_capture::start_recording(&capture_config).await
                                     .map(|handle| (handle, expected_app));
@@ -386,7 +386,7 @@ impl VoiceServer {
             "{LOG_PREFIX} [pipeline={pipeline_id}] spawning process_recording (generation={generation})"
         );
 
-        crate::core::runtime::spawn_scoped(async move {
+        crate::core::runtime::DispatchCtx::ambient().spawn(async move {
             process_recording_bg(
                 &pipeline_id,
                 handle,

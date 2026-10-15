@@ -269,9 +269,13 @@ pub async fn sweep_orphaned_running_runs_on_boot(config: &Config) -> usize {
             0
         }
         rm::BootSweepPlan::EveryScope => {
-            crate::storage::agents::for_each_scope("flows boot sweep", || {
-                sweep_orphaned_running_runs_in_scope(config)
-            })
+            crate::storage::agents::for_each_scope(
+                &crate::core::runtime::DispatchCtx::host_default(),
+                "flows boot sweep",
+                |_| {
+                    sweep_orphaned_running_runs_in_scope(config)
+                },
+            )
             .await
             .into_iter()
             .map(|(_, swept)| swept)

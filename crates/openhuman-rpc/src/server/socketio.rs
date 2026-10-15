@@ -30,6 +30,7 @@
 //! (a "type carve-out"; see AGENTS.md). `pub mod socketio;` in `core::mod` is
 //! intentionally NOT gated for the same reason.
 
+use crate::core_host::core::runtime::DispatchCtx;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -360,6 +361,9 @@ pub fn attach_socketio() -> (socketioxide::layer::SocketIoLayer, SocketIo) {
 
                     // Invoke the method through the same logic used by the HTTP RPC endpoint.
                     let response = match crate::core_host::core::invoke::invoke_method(
+                        // A Socket.IO event is not scoped to a request, so it
+                        // runs under the process default context.
+                        crate::core_host::core::runtime::DispatchCtx::process_default(),
                         crate::core_host::core::invoke::default_state(),
                         payload.method.as_str(),
                         payload.params,
@@ -403,7 +407,7 @@ pub fn attach_socketio() -> (socketioxide::layer::SocketIoLayer, SocketIo) {
                     if let Some(run_mode) = payload.run_mode.as_deref() {
                         match crate::core_host::agent::tinyagents::run_mode::parse_mode_label(run_mode) {
                             Some(mode) => {
-                                crate::core_host::agent::tinyagents::run_mode::set_mode(&thread_id, mode);
+                                crate::core_host::agent::tinyagents::run_mode::set_mode(&DispatchCtx::host_default(), &thread_id, mode);
                             }
                             None => log::warn!(
                                 "[socketio] chat:start thread_id={thread_id} ignoring unrecognized run_mode={run_mode}"
@@ -413,6 +417,8 @@ pub fn attach_socketio() -> (socketioxide::layer::SocketIoLayer, SocketIo) {
 
                     // Trigger the web channel's chat logic.
                     match crate::core_host::web_chat::start_chat(
+                        // Outside SaaS the host's one context; in SaaS the socket task's own scope.
+                        &crate::core_host::core::runtime::DispatchCtx::host_default(),
                         &client_id,
                         &payload.thread_id,
                         &payload.message,
@@ -482,6 +488,7 @@ pub fn attach_socketio() -> (socketioxide::layer::SocketIoLayer, SocketIo) {
                         payload.thread_id
                     );
                     let _ = crate::core_host::web_chat::cancel_chat_scoped(
+                        &crate::core_host::core::runtime::DispatchCtx::host_default(),
                         &client_id,
                         &payload.thread_id,
                         payload.request_id.as_deref(),
@@ -733,6 +740,7 @@ pub fn spawn_web_channel_bridge(io: SocketIo) {
                 // a contradictory sign-out event from this independent bus
                 // consumer. Real JWT expiry still broadcasts as before.
                 if crate::core_host::security::credentials::session_support::current_session_is_local(
+                    &crate::core_host::core::runtime::DispatchCtx::process_default(),
                 )
                 .await
                 {

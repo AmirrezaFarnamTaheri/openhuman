@@ -5,6 +5,7 @@
 //! Keys are write-only here. Reads report `key_configured` booleans and the
 //! resolved state from `crate::search::providers`, never a secret.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
@@ -288,13 +289,14 @@ pub fn apply_search_patch(config: &mut Config, update: SearchSettingsPatch) -> R
 
 /// Validate, save, refresh the module, and return the new settings.
 pub async fn apply_search_settings(
+    ctx: &DispatchCtx,
     config: &mut Config,
     update: SearchSettingsPatch,
 ) -> Result<Outcome<Value>, String> {
     apply_search_patch(config, update)?;
     config.save().await.map_err(|e| e.to_string())?;
     #[cfg(feature = "modules")]
-    crate::modules::search::refresh_loaded(config).await?;
+    crate::modules::search::refresh_loaded(ctx, config).await?;
     tracing::debug!(
         enabled = crate::search::is_active(config),
         providers = ?config.search.enabled_provider_names(),
@@ -310,10 +312,11 @@ pub async fn apply_search_settings(
 }
 
 pub async fn load_and_apply_search_settings(
+    ctx: &DispatchCtx,
     update: SearchSettingsPatch,
 ) -> Result<Outcome<Value>, String> {
-    let mut config = load_config_with_timeout().await?;
-    apply_search_settings(&mut config, update).await
+    let mut config = ctx.load_config().await?;
+    apply_search_settings(ctx, &mut config, update).await
 }
 
 /// The settings view: every listed provider's resolved state, the role
@@ -390,8 +393,8 @@ pub(crate) fn search_settings_json_with(config: &Config, managed_available: bool
 }
 
 /// Read the current search settings. Keys are reported only as booleans.
-pub async fn get_search_settings() -> Result<Outcome<Value>, String> {
-    let config = load_config_with_timeout().await?;
+pub async fn get_search_settings(ctx: &DispatchCtx) -> Result<Outcome<Value>, String> {
+    let config = ctx.load_config().await?;
     Ok(Outcome::new(
         search_settings_json(&config),
         vec!["search settings read".to_string()],

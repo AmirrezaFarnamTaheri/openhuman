@@ -75,7 +75,7 @@ where
         elapsed_ms = elapsed_ms(started),
         "[session-runtime] post-commit: turn completion published"
     );
-    let handle = crate::core::runtime::spawn_scoped(async move {
+    let handle = crate::core::runtime::DispatchCtx::ambient().spawn(async move {
         let started = Instant::now();
         tail.await;
         tracing::debug!(
@@ -132,9 +132,11 @@ pub(super) async fn finalize_committed_turn(
     receipt: tinyagents_runtime::CommitReceipt<crate::agent::tinyagents::host::OpenHumanRunContext>,
 ) {
     let commit_started = std::time::Instant::now();
+    // The turn's own context, taken before the receipt is dropped.
+    let dispatch = receipt.options.context.dispatch_ctx();
     let output = receipt.outcome.output.clone().unwrap_or_default();
     // Skips compaction checkpoints (user-role, not the user's words).
-    let input = crate::agent::tinyagents::last_user_message(&receipt.outcome.history)
+    let input = tinyagents_harness::summarization::last_user_message(&receipt.outcome.history)
         .map(crate::agent::message_convert::user_text_with_markers)
         .unwrap_or_default();
     let sidecar = receipt
@@ -235,6 +237,7 @@ pub(super) async fn finalize_committed_turn(
     }
     crate::agent::hooks::fire_hooks(
         post_turn_hooks,
+        &dispatch,
         crate::agent::hooks::TurnContext {
             user_message: input,
             assistant_response: output,

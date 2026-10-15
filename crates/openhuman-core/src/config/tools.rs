@@ -12,6 +12,7 @@
 //! as a follow-up. They would all ship default-OFF (and autonomy is privilege
 //! escalation), so leaving them out keeps this PR's surface read-only and safe.
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -47,9 +48,19 @@ macro_rules! read_tool {
             fn parameters_schema(&self) -> serde_json::Value {
                 json!({ "type": "object", "properties": {} })
             }
-            async fn execute(&self, _args: serde_json::Value) -> anyhow::Result<ToolResult> {
+            async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult> {
+                self.execute_with_context(args, tinytools::ToolCallOptions::default(), None)
+                    .await
+            }
+            async fn execute_with_context(
+                &self,
+                _args: serde_json::Value,
+                _options: tinytools::ToolCallOptions,
+                context: Option<&dyn tinytools::ToolRunContext>,
+            ) -> anyhow::Result<ToolResult> {
                 log::debug!(concat!("[tool][config] ", $name, " invoked"));
-                emit!(ops::$fn().await, $name)
+                let ctx = crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(context);
+                emit!(ops::$fn(&ctx).await, $name)
             }
             fn is_concurrency_safe(&self, _args: &serde_json::Value) -> bool {
                 true

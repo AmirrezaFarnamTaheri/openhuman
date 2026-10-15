@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use super::files::{self, FileRoots};
 use super::store_documents::{self, documents, on_docs, page_of};
 use super::types::{ArtifactMeta, ArtifactStatus};
+use crate::security::approval::ApprovalChatContext;
 
 const ARTIFACTS_SUBDIR: &str = "artifacts";
 const META_FILENAME: &str = "meta.json";
@@ -13,15 +14,6 @@ const META_FILENAME: &str = "meta.json";
 /// LLM (#3162). Written by the producing tool right after
 /// [`create_artifact`]; read by `ops::ai_regenerate`.
 const ARGS_FILENAME: &str = "args.json";
-
-tokio::task_local! {
-    /// When set (by `ops::ai_regenerate`), [`create_artifact`] reuses
-    /// this id + its existing directory instead of minting a fresh
-    /// UUID — so a Retry swaps the failed card in place rather than
-    /// appending a second card (#3162). Unset for all normal
-    /// generation paths, in which case a fresh UUID is minted.
-    pub static REGENERATE_TARGET_ID: String;
-}
 
 /// Returns the artifacts root directory, creating it if it doesn't exist.
 ///
@@ -311,8 +303,8 @@ fn sanitize_filename_stem(title: &str) -> String {
 /// matching [`finalize_artifact`] / [`fail_artifact`] later fires it
 /// reuses the same `artifact_id`, so the card swaps in place without
 /// flicker. Same chat-context routing rules as the Ready/Failed pair —
-/// `thread_id` / `client_id` come from the
-/// [`crate::security::approval::ApprovalChatContext`] task-local and
+/// `thread_id` / `client_id` come from the `chat` argument (the producing
+/// turn's [`crate::security::approval::ApprovalChatContext`]) and
 /// are `None` for CLI / cron / sub-agent paths, in which case the web
 /// bridge silently drops the event for lack of a routing target.
 pub async fn create_artifact(
@@ -321,8 +313,9 @@ pub async fn create_artifact(
     kind: super::types::ArtifactKind,
     title: &str,
     extension: &str,
+    chat: Option<&ApprovalChatContext>,
 ) -> Result<(ArtifactMeta, PathBuf), String> {
-    create_artifact_for_call(workspace_dir, files, kind, title, extension, None).await
+    create_artifact_for_call(workspace_dir, files, kind, title, extension, None, chat).await
 }
 
 /// As [`create_artifact`], but also records the provider-assigned
@@ -338,6 +331,37 @@ pub async fn create_artifact_for_call(
     title: &str,
     extension: &str,
     tool_call_id: Option<&str>,
+    chat: Option<&ApprovalChatContext>,
+) -> Result<(ArtifactMeta, PathBuf), String> {
+    create_artifact_regenerating(
+        workspace_dir,
+        files,
+        kind,
+        title,
+        extension,
+        tool_call_id,
+        None,
+        chat,
+    )
+    .await
+}
+
+/// As [`create_artifact_for_call`], but a `regenerate_target` (the id
+/// `ops::ai_regenerate` re-dispatches a failed card under) makes the call
+/// reuse that id and its existing record instead of minting a fresh UUID, so a
+/// Retry swaps the failed card in place rather than appending a second one
+/// (#3162). The target travels as an explicit argument from the regenerating
+/// caller to the tool that produces the artifact. A blank target mints a fresh
+/// id like `None`.
+pub async fn create_artifact_regenerating(
+    workspace_dir: &Path,
+    files: impl Into<FileRoots>,
+    kind: super::types::ArtifactKind,
+    title: &str,
+    extension: &str,
+    tool_call_id: Option<&str>,
+    regenerate_target: Option<&str>,
+    chat: Option<&ApprovalChatContext>,
 ) -> Result<(ArtifactMeta, PathBuf), String> {
     let roots = files.into();
     let files_dir = roots.current();
@@ -356,14 +380,13 @@ pub async fn create_artifact_for_call(
     }
 
     // Normal path mints a fresh UUID. A regenerate (#3162) runs inside
-    // `REGENERATE_TARGET_ID.scope(...)` and reuses the original id so the
+    // an explicit `regenerate_target` and reuses the original id so the
     // Pending/Ready/Failed events that follow carry the same artifact_id
     // and the card swaps in place. The reused dir already exists; the
     // `create_dir_all` below is idempotent and the meta/file are
     // overwritten with the fresh generation.
-    let reused_id = REGENERATE_TARGET_ID
-        .try_with(|target| target.clone())
-        .ok()
+    let reused_id = regenerate_target
+        .map(str::to_owned)
         .filter(|target| !target.trim().is_empty());
     let is_regenerate = reused_id.is_some();
     let id = reused_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -377,9 +400,9 @@ pub async fn create_artifact_for_call(
     // Capture the originating chat thread (if any) at create-time so the
     // panel can repopulate from disk after a redux-persist purge — see
     // #3226. `finalize_artifact` / `fail_artifact` already read the same
-    // task-local for event publication; persisting it here means the
+    // chat context for event publication; persisting it here means the
     // routing target survives a process restart.
-    let (thread_id, _, _) = current_chat_context();
+    let (thread_id, _, _) = chat_route(chat);
 
     // On a regenerate the id is reused in place, so preserve the original
     // `created_at` — bumping it to now would reorder the artifact to the
@@ -446,7 +469,7 @@ pub async fn create_artifact_for_call(
     // (#3162). When `finalize_artifact` / `fail_artifact` later fires the
     // matching Ready/Failed event with the same `artifact_id`, the
     // frontend can swap the card in place.
-    let (thread_id, client_id, request_id) = current_chat_context();
+    let (thread_id, client_id, request_id) = chat_route(chat);
     crate::core::bus::BUS.publish(crate::core::events::DomainEvent::ArtifactPending {
         artifact_id: meta.id.clone(),
         kind: meta.kind.as_str().to_string(),
@@ -469,7 +492,7 @@ pub async fn create_artifact_for_call(
 /// On a real transition (Pending → Ready), publishes
 /// [`DomainEvent::ArtifactReady`] on the global bus so the web
 /// channel can surface a download card to the originating thread.
-/// When the calling task carries no
+/// When the caller passes no
 /// [`ApprovalChatContext`](crate::security::approval::ApprovalChatContext)
 /// (CLI / cron / sub-agent paths), the event is still published but
 /// `thread_id` / `client_id` are `None` so the socket bridge silently
@@ -479,6 +502,7 @@ pub async fn finalize_artifact(
     workspace_dir: &Path,
     artifact_id: &str,
     size_bytes: u64,
+    chat: Option<&ApprovalChatContext>,
 ) -> Result<ArtifactMeta, String> {
     let mut meta = get_artifact(workspace_dir, artifact_id).await?;
     if matches!(meta.status, ArtifactStatus::Ready) && meta.size_bytes == size_bytes {
@@ -491,7 +515,7 @@ pub async fn finalize_artifact(
     save_artifact_meta(workspace_dir, &meta).await?;
     log::debug!("[artifacts] finalize_artifact: id={artifact_id} -> Ready size={size_bytes}");
 
-    let (thread_id, client_id, request_id) = current_chat_context();
+    let (thread_id, client_id, request_id) = chat_route(chat);
     crate::core::bus::BUS.publish(crate::core::events::DomainEvent::ArtifactReady {
         artifact_id: meta.id.clone(),
         kind: meta.kind.as_str().to_string(),
@@ -520,6 +544,7 @@ pub async fn fail_artifact(
     roots: impl Into<FileRoots>,
     artifact_id: &str,
     reason: &str,
+    chat: Option<&ApprovalChatContext>,
 ) -> Result<ArtifactMeta, String> {
     let mut meta = get_artifact(workspace_dir, artifact_id).await?;
     meta.status = ArtifactStatus::Failed;
@@ -535,7 +560,7 @@ pub async fn fail_artifact(
         reason.len()
     );
 
-    let (thread_id, client_id, request_id) = current_chat_context();
+    let (thread_id, client_id, request_id) = chat_route(chat);
     crate::core::bus::BUS.publish(crate::core::events::DomainEvent::ArtifactFailed {
         artifact_id: meta.id.clone(),
         kind: meta.kind.as_str().to_string(),
@@ -550,23 +575,20 @@ pub async fn fail_artifact(
     Ok(meta)
 }
 
-/// Read the active [`ApprovalChatContext`] task-local (set by
-/// `web_chat` around each chat turn) and return its thread id, client
-/// id, and the originating turn's `request_id`. Returns `(None, None,
-/// None)` for non-chat callers (CLI, cron, sub-agent runners) so
-/// artifact emit hooks degrade gracefully — the event is still
-/// published but the web subscriber drops it for lack of a routing
-/// target.
-fn current_chat_context() -> (Option<String>, Option<String>, Option<String>) {
-    crate::security::approval::APPROVAL_CHAT_CONTEXT
-        .try_with(|ctx| {
-            (
-                Some(ctx.thread_id.clone()),
-                Some(ctx.client_id.clone()),
-                ctx.request_id.clone(),
-            )
-        })
-        .unwrap_or((None, None, None))
+/// The routing triple of the producing turn's [`ApprovalChatContext`]: its
+/// thread id, client id and originating `request_id`. `(None, None, None)` for
+/// non-chat callers (CLI, cron, sub-agent runners) so artifact emit hooks
+/// degrade gracefully: the event is still published but the web subscriber
+/// drops it for lack of a routing target.
+fn chat_route(chat: Option<&ApprovalChatContext>) -> (Option<String>, Option<String>, Option<String>) {
+    match chat {
+        Some(ctx) => (
+            Some(ctx.thread_id.clone()),
+            Some(ctx.client_id.clone()),
+            ctx.request_id.clone(),
+        ),
+        None => (None, None, None),
+    }
 }
 
 #[cfg(test)]

@@ -1278,7 +1278,9 @@ const messages: TranslationMap = {
   'chat.stallWarning.thinking':
     'لا يزال يفكر. لا يوجد ناتج جديد منذ دقيقتين، لكن الوكيل لا يزال يعمل. اضغط إيقاف إذا أردت الإلغاء.',
   'chat.stallWarning.working':
-    'لا يزال يعمل. خطوة تعمل منذ أكثر من دقيقتين دون ناتج جديد. اضغط إيقاف إذا أردت الإلغاء.',
+    'لا يوجد ناتج جديد منذ {duration}. قد يكون الوكيل عالقًا؛ اضغط إيقاف للإلغاء.',
+  'chat.stallWarning.toolRunning':
+    '{tool}. قد تستغرق الخطوات الطويلة مثل عمليات البناء أو مراقبة CI بعض الوقت.',
   'chat.filter.tasks': 'المهام',
   'chat.selectThread': 'اختر محادثة',
   'chat.noThreads': 'لا توجد محادثات بعد',
@@ -1830,6 +1832,23 @@ const messages: TranslationMap = {
   'conversations.tools.steps.other': '{count} خطوات',
   'conversations.tools.working': 'جارٍ العمل',
   'conversations.tools.noOutput': 'لا توجد مخرجات',
+  'conversations.mcpUi.openInBrowser': 'فتح في المتصفح',
+  'conversations.mcpUi.showQr': 'إظهار رمز QR',
+  'conversations.mcpUi.hideQr': 'إخفاء رمز QR',
+  'conversations.mcpUi.scanToOpen': 'امسح الرمز بهاتفك لفتحه',
+  'conversations.mcpUi.openOnPhone': 'افتح على هاتفك',
+  'conversations.mcpUi.copyLink': 'نسخ الرابط',
+  'conversations.mcpUi.copied': 'تم النسخ',
+  'conversations.mcpUi.linksLabel': 'روابط من هذه الأداة',
+  'conversations.mcpUi.widgetTitle': 'عرض الأداة',
+  'conversations.mcpUi.widgetLoading': 'جارٍ تحميل العرض…',
+  'conversations.mcpUi.widgetUnavailable':
+    'لم يعد هذا العرض متاحًا. أعد توصيل الخادم لرؤيته مرة أخرى.',
+  'conversations.mcpUi.confirmTitle': 'السماح بهذا الإجراء؟',
+  'conversations.mcpUi.confirmBody':
+    'يريد هذا العرض تشغيل {tool}. قد يغيّر ذلك شيئًا في تلك الخدمة.',
+  'conversations.mcpUi.confirmAllow': 'سماح',
+  'conversations.mcpUi.confirmDeny': 'رفض',
   'conversations.tools.delegatedTo': 'تم التفويض إلى {agent}',
   'conversations.tools.parallelAgentsAggregating': 'تجميع النتائج',
   'conversations.tools.openInBrowser': 'فتح في المتصفح',
@@ -4699,6 +4718,8 @@ const messages: TranslationMap = {
   'conversations.tools.createDocument.done': 'تم إنشاء المستند',
   'conversations.tools.createPresentation.active': 'جارٍ إنشاء عرض تقديمي',
   'conversations.tools.createPresentation.done': 'تم إنشاء العرض التقديمي',
+  'conversations.tools.showView.done': 'تم عرض الواجهة',
+  'conversations.tools.showView.active': 'جارٍ عرض واجهة',
   'conversations.tools.recallMemories.active': 'جارٍ استرجاع الذكريات',
   'conversations.tools.recallMemories.done': 'تم استرجاع الذكريات',
   'conversations.tools.saveToMemory.active': 'جارٍ الحفظ في الذاكرة',

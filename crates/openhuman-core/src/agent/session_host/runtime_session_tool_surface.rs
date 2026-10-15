@@ -8,7 +8,7 @@ impl OpenHumanTurnPrelude {
     /// removed from the executable source, schema, and policy together before
     /// this request is prepared.
     pub(super) fn refresh_delegation_tool_surface(&self) -> anyhow::Result<()> {
-        use crate::agent::harness::definition::AgentDefinitionRegistry;
+        use crate::agent::harness::host_definition::AgentDefinitionRegistry;
         use crate::tools::orchestrator_tools::collect_orchestrator_tools;
         use tinytools::ToolPolicyEngine;
 
@@ -76,10 +76,11 @@ impl OpenHumanTurnPrelude {
             )
         });
         collected.extend(rebuilt);
-        super::super::managed_tools::reject_synthesized_collisions(
+        tinyagents_runtime::reject_synthesized_collisions(
             &surface.permanent_tool_names,
             &collected,
-        )?;
+        )
+        .map_err(anyhow::Error::msg)?;
         let synthesized =
             super::super::builder::drop_synthesized_name_collisions(&surface.tools, collected);
         let synthesized_names = synthesized

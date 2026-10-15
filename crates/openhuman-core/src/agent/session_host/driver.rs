@@ -1,9 +1,8 @@
 //! OpenHuman's model-and-harness implementation of the neutral session driver.
 //!
 //! This adapter deliberately has no transcript, prefix, or generic history
-//! state.  `tinyagents_runtime::Session` owns those concerns and gives this
-//! type the complete immutable model history and tool declaration snapshot for
-//! one invocation.
+//! state. `tinyagents_runtime::Session` owns those and hands this type the
+//! complete immutable model history and tool declaration snapshot per call.
 
 mod grounded_close;
 
@@ -36,7 +35,7 @@ pub struct OpenHumanSessionDriver {
     run_queue:
         Option<Arc<tinyagents_harness::run_queue::RunQueue<crate::agent::queued_turn::QueuedTurn>>>,
     workspace: Option<tinytools::WorkspaceDescriptor>,
-    sandbox_mode: crate::agent::harness::definition::SandboxMode,
+    sandbox_mode: tinyagents_definition::SandboxMode,
     hosted_base: Option<Arc<OpenHumanHostBase>>,
     agent_id: String,
 }
@@ -54,7 +53,7 @@ impl OpenHumanSessionDriver {
             Arc<tinyagents_harness::run_queue::RunQueue<crate::agent::queued_turn::QueuedTurn>>,
         >,
         workspace: Option<tinytools::WorkspaceDescriptor>,
-        sandbox_mode: crate::agent::harness::definition::SandboxMode,
+        sandbox_mode: tinyagents_definition::SandboxMode,
         hosted_base: Option<Arc<OpenHumanHostBase>>,
         agent_id: String,
     ) -> Self {
@@ -109,7 +108,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
             .transcript_snapshot
             .get_or_insert_with(|| {
                 Arc::new(std::sync::Mutex::new(
-                    crate::agent::tinyagents::TranscriptSnapshot {
+                    crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot {
                         request_base_len: request.history.len(),
                         ..Default::default()
                     },
@@ -123,7 +122,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
         }
         let sidecar = request.run_context.data.session_sidecar.clone();
         let started = Instant::now();
-        let user_message = crate::agent::tinyagents::last_user_message(&request.history)
+        let user_message = tinyagents_harness::summarization::last_user_message(&request.history)
             .map(crate::agent::message_convert::user_text_with_markers)
             .unwrap_or_default();
         let context_window = self
@@ -184,10 +183,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
         // composed for: a text dialect strips schemas off the wire and needs
         // the positional registry to recover P-Format / code-style calls.
         let run_context = request.run_context.data.clone().with_tool_dialect(
-            crate::agent::prompts::tool_call_format_from_dialect(
-                self.dispatcher.tool_call_format(),
-            )
-            .harness_dispatcher(),
+            tinyagents_harness::dialect::dispatcher_for_format(self.dispatcher.tool_call_format()),
         );
         let cancellation = request.run_context.cancellation.clone();
         // Boxed: the graph future is very large, and holding it inline in the
@@ -240,7 +236,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
 
         if outcome.text.trim().is_empty() && outcome.tool_outcomes.is_empty() {
             return Err(driver_error(
-                crate::agent::error::AgentError::EmptyProviderResponse {
+                tinyagents_harness::agent_error::AgentError::EmptyProviderResponse {
                     iteration: outcome.model_calls,
                 },
             ));
@@ -273,18 +269,33 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
             let now = Instant::now();
             now + deadline.close_budget(now)
         });
-        let close = grounded_close::close_if_needed(
-            &self.turn_model_source,
-            &self.model_name,
-            self.temperature,
-            request.run_context.data.thread_id.as_deref(),
-            self.dispatcher.as_ref(),
-            &request.history,
-            &user_message,
-            &outcome,
-            close_by.map(|at| at.saturating_duration_since(Instant::now())),
-        )
-        .await;
+        // A Stop during the close or the repair after it hands back the
+        // accepted rounds like a Stop during the loop, instead of letting the
+        // runtime's grace expire and drop the turn (#7776).
+        let accepted_history = request.history.clone();
+        let stopped = || {
+            driver_cancelled_with_snapshot(
+                &snapshot,
+                &sidecar,
+                started.elapsed(),
+                accepted_history.clone(),
+            )
+        };
+        let close = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Err(stopped()),
+            close = grounded_close::close_if_needed(
+                &self.turn_model_source,
+                &self.model_name,
+                self.temperature,
+                request.run_context.data.thread_id.as_deref(),
+                self.dispatcher.as_ref(),
+                &request.history,
+                &user_message,
+                &outcome,
+                close_by.map(|at| at.saturating_duration_since(Instant::now())),
+            ) => close,
+        };
         let mut output = close
             .as_ref()
             .map(|close| close.output.clone())
@@ -336,34 +347,41 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
                 None
             }
             Some(contract) => {
-                let repair = grounded_close::repair_required_output(
-                    &self.turn_model_source,
-                    &self.model_name,
-                    self.temperature,
-                    request.run_context.data.thread_id.as_deref(),
-                    self.dispatcher.as_ref(),
-                    contract,
-                    &history,
-                    &output,
-                    close.is_none() && request.run_context.data.progress.is_some(),
-                    request.run_context.data.progress.as_ref(),
-                    outcome.model_calls.saturating_add(1) as u32,
-                    &mut repair_usage,
-                );
-                match time_left {
-                    Some(left) => {
-                        // Bound to what is left so the turn still commits; on
-                        // expiry fall back to the deterministic block.
-                        let repaired = tokio::time::timeout(left, repair).await;
-                        match repaired {
-                            Ok(repaired) => repaired,
-                            Err(_) => {
-                                append_synthesized_block(&mut output, &mut history, contract);
-                                None
+                let repaired = {
+                    let repair = grounded_close::repair_required_output(
+                        &self.turn_model_source,
+                        &self.model_name,
+                        self.temperature,
+                        request.run_context.data.thread_id.as_deref(),
+                        self.dispatcher.as_ref(),
+                        contract,
+                        &history,
+                        &output,
+                        close.is_none() && request.run_context.data.progress.is_some(),
+                        request.run_context.data.progress.as_ref(),
+                        outcome.model_calls.saturating_add(1) as u32,
+                        &mut repair_usage,
+                    );
+                    tokio::pin!(repair);
+                    tokio::select! {
+                        biased;
+                        _ = cancellation.cancelled() => return Err(stopped()),
+                        repaired = async {
+                            match time_left {
+                                // Bound to what is left so the turn still commits;
+                                // on expiry fall back to the deterministic block.
+                                Some(left) => tokio::time::timeout(left, &mut repair).await.ok(),
+                                None => Some((&mut repair).await),
                             }
-                        }
+                        } => repaired,
                     }
-                    None => repair.await,
+                };
+                match repaired {
+                    Some(repaired) => repaired,
+                    None => {
+                        append_synthesized_block(&mut output, &mut history, contract);
+                        None
+                    }
                 }
             }
             None => None,
@@ -450,7 +468,7 @@ impl SessionDriver<OpenHumanRunContext> for OpenHumanSessionDriver {
             observed.wrap_up_injected = outcome.wrap_up_injected;
             // How the harness stopped the turn, if it did. The wind-down
             // middleware marked the sidecar during the run.
-            observed.stop = crate::agent::turn_stop::TurnStop::classify(
+            observed.stop = crate::agent::turn_projection::classify_stop(
                 outcome.breaker_halt.as_deref(),
                 observed.wind_down,
                 outcome.hit_cap,
@@ -571,7 +589,7 @@ fn ensure_snapshot_tools_are_executable(
 
 fn driver_error_with_snapshot(
     error: anyhow::Error,
-    snapshot: &crate::agent::tinyagents::TranscriptSnapshotSink,
+    snapshot: &crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshotSink,
     sidecar: &std::sync::Arc<
         std::sync::Mutex<crate::agent::tinyagents::host::run_context::SessionTurnSidecar>,
     >,
@@ -604,8 +622,9 @@ fn driver_error_with_snapshot(
     }
     let accepted_end = guard.accepted_end();
     let history = guard.messages[..accepted_end].to_vec();
-    let unanswered =
-        crate::agent::tinyagents::render_unanswered_steps(&guard.messages[accepted_end..]);
+    let unanswered = crate::agent::tinyagents::middleware::turn_context::render_unanswered_steps(
+        &guard.messages[accepted_end..],
+    );
     let display = if stalled {
         // The model's streamed narration was stopped before it could repeat
         // indefinitely. Preserve the completed tools as a useful, bounded
@@ -645,7 +664,7 @@ fn driver_error_with_snapshot(
 /// runtime's single atomic append carries the same usage/failure truth as a
 /// successful turn. The partial history itself remains accepted-only.
 fn record_snapshot_usage(
-    guard: &crate::agent::tinyagents::TranscriptSnapshot,
+    guard: &crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshot,
     sidecar: &std::sync::Arc<
         std::sync::Mutex<crate::agent::tinyagents::host::run_context::SessionTurnSidecar>,
     >,
@@ -673,7 +692,7 @@ fn record_snapshot_usage(
 /// just the request before the first model call. No display partial: the
 /// turn_state mirror already records the streamed text.
 fn driver_cancelled_with_snapshot(
-    snapshot: &crate::agent::tinyagents::TranscriptSnapshotSink,
+    snapshot: &crate::agent::tinyagents::middleware::turn_context::TranscriptSnapshotSink,
     sidecar: &std::sync::Arc<
         std::sync::Mutex<crate::agent::tinyagents::host::run_context::SessionTurnSidecar>,
     >,

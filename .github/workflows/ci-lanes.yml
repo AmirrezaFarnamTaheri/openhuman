@@ -10,6 +10,10 @@
 #           `openhuman-ex63`, host code in tinyhumansai/gh-hosted-runner). All
 #           lanes run at once; target dirs live on the per-job scratch disk;
 #           sccache, cargo and pnpm caches live on a 10 GB capped cache disk.
+#           Rust compiles go through tinymold (a per-job local store on scratch
+#           plus the host's shared, signed remote) when the guest provides
+#           both, and through sccache otherwise (rustWrapperFor in
+#           lanes-plan.mjs).
 #   hosted  the same lanes split over a few GitHub-hosted jobs sized to fit
 #           those runners, with GitHub's Actions cache.
 #
@@ -80,13 +84,24 @@ jobs:
 
       - name: Install jq for release-script tests
         if: steps.filter.outputs.scripts == 'true'
+        env:
+          JQ_URL: https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64
+          JQ_SHA256: 5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5
         run: |
-          if command -v jq >/dev/null && python3 -c 'import tomli' 2>/dev/null; then
+          if command -v jq >/dev/null; then
             exit 0
           fi
-          SUDO=$([ "$(id -u)" -eq 0 ] || echo sudo)
-          $SUDO apt-get update
-          $SUDO apt-get install -y --no-install-recommends jq python3-tomli
+          if [ "$(uname -m)" != "x86_64" ]; then
+            echo "::error::no jq on this runner and no pinned build for $(uname -m)"
+            exit 1
+          fi
+          bin="$RUNNER_TEMP/jq-bin"
+          mkdir -p "$bin"
+          curl -fsSL --retry 3 -o "$bin/jq" "$JQ_URL"
+          echo "$JQ_SHA256  $bin/jq" | sha256sum -c -
+          chmod +x "$bin/jq"
+          "$bin/jq" --version
+          echo "$bin" >> "$GITHUB_PATH"
 
       # One step per lane: `Start lanes` launches every lane in the background
       # (they still run in parallel); each `Lane:` step streams its own lane's

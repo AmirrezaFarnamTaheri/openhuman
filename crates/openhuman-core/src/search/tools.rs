@@ -8,6 +8,7 @@
 //! agent's config carries host-pinned search keys, which make it the config
 //! the call runs under.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -116,10 +117,11 @@ impl TinySearchTool {
         &self.spec
     }
 
-    async fn live_config(&self) -> anyhow::Result<Config> {
+    async fn live_config(&self, ctx: &DispatchCtx) -> anyhow::Result<Config> {
         match &self.config {
             Some(config) => Ok(config.as_ref().clone()),
-            None => crate::config::rpc::load_config_with_timeout()
+            None => ctx
+                .load_config()
                 .await
                 .map_err(|error| anyhow::anyhow!(error)),
         }
@@ -244,7 +246,17 @@ impl Tool for TinySearchTool {
         args: Value,
         options: ToolCallOptions,
     ) -> anyhow::Result<ToolResult> {
-        let config = self.live_config().await?;
+        self.execute_with_context(args, options, None).await
+    }
+
+    async fn execute_with_context(
+        &self,
+        args: Value,
+        options: ToolCallOptions,
+        context: Option<&dyn tinytools::ToolRunContext>,
+    ) -> anyhow::Result<ToolResult> {
+        let ctx = crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(context);
+        let config = self.live_config(&ctx).await?;
         // Re-read per call, so a key added or a provider switched mid-session
         // clears an earlier refusal instead of outliving it.
         let signature = self.provider_signature(&config);
@@ -276,7 +288,7 @@ impl Tool for TinySearchTool {
         if let Some(message) = local_only_search_block(&request.name) {
             return Ok(ToolResult::error(message));
         }
-        match crate::modules::search::execute_tool(&config, request).await {
+        match crate::modules::search::execute_tool(&ctx, &config, request).await {
             Ok(response) => {
                 tracing::debug!(
                     tool = %self.spec.name,

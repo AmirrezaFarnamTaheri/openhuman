@@ -13,9 +13,9 @@
 //!
 //! Like the workflow engine (#3375), the worker is spawned from a controller
 //! background task with no enclosing agent turn, so it builds a root
-//! [`ParentExecutionContext`] (shared [`build_root_parent`]) and runs inside
-//! [`with_parent_context`] — every nested `spawn_agent` then resolves a real
-//! provider / tools / memory.
+//! [`ParentExecutionContext`] (shared [`build_root_parent`]) and passes it to
+//! `spawn_agent` — every spawned worker then inherits a real provider / tools /
+//! memory.
 //!
 //! ## Message delivery boundary
 //!
@@ -32,6 +32,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use serde_json::json;
 
+use crate::agent::harness::ParentExecutionContext;
 use crate::agent::orchestration::parent_context::with_root_parent;
 use crate::config::Config;
 use tinyagents_session::run_ledger::{
@@ -49,7 +50,7 @@ use tinyagents_orchestration::teams::{
     truncate_chars, MemberOutcome, SessionTeamLedger, TeamError,
 };
 
-use crate::agent::tinyagents::observability::GraphTracingSink;
+use tinyagents_graph::GraphTracingSink;
 
 const LOG_TARGET: &str = "agent_team_runtime";
 /// Fallback archetype when a member carries no explicit `agent_id`: the
@@ -94,6 +95,7 @@ pub enum StartMemberOutcome {
 /// unknown, or the member has nothing claimable. An unknown member surfaces as
 /// [`TeamError::UnknownMember`].
 pub async fn start_member_run(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     team_id: &str,
     member_id: &str,
@@ -177,6 +179,7 @@ pub async fn start_member_run(
         .clone()
         .unwrap_or_else(|| DEFAULT_TEAMMATE_AGENT_ID.to_string());
     let cfg = config.clone();
+    let task_ctx = ctx.clone();
     let team = team_id.to_string();
     let mem = member_id.to_string();
     let task_for_loop = claimed.clone();
@@ -186,10 +189,11 @@ pub async fn start_member_run(
     // worker keeps the label the approval gate needs. Inherit-only: no origin
     // in scope means the worker stays unlabelled and fails closed as before.
     let inherited_origin = crate::agent::turn_origin::capture();
-    crate::core::runtime::spawn_scoped(async move {
+    ctx.spawn(async move {
         crate::agent::turn_origin::with_inherited_origin(
             inherited_origin,
             run_member_loop(
+                &task_ctx,
                 &cfg,
                 &team,
                 &mem,
@@ -197,6 +201,7 @@ pub async fn start_member_run(
                 task_for_loop,
                 &rid,
                 model_override,
+                None,
             ),
         )
         .await;
@@ -218,6 +223,7 @@ pub async fn start_member_run(
 /// and idle the member so the work is reclaimable; they are recorded, not
 /// propagated (there is no caller on the spawned task).
 async fn run_member_loop(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     team_id: &str,
     member_id: &str,
@@ -225,24 +231,37 @@ async fn run_member_loop(
     task: AgentTeamTask,
     run_id: &str,
     model_override: Option<String>,
+    parent_override: Option<ParentExecutionContext>,
 ) {
     // The member acts on memory as itself within the team: its node is
     // `team:<team>/agent:<agent>`, so members share the team's node and
     // never read each other's.
+    // The member acts on memory as itself, in its team: it rides the parent's
+    // host environment, so every run started from that parent keeps it.
     let identity = crate::memory::scope::MemoryIdentity::team_member(team_id, agent_id);
-    let member_turn = with_root_parent(config, "agent_team_runtime", "team", "teamrun", async {
-        drive_member(
-            config,
-            team_id,
-            member_id,
-            agent_id,
-            &task,
-            run_id,
-            model_override,
-        )
-        .await
-    });
-    let outcome = crate::memory::scope::within(identity, Box::pin(member_turn))
+    let member_turn = with_root_parent(
+        ctx,
+        parent_override,
+        config,
+        "agent_team_runtime",
+        "team",
+        "teamrun",
+        |mut parent| async {
+            parent.host_env.memory_identity = Some(identity);
+            drive_member(
+                config,
+                team_id,
+                member_id,
+                agent_id,
+                &task,
+                run_id,
+                model_override,
+                parent,
+            )
+            .await
+        },
+    );
+    let outcome = Box::pin(member_turn)
         .await
         // Flatten: outer Err = root-parent build failure, inner = drive_member result.
         .unwrap_or_else(Err);
@@ -273,6 +292,7 @@ async fn drive_member(
     task: &AgentTeamTask,
     run_id: &str,
     model_override: Option<String>,
+    parent: ParentExecutionContext,
 ) -> Result<()> {
     let ledger = SessionTeamLedger::new(
         crate::agent::session_store::require_ledger(&config.workspace_dir)
@@ -294,6 +314,7 @@ async fn drive_member(
         let task_id = task.id.clone();
         let run_id = run_id.to_string();
         move || {
+            let parent = parent.clone();
             let session = session.clone();
             let agent_id = agent_id.clone();
             let prompt = prompt.clone();
@@ -304,20 +325,23 @@ async fn drive_member(
             let run_id = run_id.clone();
             async move {
                 let resp = session
-                    .spawn_agent(SpawnAgentRequest {
-                        agent_id,
-                        prompt,
-                        model,
-                        metadata: [
-                            ("teamId".to_string(), team_id),
-                            ("memberId".to_string(), member_id),
-                            ("taskId".to_string(), task_id),
-                            ("teamRunId".to_string(), run_id),
-                        ]
-                        .into_iter()
-                        .collect(),
-                        ..Default::default()
-                    })
+                    .spawn_agent(
+                        parent,
+                        SpawnAgentRequest {
+                            agent_id,
+                            prompt,
+                            model,
+                            metadata: [
+                                ("teamId".to_string(), team_id),
+                                ("memberId".to_string(), member_id),
+                                ("taskId".to_string(), task_id),
+                                ("teamRunId".to_string(), run_id),
+                            ]
+                            .into_iter()
+                            .collect(),
+                            ..Default::default()
+                        },
+                    )
                     .await
                     .map_err(|e| anyhow!("spawn teammate worker failed: {e}"))?;
 

@@ -66,7 +66,7 @@ async fn import_into(scoped: &ScopedStorage, workspace_dir: &Path) -> Result<Out
     if !ledger.is_file() {
         return Ok(Outcome::NoSource);
     }
-    let (records, skipped) = crate::core::runtime::spawn_blocking_scoped(move || -> Result<_> {
+    let (records, skipped) = tokio::task::spawn_blocking(move || -> Result<_> {
         let text = std::fs::read_to_string(&ledger)
             .with_context(|| format!("read {}", ledger.display()))?;
         Ok(support::parse_jsonl(&text))

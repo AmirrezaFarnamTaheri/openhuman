@@ -42,3 +42,5 @@ pub use types::MaybeSet;
 
 #[cfg(test)]
 pub(crate) mod module_test_process;
+#[cfg(test)]
+pub(crate) mod classic_transcript_fixture;

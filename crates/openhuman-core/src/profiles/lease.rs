@@ -191,7 +191,7 @@ pub fn heartbeat(host: Arc<ProfileHost>, operator: Arc<crate::core::runtime::Cor
             }
         }
     });
-    crate::core::runtime::spawn_scoped(renewals);
+    tokio::spawn(renewals);
 }
 
 #[cfg(test)]

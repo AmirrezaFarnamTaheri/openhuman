@@ -41,7 +41,7 @@
 //! [`ServiceSet`], the compiled-and-registered [`DomainSet`] and the API key.
 //! An agent owns everything the core reads through its ambient context:
 //! its `Config` (provider route and model, MCP servers, autonomy tier,
-//! `action_dir`), its [`AgentDefinition`](openhuman_core::agent::harness::definition::AgentDefinition)
+//! `action_dir`), its [`AgentDefinition`](openhuman_core::agent::harness::host_definition::AgentDefinition)
 //! (system prompt, tool scope, sandbox mode), its profile (allowlists,
 //! dedicated memory and transcripts), its skills root, its narrowed
 //! `DomainSet` and [`ToolGroups`], its approval settings, sub-agents, MCP
@@ -386,7 +386,10 @@ impl Runtime {
 
     /// The runtime's scheduled jobs. See [`crate::cron`].
     pub fn cron(&self) -> crate::cron::Cron<'_> {
-        crate::cron::Cron::new(&self.base_config)
+        crate::cron::Cron::new(
+            &self.base_config,
+            openhuman_core::core::runtime::DispatchCtx::new(self.core_runtime().context().clone()),
+        )
     }
 
     /// Run `handler` whenever system job `name` comes due (see

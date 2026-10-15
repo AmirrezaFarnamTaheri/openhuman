@@ -1314,7 +1314,9 @@ const messages: TranslationMap = {
   'chat.stallWarning.thinking':
     'Всё ещё думает. Нового вывода нет уже 2 минуты, но агент продолжает работать. Нажмите «Стоп», если хотите отменить.',
   'chat.stallWarning.working':
-    'Всё ещё работает. Шаг выполняется больше 2 минут без нового вывода. Нажмите «Стоп», если хотите отменить.',
+    'Нового вывода нет уже {duration}. Возможно, агент завис; нажмите «Остановить», чтобы отменить.',
+  'chat.stallWarning.toolRunning':
+    '{tool}. Долгие шаги, например сборка или отслеживание CI, могут занять время.',
   'chat.filter.tasks': 'Задачи',
   'chat.selectThread': 'Выбери чат',
   'chat.noThreads': 'Чатов пока нет',
@@ -1879,6 +1881,23 @@ const messages: TranslationMap = {
   'conversations.tools.steps.other': 'Шагов: {count}',
   'conversations.tools.working': 'Выполняется',
   'conversations.tools.noOutput': 'Нет вывода',
+  'conversations.mcpUi.openInBrowser': 'Открыть в браузере',
+  'conversations.mcpUi.showQr': 'Показать QR',
+  'conversations.mcpUi.hideQr': 'Скрыть QR',
+  'conversations.mcpUi.scanToOpen': 'Отсканируйте телефоном, чтобы открыть',
+  'conversations.mcpUi.openOnPhone': 'Открыть на телефоне',
+  'conversations.mcpUi.copyLink': 'Копировать ссылку',
+  'conversations.mcpUi.copied': 'Скопировано',
+  'conversations.mcpUi.linksLabel': 'Ссылки от этого инструмента',
+  'conversations.mcpUi.widgetTitle': 'Виджет инструмента',
+  'conversations.mcpUi.widgetLoading': 'Загрузка виджета…',
+  'conversations.mcpUi.widgetUnavailable':
+    'Этот виджет больше недоступен. Переподключите сервер, чтобы увидеть его снова.',
+  'conversations.mcpUi.confirmTitle': 'Разрешить это действие?',
+  'conversations.mcpUi.confirmBody':
+    'Это окно хочет запустить {tool}. Это может что-то изменить в этом сервисе.',
+  'conversations.mcpUi.confirmAllow': 'Разрешить',
+  'conversations.mcpUi.confirmDeny': 'Запретить',
   'conversations.tools.delegatedTo': 'Передано агенту {agent}',
   'conversations.tools.parallelAgentsAggregating': 'Объединение результатов',
   'conversations.tools.openInBrowser': 'Открыть в браузере',
@@ -4854,6 +4873,8 @@ const messages: TranslationMap = {
   'conversations.tools.createDocument.done': 'Документ создан',
   'conversations.tools.createPresentation.active': 'Создание презентации',
   'conversations.tools.createPresentation.done': 'Презентация создана',
+  'conversations.tools.showView.done': 'Окно показано',
+  'conversations.tools.showView.active': 'Показ окна',
   'conversations.tools.recallMemories.active': 'Извлечение воспоминаний',
   'conversations.tools.recallMemories.done': 'Воспоминания извлечены',
   'conversations.tools.saveToMemory.active': 'Сохранение в память',

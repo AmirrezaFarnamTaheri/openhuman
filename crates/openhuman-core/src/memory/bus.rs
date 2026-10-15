@@ -17,6 +17,7 @@
 //! Turns are not ingested from the bus: the session host calls the lifecycle
 //! hooks itself, under the session's own config (`lifecycle::hooks`).
 
+use crate::core::runtime::DispatchCtx;
 use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
@@ -51,13 +52,17 @@ impl EventHandler<DomainEvent> for PendingDeletionsSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) {
-        let DomainEvent::CredentialChanged { kind } = event else {
+        let DomainEvent::CredentialChanged { kind, tenant } = event else {
             return;
         };
         if kind == "cleared" {
             return;
         }
-        let config = match crate::config::rpc::load_config_with_timeout().await {
+        let Some(ctx) = DispatchCtx::for_event(tenant.as_ref()) else {
+            tracing::debug!("[memory:bus] credential change has no tenant; deletions wait");
+            return;
+        };
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => {
                 tracing::debug!(error = %error, "[memory:bus] config unavailable; deletions wait");
@@ -90,13 +95,17 @@ impl EventHandler<DomainEvent> for SystemJobsSubscriber {
     }
 
     async fn handle(&self, event: &DomainEvent) {
-        let DomainEvent::CronSystemJobDue { job } = event else {
+        let DomainEvent::CronSystemJobDue { job, tenant } = event else {
             return;
         };
         if job != SOURCES_SYNC_JOB && job != BACKGROUND_JOB {
             return;
         }
-        let config = match crate::config::rpc::load_config_with_timeout().await {
+        let Some(ctx) = DispatchCtx::for_event(tenant.as_ref()) else {
+            tracing::debug!(job = %job, "[memory:bus] system job has no tenant; skipped");
+            return;
+        };
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => {
                 tracing::debug!(error = %error, job = %job, "[memory:bus] config unavailable");
@@ -114,8 +123,9 @@ impl EventHandler<DomainEvent> for SystemJobsSubscriber {
 /// own context so its memory binding and sources apply.
 async fn sync_live_agent_sources() {
     for (agent_id, ctx) in crate::core::runtime::AgentContextRegistry::live() {
+        let dispatch = crate::core::runtime::DispatchCtx::new(ctx.clone());
         crate::core::runtime::CoreContext::scope(ctx, async {
-            match crate::config::ops::load_current_or_init().await {
+            match crate::config::ops::load_current_or_init(&dispatch).await {
                 Ok(config) => {
                     tracing::debug!(agent = %agent_id, "[memory:bus] agent source sync");
                     run_system_job(&config, SOURCES_SYNC_JOB).await;

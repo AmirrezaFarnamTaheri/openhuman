@@ -93,13 +93,13 @@ Some settings remain runtime-wide for every agent (the live autonomy policy's
 config sub-agents re-read); the crate README lists them under "Still
 runtime-wide".
 
-Every agent turn runs through the published [`tinyagents`](https://crates.io/crates/tinyagents) harness. There are three entry points: `Agent::turn`, the channel and CLI bus path, and `run_subagent`. All of them go through the adapter seam in [`crates/openhuman-core/src/agent/tinyagents/`](https://github.com/tinyhumansai/openhuman/tree/main/crates/openhuman-core/src/agent/tinyagents) (`run_turn_via_tinyagents_shared`). Context trimming is `MessageTrimMiddleware`, and cancellation is the tinyagents steering channel. Policy stop hooks (budget, thread-goal and iteration caps) fire through a `StopHookMiddleware` ([`tinyagents/stop_hooks.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/tinyagents/stop_hooks.rs)) that pauses the run on the first stop vote. The channel route forwards live `AgentProgress` like the chat route. The shared `TurnProgress` seam lives in `agent/session_host/tool_progress.rs`.
+Every agent turn runs through the published [`tinyagents`](https://crates.io/crates/tinyagents) harness. There are three entry points: `Agent::turn`, the channel and CLI bus path, and `run_subagent`. All of them go through the adapter seam in [`crates/openhuman-core/src/agent/tinyagents/`](https://github.com/tinyhumansai/openhuman/tree/main/crates/openhuman-core/src/agent/tinyagents) (`TurnSpec::run`). Context trimming is `MessageTrimMiddleware`, and cancellation is the tinyagents steering channel. Policy stop hooks (budget, thread-goal and iteration caps) fire through a `StopHookMiddleware` ([`tinyagents/stop_hooks.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/tinyagents/stop_hooks.rs)) that pauses the run on the first stop vote. The channel route forwards live `AgentProgress` like the chat route. The shared `TurnProgress` seam lives in `agent/session_host/tool_progress.rs`.
 
-Multi-agent orchestration runs on the tinyagents graph layer, through `graph::parallel::map_reduce`, the `spawn_parallel_graph` scaffold and the shared `graph::orchestration` `TaskStore` lifecycle primitives re-exported from [`orchestration/mod.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/orchestration/mod.rs):
+Multi-agent orchestration runs on the tinyagents graph layer, through `tinyagents-orchestration`'s `parallel` module, the host `spawn_parallel` adapter and the shared `graph::orchestration` `TaskStore` lifecycle primitives re-exported from [`orchestration/mod.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/orchestration/mod.rs):
 
 - [`orchestration/delegation.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/orchestration/delegation.rs) is a `plan → execute ⇄ review → finalize` `CompiledGraph`. It has conditional routing, `RecursionPolicy`, a durable `FileCheckpointer`, a `CancellationToken` and a `GraphTracingSink`.
 - The workflow phase engine fans each phase's agents out on the graph (`with_max_concurrency`). The durable `WorkflowRun` ledger stays the source of truth for resume.
-- `spawn_parallel_agents` runs its fan-out through `spawn_parallel_graph` and `graph::parallel::map_reduce`.
+- `spawn_parallel_agents` runs its fan-out through the host `spawn_parallel` adapter over `tinyagents_orchestration::parallel`.
 - The agent-teams member runtime is a conditional-routing graph (`execute → complete | fail → done`, [`agent_teams/runtime.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/orchestration/agent_teams/runtime.rs)).
 - The detached-sub-agent registry is backed by a typed `TaskStore` lifecycle ledger (Pending, Running, then Completed, Failed or Cancelled).
 
@@ -213,7 +213,7 @@ The loader is `agent::prompts::agents_md` (pure functions returning pre-loaded s
 
 ## The tool-call loop
 
-Inside `Agent::turn`, the tool-call loop is the inner engine. It is the published tinyagents crate's `AgentHarness` loop, assembled per turn by `run_turn_via_tinyagents_shared` ([`crates/openhuman-core/src/agent/tinyagents/mod.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/tinyagents/mod.rs)). It runs up to the turn's iteration cap, resolved in `session_host/builder/iteration_cap.rs`: an explicit `[agent] max_tool_iterations_override` (or `OPENHUMAN_AGENT_MAX_TOOL_ITERATIONS`) wins, then the agent definition's cap (the orchestrator's is 200), then `max_tool_iterations` (default 10) for a turn with no definition. The model is told how many calls remain at 50% and 80% of the budget, and `inference_agent_chat` reports a capped turn with `hit_cap: true` and its `checkpoint` text:
+Inside `Agent::turn`, the tool-call loop is the inner engine. It is the published tinyagents crate's `AgentHarness` loop, assembled per turn by `TurnSpec::run` ([`crates/openhuman-core/src/agent/tinyagents/mod.rs`](https://github.com/tinyhumansai/openhuman/blob/main/crates/openhuman-core/src/agent/tinyagents/mod.rs)). It runs up to the turn's iteration cap, resolved in `session_host/builder/iteration_cap.rs`: an explicit `[agent] max_tool_iterations_override` (or `OPENHUMAN_AGENT_MAX_TOOL_ITERATIONS`) wins, then the agent definition's cap (the orchestrator's is 200), then `max_tool_iterations` (default 10) for a turn with no definition. The model is told how many calls remain at 50% and 80% of the budget, and `inference_agent_chat` reports a capped turn with `hit_cap: true` and its `checkpoint` text:
 
 ```text
 loop {
@@ -312,7 +312,7 @@ once (`session_rule_set`); each turn evaluates them in its own context
 Long tool-calling chains can blow past the context window. Two layers handle that:
 
 - Tool-result budget: every tool result is checked against a per-call byte budget, enforced as tinyagents tool middleware. Anything over is hard-truncated with an explanatory marker so the model knows it didn't see the full output.
-- Microcompact / autocompact: when total history is creeping toward the context window, tinyagents middleware (message trimming + the compression hooks installed in `tinyagents/middleware.rs` and `tinyagents/harness_context_ladder.rs`) compacts older turns into summaries before the next provider call. The compacted history keeps the system prompt and the most recent turns intact (KV-cache stability) and rewrites the middle.
+- Microcompact / autocompact: when total history is creeping toward the context window, tinyagents middleware (message trimming + the compression hooks installed in `tinyagents/middleware.rs` and `tinyagents/context_wiring.rs`, with ladder order and sizing owned by `tinyagents-harness` `ContextLadder`) compacts older turns into summaries before the next provider call. The compacted history keeps the system prompt and the most recent turns intact (KV-cache stability) and rewrites the middle.
 
 ### Oversized tool results: the summarizer detour
 
@@ -619,13 +619,13 @@ The harness shell lives under `crates/openhuman-core/src/agent/`, with the tinya
 
 | File / dir                               | What lives there                                                                                              |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `session_host/runtime_session.rs`        | `Agent::turn`: the lifecycle described above; routes into the tinyagents runner via `tinyagents/turn_runner.rs`. |
-| `tinyagents/mod.rs`                      | `run_turn_via_tinyagents_shared`: the shared tinyagents harness assembly (the live loop).                    |
+| `session_host/runtime_session.rs`        | `Agent::turn`: the lifecycle described above; routes into the tinyagents runner via `tinyagents/turn_exec.rs`. |
+| `tinyagents/mod.rs`                      | `TurnSpec::run`: the shared tinyagents harness assembly (the live loop).                    |
 | `tinyagents/middleware.rs`               | The named OpenHuman middleware stack (approval/security, tool policy, recovery, budgets, circuit breaker).    |
 | `harness/graph.rs`                       | The channel/CLI bus turn route into the tinyagents runner.                                                    |
 | `subagent_host/`                         | Direct OpenHuman planner/executor/persistence adapters for `tinyagents-orchestration::subagent`; product prompt/tool/model/security/artifact/progress behavior remains here. |
 | `orchestration/subagent_sessions/`       | Durable reusable sub-agent identity, compatibility matching, persisted status/history.                        |
-| `harness/definition.rs`                  | `AgentDefinition`: what an archetype declares.                                                               |
+| `harness/host_definition.rs`             | Host extension and registry over `tinyagents_definition::AgentDefinition`.                                   |
 | `subagent_host/ops/runner.rs`            | Integration-tool ranking and the host execution leaf; generic lifecycle stays in `tinyagents-orchestration`.  |
 | `tinyagents/payload_summarizer.rs`       | The model call behind TinyJuice's oversized-tool-result summary.                                              |
 | `session_host/tool_progress.rs`       | Surviving OpenHuman seam: `TurnProgress`.                                                                     |
@@ -645,7 +645,7 @@ direct `tinyagents-orchestration::subagent` lifecycle. There is no
 
 | File (`crates/openhuman-core/src/agent/tinyagents/`)          | Role                                                                                                                                                                                                                                                                           |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mod.rs`                                          | The runner (`run_turn_via_tinyagents_shared`): installs the native `ChatModel`, host tool adapters, and middleware on an `AgentHarness`; runs one turn; caps output through `MaxTokensModel` (`agent/tinyagents/model.rs`); mirrors progress; forwards steering; and pauses gracefully at the model-call cap. |
+| `mod.rs`                                          | The runner (`TurnSpec::run`): installs the native `ChatModel`, host tool adapters, and middleware on an `AgentHarness`; runs one turn; caps output through `MaxTokensModel` (`agent/tinyagents/model.rs`); mirrors progress; forwards steering; and pauses gracefully at the model-call cap. |
 | `mod.rs` / `model.rs` / `tools.rs` / `convert.rs` | `RunPolicy` / `ChatModel` / `Tool` / message adapters (incl. unknown-tool policy and out-of-band reasoning forwarding).                                                                                                                                                        |
 | `observability.rs`                                | Harness `AgentEvent` → `AgentProgress` + cost; `GraphTracingSink` for graph events.                                                                                                                                                                                            |
 | `orchestration.rs`                                | Re-exported `graph::orchestration` task-store types; map-reduce fanout uses the TinyAgents SDK surface directly.                                                                                                                                                           |

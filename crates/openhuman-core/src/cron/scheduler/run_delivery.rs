@@ -36,8 +36,9 @@ impl RunDelivery for HostDelivery {
         self.binding
             .within(async {
                 let config = self.binding.config();
+                let ctx = self.binding.dispatch_ctx();
                 let result =
-                    deliver_run(&config, job, run_id, &attempt.output, attempt.success).await;
+                    deliver_run(&ctx, &config, job, run_id, &attempt.output, attempt.success).await;
                 // A failed required delivery fails the run, as the runtime
                 // records it.
                 let delivered = match &result {
@@ -48,7 +49,7 @@ impl RunDelivery for HostDelivery {
                 // The job ran as its agent (when it had one); a one-shot job
                 // is deleted once the run completes, so subscribers learn the
                 // owner here, not from the store.
-                crate::cron::completion_owner::note(&job.id);
+                crate::cron::completion_owner::note(&ctx, &job.id);
                 BUS.publish(DomainEvent::CronJobCompleted {
                     job_id: job.id.clone(),
                     success,
@@ -100,12 +101,12 @@ impl TriggerSink for HostTriggers {
                         Err(_) => None,
                     }
                     .map_or_else(|| flow_id.to_string(), |job| job.id);
-                    return Ok(run_system_job(&job_id, name, run_id).await);
+                    return Ok(run_system_job(&self.binding.dispatch_ctx(), &job_id, name, run_id).await);
                 }
                 // `[components] flows = false`: schedule-triggered flows stop
                 // while agent, shell and system jobs keep running. The tick is
                 // answered, not retried, so the row's recurrence moves on.
-                if !flows_component_enabled() {
+                if !self.binding.dispatch_ctx().components().flows {
                     tracing::debug!(
                         target: "flows",
                         %flow_id,
@@ -131,7 +132,7 @@ impl TriggerSink for HostTriggers {
                             self.binding.config(),
                         ))
                     })
-                    .dispatch_schedule_tick(flow_id)
+                    .dispatch_schedule_tick(&self.binding.dispatch_ctx(), flow_id)
                     .await;
                 #[cfg(not(feature = "flows"))]
                 tracing::warn!(%flow_id, "[cron] built without `flows`; schedule trigger dropped");
@@ -145,19 +146,19 @@ impl TriggerSink for HostTriggers {
     }
 }
 
-/// Whether `[components] flows` is on in the ambient context. No context
-/// means nothing narrowed it.
-fn flows_component_enabled() -> bool {
-    crate::core::runtime::CoreContext::current().is_none_or(|ctx| ctx.components().flows)
-}
-
 /// A host-owned system job (`system:<name>`): announced on the bus, then its
 /// registered handler is awaited and its result is the run's result. Without a
 /// handler the job is announce-only and `ok` on dispatch.
-async fn run_system_job(job_id: &str, name: &str, run_id: &str) -> Attempt {
+async fn run_system_job(
+    ctx: &crate::core::runtime::DispatchCtx,
+    job_id: &str,
+    name: &str,
+    run_id: &str,
+) -> Attempt {
     tracing::info!(%job_id, job = %name, %run_id, "[cron] system job due — publishing CronSystemJobDue");
     BUS.publish(DomainEvent::CronSystemJobDue {
         job: name.to_string(),
+        tenant: ctx.event_tenant(),
     });
     let ctx = crate::cron::system_job_handlers::SystemJobContext {
         job_id: job_id.to_string(),
