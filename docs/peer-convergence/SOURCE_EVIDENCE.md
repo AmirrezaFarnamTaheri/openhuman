@@ -55,3 +55,27 @@ The same opt-in tool now accepts `{"operation":"locate","query":"where is the se
 A previous cursor implementation wrongly stopped after the first `max_files + 1` entries during depth-first traversal, then sorted only that prefix. Directory `a/child.rs` could be visited before lexically preceding `a.rs`, causing the cursor to skip `a.rs`. The implementation now enumerates the independently bounded traversal first, sorts all observed eligible files by normalized relative path, and only then selects a page. If the traversal budget itself is exceeded, the result is partial **without issuing a cursor that could skip unobserved files**. The final enriched graph JSON is also independently bounded after partial-catalog metadata has been attached; omitted edges invalidate graph-derived impact.
 
 This is candidate discovery and conservative syntactic dependency evidence, not a full repository-scale semantic code navigator, full AST/call graph, or atomic snapshot. The source graph still requires real Rust/compiler and multi-platform regression verification before shipping.
+
+
+## Additional hardening: multiline Rust syntax and navigation terms
+
+The conservative graph lexer now retains state across multiline Rust ordinary
+and raw string literals, including variable numbers of raw-string hashes and
+raw byte strings. Module-looking text, braces, or `#[path]` examples inside
+those literals are **not** treated as source dependency declarations. This is
+still a lexical approximation, not an AST parser; unsupported syntax must not
+be represented as complete semantic coverage.
+
+The `graph` operation ignores `query` rather than inheriting `scan`'s
+literal-match truncation budget. A graph's completeness is therefore
+determined only by its actual catalog, traversal, source, and graph limits.
+
+The opt-in `locate` operation now preserves the beginning and end of long
+natural-language queries before lexical matching. Its 16-term cap is applied
+by request order, not alphabetically, so a late symbol name or requirement
+cannot disappear merely because it sorts after general words. Candidates
+remain unverified and may omit results outside the observed files.
+
+Regression tests cover raw and ordinary multiline string examples, spurious
+`#[path]` attributes, long-query tail terms, and the scan-only query budget.
+They require execution on a Rust-enabled runner before release.
