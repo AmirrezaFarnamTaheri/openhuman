@@ -339,3 +339,64 @@ fn nested_inline_rust_modules_are_not_resolved_against_root_files() {
     assert_eq!(edges.len(), 1);
     assert_eq!(edges[0]["to"], "src/actual.rs");
 }
+
+
+#[test]
+fn rust_raw_multiline_strings_never_create_source_module_edges() {
+    let documents = vec![
+        source("src/lib.rs", r####"
+const MESSAGE: &str = r###"
+mod fake_one;
+fn demonstration() { mod fake_two; }
+"###;
+mod genuine;
+"####),
+        source("src/fake_one.rs", "pub const FALSE: u8 = 1;"),
+        source("src/fake_two.rs", "pub const FALSE: u8 = 2;"),
+        source("src/genuine.rs", "pub const TRUE: u8 = 3;"),
+    ];
+    let graph = build_graph(&documents, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1, "module-looking raw string bytes must not become graph edges");
+    assert_eq!(edges[0]["to"], "src/genuine.rs");
+}
+
+#[test]
+fn rust_multiline_ordinary_string_and_raw_byte_string_do_not_create_edges() {
+    let documents = vec![
+        source("src/lib.rs", r####"
+const NORMAL: &str = "one
+mod fake_one;
+three";
+const BINARY: &[u8] = br##"
+mod fake_two;
+"##;
+mod genuine;
+"####),
+        source("src/fake_one.rs", "pub const FALSE: u8 = 1;"),
+        source("src/fake_two.rs", "pub const FALSE: u8 = 2;"),
+        source("src/genuine.rs", "pub const TRUE: u8 = 3;"),
+    ];
+    let graph = build_graph(&documents, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0]["to"], "src/genuine.rs");
+}
+
+#[test]
+fn rust_module_path_attribute_inside_raw_string_is_not_a_real_attribute() {
+    let documents = vec![
+        source("src/lib.rs", r####"
+const EXAMPLE: &str = r##"
+#[path = "fake.rs"]
+"##;
+mod genuine;
+"####),
+        source("src/genuine.rs", "pub const YES: u8 = 1;"),
+        source("src/fake.rs", "pub const NO: u8 = 1;"),
+    ];
+    let graph = build_graph(&documents, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0]["to"], "src/genuine.rs");
+}
