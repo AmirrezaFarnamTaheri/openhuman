@@ -160,3 +160,28 @@ fn first_column_excerpt_keeps_original_text_and_provenance() {
     assert_eq!(evidence["column_start"], 1);
     assert_eq!(evidence["excerpt_truncated"], false);
 }
+
+
+#[test]
+fn long_line_excerpt_includes_matched_symbol_not_an_unrelated_prefix() {
+    let line = format!("{} sessionVerifier() {}\n", "noisy ".repeat(180), "{}");
+    let docs = vec![src("src/long.rs", &line)];
+    let found = rank_sources(&docs, "session verifier", 5);
+    assert_eq!(found["results"].as_array().unwrap().len(), 1);
+    let sample = &found["results"][0]["evidence"][0];
+    let snippet = sample["text"].as_str().unwrap();
+    assert!(snippet.contains("sessionVerifier"), "locator must display matching evidence: {snippet}");
+    assert!(sample["excerpt_start_column"].as_u64().unwrap() > 1);
+    assert!(snippet.chars().count() <= 160);
+}
+
+#[test]
+fn unicode_excerpts_count_columns_in_characters_not_utf8_bytes() {
+    let line = format!("{} sessionVerifier()\n", "🙂 ".repeat(150));
+    let docs = vec![src("src/unicode.rs", &line)];
+    let found = rank_sources(&docs, "session verifier", 5);
+    let sample = &found["results"][0]["evidence"][0];
+    assert!(sample["text"].as_str().unwrap().contains("sessionVerifier"));
+    assert!(sample["excerpt_start_column"].as_u64().unwrap() > 1);
+    assert_eq!(sample["line"], 1);
+}
