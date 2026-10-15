@@ -311,3 +311,24 @@ describe('Model Fleet single-flight persistence', () => {
     await expect(singleFlight(async () => 'recovered')).resolves.toBe('recovered');
   });
 });
+
+
+describe('model fleet destination parsing safety', () => {
+  it('rejects embedded URL control characters that WHATWG URL silently strips', () => {
+    expect(validModelFleetEndpoint('https://host.example/v1/\npath')).toBe(false);
+    expect(validModelFleetImageEndpoint('https://host.example/v1/\timage')).toBe(false);
+    expect(validModelFleetImageEndpoint('http://127.0.0.1:8080/\rimage')).toBe(false);
+    expect(validModelFleetImageEndpoint('http://127.0.0.1:8080/v1')).toBe(true);
+    expect(validModelFleetImageEndpoint('https://images.example/v1')).toBe(true);
+  });
+
+  it('bounds model-to-image mappings at the same 512-entry limit as protocol overrides', () => {
+    const mappings = Array.from(
+      { length: 512 },
+      (_, index) => 'model-' + index + ' = https://images.example/v1'
+    );
+    expect(Object.keys(parseModelImageEndpoints(mappings.join('\n')))).toHaveLength(512);
+    expect(() => parseModelImageEndpoints([...mappings, 'overflow = https://images.example/v1'].join('\n')))
+      .toThrow(/512/);
+  });
+});
