@@ -542,3 +542,49 @@ async fn locate_refuses_blank_queries_and_never_indexes_hidden_credentials() {
     assert!(result.to_string().find(".env").is_none());
     assert_eq!(result["results"][0]["path"], "main.rs");
 }
+
+
+#[tokio::test]
+async fn source_pages_follow_global_lexical_order_even_with_directory_prefixes() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("a")).unwrap();
+    std::fs::write(project.path().join("a/child.rs"), "fn nested() {}\n").unwrap();
+    std::fs::write(project.path().join("a.rs"), "fn sibling() {}\n").unwrap();
+    std::fs::write(project.path().join("b.rs"), "fn final_file() {}\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let first = run(&tool, json!({"operation":"scan","max_files":1})).await;
+    assert_eq!(first["files"][0]["path"], "a.rs");
+    assert_eq!(first["next_after_path"], "a.rs");
+    let second = run(&tool, json!({
+        "operation":"scan","max_files":1,"after_path":"a.rs"
+    })).await;
+    assert_eq!(second["files"][0]["path"], "a/child.rs");
+    let third = run(&tool, json!({
+        "operation":"scan","max_files":1,"after_path":"a/child.rs"
+    })).await;
+    assert_eq!(third["files"][0]["path"], "b.rs");
+    assert_eq!(third["complete"], true);
+    assert_eq!(third["next_after_path"], Value::Null);
+}
+
+#[tokio::test]
+async fn large_partial_graph_remains_valid_json_after_enrichment() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    for index in 0..32 {
+        let stem = format!("{}_{index:02}", "a".repeat(120));
+        let content = (0..32).map(|other| {
+            format!("import './{}_{other:02}';\n", "a".repeat(120))
+        }).collect::<String>();
+        std::fs::write(project.path().join(format!("{stem}.ts")), content).unwrap();
+    }
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = tool.execute(json!({"operation":"graph","max_files":16})).await.unwrap();
+    let raw = result.output();
+    assert!(raw.len() <= 28_000, "graph exceeds safe JSON response budget: {}", raw.len());
+    let graph: Value = serde_json::from_str(raw).expect("complete JSON graph");
+    assert_eq!(graph["catalog_complete"], false);
+    assert_eq!(graph["edges_complete"], false);
+    assert_eq!(graph["impact"], json!([]));
+}
