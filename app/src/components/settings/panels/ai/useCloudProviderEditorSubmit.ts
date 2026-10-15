@@ -11,6 +11,7 @@ import {
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
+import { validModelFleetImageEndpoint } from './modelFleetOps';
 import {
   type AISettings,
   type CloudProvider,
@@ -46,6 +47,30 @@ export function useCloudProviderEditorSubmit({
       };
       const previous = editing && editing !== 'new' ? editing : null;
       const savedKeyExists = previous?.maskedKey.startsWith('••••') ?? false;
+      // Do not rely on the modal's form checks: the submit hook can be
+      // invoked by other UI paths, retries or future automation callers.
+      // Never send an existing or candidate key to off-loopback plaintext.
+      // Preserve unauthenticated LAN-model endpoints for local deployments.
+      if (upserted.slug !== 'openhuman') {
+        const hasCredential = Boolean(apiKey.trim())
+          || savedKeyExists
+          || upserted.maskedKey.startsWith('••••');
+        if (hasCredential && (
+          !upserted.endpoint.trim() ||
+          !validModelFleetImageEndpoint(upserted.endpoint)
+        )) {
+          throw new Error('API keys require HTTPS or loopback HTTP.');
+        }
+        const imageRoutes = [
+          upserted.imageEndpoint ?? '',
+          ...Object.values(upserted.modelImageEndpoints ?? {}),
+        ];
+        if (imageRoutes.some(url =>
+          typeof url !== 'string' || !validModelFleetImageEndpoint(url)
+        )) {
+          throw new Error('Image endpoints require HTTPS or loopback HTTP.');
+        }
+      }
       const changedDestination = previous !== null && (
         previous.slug !== upserted.slug ||
         previous.endpoint !== upserted.endpoint ||
