@@ -26,7 +26,7 @@ Direct file-edit tools and other potentially mutating workflows invalidate earli
 1. A successful exit recorded through ShellTool is a *local process outcome*, not verified requirements coverage. An ordinary successful shell command is not automatically a test.
 2. A journal with a check after every known source mutation supplies a limited freshness fact. It does **not** prove that shell commands or external agents made no unobserved changes.
 3. A machine-verifiable completion receipt additionally needs a source tree/generation hash tied to the check, a manifest of tests actually run, a complete effects journal, and GitHub CI check-run results against the **final exact commit SHA**. Neither the model's final answer nor a local status marked `passed` substitutes for that.
-4. The implementation is not ready for release until `cargo test -p openhuman shell_verification`, `cargo test -p openhuman local_checks`, `cargo check -p openhuman`, platform builds, permission-adversarial tests, and a latest-head CI run complete.
+4. The implementation is not ready for release until `cargo test -p openhuman verification_tests`, `cargo test -p openhuman local_checks`, `cargo check -p openhuman`, platform builds, permission-adversarial tests, and a latest-head CI run complete.
 
 The pinned TinyAgents observability contract provides typed `ToolStarted`, `ToolCompleted`, `ToolFailed` events and a host-only metadata channel. This implementation adapts Canny's post-edit freshness insight to that existing seam without importing Canny's independent hook process or model judge.
 
