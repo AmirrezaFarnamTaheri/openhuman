@@ -21,6 +21,106 @@ pub(super) struct SourceDocument {
 fn pattern(cache: &'static OnceLock<Regex>, expression: &'static str) -> &'static Regex {
     cache.get_or_init(|| Regex::new(expression).expect("literal regex is valid"))
 }
+
+#[derive(Clone, Copy)]
+enum SourceSyntax { Rust, JavaScript, Python }
+
+#[derive(Default)]
+struct LexicalState {
+    block_depth: usize,
+    js_template: bool,
+    python_triple: Option<u8>,
+}
+
+/// Conservative lexical mask for candidate statement locations, not an AST.
+/// Quoted calls and multiline comments are not dependency statements.
+fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) -> Vec<bool> {
+    let bytes = line.as_bytes();
+    let mut visible = vec![false; bytes.len()];
+    let mut quote: Option<u8> = None;
+    let mut index = 0;
+    while index < bytes.len() {
+        let current = bytes[index];
+        let next = bytes.get(index + 1).copied();
+        if let Some(triple) = state.python_triple {
+            if bytes.get(index..index + 3) == Some(&[triple, triple, triple][..]) {
+                state.python_triple = None;
+                index += 3;
+            } else {
+                index += 1;
+            }
+            continue;
+        }
+        if state.block_depth > 0 {
+            if current == b'/' && next == Some(b'*') && matches!(syntax, SourceSyntax::Rust) {
+                state.block_depth += 1;
+                index += 2;
+            } else if current == b'*' && next == Some(b'/') {
+                state.block_depth -= 1;
+                index += 2;
+            } else {
+                index += 1;
+            }
+            continue;
+        }
+        if state.js_template {
+            if current == b'\\' {
+                index += 2;
+            } else if current == b'\x60' {
+                state.js_template = false;
+                index += 1;
+            } else {
+                index += 1;
+            }
+            continue;
+        }
+        if let Some(delimiter) = quote {
+            if current == b'\\' {
+                index += 2;
+            } else {
+                if current == delimiter { quote = None; }
+                index += 1;
+            }
+            continue;
+        }
+        if matches!(syntax, SourceSyntax::Python)
+            && matches!(current, b'\'' | b'"')
+            && bytes.get(index..index + 3) == Some(&[current, current, current][..])
+        {
+            state.python_triple = Some(current);
+            index += 3;
+            continue;
+        }
+        if matches!(syntax, SourceSyntax::Python) && current == b'#' { break; }
+        if !matches!(syntax, SourceSyntax::Python) && current == b'/' && next == Some(b'/') { break; }
+        if !matches!(syntax, SourceSyntax::Python) && current == b'/' && next == Some(b'*') {
+            state.block_depth += 1;
+            index += 2;
+            continue;
+        }
+        if matches!(syntax, SourceSyntax::JavaScript) && current == b'\x60' {
+            state.js_template = true;
+            index += 1;
+            continue;
+        }
+        if matches!(current, b'\'' | b'"') {
+            quote = Some(current);
+            index += 1;
+            continue;
+        }
+        visible[index] = true;
+        index += 1;
+    }
+    visible
+}
+
+fn is_code(captures: &regex::Captures<'_>, group: usize, mask: &[bool]) -> bool {
+    captures.get(group)
+        .and_then(|matched| mask.get(matched.start()))
+        .copied()
+        .unwrap_or(false)
+}
+
 fn rust_mod_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     pattern(&PATTERN, r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z_0-9]*)\s*;")
@@ -153,13 +253,18 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
         let python = ext == Some("py");
         if !js && !rust && !python { continue; }
         let mut previous_line = "";
+        let mut lexical = LexicalState::default();
+        let syntax = if rust { SourceSyntax::Rust }
+            else if js { SourceSyntax::JavaScript } else { SourceSyntax::Python };
         for (index, line) in doc.content.lines().enumerate() {
+            let code_mask = code_positions(line, syntax, &mut lexical);
             let imports: Vec<(&str, String)> = if rust {
                 if previous_line.trim_start().starts_with("#[path") {
                     previous_line = line;
                     continue;
                 }
                 rust_mod_pattern().captures(line)
+                    .filter(|captures| is_code(captures, 1, &code_mask))
                     .map(|captures| ("module", captures[1].to_string()))
                     .into_iter().collect()
             } else if js {
@@ -168,16 +273,19 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
                 let mut found = Vec::new();
                 if let Some(captures) = js_from_pattern().captures(line)
                     .or_else(|| js_side_effect_pattern().captures(line))
-                    .or_else(|| js_require_pattern().captures(line)) {
+                    .or_else(|| js_require_pattern().captures(line))
+                    .filter(|captures| is_code(captures, 0, &code_mask)) {
                     found.push(("import", captures[1].to_string()));
                 }
-                if let Some(captures) = js_dynamic_pattern().captures(line) {
+                if let Some(captures) = js_dynamic_pattern().captures(line)
+                    .filter(|captures| is_code(captures, 0, &code_mask)) {
                     found.push(("dynamic_import", captures[1].to_string()));
                 }
                 found
             } else {
                 let mut found = Vec::new();
-                if let Some(captures) = python_from_pattern().captures(line) {
+                if let Some(captures) = python_from_pattern().captures(line)
+                    .filter(|captures| is_code(captures, 1, &code_mask)) {
                     let module = &captures[1];
                     if module.bytes().all(|byte| byte == b'.') {
                         for name in captures[2].split(',') {
