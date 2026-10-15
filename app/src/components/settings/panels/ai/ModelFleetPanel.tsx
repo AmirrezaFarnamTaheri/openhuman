@@ -50,7 +50,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
         if (!cancelled) setFleetHealth(status);
       })
       .catch(() => {
-        if (!cancelled) setHealthError('Fleet health is unavailable.');
+        if (!cancelled) setHealthError(t('settings.ai.fleet.healthUnavailable', 'Fleet health is unavailable.'));
       });
     return () => {
       cancelled = true;
@@ -62,7 +62,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     try {
       setFleetHealth(await loadModelFleetStatus());
     } catch {
-      setHealthError('Fleet health is unavailable.');
+      setHealthError(t('settings.ai.fleet.healthUnavailable', 'Fleet health is unavailable.'));
     } finally {
       setHealthBusy(false);
     }
@@ -213,9 +213,9 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const applyProviderBulk = (clear = false) =>
     void run(
       async () => {
-        if (!selectedProviders.size) throw new Error('Select one or more providers.');
+        if (!selectedProviders.size) throw new Error(t('settings.ai.fleet.selectProvidersError', 'Select one or more providers.'));
         if (!clear && !validModelFleetImageEndpoint(groupImageUrl)) {
-          throw new Error('Image endpoints require HTTPS or loopback HTTP.');
+          throw new Error(t('settings.ai.fleet.imageEndpointError', 'Image endpoints require HTTPS or loopback HTTP.'));
         }
         if (
           !clear &&
@@ -246,10 +246,10 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const saveModelImageEndpoint = (remove = false) =>
     void run(
       async () => {
-        if (!activeProvider) throw new Error('Choose a provider group.');
+        if (!activeProvider) throw new Error(t('settings.ai.fleet.chooseGroupError', 'Choose a provider group.'));
         const id = modelId.trim();
         if (!remove && (!modelImageUrl.trim() || !validModelFleetImageEndpoint(modelImageUrl))) {
-          throw new Error('Enter an image endpoint using HTTPS or loopback HTTP.');
+          throw new Error(t('settings.ai.fleet.modelImageEndpointError', 'Enter an image endpoint using HTTPS or loopback HTTP.'));
         }
         if (
           !remove &&
@@ -279,7 +279,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const applyModels = (remove = false) =>
     void run(
       async () => {
-        if (!selectedModels.size) throw new Error('Select one or more models.');
+        if (!selectedModels.size) throw new Error(t('settings.ai.fleet.selectModelsError', 'Select one or more models.'));
         let models: ModelRegistryEntry[];
         if (remove) {
           models = settings.modelRegistry.filter(m => !selectedModels.has(keyOf(m)));
@@ -289,11 +289,11 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           if (contextAction.trim()) {
             const count = Number(contextAction.trim());
             if (!Number.isInteger(count) || count < 0 || count > 100_000_000) {
-              throw new Error('Context window must be an integer between 0 and 100,000,000.');
+              throw new Error(t('settings.ai.fleet.contextError', 'Context window must be an integer between 0 and 100,000,000.'));
             }
             patch.context_window = count;
           }
-          if (!Object.keys(patch).length) throw new Error('Choose at least one field to update.');
+          if (!Object.keys(patch).length) throw new Error(t('settings.ai.fleet.selectPatchError', 'Choose at least one field to update.'));
           models = applyModelBulkPatch(settings.modelRegistry, selectedModels, patch);
         }
         await persist({ ...settings, modelRegistry: models });
@@ -426,7 +426,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
             })
           )}
           {!fleetHealth?.providers.some(p => p.models.length > 0) && (
-            <p className="text-content-muted">No inference key usage recorded in this session.</p>
+            <p className="text-content-muted">{t('settings.ai.fleet.noKeyUsage', 'No inference key usage recorded in this session.')}</p>
           )}
         </div>
       </div>
@@ -493,7 +493,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
                 type="checkbox"
                 checked={selectedProviders.has(p.slug)}
                 onChange={() => toggle(selectedProviders, setSelectedProviders, p.slug)}
-                aria-label={'Select ' + p.label}
+                aria-label={t('settings.ai.fleet.selectProvider', 'Select provider') + ' ' + p.label}
                 disabled={busy}
               />
               <span className="min-w-0 truncate">
@@ -523,7 +523,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               onClick={() => setSelectedProviders(new Set())}>
               {t('common.clear', 'Clear selection')}
             </Button>
-            <span className="text-xs text-content-muted">{selectedProviders.size} selected</span>
+            <span className="text-xs text-content-muted">{selectedProviders.size} {t('settings.ai.fleet.selected', 'selected')}</span>
           </div>
         )}
         <div className="grid gap-2 sm:grid-cols-2">
@@ -535,7 +535,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               value={groupImageUrl}
               onChange={e => setGroupImageUrl(e.target.value)}
               placeholder="https://vision.example.com/v1"
-              aria-label="Group image API base URL"
+              aria-label={t('settings.ai.fleet.groupImageAria', 'Group image API base URL')}
             />
           </label>
           <label className="space-y-1 text-xs text-content-secondary">
@@ -544,7 +544,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               value={strategy}
               onChange={e => setStrategy(e.target.value as typeof strategy)}
               className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content"
-              aria-label="Multi-token selection strategy">
+              aria-label={t('settings.ai.fleet.rotationAria', 'Multi-token selection strategy')}>
               <option value="round_robin">Round robin</option>
               <option value="least_busy">Least busy</option>
               <option value="priority_weighted">Priority weighted</option>
@@ -595,7 +595,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
                 setModelImageUrl('');
               }}
               className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs text-content"
-              aria-label="Image endpoint provider group">
+              aria-label={t('settings.ai.fleet.imageGroupAria', 'Image endpoint provider group')}>
               {providers.map(p => (
                 <option key={p.slug} value={p.slug}>
                   {p.label}
@@ -608,7 +608,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
             <TextField
               value={modelId}
               onChange={e => setModelId(e.target.value)}
-              aria-label="Image endpoint model id"
+              aria-label={t('settings.ai.fleet.imageModelIdAria', 'Image endpoint model id')}
               placeholder="vendor/model-vision"
             />
           </label>
@@ -617,7 +617,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
             <TextField
               value={modelImageUrl}
               onChange={e => setModelImageUrl(e.target.value)}
-              aria-label="Model image API base URL"
+              aria-label={t('settings.ai.fleet.modelImageAria', 'Model image API base URL')}
               placeholder="https://vision.example.com/v1"
             />
           </label>
@@ -717,7 +717,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder={t('settings.ai.fleet.search', 'Search model or provider')}
-          aria-label="Filter model presets"
+          aria-label={t('settings.ai.fleet.searchAria', 'Filter model presets')}
         />
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -736,7 +736,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
             disabled={!selectedModels.size}>
             {t('common.clear', 'Clear selection')}
           </Button>
-          <span className="text-xs text-content-muted">{selectedModels.size} selected</span>
+          <span className="text-xs text-content-muted">{selectedModels.size} {t('settings.ai.fleet.selected', 'selected')}</span>
         </div>
         <div className="max-h-52 overflow-y-auto rounded-lg border border-line-subtle">
           {shownModels.map(m => (
@@ -748,7 +748,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
                 checked={selectedModels.has(keyOf(m))}
                 disabled={busy}
                 onChange={() => toggle(selectedModels, setSelectedModels, keyOf(m))}
-                aria-label={'Select model ' + m.provider + ' ' + m.id}
+                aria-label={t('settings.ai.fleet.selectModel', 'Select model') + ' ' + m.provider + ' ' + m.id}
               />
               <span className="min-w-0 flex-1 truncate" title={m.id}>
                 {presetNames.get(keyOf(m)) ?? m.id}
@@ -756,7 +756,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
                   ({m.provider}/{m.id})
                 </span>
               </span>
-              {m.vision && <span className="text-content-muted">vision</span>}
+              {m.vision && <span className="text-content-muted">{t('settings.ai.fleet.visionLabel', 'vision')}</span>}
             </label>
           ))}
           {shownModels.length === 0 && (
@@ -775,9 +775,9 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               value={visionAction}
               onChange={e => setVisionAction(e.target.value as typeof visionAction)}
               className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
-              <option value="keep">Keep unchanged</option>
-              <option value="on">Enabled</option>
-              <option value="off">Disabled</option>
+              <option value="keep">{t('settings.ai.fleet.keepUnchanged', 'Keep unchanged')}</option>
+              <option value="on">{t('settings.ai.fleet.enabled', 'Enabled')}</option>
+              <option value="off">{t('settings.ai.fleet.disabled', 'Disabled')}</option>
             </select>
           </label>
           <label className="space-y-1 text-xs text-content-secondary">
@@ -786,8 +786,8 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               inputMode="numeric"
               value={contextAction}
               onChange={e => setContextAction(e.target.value)}
-              placeholder="Leave blank to keep"
-              aria-label="Bulk context tokens"
+              placeholder={t('settings.ai.fleet.leaveBlank', 'Leave blank to keep')}
+              aria-label={t('settings.ai.fleet.bulkContextAria', 'Bulk context tokens')}
             />
           </label>
         </div>
