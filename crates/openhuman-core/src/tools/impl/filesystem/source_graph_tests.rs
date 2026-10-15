@@ -419,3 +419,17 @@ fn js_from_import_must_be_outside_trailing_comments() {
     assert_eq!(edges.len(), 1, "commented from must not create a dependency");
     assert_eq!(edges[0]["to"], "src/real.ts");
 }
+
+
+#[test]
+fn js_real_from_clause_accepts_module_paths_containing_the_word_from() {
+    let docs = vec![
+        source("src/index.ts", "export { value } from './from-utils';\n"),
+        source("src/from-utils.ts", "export const value = 1;\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0]["status"], "resolved");
+    assert_eq!(edges[0]["to"], "src/from-utils.ts");
+}
