@@ -120,6 +120,29 @@ describe('useCloudProviderEditorSubmit', () => {
     expect(persist).not.toHaveBeenCalled();
   });
 
+
+  it('requires a replacement key when changing authentication headers at the same endpoint', async () => {
+    const existing = {
+      id: 'p_existing', slug: 'existing', label: 'Existing',
+      endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
+      maskedKey: '••••stored',
+    };
+    const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
+    const persist = vi.fn();
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: existing, draft: saved, saved, persist,
+      t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await expect(result.current(
+        { ...existing, authStyle: 'anthropic' }, '', { skipProbe: true }
+      )).rejects.toThrow(/requires a new API key/);
+    });
+    expect(api.listProviderModels).not.toHaveBeenCalled();
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
+  });
+
   it('blocks redirecting a saved key when the endpoint changes, even if verification is skipped', async () => {
     const existing = {
       id: 'p_existing', slug: 'existing', label: 'Existing',
