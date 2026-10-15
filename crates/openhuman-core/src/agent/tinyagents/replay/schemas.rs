@@ -221,7 +221,7 @@ fn replay_schema(function: &str) -> ControllerSchema {
             outputs: vec![FieldSchema {
                 name: "local_checks",
                 ty: TypeSchema::Json,
-                comment: "Local-check counts, last possible source edit offset, partial flag and freshness evidence; task_verified always false.",
+                comment: "Observed check counts, unresolved safe check categories, unattributed legacy failures, last possible mutation, freshness and partial state; task_verified always false.",
                 required: true,
             }],
         },
