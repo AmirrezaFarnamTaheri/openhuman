@@ -26,6 +26,13 @@ import {
  * provider list still equals our attempted write. This is a best-effort UI
  * safeguard, not a cross-process compare-and-swap or crash-atomic transaction.
  */
+/** Never surface a candidate API key if a gateway echoes it in an error. */
+function redactCandidateSecrets(message: string, rawKeys: string): string {
+  const keys = [...new Set(rawKeys.split(/[,;\r\n]/).map(key => key.trim()).filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  return keys.reduce((safe, secret) => safe.replaceAll(secret, '[redacted]'), message);
+}
+
 function providerListFingerprint(
   providers: ReadonlyArray<{
     id: string; slug: string; label: string; endpoint: string;
@@ -181,7 +188,8 @@ export function useCloudProviderEditorSubmit({
           try {
             await listProviderModels(upserted.slug, apiKey, previewProvider);
           } catch (probeErr) {
-            const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
+            const rawMessage = probeErr instanceof Error ? probeErr.message : String(probeErr);
+            const msg = redactCandidateSecrets(rawMessage, apiKey);
             console.warn('[ai-settings] provider /models probe failed', {
               slug: upserted.slug,
               summary: presentProviderSetupError(msg, t).summary,
@@ -237,8 +245,13 @@ export function useCloudProviderEditorSubmit({
           );
         }
         if (conflictOrUnknown) {
-          const detail = error instanceof Error ? error.message : 'Provider save failed';
+          const detail = redactCandidateSecrets(
+            error instanceof Error ? error.message : 'Provider save failed', apiKey
+          );
           throw new Error(detail + '. The provider state may have changed; reload settings.');
+        }
+        if (error instanceof Error && error.message !== redactCandidateSecrets(error.message, apiKey)) {
+          throw new Error(redactCandidateSecrets(error.message, apiKey));
         }
         throw error;
       }
