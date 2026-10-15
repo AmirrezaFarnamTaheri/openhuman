@@ -20,6 +20,7 @@ import {
   applyModelBulkPatch,
   createSingleFlightRunner,
   fleetModelKey,
+  keyedProviderDestinationChanges,
   syncConfiguredProviderPresets,
   syncModelPresets,
   updateSelectedGroupSettings,
@@ -196,13 +197,9 @@ export function ModelFleetPanel({ settings, persist }: Props) {
         });
         // Never silently send an existing encrypted key to a newly configured
         // host or re-interpret its auth header. Re-enter the key via the editor.
-        for (const before of providers) {
-          const after = next.find(candidate => candidate.id === before.id);
-          if (after && before.maskedKey.startsWith('••••') &&
-            (before.endpoint !== after.endpoint || before.authStyle !== after.authStyle)) {
-            throw new Error(t('settings.ai.fleet.reauthRequired',
-              'Re-enter the API key in the provider editor before changing its endpoint or authentication.'));
-          }
+        if (keyedProviderDestinationChanges(providers, next).length > 0) {
+          throw new Error(t('settings.ai.fleet.reauthRequired',
+            'Re-enter the API key in the provider editor before changing its endpoint or authentication.'));
         }
         await persist({ ...settings, cloudProviders: next });
         setConfirmProviderRefresh(false);
