@@ -219,3 +219,66 @@ describe('useCloudProviderEditorSubmit', () => {
     expect(api.setCloudProviderKey).not.toHaveBeenCalled();
   });
 });
+
+
+describe('provider-submit transport boundary', () => {
+  it('rejects keyed remote HTTP even when submit is called directly with probe skipped', async () => {
+    const persist = vi.fn();
+    const done = vi.fn();
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: key => key, onDone: done,
+    }));
+    await act(async () => {
+      await expect(result.current({
+        id: '', slug: 'unsafe-key-route', label: 'Unsafe route',
+        endpoint: 'http://external.example/v1',
+        authStyle: 'bearer', maskedKey: '',
+      }, 'candidate-secret', { skipProbe: true })).rejects.toThrow(/HTTPS|loopback/);
+    });
+    expect(api.listProviderModels).not.toHaveBeenCalled();
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
+    expect(done).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unsafe image override when a caller bypasses the form validator', async () => {
+    const persist = vi.fn();
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: key => key, onDone: vi.fn(),
+    }));
+    for (const override of [
+      { imageEndpoint: 'http://external.example/v1' },
+      { modelImageEndpoints: { vision: 'http://169.254.169.254/latest/meta-data' } },
+    ]) {
+      await act(async () => {
+        await expect(result.current({
+          id: '', slug: 'external-image', label: 'Unsafe image',
+          endpoint: 'https://models.example/v1', authStyle: 'bearer',
+          maskedKey: '', ...override,
+        }, '', { skipProbe: true })).rejects.toThrow(/HTTPS|loopback/);
+      });
+    }
+    expect(persist).not.toHaveBeenCalled();
+    expect(api.listProviderModels).not.toHaveBeenCalled();
+  });
+
+  it('continues to permit no-key LAN models without putting secrets on cleartext HTTP', async () => {
+    const persist = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await result.current({
+        id: '', slug: 'no-key-lan-model', label: 'LAN model',
+        endpoint: 'http://192.168.1.5:8000/v1',
+        authStyle: 'bearer', maskedKey: '',
+      }, '', { skipProbe: true });
+    });
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+  });
+});
