@@ -297,3 +297,45 @@ fn graph_does_not_parse_rust_mod_declarations_inside_block_comments() {
     assert_eq!(edges[0]["to"], "src/actual.rs");
     assert_eq!(edges[0]["line"], 4);
 }
+
+
+#[test]
+fn graph_does_not_treat_python_docstring_examples_as_imports() {
+    let docs = vec![
+        source("pkg/main.py", "\"\"\"\nfrom .fake import f\n\"\"\"\nfrom .actual import a\n"),
+        source("pkg/fake.py", "f = 1\n"),
+        source("pkg/actual.py", "a = 2\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0]["to"], "pkg/actual.py");
+    assert_eq!(edges[0]["line"], 4);
+}
+
+#[test]
+fn rust_path_attribute_remains_authoritative_across_intervening_comments() {
+    let docs = vec![
+        source("src/lib.rs", "#[path = \"custom.rs\"]\n// documentation comment\nmod alternate;\nmod actual;\n"),
+        source("src/alternate.rs", "pub const BAD: u8 = 1;\n"),
+        source("src/custom.rs", "pub const REAL: u8 = 2;\n"),
+        source("src/actual.rs", "pub const GOOD: u8 = 3;\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0]["to"], "src/actual.rs");
+}
+
+#[test]
+fn nested_inline_rust_modules_are_not_resolved_against_root_files() {
+    let docs = vec![
+        source("src/lib.rs", "mod nested {\n  mod child;\n}\nmod actual;\n"),
+        source("src/child.rs", "pub const FALSE_TARGET: u8 = 1;\n"),
+        source("src/actual.rs", "pub const REAL: u8 = 2;\n"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0]["to"], "src/actual.rs");
+}
