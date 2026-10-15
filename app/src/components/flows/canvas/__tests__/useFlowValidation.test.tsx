@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowGraph } from '../../../../lib/flows/types';
+import type { FlowValidation } from '../../../../services/api/flowsApi';
 import { useFlowValidation } from '../useFlowValidation';
 
 const validateFlow = vi.hoisted(() => vi.fn());
@@ -16,8 +17,8 @@ function graph(name: string): WorkflowGraph {
   };
 }
 
-const valid = { valid: true, errors: [], warnings: [] };
-const invalid = { valid: false, errors: ['bad config'], warnings: [] };
+const valid: FlowValidation = { valid: true, errors: [], warnings: [] };
+const invalid: FlowValidation = { valid: false, errors: ['bad config'], warnings: [] };
 
 describe('useFlowValidation draft revision isolation', () => {
   beforeEach(() => {
@@ -29,7 +30,7 @@ describe('useFlowValidation draft revision isolation', () => {
   });
 
   it('does not let a previous draft RPC validate a newly edited draft before its debounce', async () => {
-    let resolveOld!: (value: typeof invalid) => void;
+    let resolveOld!: (value: FlowValidation) => void;
     validateFlow.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
     validateFlow.mockResolvedValueOnce(valid);
 
@@ -38,7 +39,7 @@ describe('useFlowValidation draft revision isolation', () => {
       { initialProps: { draft: graph('old'), key: 'old' } }
     );
 
-    let oldRequest!: Promise<typeof invalid | null>;
+    let oldRequest!: Promise<FlowValidation | null>;
     act(() => { oldRequest = result.current.validateNow(); });
     expect(result.current.validating).toBe(true);
 
@@ -71,14 +72,14 @@ describe('useFlowValidation draft revision isolation', () => {
   });
 
   it('retains the newest result on the same draft when two manual validations resolve backwards', async () => {
-    let resolveFirst!: (value: typeof invalid) => void;
-    let resolveSecond!: (value: typeof valid) => void;
+    let resolveFirst!: (value: FlowValidation) => void;
+    let resolveSecond!: (value: FlowValidation) => void;
     validateFlow.mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }));
     validateFlow.mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve; }));
 
     const { result } = renderHook(() => useFlowValidation(graph('A'), 'A'));
-    let first!: Promise<typeof invalid | null>;
-    let second!: Promise<typeof valid | null>;
+    let first!: Promise<FlowValidation | null>;
+    let second!: Promise<FlowValidation | null>;
     act(() => {
       first = result.current.validateNow();
       second = result.current.validateNow();
