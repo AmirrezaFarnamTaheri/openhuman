@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { assessModelFeasibility, type FeasibilityModel, type ModelRequirements } from './modelFeasibility';
+import { assessModelFeasibility, formatEstimatedModelCost, type FeasibilityModel, type ModelRequirements } from './modelFeasibility';
 
 const model = (id: string, fields: Partial<FeasibilityModel> = {}): FeasibilityModel => ({
   provider: 'demo', id, context_window: 64_000, vision: false,
@@ -74,5 +74,14 @@ describe('saved-model suitability preview (advisory, no live routing)', () => {
     const b = assessModelFeasibility([...first].reverse(), req());
     expect(a.rows.map(row => row.model.id)).toEqual(['a', 'b', 'z']);
     expect(a.rows.map(row => row.model.id)).toEqual(b.rows.map(row => row.model.id));
+  });
+});
+
+describe('conservative model cost presentation', () => {
+  it('does not display positive microcosts as zero or unknown', () => {
+    expect(formatEstimatedModelCost(0.0000004)).toBe('<$0.0001');
+    expect(formatEstimatedModelCost(0)).toBe('Est. $0.0000');
+    expect(formatEstimatedModelCost(null)).toBe('Cost unknown');
+    expect(formatEstimatedModelCost(0.012345)).toBe('Est. $0.0123');
   });
 });
