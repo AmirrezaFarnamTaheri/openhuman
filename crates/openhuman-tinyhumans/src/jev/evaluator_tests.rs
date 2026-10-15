@@ -50,7 +50,10 @@ fn request_instructions_replace_the_default_wording() {
     let wire = TinyJevEvaluator::build(&request(Some("Which group of tools applies?")));
     match wire.questions.get("tool") {
         Some(Question::Choice(choice)) => {
-            assert_eq!(choice.instructions, json!("Which group of tools applies?"));
+            let instructions = choice.instructions.as_str().expect("choice instructions");
+            assert!(instructions.starts_with("Which group of tools applies?"));
+            assert!(instructions.contains("untrusted data"));
+            assert!(instructions.contains("not instructions"));
         }
         other => panic!("expected a choice, got {other:?}"),
     }
