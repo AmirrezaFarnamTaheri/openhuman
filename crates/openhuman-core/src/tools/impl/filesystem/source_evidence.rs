@@ -24,7 +24,12 @@ const MAX_DEPTH: usize = 12;
 const MAX_VISITED_ENTRIES: usize = 8192;
 const MAX_VERIFY_LINES: usize = 80;
 const MAX_JSON_RESPONSE_BYTES: usize = 26_000;
-const SKIP_DIRS: &[&str] = &[".git", ".svn", ".hg", "node_modules", "target", ".next", "dist", "build", ".venv", "__pycache__"];
+const SKIP_DIRS: &[&str] = &[
+    ".git", ".svn", ".hg", ".git-crypt", "node_modules", "target",
+    ".next", "dist", "build", ".venv", "__pycache__", ".terraform",
+    ".ssh", ".aws", ".azure", ".kube", ".gnupg", ".docker", ".pki",
+    ".config", "secrets",
+];
 const SKIP_FILES: &[&str] = &[".env", ".env.local", ".env.production", ".env.development", ".npmrc", ".pypirc", "id_rsa", "id_ed25519", "credentials.json", "secrets.json"];
 
 pub struct SourceEvidenceTool {
