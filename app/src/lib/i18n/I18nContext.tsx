@@ -5,6 +5,7 @@ import ar from './ar';
 import bn from './bn';
 import de from './de';
 import en from './en';
+import { fleetTranslations } from './fleetTranslations';
 import es from './es';
 import fr from './fr';
 import hi from './hi';
@@ -70,7 +71,7 @@ function resolveEn(): Record<string, string> {
 const I18nContext = createContext<I18nContextValue>({
   t: (key: string, fallback?: string) => {
     const map = resolveEn();
-    return map[key] ?? fallback ?? key;
+    return fleetTranslations.en[key] ?? map[key] ?? fallback ?? key;
   },
   locale: 'en',
 });
@@ -90,7 +91,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const t = useCallback(
     (key: string, fallback?: string): string => {
       const map = translations[locale] ?? resolveEn();
-      return map[key] ?? resolveEn()[key] ?? fallback ?? key;
+      return fleetTranslations[locale]?.[key] ?? fleetTranslations.en[key] ?? map[key] ?? resolveEn()[key] ?? fallback ?? key;
     },
     [locale]
   );
