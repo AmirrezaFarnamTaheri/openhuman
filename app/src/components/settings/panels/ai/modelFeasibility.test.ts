@@ -85,3 +85,40 @@ describe('conservative model cost presentation', () => {
     expect(formatEstimatedModelCost(0.012345)).toBe('Est. $0.0123');
   });
 });
+
+
+describe('one-sided and zero-token cost estimates', () => {
+  it('does not require input pricing for an output-only request', () => {
+    const result = assessModelFeasibility([
+      model('output-only', { cost_per_1m_input: undefined, cost_per_1m_output: 5 }),
+    ], req({ inputTokens: 0, outputTokens: 1000 }));
+    expect(result.rows[0].estimatedCostUSD).toBe(0.005);
+    expect(result.rows[0].status).toBe('metadata_fit');
+  });
+
+  it('does not require output pricing for an input-only request', () => {
+    const result = assessModelFeasibility([
+      model('input-only', { cost_per_1m_input: 2, cost_per_1m_output: null }),
+    ], req({ inputTokens: 1000, outputTokens: 0 }));
+    expect(result.rows[0].estimatedCostUSD).toBe(0.002);
+    expect(result.rows[0].status).toBe('metadata_fit');
+  });
+
+  it('estimates zero cost for zero usage even when price metadata is absent', () => {
+    const result = assessModelFeasibility([
+      model('zero-usage', { cost_per_1m_input: undefined, cost_per_1m_output: null }),
+    ], req({ inputTokens: 0, outputTokens: 0, maxEstimatedCostUSD: 0 }));
+    expect(result.rows[0].estimatedCostUSD).toBe(0);
+    expect(result.rows[0].status).toBe('metadata_fit');
+    expect(result.rows[0].reasons).not.toContain('unknown_price');
+  });
+
+  it('keeps pricing unknown when an actually used token component has no price', () => {
+    const result = assessModelFeasibility([
+      model('unknown-input', { cost_per_1m_input: null, cost_per_1m_output: 5 }),
+    ], req({ inputTokens: 1000, outputTokens: 1000 }));
+    expect(result.rows[0].estimatedCostUSD).toBeNull();
+    expect(result.rows[0].status).toBe('unknown');
+    expect(result.rows[0].reasons).toContain('unknown_price');
+  });
+});
