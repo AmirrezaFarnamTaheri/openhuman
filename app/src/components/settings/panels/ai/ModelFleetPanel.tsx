@@ -221,7 +221,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           !validProdexDestination(groupImageUrl.trim())
         ) {
           throw new Error(
-            'Prodex image endpoints require HTTPS or loopback HTTP without URL credentials.'
+            t('settings.ai.fleet.prodexImageError', 'Prodex image endpoints require HTTPS or loopback HTTP without URL credentials.')
           );
         }
         const next = updateSelectedGroupSettings(
@@ -254,7 +254,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           !validProdexDestination(modelImageUrl.trim())
         ) {
           throw new Error(
-            'Prodex model image endpoints require HTTPS or loopback HTTP without URL credentials.'
+            t('settings.ai.fleet.prodexModelImageError', 'Prodex model image endpoints require HTTPS or loopback HTTP without URL credentials.')
           );
         }
         const next = providers.map(p => {
@@ -542,9 +542,9 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               onChange={e => setStrategy(e.target.value as typeof strategy)}
               className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content"
               aria-label={t('settings.ai.fleet.rotationAria', 'Multi-token selection strategy')}>
-              <option value="round_robin">Round robin</option>
-              <option value="least_busy">Least busy</option>
-              <option value="priority_weighted">Priority weighted</option>
+              <option value="round_robin">{t('settings.ai.rotationRoundRobin', 'Round robin')}</option>
+              <option value="least_busy">{t('settings.ai.rotationLeastBusy', 'Least busy')}</option>
+              <option value="priority_weighted">{t('settings.ai.rotationPriorityWeighted', 'Priority weighted')}</option>
             </select>
           </label>
         </div>
