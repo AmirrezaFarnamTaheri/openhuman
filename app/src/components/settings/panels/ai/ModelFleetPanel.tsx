@@ -23,6 +23,7 @@ import {
   syncConfiguredProviderPresets,
   syncModelPresets,
   updateSelectedGroupSettings,
+  upsertModelImageEndpoint,
   validModelFleetImageEndpoint,
 } from './modelFleetOps';
 import { validProdexDestination } from './prodexEndpointPolicy';
@@ -208,9 +209,6 @@ export function ModelFleetPanel({ settings, persist }: Props) {
       async () => {
         if (!activeProvider) throw new Error('Choose a provider group.');
         const id = modelId.trim();
-        if (!id || id.length > 200 || /\p{Cc}/u.test(id)) {
-          throw new Error('Enter a valid model id (up to 200 characters).');
-        }
         if (!remove && (!modelImageUrl.trim() || !validModelFleetImageEndpoint(modelImageUrl))) {
           throw new Error('Enter an image endpoint using HTTPS or loopback HTTP.');
         }
@@ -225,9 +223,11 @@ export function ModelFleetPanel({ settings, persist }: Props) {
         }
         const next = providers.map(p => {
           if (p.slug !== effectiveGroup) return p;
-          const modelImageEndpoints = { ...(p.modelImageEndpoints ?? {}) };
-          if (remove) delete modelImageEndpoints[id];
-          else modelImageEndpoints[id] = modelImageUrl.trim();
+          const modelImageEndpoints = upsertModelImageEndpoint(
+            p.modelImageEndpoints ?? {},
+            id,
+            remove ? null : modelImageUrl
+          );
           return { ...p, modelImageEndpoints };
         });
         await persist({ ...settings, cloudProviders: next });
