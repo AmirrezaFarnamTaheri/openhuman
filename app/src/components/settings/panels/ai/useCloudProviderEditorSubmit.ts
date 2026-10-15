@@ -3,10 +3,11 @@
  * the new/edited provider (unless the user explicitly skipped verification)
  * and rolls back on failure.
  */
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import {
   flushCloudProviders,
+  loadAISettings,
   listProviderModels,
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
@@ -18,6 +19,35 @@ import {
   maskKeyLabel,
   ProviderProbeError,
 } from './aiPanelTypes';
+
+/**
+ * Compare only provider configuration, excluding encrypted-key presence and
+ * unrelated routes/models. A compensating write is safe only when the live
+ * provider list still equals our attempted write. This is a best-effort UI
+ * safeguard, not a cross-process compare-and-swap or crash-atomic transaction.
+ */
+function providerListFingerprint(
+  providers: ReadonlyArray<{
+    id: string; slug: string; label: string; endpoint: string;
+    auth_style: string; image_endpoint?: string;
+    model_image_endpoints?: Record<string, string>;
+    model_transports?: Record<string, string>;
+    rotation_strategy?: string; tool_call_codec?: string; ca_cert_pem?: string;
+  }>
+): string {
+  return JSON.stringify(providers
+    .filter(p => !['', 'cloud', 'openhuman', 'pid'].includes(p.slug))
+    .map(p => ({
+      id: p.id, slug: p.slug, label: p.label, endpoint: p.endpoint,
+      auth_style: p.auth_style,
+      image_endpoint: p.image_endpoint ?? '',
+      model_image_endpoints: p.model_image_endpoints ?? {},
+      model_transports: p.model_transports ?? {},
+      rotation_strategy: p.rotation_strategy ?? 'round_robin',
+      tool_call_codec: p.tool_call_codec ?? 'native',
+      ca_cert_pem: p.ca_cert_pem ?? '',
+    })).sort((a, b) => a.slug.localeCompare(b.slug) || a.id.localeCompare(b.id)));
+}
 
 export function useCloudProviderEditorSubmit({
   editing,
@@ -34,8 +64,16 @@ export function useCloudProviderEditorSubmit({
   t: (key: string, fallback?: string) => string;
   onDone: () => void;
 }) {
+  // A ref guards the synchronous pre-render window as well as awaited RPCs.
+  // It prevents overlapping saves from racing the compensation/key-store path.
+  const saveInFlight = useRef(false);
   return useCallback(
     async (next: CloudProvider, apiKey: string, opts?: { skipProbe?: boolean }) => {
+      if (saveInFlight.current) {
+        throw new Error('A provider save is already in progress.');
+      }
+      saveInFlight.current = true;
+      try {
       const id =
         editing === 'new' || !editing?.id
           ? `p_${next.slug}_${Math.random().toString(36).slice(2, 7)}`
@@ -87,7 +125,9 @@ export function useCloudProviderEditorSubmit({
 
       // Snapshot the prior persisted cloud_providers list so we can restore
       // it if the live probe fails.
-      const priorWireProviders = saved.cloudProviders.map(p => ({
+      const priorWireProviders = saved.cloudProviders
+        .filter(p => !['', 'cloud', 'openhuman', 'pid'].includes(p.slug))
+        .map(p => ({
         id: p.id,
         slug: p.slug,
         label: p.label,
@@ -160,29 +200,52 @@ export function useCloudProviderEditorSubmit({
           await setCloudProviderKey(upserted.slug, apiKey);
         }
       } catch (error) {
-        // A failed preview never touched shared settings. Do not overwrite
-        // concurrent provider edits with a blind compensation write.
+        // Do not replay a stale whole-list rollback over concurrent edits.
+        // The provider snapshot is reloaded only after an attempted write.
+        let safeToResetLocalState = false;
+        let conflictOrUnknown = false;
         if (settingsWriteAttempted) {
-          await flushCloudProviders(priorWireProviders).catch(rollbackErr =>
-            console.warn(
-              `[ai-settings] rollback provider settings failed slug=${upserted.slug}`,
-              rollbackErr
-            )
+          try {
+            const current = await loadAISettings();
+            const observed = providerListFingerprint(current.cloudProviders);
+            const prior = providerListFingerprint(priorWireProviders);
+            const attempted = providerListFingerprint(nextWireProviders);
+            if (observed === attempted) {
+              try {
+                await flushCloudProviders(priorWireProviders);
+                safeToResetLocalState = true;
+              } catch {
+                conflictOrUnknown = true;
+                console.warn('[ai-settings] provider compensation failed; reload settings.');
+              }
+            } else if (observed === prior) {
+              // A rejected write may have failed before reaching the core.
+              safeToResetLocalState = true;
+            } else {
+              conflictOrUnknown = true;
+              console.warn('[ai-settings] provider settings changed concurrently; rollback skipped.');
+            }
+          } catch {
+            conflictOrUnknown = true;
+            console.warn('[ai-settings] provider state could not be verified; rollback skipped.');
+          }
+        }
+        if (settingsPersisted && safeToResetLocalState) {
+          // Restore the UI snapshot only when core state is confirmed restored.
+          await persist(saved).catch(() =>
+            console.warn('[ai-settings] editor state reset failed; reload settings.')
           );
         }
-        if (settingsPersisted) {
-          // Restore the editor's saved/draft snapshot after a failed key-store
-          // write. This keeps the UI consistent with the reverted provider.
-          await persist(saved).catch(rollbackErr =>
-            console.warn(
-              `[ai-settings] rollback provider editor state failed slug=${upserted.slug}`,
-              rollbackErr
-            )
-          );
+        if (conflictOrUnknown) {
+          const detail = error instanceof Error ? error.message : 'Provider save failed';
+          throw new Error(detail + '. The provider state may have changed; reload settings.');
         }
         throw error;
       }
       onDone();
+      } finally {
+        saveInFlight.current = false;
+      }
     },
     [editing, draft, saved, persist, t, onDone]
   );
