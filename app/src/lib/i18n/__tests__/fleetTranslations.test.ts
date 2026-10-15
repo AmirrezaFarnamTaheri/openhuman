@@ -18,4 +18,26 @@ describe('provider fleet localization', () => {
       expect(messages['settings.ai.modelTransportOverridesHelp']).toContain('Auto');
     }
   });
+  it('localizes suitability browsing and destructive-sync consent across supported locales', () => {
+    const keys = [
+      'settings.ai.feasibility.search',
+      'settings.ai.feasibility.filter',
+      'settings.ai.feasibility.more',
+      'settings.ai.feasibility.costUnknown',
+      'settings.ai.fleet.approveProviderSync',
+      'settings.ai.fleet.approveMetadataRefresh',
+    ];
+    for (const [locale, messages] of Object.entries(fleetTranslations)) {
+      for (const key of keys) {
+        expect(messages[key]?.trim(), locale + ': ' + key).toBeTruthy();
+      }
+    }
+    expect(fleetTranslations.es['settings.ai.feasibility.more']).not.toBe(
+      fleetTranslations.en['settings.ai.feasibility.more']
+    );
+    expect(fleetTranslations.fr['settings.ai.feasibility.filter']).not.toBe(
+      fleetTranslations.en['settings.ai.feasibility.filter']
+    );
+  });
+
 });
