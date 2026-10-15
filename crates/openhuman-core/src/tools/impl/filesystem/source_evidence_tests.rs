@@ -588,3 +588,27 @@ async fn large_partial_graph_remains_valid_json_after_enrichment() {
     assert_eq!(graph["edges_complete"], false);
     assert_eq!(graph["impact"], json!([]));
 }
+
+
+#[tokio::test]
+async fn verification_can_reopen_the_exact_match_window_from_a_locate_result() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("long.rs"),
+        format!("{}authSessionFresh = true;\n", "🙂".repeat(220))).unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let located = run(&tool, json!({
+        "operation":"locate","query":"auth session fresh"
+    })).await;
+    let evidence = &located["results"][0]["evidence"][0];
+    let expected = located["results"][0]["source_hash"].as_str().unwrap();
+    let result = run(&tool, json!({
+        "operation":"verify", "path":"long.rs", "expected_sha256":expected,
+        "start_line":1, "end_line":1,
+        "start_column":evidence["column_start"]
+    })).await;
+    assert_eq!(result["verified"], true);
+    assert_eq!(result["lines"][0]["column_start"], evidence["column_start"]);
+    assert_eq!(result["lines"][0]["text"], evidence["text"]);
+    assert!(result["lines"][0]["text"].as_str().unwrap().contains("authSessionFresh"));
+}
