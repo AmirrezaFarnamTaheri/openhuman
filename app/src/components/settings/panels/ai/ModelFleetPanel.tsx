@@ -15,6 +15,7 @@ import TextField from '../../../ui/TextField';
 import type { AISettings, CloudProvider } from './aiPanelTypes';
 import { summarizeFleetHealth } from './fleetHealthInsights';
 import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
+import { ModelFeasibilityPreview } from './ModelFeasibilityPreview';
 import {
   applyModelBulkPatch,
   createSingleFlightRunner,
@@ -586,6 +587,7 @@ export function ModelFleetPanel({ settings, persist }: Props) {
         </div>
       </div>
 
+      <ModelFeasibilityPreview models={settings.modelRegistry} />
       <div className="space-y-2 border-t border-line-subtle pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-sm font-medium text-content">
