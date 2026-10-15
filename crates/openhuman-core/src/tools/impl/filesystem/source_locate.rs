@@ -117,7 +117,7 @@ pub(super) fn rank_sources(docs: &[SourceDocument], query: &str, limit: usize) -
     }
     scores.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
     let total_candidates = scores.len();
-    let mut candidates: Vec<Value> = scores.into_iter()
+    let candidates: Vec<Value> = scores.into_iter()
         .take(limit.clamp(1, MAX_RESULTS))
         .map(|(_, _, item)| item)
         .collect();
