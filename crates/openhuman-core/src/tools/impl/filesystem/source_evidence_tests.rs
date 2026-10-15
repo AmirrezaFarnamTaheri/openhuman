@@ -685,3 +685,49 @@ async fn scanned_unicode_line_preserves_utf8_boundaries_in_cropped_excerpt() {
     assert!(hit["text"].as_str().unwrap().chars().count() <= 160);
     assert!(hit["column_start"].as_u64().unwrap() > 1);
 }
+
+
+#[cfg(unix)]
+#[tokio::test]
+async fn unix_literal_backslashes_do_not_collide_with_separator_paths() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("src")).unwrap();
+    std::fs::write(project.path().join("src/file.rs"), "fn nested() {}\n").unwrap();
+    std::fs::write(project.path().join("src\\file.rs"), "fn literal_backslash() {}\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+
+    let result = run(&tool, json!({"operation":"scan"})).await;
+    assert_eq!(result["files"].as_array().unwrap().len(), 2);
+    let files = result["files"].as_array().unwrap();
+    assert_ne!(files[0]["path"], files[1]["path"]);
+    assert!(files.iter().any(|f| f["path"] == "src/file.rs"));
+    assert!(files.iter().any(|f| f["path"] == "src\\file.rs"));
+
+    let digest = files.iter()
+        .find(|f| f["path"] == "src\\file.rs").unwrap()["source_hash"]
+        .as_str().unwrap();
+    let reread = run(&tool, json!({
+        "operation": "verify", "path": "src\\file.rs",
+        "expected_sha256": digest, "start_line": 1, "end_line": 1
+    })).await;
+    assert_eq!(reread["lines"][0]["text"], "fn literal_backslash() {}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn non_utf8_filename_cannot_be_silently_counted_as_complete_scan() {
+    use std::os::unix::ffi::OsStrExt;
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let non_utf8 = std::ffi::OsStr::from_bytes(b"source_\xff.rs");
+    std::fs::write(project.path().join(non_utf8), "fn opaque() {}\n").unwrap();
+    std::fs::write(project.path().join("good.rs"), "fn good() {}\n").unwrap();
+
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"scan"})).await;
+    assert_eq!(result["files"].as_array().unwrap().len(), 1);
+    assert_eq!(result["files"][0]["path"], "good.rs");
+    assert_eq!(result["complete"], false);
+    assert_eq!(result["truncated_reason"], "non_utf8_path");
+}
