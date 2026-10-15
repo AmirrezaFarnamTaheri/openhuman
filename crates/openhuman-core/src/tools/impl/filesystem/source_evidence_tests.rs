@@ -842,3 +842,24 @@ async fn malformed_numeric_and_filter_arguments_do_not_silently_use_defaults() {
         );
     }
 }
+
+
+#[tokio::test]
+async fn misspelled_tool_fields_do_not_turn_narrow_requests_into_root_scans() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("visible.rs"), "fn visible() {}\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    for typo in [
+        json!({"op": "verify", "path": "visible.rs"}),
+        json!({"operation": "scan", "paht": "visible.rs"}),
+        json!({"operation": "scan", "query_text": "visible"}),
+        json!({"operation": "scan", "limit": 1}),
+        json!({"operation": "graph", "focus": "visible.rs"}),
+    ] {
+        assert!(tool.execute(typo.clone()).await.is_err(),
+            "unknown key must not broaden source access: {typo}");
+    }
+    let schema = tool.parameters_schema();
+    assert_eq!(schema["additionalProperties"], false);
+}
