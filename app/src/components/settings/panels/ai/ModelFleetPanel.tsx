@@ -447,11 +447,43 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           </Button>
         </div>
         <p className="text-xs text-content-muted">
-          {t(
-            'settings.ai.fleet.groupSyncHint',
-            'Sync updates official base URLs and protocols; your own labels, credentials and image overrides remain unchanged.'
-          )}
+          {t('settings.ai.fleet.groupSyncHintSafe',
+            'Saved provider endpoints are preserved by default. Review and explicitly approve changes; credentialed providers must be updated through the editor with a new key.')}
         </p>
+        {providerRefreshPreview.updated > 0 && (
+          <div className="space-y-2 rounded-lg border border-line-subtle p-2 text-xs">
+            <label className="flex items-start gap-2 text-content-secondary">
+              <input type="checkbox" checked={confirmProviderRefresh} disabled={busy}
+                onChange={e => setConfirmProviderRefresh(e.target.checked)} />
+              <span>{t('settings.ai.fleet.approveProviderSync',
+                'Approve replacing official endpoints and authentication styles for configured providers')}</span>
+            </label>
+            <details>
+              <summary className="cursor-pointer text-content">
+                {t('settings.ai.fleet.previewProviderChanges', 'Preview provider changes')}
+                {' (' + providerRefreshPreview.updated + ')'}
+              </summary>
+              <ul className="mt-1 max-h-40 space-y-1 overflow-auto">
+                {providerRefreshPreview.providers.map(after => {
+                  const before = providers.find(p => p.id === after.id);
+                  if (!before || (before.endpoint === after.endpoint &&
+                    before.authStyle === after.auth_style)) return null;
+                  return (
+                    <li key={after.id} className="break-all text-content-muted">
+                      <strong>{before.label}</strong>: {before.endpoint} → {after.endpoint}
+                      {before.authStyle !== after.auth_style &&
+                        ' (' + before.authStyle + ' → ' + after.auth_style + ')'}
+                      {before.maskedKey.startsWith('••••') &&
+                        <span className="ml-1 font-medium text-content">
+                          {t('settings.ai.fleet.providerNeedsKey', 'Requires key re-entry in editor')}
+                        </span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
+          </div>
+        )}
         <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-line-subtle p-2">
           {providers.map(p => (
             <label
@@ -644,11 +676,43 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           </Button>
         </div>
         <p className="text-xs text-content-muted">
-          {t(
-            'settings.ai.fleet.presetHint',
-            'Imports 127 Penguin presets and refreshes known pricing, context and vision flags. Custom models are preserved; routes and credentials are untouched.'
-          )}
+          {t('settings.ai.fleet.presetHintSafe',
+            'Import missing model presets without changing saved model metadata. Updating existing vision, context and prices is optional and may replace manual edits. Routes and credentials are never changed.')}
         </p>
+        {modelRefreshPreview.updated > 0 && (
+          <label className="flex items-start gap-2 text-xs text-content-secondary">
+            <input type="checkbox" disabled={busy} checked={refreshExistingModels}
+              onChange={e => setRefreshExistingModels(e.target.checked)}
+              aria-label={t('settings.ai.fleet.approveMetadataRefresh',
+                'Approve replacing saved model metadata')} />
+            <span>{t('settings.ai.fleet.approveMetadataRefresh',
+              'Approve replacing saved model metadata')}
+              {' (' + modelRefreshPreview.updated + ')'}
+            </span>
+          </label>
+        )}
+        {modelChanges.length > 0 && (
+          <details className="rounded-lg border border-line-subtle p-2 text-xs">
+            <summary className="cursor-pointer text-content">
+              {t('settings.ai.fleet.previewModelChanges', 'Preview model changes')}
+              {' (' + modelChanges.length + ')'}
+            </summary>
+            <ul className="mt-1 max-h-36 space-y-1 overflow-auto text-content-muted">
+              {modelChanges.map(({ model, original }) => (
+                <li key={keyOf(model)} className="break-all">
+                  {model.provider}/{model.id} — {original
+                    ? t('settings.ai.fleet.refreshLabel', 'refresh saved metadata')
+                    : t('settings.ai.fleet.addLabel', 'add missing preset')}
+                  {original && ' (' +
+                    String(original.context_window ?? '?') + ' → ' +
+                    String(model.context_window ?? '?') + ' context; ' +
+                    String(original.cost_per_1m_input ?? '?') + ' → ' +
+                    String(model.cost_per_1m_input ?? '?') + ' input/1M USD)'}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <TextField
           value={search}
           onChange={e => setSearch(e.target.value)}
