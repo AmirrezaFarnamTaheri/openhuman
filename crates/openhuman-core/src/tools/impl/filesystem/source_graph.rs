@@ -252,17 +252,47 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
         let rust = ext == Some("rs");
         let python = ext == Some("py");
         if !js && !rust && !python { continue; }
-        let mut previous_line = "";
+        let mut pending_custom_path = false;
+        let mut rust_nesting = 0usize;
         let mut lexical = LexicalState::default();
         let syntax = if rust { SourceSyntax::Rust }
             else if js { SourceSyntax::JavaScript } else { SourceSyntax::Python };
         for (index, line) in doc.content.lines().enumerate() {
             let code_mask = code_positions(line, syntax, &mut lexical);
+            let was_nested = rust && rust_nesting > 0;
+            if rust {
+                // Ignore nested inline modules instead of resolving their
+                // relative paths using the containing file's root directory.
+                // This graph intentionally does not parse Rust module scopes.
+                for (byte, code) in line.bytes().zip(code_mask.iter().copied()) {
+                    if !code { continue; }
+                    if byte == b'{' {
+                        rust_nesting += 1;
+                    } else if byte == b'}' {
+                        rust_nesting = rust_nesting.saturating_sub(1);
+                    }
+                }
+            }
             let imports: Vec<(&str, String)> = if rust {
-                if previous_line.trim_start().starts_with("#[path") {
-                    previous_line = line;
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("#[path") {
+                    pending_custom_path = true;
                     continue;
                 }
+                if pending_custom_path {
+                    let no_code = !line.bytes().zip(code_mask.iter().copied())
+                        .any(|(byte, visible)| visible && !byte.is_ascii_whitespace());
+                    if trimmed.starts_with("#[") || no_code {
+                        continue;
+                    }
+                    pending_custom_path = false;
+                    if rust_mod_pattern().is_match(line) {
+                        // Its actual target is controlled by #[path], not by
+                        // filename conventions. Exclude rather than guess.
+                        continue;
+                    }
+                }
+                if was_nested { continue; }
                 rust_mod_pattern().captures(line)
                     .filter(|captures| is_code(captures, 1, &code_mask))
                     .map(|captures| ("module", captures[1].to_string()))
@@ -303,7 +333,6 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
                 }
                 found
             };
-            previous_line = line;
             for (kind, spec) in imports {
                 let (status, target, count) =
                     resolve(&present, candidate_paths(&doc.path, &spec, kind));
