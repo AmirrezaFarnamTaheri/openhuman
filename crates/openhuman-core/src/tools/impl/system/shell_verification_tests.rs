@@ -99,3 +99,25 @@ fn local_check_host_metadata_does_not_change_model_facing_output() {
     assert_eq!(result.output(), "local stdout");
     assert!(!result.output().contains("openhuman_local_check_v1"));
 }
+
+
+#[test]
+fn local_receipts_record_safe_check_category_without_exposing_command_arguments() {
+    for (command, expected) in [
+        ("cargo test -p private_customer_project", "cargo_test"),
+        ("cargo fmt --check", "cargo_fmt"),
+        ("cargo clippy --workspace", "cargo_clippy"),
+        ("pytest -q tests/private_team", "pytest"),
+        ("pnpm exec vitest run", "vitest"),
+        ("npm run build", "npm_build"),
+    ] {
+        let mut result = ToolResult::success("pass");
+        append_verification_receipt(&mut result, command, true);
+        let serialized = result.metadata.as_ref().unwrap().to_string();
+        assert_eq!(result.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["check_kind"],expected);
+        assert!(!serialized.contains("private_customer_project"));
+        assert!(!serialized.contains("private_team"));
+        assert!(!serialized.contains("-p"));
+        assert!(!serialized.contains("-q"));
+    }
+}
