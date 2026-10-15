@@ -29,9 +29,14 @@ const SKIP_DIRS: &[&str] = &[
     ".git", ".svn", ".hg", ".git-crypt", "node_modules", "target",
     ".next", "dist", "build", ".venv", "__pycache__", ".terraform",
     ".ssh", ".aws", ".azure", ".kube", ".gnupg", ".docker", ".pki",
-    ".config", "secrets",
+    ".config", ".openhuman", "secrets",
 ];
-const SKIP_FILES: &[&str] = &[".env", ".env.local", ".env.production", ".env.development", ".npmrc", ".pypirc", "id_rsa", "id_ed25519", "credentials.json", "secrets.json"];
+const SKIP_FILES: &[&str] = &[
+    ".env", ".env.local", ".env.production", ".env.development", ".envrc",
+    ".npmrc", ".pypirc", ".netrc", ".git-credentials",
+    "id_rsa", "id_ed25519", "credentials.json", "secrets.json",
+    "token.json", "auth.json", "service-account.json",
+];
 
 pub struct SourceEvidenceTool {
     security: Arc<SecurityPolicy>,
