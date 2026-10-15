@@ -1,6 +1,5 @@
 //! Regression contract for bounded, no-egress source location.
 use super::{rank_sources, SourceDocument};
-use serde_json::Value;
 use sha2::Digest;
 
 fn src(path: &str, text: &str) -> SourceDocument {
