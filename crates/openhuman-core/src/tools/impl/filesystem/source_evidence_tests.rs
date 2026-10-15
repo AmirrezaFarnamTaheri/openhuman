@@ -878,3 +878,23 @@ async fn rejected_unknown_argument_keys_are_not_echoed_into_model_context() {
     assert!(!message.contains(&sensitive_key));
     assert!(message.len() < 256, "error must stay bounded and non-echoing");
 }
+
+
+#[cfg(unix)]
+#[test]
+fn file_descriptor_identity_detects_atomic_source_replacement() {
+    let dir = tempfile::tempdir().unwrap();
+    let original = dir.path().join("source.rs");
+    let replacement = dir.path().join("replacement.rs");
+    std::fs::write(&original, "fn original() {}\n").unwrap();
+    std::fs::write(&replacement, "fn substituted() {}\n").unwrap();
+    let before = std::fs::metadata(&original).unwrap();
+    let same = std::fs::metadata(&original).unwrap();
+    assert!(same_file_identity(&before, &same));
+    let different = std::fs::metadata(&replacement).unwrap();
+    assert!(!same_file_identity(&before, &different));
+    std::fs::rename(&replacement, &original).unwrap();
+    let after = std::fs::metadata(&original).unwrap();
+    assert!(!same_file_identity(&before, &after),
+        "atomically replacing a validated file must invalidate its provenance");
+}
