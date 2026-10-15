@@ -301,6 +301,33 @@ describe('provider-submit transport boundary', () => {
 
 describe('provider save concurrency and rollback isolation', () => {
 
+  it('never restores the old endpoint if final attachment fails after key replacement', async () => {
+    api.listProviderModels.mockResolvedValue([]);
+    const old = {
+      id: 'p_old', slug: 'provider', label: 'Provider',
+      endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
+      maskedKey: '••••stored',
+    };
+    const saved = { ...EMPTY_SETTINGS, cloudProviders: [old] };
+    const persist = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('final attachment failed'));
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: old, draft: saved, saved,
+      persist, t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await expect(result.current(
+        { ...old, endpoint: 'https://new.example/v1' }, 'replacement-key'
+      )).rejects.toThrow(/provider was detached/i);
+    });
+    expect(persist).toHaveBeenCalledTimes(2);
+    expect(persist.mock.calls[0][0].cloudProviders).toEqual([]);
+    expect(api.setCloudProviderKey).toHaveBeenCalledWith('provider', 'replacement-key');
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
+  });
+
+
   it('redacts an echoed candidate credential from preview errors', async () => {
     const secret = 'candidate-sensitive-secret';
     api.listProviderModels.mockRejectedValue(new Error('upstream rejected ' + secret));
