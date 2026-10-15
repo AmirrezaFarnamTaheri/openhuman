@@ -79,3 +79,32 @@ remain unverified and may omit results outside the observed files.
 Regression tests cover raw and ordinary multiline string examples, spurious
 `#[path]` attributes, long-query tail terms, and the scan-only query budget.
 They require execution on a Rust-enabled runner before release.
+
+
+## Pass 11: strict argument boundary and Unix descriptor provenance
+
+Source Evidence is an opt-in tool capable of returning workspace names and
+source excerpts. Before path validation or traversal, it now requires a JSON
+object, recognizes only the documented operation names and schema keys,
+rejects malformed explicit path/query/filter types, and validates positive
+integer limits. A typo such as 'paht' or 'op' cannot silently fall back
+to a workspace-root scan. Omitted optional values retain documented defaults.
+The published tool schema sets additionalProperties=false.
+
+Unknown argument keys are not echoed in returned errors: a malformed call
+could otherwise inject an arbitrarily large secret-like key into model-visible
+error text. These are defense-in-depth restrictions; the host security policy
+still independently authorizes every source path.
+
+On Unix, the content reader now compares device/inode identity of the initially
+inspected file, the opened file descriptor and the path after reading.
+An atomically substituted file is rejected instead of becoming hash-anchored
+source evidence under the original name. Existing O_NOFOLLOW and canonical
+path revalidation remain in force. This narrows a path-switch race but is
+not a proof against every filesystem race on every platform. Cross-platform
+capability-based traversal remains a separate release-hardening gate.
+
+New regression tests document malformed operations and typed fields, unknown
+keys, secret-like unknown-key non-echoing, and Unix atomic replacement
+identity. These latest Rust tests have not been observed passing at the
+exact PR head; Rust tool execution and latest-head Actions remain unavailable.
