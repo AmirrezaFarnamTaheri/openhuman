@@ -288,8 +288,9 @@ pub(super) fn handle_inference_update_model_settings(
                                 rotation_strategy,
                                 tool_call_codec: entry.tool_call_codec,
                                 model_transports:
-                                    crate::config::schema::cloud_providers::normalize_model_transports(
+                                    crate::config::schema::cloud_providers::normalize_model_transports_for_auth(
                                         entry.model_transports,
+                                        auth_style,
                                     )?,
                                 default_model: entry.default_model,
                             };
