@@ -92,3 +92,20 @@ fn limit_is_clamped_and_zero_cannot_be_unbounded() {
     assert_eq!(rank_sources(&docs, "check", 0)["results"].as_array().unwrap().len(), 1);
     assert_eq!(rank_sources(&docs, "check", 500)["results"].as_array().unwrap().len(), 5);
 }
+
+
+#[test]
+fn location_excerpt_contains_the_actual_match_on_very_long_unicode_lines() {
+    let prefix = "🙂".repeat(220);
+    let line = format!("{prefix} authSessionFresh is checked here");
+    let found = rank_sources(
+        &[src("src/session.ts", &format!("{line}\n"))],
+        "auth session fresh",
+        5,
+    );
+    let excerpt = &found["results"][0]["evidence"][0];
+    assert!(excerpt["text"].as_str().unwrap().contains("authSessionFresh"));
+    assert!(excerpt["column_start"].as_u64().unwrap() > 1);
+    assert_eq!(excerpt["line"], 1);
+    assert!(excerpt["text"].as_str().unwrap().chars().count() <= 160);
+}
