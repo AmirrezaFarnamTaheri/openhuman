@@ -333,12 +333,25 @@ fn handle_runs_active(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
+/// The event-journal storage backend expects opaque, compact run keys.
+/// Refuse path-like, control and unbounded strings before touching config,
+/// storage, or logging. A malformed user-supplied ID is never proof of a run.
+fn validate_local_check_run_id(id: &str) -> Result<(), String> {
+    if id.is_empty() || id.len() > 128
+        || !id.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'-'))
+    {
+        return Err("invalid params: malformed run_id".to_owned());
+    }
+    Ok(())
+}
+
 /// Return a narrowly scoped verification fact summary without copying
 /// source, prompts, command arguments or tool output into the response.
 fn handle_run_local_checks(params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload: RunLocalChecksParams = serde_json::from_value(Value::Object(params))
             .map_err(|err| format!("invalid params: {err}"))?;
+        validate_local_check_run_id(&payload.run_id)?;
         let workspace = configured_workspace().await?;
         let receipt = read_run_local_checks(&workspace, &payload.run_id)
             .await
