@@ -256,3 +256,44 @@ fn explicit_json_and_stylesheet_imports_resolve_exact_observed_assets() {
     assert_eq!(edges[0]["to"], "app/settings.json");
     assert_eq!(edges[1]["to"], "app/theme.css");
 }
+
+
+#[test]
+fn graph_does_not_invent_edges_from_js_comments_or_string_literals() {
+    let docs = vec![
+        source("src/main.ts", r#"
+            const quoted = "require('./fake')";
+            const inline = 1; // require('./fake')
+            /* import('./fake') */
+            /*
+               import Ghost from './fake';
+               require('./fake')
+            */
+            const real = require('./actual'); /* require('./fake') */
+            const deferred = import('./lazy');
+        "#),
+        source("src/fake.ts", "export const notImported = 1;\n"),
+        source("src/actual.ts", "export const actual = true;\n"),
+        source("src/lazy.ts", "export const lazy = true;\n"),
+    ];
+    let result = build_graph(&docs, 64, None);
+    let edges = result["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 2, "comments and strings are not dependency syntax");
+    assert_eq!(edges[0]["to"], "src/actual.ts");
+    assert_eq!(edges[1]["to"], "src/lazy.ts");
+    assert!(edges.iter().all(|e| e["specifier"] != "./fake"));
+}
+
+#[test]
+fn graph_does_not_parse_rust_mod_declarations_inside_block_comments() {
+    let docs = vec![
+        source("src/lib.rs", "/*\nmod pretend;\n*/\nmod actual;\n"),
+        source("src/pretend.rs", "pub const V: u8 = 1;\n"),
+        source("src/actual.rs", "pub const V: u8 = 2;\n"),
+    ];
+    let result = build_graph(&docs, 64, None);
+    let edges = result["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0]["to"], "src/actual.rs");
+    assert_eq!(edges[0]["line"], 4);
+}
