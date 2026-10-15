@@ -38,3 +38,12 @@ Scan results trim matched excerpts before exceeding the tool-output limit, prese
 The proof strength is restricted to focused regression cases until Rust unit tests and platform integration tests execute on the latest exact PR head. Do not represent a passing peer-suite baseline or successful TypeScript check as proof that this Rust feature compiles.
 
 Graph results also include `scope_path` and `scope_is_workspace`. Even a scan that finishes its specified subdirectory is not evidence that imports outside that directory were absent from the whole repository. Graph impact remains explicitly non-exhaustive.
+
+## Pass 9 direct-path, pagination and resource-resolution corrections
+
+- Explicitly addressed files are now checked for excluded ancestors, not only their basename. The exclusion is case-insensitive and includes Git/mercurial metadata, vendor/build/cache folders, and common hidden SSH/cloud/Kubernetes/PKI credential stores. A selected file under an excluded directory cannot bypass the walker's normal deny list.
+- For scans stopped by the aggregate byte limit, `next_after_path` points to the last examined/accepted file **before** the byte-limited file. A subsequent request resumes without silently skipping that unprocessed candidate.
+- A nonempty `after_path` is a partial file catalog, even when the last page has no further items. `catalog_complete=false` and `scan_complete=false` are returned for derived graph results; targets and impact remain provisional. Regular scans retain `complete` as page-exhaustion status and additionally expose `catalog_complete` to avoid claiming full-repository coverage.
+- Literal JS/TS import specifiers naming observed JSON, CSS or other text resources can resolve to that exact file. This remains syntactic, read-only and non-exhaustive evidence.
+
+The Source Evidence and Local Check APIs are separate read-only projections. A source digest is not proof that a test ran on that digest. Combining them as an authoritative post-edit verification receipt requires persisted linkage from a specific checked source generation to a successful command and final CI commit.
