@@ -445,3 +445,23 @@ async fn byte_budget_partial_scan_supplies_resume_cursor() {
     let second = run(&tool, json!({"operation":"scan","after_path":cursor})).await;
     assert_eq!(second["files"][0]["path"], "08.rs");
 }
+
+
+#[tokio::test]
+async fn sensitive_directory_exclusion_is_case_insensitive_and_blocks_nested_files() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    for directory in [".GIT", "NODE_MODULES", ".CACHE-build"] {
+        let folder = project.path().join(directory);
+        std::fs::create_dir(&folder).unwrap();
+        std::fs::write(folder.join("payload.rs"), "fn private_code() {}").unwrap();
+    }
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let root_scan = run(&tool, json!({"operation":"scan","path":"."})).await;
+    assert_eq!(root_scan["files"].as_array().unwrap().len(), 0);
+    for directory in [".GIT", "NODE_MODULES", ".CACHE-build"] {
+        let target = format!("{directory}/payload.rs");
+        assert!(tool.execute(json!({"operation":"scan","path":target})).await.is_err(),
+            "case-insensitive deny boundary must reject {target}");
+    }
+}
