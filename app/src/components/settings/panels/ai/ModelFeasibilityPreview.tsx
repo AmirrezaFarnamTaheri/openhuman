@@ -18,6 +18,7 @@ interface Props {
 
 export function ModelFeasibilityPreview({ models }: Props) {
   const [inputText, setInputText] = useState('32000');
+  const [cachedInputText, setCachedInputText] = useState('0');
   const [outputText, setOutputText] = useState('2000');
   const [budgetText, setBudgetText] = useState('');
   const [requiresVision, setRequiresVision] = useState(false);
@@ -27,6 +28,7 @@ export function ModelFeasibilityPreview({ models }: Props) {
     try {
       return assessModelFeasibility(models, {
         inputTokens: Number(inputText),
+        cachedInputTokens: cachedInputText.trim() === '' ? 0 : Number(cachedInputText),
         outputTokens: Number(outputText),
         requiresVision,
         maxEstimatedCostUSD: budgetText.trim() === '' ? null : Number(budgetText),
@@ -34,9 +36,11 @@ export function ModelFeasibilityPreview({ models }: Props) {
     } catch {
       return null;
     }
-  }, [models, inputText, outputText, budgetText, requiresVision]);
+  }, [models, inputText, cachedInputText, outputText, budgetText, requiresVision]);
 
   const displayed = report?.rows.slice(0, 8) ?? [];
+  const cachedExceedsInput = inputText.trim() !== '' && cachedInputText.trim() !== '' &&
+    Number(cachedInputText) > Number(inputText);
   return (
     <section aria-label="Model suitability preview"
       className="space-y-3 rounded-lg border border-line-subtle p-3">
@@ -47,11 +51,18 @@ export function ModelFeasibilityPreview({ models }: Props) {
           This is advisory only and does not change any workload route.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
         <label className="space-y-1 text-xs text-content-secondary">
           <span>Estimated input tokens</span>
           <input type="number" min="0" step="1" value={inputText}
             aria-label="Estimated input tokens" onChange={e => setInputText(e.target.value)}
+            className="w-full rounded border border-line-subtle bg-transparent px-2 py-1 text-content" />
+        </label>
+        <label className="space-y-1 text-xs text-content-secondary">
+          <span>Cached input tokens (within input)</span>
+          <input type="number" min="0" max={inputText} step="1" value={cachedInputText}
+            aria-label="Cached input tokens (within input)"
+            onChange={e => setCachedInputText(e.target.value)}
             className="w-full rounded border border-line-subtle bg-transparent px-2 py-1 text-content" />
         </label>
         <label className="space-y-1 text-xs text-content-secondary">
@@ -75,7 +86,9 @@ export function ModelFeasibilityPreview({ models }: Props) {
       </div>
       {!report ? (
         <p role="alert" className="text-xs text-content-secondary">
-          Enter non-negative whole token counts and an optional non-negative cost limit.
+          {cachedExceedsInput
+            ? 'Cached input must be within total input tokens.'
+            : 'Enter non-negative whole token counts (cached input is a subset) and an optional non-negative cost limit.'}
         </p>
       ) : (
         <>
