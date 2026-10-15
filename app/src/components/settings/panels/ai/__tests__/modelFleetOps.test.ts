@@ -188,6 +188,33 @@ describe('model-fleet preset management', () => {
     )).toThrow(/512/);
   });
 
+  it('matches the Rust 200-byte model ID boundary and rejects prototype-key pollution', () => {
+    const exactLimit = 'é'.repeat(100); // 200 bytes of UTF-8
+    const overLimit = 'é'.repeat(101); // 202 bytes, but only 101 JS code units
+    expect(parseModelTransportOverrides(`${exactLimit} = responses`)[exactLimit])
+      .toBe('responses');
+    expect(() => parseModelTransportOverrides(`${overLimit} = responses`)).toThrow(/200/);
+    expect(() => parseModelImageEndpoints(
+      `${overLimit} = https://images.example/v1`
+    )).toThrow(/200/);
+    const special = parseModelTransportOverrides('__proto__ = responses');
+    expect(Object.getPrototypeOf(special)).toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(special, '__proto__')).toBe(true);
+  });
+
+  it('rejects empty URL query and fragment delimiters before any credentialed probe', () => {
+    for (const url of [
+      'https://provider.example/v1?',
+      'https://provider.example/v1#',
+      'https://provider.example/v1?#',
+    ]) {
+      expect(validModelFleetEndpoint(url)).toBe(false);
+      expect(validModelFleetImageEndpoint(url)).toBe(false);
+      expect(() => parseModelImageEndpoints('vision = ' + url)).toThrow();
+    }
+    expect(validModelFleetEndpoint('https://provider.example/v1')).toBe(true);
+  });
+
   it('changes a key rotation strategy without clearing the existing image endpoint', () => {
     const providers = [
       {
