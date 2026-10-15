@@ -22,14 +22,17 @@ const STOPWORDS: &[&str] = &[
     "who", "why", "with", "would", "you",
 ];
 
-fn tokenize(input: &str) -> BTreeSet<String> {
-    let mut pieces = BTreeSet::new();
+/// Split literal terms at word and camel-case boundaries while preserving
+/// first-seen order. A sorted set is only appropriate for later intersections,
+/// never for deciding which query requirements survive a strict term budget.
+fn tokenize_ordered(input: &str) -> Vec<String> {
+    let mut pieces = Vec::new();
     let mut current = String::new();
     let mut last_lower = false;
     for ch in input.chars() {
         if !ch.is_alphanumeric() {
             if (2..=64).contains(&current.chars().count()) {
-                pieces.insert(current.to_lowercase());
+                pieces.push(current.to_lowercase());
             }
             current.clear();
             last_lower = false;
@@ -37,7 +40,7 @@ fn tokenize(input: &str) -> BTreeSet<String> {
         }
         if last_lower && ch.is_uppercase() && !current.is_empty() {
             if (2..=64).contains(&current.chars().count()) {
-                pieces.insert(current.to_lowercase());
+                pieces.push(current.to_lowercase());
             }
             current.clear();
         }
@@ -47,16 +50,32 @@ fn tokenize(input: &str) -> BTreeSet<String> {
         last_lower = ch.is_lowercase();
     }
     if (2..=64).contains(&current.chars().count()) {
-        pieces.insert(current.to_lowercase());
+        pieces.push(current.to_lowercase());
     }
     pieces
 }
 
+fn tokenize(input: &str) -> BTreeSet<String> {
+    tokenize_ordered(input).into_iter().collect()
+}
+
 fn query_terms(input: &str) -> BTreeSet<String> {
-    tokenize(input)
+    let mut seen = BTreeSet::new();
+    let ordered: Vec<String> = tokenize_ordered(input)
         .into_iter()
         .filter(|token| !STOPWORDS.contains(&token.as_str()))
-        .take(16)
+        .filter(|token| seen.insert(token.clone()))
+        .collect();
+    const MAX_TERMS: usize = 16;
+    if ordered.len() <= MAX_TERMS {
+        return ordered.into_iter().collect();
+    }
+    // Retain the original high-level intent AND late specific constraints.
+    // Alphabetically taking the first 16 drops key requirements like a final
+    // class/method name simply because they sort after generic words.
+    ordered.iter().take(MAX_TERMS / 2)
+        .chain(ordered.iter().skip(ordered.len() - MAX_TERMS / 2))
+        .cloned()
         .collect()
 }
 
