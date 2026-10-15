@@ -56,15 +56,21 @@ fn trusted_local_fact(meta: Option<&Value>) -> Option<bool> {
     let fact = meta?.get("openhuman_local_check_v1")?;
     if fact.get("recognized")?.as_bool() != Some(true)
         || fact.get("scope")?.as_str() != Some("local_check_only")
-        || fact.get("task_verified").and_then(Value::as_bool) == Some(true)
+        || fact.get("task_verified")?.as_bool() != Some(false)
     {
         return None;
     }
+    // This host-only envelope is versioned. A contradictory tuple such as
+    // passed=true/status=not_executed cannot become positive evidence even
+    // if some future tool or adapter accidentally writes that metadata.
     let passed = fact.get("passed")?.as_bool()?;
-    if passed && fact.get("exit_status")?.as_str() != "zero" {
-        return None;
+    let status = fact.get("status")?.as_str()?;
+    let exit = fact.get("exit_status")?.as_str()?;
+    match (passed, status, exit) {
+        (true, "passed", "zero") => Some(true),
+        (false, "not_executed" | "failed_or_unobserved", "unknown") => Some(false),
+        _ => None,
     }
-    Some(passed)
 }
 
 impl LocalCheckAccumulator {
