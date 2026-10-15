@@ -241,3 +241,18 @@ fn javascript_dynamic_literal_import_is_a_possible_dependency() {
     assert_eq!(edge(&graph)["status"], "resolved");
     assert_eq!(edge(&graph)["to"], "app/view.tsx");
 }
+
+#[test]
+fn explicit_json_and_stylesheet_imports_resolve_exact_observed_assets() {
+    let docs = vec![
+        source("app/index.ts", "import data from './settings.json';\nimport './theme.css';\n"),
+        source("app/settings.json", "{\\\"healthy\\\":true}"),
+        source("app/theme.css", "body { color: inherit; }"),
+    ];
+    let graph = build_graph(&docs, 64, None);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 2);
+    assert_eq!(edges[0]["status"], "resolved");
+    assert_eq!(edges[0]["to"], "app/settings.json");
+    assert_eq!(edges[1]["to"], "app/theme.css");
+}
