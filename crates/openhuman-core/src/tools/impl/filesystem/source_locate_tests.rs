@@ -125,3 +125,38 @@ fn bounded_query_keeps_late_specific_symbols_instead_of_alphabetical_prefix() {
     assert!(found["results"][0]["matched_terms"].as_array().unwrap()
         .iter().any(|value| value == "zulu" || value == "critical"));
 }
+
+
+#[test]
+fn long_source_line_excerpt_includes_the_actual_matching_symbol() {
+    let text = format!("{}criticalFunction() {}\n", "x".repeat(220), "y".repeat(60));
+    let docs = vec![src("src/long.ts", &text)];
+    let result = rank_sources(&docs, "critical function", 5);
+    let excerpt = &result["results"][0]["evidence"][0];
+    assert_eq!(excerpt["line"], 1);
+    assert!(excerpt["text"].as_str().unwrap().contains("criticalFunction"),
+        "a line hit should show its matching token, not an unrelated prefix");
+    assert!(excerpt["excerpt_start_column"].as_u64().unwrap() > 1);
+    assert_eq!(excerpt["excerpt_truncated"], true);
+}
+
+#[test]
+fn source_excerpt_never_splits_unicode_code_points() {
+    let text = format!("{}unicodeMarker();\n", "🧠".repeat(220));
+    let docs = vec![src("src/unicode.ts", &text)];
+    let result = rank_sources(&docs, "unicode marker", 5);
+    let excerpt = result["results"][0]["evidence"][0]["text"].as_str().unwrap();
+    assert!(excerpt.contains("unicodeMarker"));
+    assert!(excerpt.chars().count() <= 160);
+    assert!(!excerpt.contains('�'));
+}
+
+#[test]
+fn first_column_excerpt_keeps_original_text_and_provenance() {
+    let docs = vec![src("src/api.rs", "fn loadAccount() {}\n")];
+    let result = rank_sources(&docs, "load account", 5);
+    let evidence = &result["results"][0]["evidence"][0];
+    assert_eq!(evidence["text"], "fn loadAccount() {}");
+    assert_eq!(evidence["excerpt_start_column"], 1);
+    assert_eq!(evidence["excerpt_truncated"], false);
+}
