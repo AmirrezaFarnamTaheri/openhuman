@@ -1,7 +1,7 @@
 /** Model Fleet settings: opt-in preset syncing, multi-select editing, and image API routing.
  * All mutations go through the existing Settings -> Rust core persistence path.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '../../../../lib/i18n/I18nContext';
 import {
@@ -17,6 +17,7 @@ import { summarizeFleetHealth } from './fleetHealthInsights';
 import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
 import {
   applyModelBulkPatch,
+  createSingleFlightRunner,
   fleetModelKey,
   syncConfiguredProviderPresets,
   syncModelPresets,
@@ -123,20 +124,23 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     [settings.modelRegistry, search, presetNames]
   );
 
-  const run = async (operation: () => Promise<void>, successMessage: string) => {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await operation();
-      setNotice(successMessage);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+  // The ref closes the double-click window before busy state re-renders.
+  // It remains stable across renders and releases after errors as well.
+  const writeGate = useRef(createSingleFlightRunner()).current;
+  const run = (operation: () => Promise<void>, successMessage: string) =>
+    writeGate(async () => {
+      setBusy(true);
+      setError('');
+      setNotice('');
+      try {
+        await operation();
+        setNotice(successMessage);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
+    });
   const toggle = (state: Set<string>, change: (value: Set<string>) => void, value: string) => {
     const copy = new Set(state);
     if (copy.has(value)) copy.delete(value);
