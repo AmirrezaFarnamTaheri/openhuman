@@ -38,8 +38,9 @@ pub(crate) struct LocalCheckReport {
 pub(super) struct LocalCheckAccumulator {
     latest_pass: Option<u64>,
     last_possible_mutation: Option<u64>,
-    /// Last observed outcome by check family: cargo_test != cargo_fmt.
-    /// No command contents, source paths, or user-supplied identifiers.
+    /// Per-family sticky failures: a check category alone cannot prove the
+    /// next command tested the same package, arguments, files or build mode.
+    /// No command contents, source paths or user-supplied identifiers.
     checks_by_kind: BTreeMap<String, bool>,
     unattributed_failures: usize,
     passed: usize,
@@ -157,7 +158,10 @@ impl LocalCheckAccumulator {
                         self.latest_pass = Some(offset);
                         self.passed += 1;
                         if let Some(kind) = kind {
-                            self.checks_by_kind.insert(kind.to_owned(), true);
+                            // Never erase a failed cargo_test -p A with a
+                            // later successful cargo_test -p B. The safe
+                            // category lacks enough invocation identity.
+                            self.checks_by_kind.entry(kind.to_owned()).or_insert(true);
                         }
                     }
                     Some((_, kind)) => {
@@ -183,8 +187,10 @@ impl LocalCheckAccumulator {
 
     pub(super) fn finish(self, run_id: &str, fully_paged: bool) -> LocalCheckReport {
         let complete = fully_paged && !self.has_event_gaps;
-        // A successful formatter cannot erase a failed test run. Only a
-        // later successful check of the SAME safe family resolves its failure.
+        // An unrelated check cannot clear a failure. Even the same family
+        // can represent a different package, script or test selector. Without
+        // command identity evidence, require a separate clean run rather
+        // than creating an apparently green proof from the same journal.
         let unresolved_check_kinds: Vec<String> = self.checks_by_kind.iter()
             .filter(|(_, passed)| !**passed)
             .map(|(kind, _)| kind.clone())
