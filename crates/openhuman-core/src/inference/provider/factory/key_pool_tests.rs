@@ -276,4 +276,7 @@ fn untrusted_correlation_ids_do_not_fill_session_affinity_with_unbounded_strings
     }
     let pools = registry().lock().unwrap();
     assert!(pools.get(scope).unwrap().sticky.is_empty());
+    drop(pools);
+    // A completed test must not retain its deterministic scope globally.
+    assert!(!registry().lock().unwrap().contains_key(scope));
 }
