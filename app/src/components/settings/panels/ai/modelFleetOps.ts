@@ -254,6 +254,39 @@ export function updateSelectedGroupSettings<
   ) as T[];
 }
 
+/**
+ * Single model-image mapping update shared by all direct editor paths.
+ * A null-prototype dictionary is required: arbitrary model IDs (including
+ * "__proto__") must be data keys, never JavaScript prototype setters.
+ * The limits match Rust's config normalization and the bulk text parser.
+ */
+export function upsertModelImageEndpoint(
+  current: Readonly<Record<string, string>>,
+  modelId: string,
+  endpoint: string | null
+): Record<string, string> {
+  const id = modelId.trim();
+  if (!id || new TextEncoder().encode(id).length > 200 || /\\p{Cc}/u.test(id)) {
+    throw new Error('Image model ids must be nonempty and at most 200 UTF-8 bytes.');
+  }
+  const next: Record<string, string> = Object.assign(Object.create(null), current);
+  if (endpoint === null) {
+    delete next[id];
+  } else {
+    if (!endpoint.trim() || !validModelFleetImageEndpoint(endpoint)) {
+      throw new Error('Image endpoints require HTTPS or loopback HTTP, without URL credentials.');
+    }
+    if (!Object.prototype.hasOwnProperty.call(next, id) && Object.keys(next).length >= 512) {
+      throw new Error('At most 512 image model mappings are supported.');
+    }
+    next[id] = endpoint.trim();
+  }
+  if (Object.keys(next).length > 512) {
+    throw new Error('At most 512 image model mappings are supported.');
+  }
+  return next;
+}
+
 /** Explicit model-id-to-protocol mapping. Unknown models remain Auto.
  * Keep a null-prototype object so user-provided ids cannot mutate its prototype.
  */
