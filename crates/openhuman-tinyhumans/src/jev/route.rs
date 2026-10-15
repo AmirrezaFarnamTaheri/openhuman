@@ -141,7 +141,20 @@ fn base_override(config: &Config) -> Option<String> {
 /// Resolve the configured route. The error names every gap (never a secret) so
 /// the BM25 fallback's log line says what to set.
 pub fn resolve(config: &Config, env: EnvLookup<'_>) -> Result<ResolvedRoute, RankError> {
-    let requested = JevRoute::parse(&config.agent.tool_search.jev_route);
+    // Backward-compatible JevRoute::parse maps unknown values to Auto for
+    // display callers. Actual network routing must be stricter: a typo in an
+    // explicitly selected provider must never silently spend a different
+    // provider's credentials or send request context to its endpoint.
+    let normalized = config.agent.tool_search.jev_route.trim().to_ascii_lowercase();
+    if !matches!(
+        normalized.as_str(),
+        "" | "auto" | "tinyhumans" | "typesafe" | "openrouter"
+    ) {
+        return Err(RankError::invalid_input(
+            "unknown jev route; expected auto, tinyhumans, typesafe, or openrouter",
+        ));
+    }
+    let requested = JevRoute::parse(&normalized);
     let outcome = match requested {
         JevRoute::TinyHumans => tinyhumans(config),
         JevRoute::TypeSafe => typesafe(config, env),
