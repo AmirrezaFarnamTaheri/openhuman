@@ -19,7 +19,7 @@ use tinyagents_harness::middleware::{
 };
 use tinyagents_harness::runtime::AgentHarness;
 
-use crate::agent::session_host::turn_checkpoint::wrap_harness_instruction;
+use tinyagents_harness::middleware::wrap_harness_instruction;
 
 /// The only agent whose root turns are checked.
 const ORCHESTRATOR_AGENT_ID: &str = "orchestrator";
