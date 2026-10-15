@@ -603,3 +603,33 @@ fn peer_router_key_only_provider_presets_keep_transport_parity() {
             "unverified Responses API support must not enable that transport");
     }
 }
+
+
+#[test]
+fn image_routes_reject_embedded_control_characters_before_url_normalization() {
+    use std::collections::HashMap;
+    // RFC/WHATWG URL parsers may discard embedded horizontal tabs and line
+    // breaks. The endpoint used with a bearer key must not be silently altered.
+    for endpoint in [
+        "https://images.example/v1/\timage",
+        "https://images.example/v1/\nimage",
+        "http://127.0.0.1:8080/v1/\rimage",
+    ] {
+        assert!(
+            super::normalize_fleet_config(Some(endpoint.to_owned()), HashMap::new(), None).is_err(),
+            "provider image endpoint normalized embedded controls: {endpoint:?}"
+        );
+        let mut per_model = HashMap::new();
+        per_model.insert("vision".to_owned(), endpoint.to_owned());
+        assert!(
+            super::normalize_fleet_config(None, per_model, None).is_err(),
+            "model image route normalized embedded controls: {endpoint:?}"
+        );
+    }
+    assert!(super::normalize_fleet_config(
+        Some("https://images.example/v1".to_owned()), HashMap::new(), None
+    ).is_ok());
+    assert!(super::normalize_fleet_config(
+        Some("http://[::1]:8080/v1".to_owned()), HashMap::new(), None
+    ).is_ok());
+}
