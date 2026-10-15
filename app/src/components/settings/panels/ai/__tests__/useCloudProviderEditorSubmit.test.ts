@@ -6,6 +6,7 @@ import { useCloudProviderEditorSubmit } from '../useCloudProviderEditorSubmit';
 
 const api = vi.hoisted(() => ({
   flushCloudProviders: vi.fn(),
+  loadAISettings: vi.fn(),
   listProviderModels: vi.fn(),
   setCloudProviderKey: vi.fn(),
   clearCloudProviderKey: vi.fn(),
@@ -14,6 +15,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../../../../../services/api/aiSettingsApi', async importOriginal => ({
   ...(await importOriginal<typeof import('../../../../../services/api/aiSettingsApi')>()),
   flushCloudProviders: api.flushCloudProviders,
+  loadAISettings: api.loadAISettings,
   listProviderModels: api.listProviderModels,
   setCloudProviderKey: api.setCloudProviderKey,
   clearCloudProviderKey: api.clearCloudProviderKey,
@@ -21,6 +23,7 @@ vi.mock('../../../../../services/api/aiSettingsApi', async importOriginal => ({
 
 beforeEach(() => {
   api.flushCloudProviders.mockReset();
+  api.loadAISettings.mockReset();
   api.listProviderModels.mockReset();
   api.setCloudProviderKey.mockReset();
   api.clearCloudProviderKey.mockReset();
@@ -280,5 +283,66 @@ describe('provider-submit transport boundary', () => {
     });
     expect(persist).toHaveBeenCalledTimes(1);
     expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('provider save concurrency and rollback isolation', () => {
+  it('refuses overlapping submissions and releases the guard after the first saves', async () => {
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    const persist = vi.fn().mockReturnValueOnce(pending).mockResolvedValue(undefined);
+    const done = vi.fn();
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: key => key, onDone: done,
+    }));
+    const provider = {
+      id: '', slug: 'safe', label: 'Safe', endpoint: 'https://safe.example/v1',
+      authStyle: 'bearer' as const, maskedKey: '',
+    };
+    let first!: Promise<void>;
+    await act(async () => {
+      first = result.current(provider, '', { skipProbe: true });
+      await expect(result.current(provider, '', { skipProbe: true }))
+        .rejects.toThrow(/in progress/i);
+    });
+    expect(persist).toHaveBeenCalledTimes(1);
+    release?.();
+    await act(async () => { await first; });
+    await act(async () => { await result.current(provider, '', { skipProbe: true }); });
+    expect(persist).toHaveBeenCalledTimes(2);
+    expect(done).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not roll back another editor\'s newer provider settings after a key-store failure', async () => {
+    api.listProviderModels.mockResolvedValue([]);
+    api.setCloudProviderKey.mockRejectedValue(new Error('keyring locked'));
+    const existing = {
+      id: 'p_existing', slug: 'existing', label: 'Existing',
+      endpoint: 'https://old.example/v1', authStyle: 'bearer' as const,
+      maskedKey: '••••stored',
+    };
+    const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
+    const persist = vi.fn().mockResolvedValue(undefined);
+    api.loadAISettings.mockResolvedValue({
+      ...saved,
+      cloudProviders: [{
+        id: 'p_existing', slug: 'existing', label: 'A concurrent edit',
+        endpoint: 'https://concurrent.example/v1', auth_style: 'bearer',
+      }],
+    });
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: existing, draft: saved, saved,
+      persist, t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await expect(result.current(
+        { ...existing, endpoint: 'https://new.example/v1' }, 'replacement-key'
+      )).rejects.toThrow(/keyring locked/);
+    });
+    expect(api.loadAISettings).toHaveBeenCalledTimes(1);
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
+    expect(persist).toHaveBeenCalledTimes(1);
   });
 });
