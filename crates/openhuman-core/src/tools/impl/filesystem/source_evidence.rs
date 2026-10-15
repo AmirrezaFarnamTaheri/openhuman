@@ -88,7 +88,8 @@ impl Tool for SourceEvidenceTool {
             "focus_path":{"type":"string","maxLength":180,"description":"Optional indexed path for reverse impact analysis in graph mode"},
             "expected_sha256":{"type":"string","minLength":64,"maxLength":64},
             "start_line":{"type":"integer","minimum":1},
-            "end_line":{"type":"integer","minimum":1}
+            "end_line":{"type":"integer","minimum":1},
+            "start_column":{"type":"integer","minimum":1,"description":"Optional one-based Unicode-scalar column offset for each returned excerpt"}
         }})
     }
     fn max_result_size_chars(&self) -> Option<usize> { Some(30_000) }
@@ -410,6 +411,11 @@ async fn verify(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value)
         anyhow::bail!("expected_sha256 must be a 64-digit hexadecimal SHA-256");
     }
     let (start, end) = parse_line_range(args)?;
+    let column = args.get("start_column").and_then(Value::as_u64).unwrap_or(1);
+    if column == 0 || column > MAX_FILE_BYTES + 1 {
+        anyhow::bail!("start_column is outside the source evidence budget");
+    }
+    let skip_columns = usize::try_from(column - 1)?;
     if ignored(path, false) { anyhow::bail!("source file is excluded"); }
     let bytes = read_checked(policy, path).await?
         .ok_or_else(|| anyhow::anyhow!("source file is not permitted, not UTF-8, or too large"))?;
@@ -418,7 +424,12 @@ async fn verify(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value)
     let text = std::str::from_utf8(&bytes)?;
     let lines: Vec<Value> = text.lines().enumerate()
         .filter(|(i,_)| i+1 >= start && i+1 <= end)
-        .map(|(i,line)| json!({"line":i+1,"text":bounded_line(line)})).collect();
+        .map(|(i,line)| json!({
+            "line": i + 1,
+            "column_start": column,
+            "line_char_count": line.chars().count(),
+            "text": line.chars().skip(skip_columns).take(MAX_LINE_CHARS).collect::<String>()
+        })).collect();
     let mut result = json!({"operation":"verify","path":relative(root,path),"source_hash":actual,
         "verified":true,"lines":lines,"lines_complete":true,"next_line":Value::Null,
         "snapshot_atomic":false});
