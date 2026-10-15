@@ -145,23 +145,23 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
         !memberSet.has(edge.from_node) &&
         !loopNodeIds.has(member)
       ) {
-          issues.push({
-            code: 'loop_side_entry',
-            nodeIds: [edge.from_node, member],
-            message: 'External flow must enter a cyclic component through a loop controller, not ' +
-              member + '.',
-          });
-        }
-        if (
-          loopNodeIds.has(edge.from_node) &&
-          edge.from_port === 'done'
-        ) {
-          issues.push({
-            code: 'loop_done_reenters',
-            nodeIds: [edge.from_node, member],
-            message: 'Loop ' + edge.from_node + ' done port must exit its cyclic component.',
-          });
-        }
+        issues.push({
+          code: 'loop_side_entry',
+          nodeIds: [edge.from_node, member],
+          message: 'External flow must enter a cyclic component through a loop controller, not ' +
+            member + '.',
+        });
+      }
+      if (
+        loopNodeIds.has(edge.from_node) &&
+        edge.from_port === 'done'
+      ) {
+        issues.push({
+          code: 'loop_done_reenters',
+          nodeIds: [edge.from_node, member],
+          message: 'Loop ' + edge.from_node + ' done port must exit its cyclic component.',
+        });
+      }
     }
     if (hasRunLevelBound) continue;
 
