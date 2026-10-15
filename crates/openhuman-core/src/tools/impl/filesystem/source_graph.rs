@@ -11,6 +11,7 @@ use regex::Regex;
 use serde_json::{json, Value};
 
 /// Original text is only retained for the duration of a bounded graph call.
+#[derive(Clone)]
 pub(super) struct SourceDocument {
     pub path: String,
     pub source_hash: String,
