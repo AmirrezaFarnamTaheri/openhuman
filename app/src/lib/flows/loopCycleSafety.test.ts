@@ -100,6 +100,25 @@ describe('validateLoopCycleSafety', () => {
     }).map(issue => issue.code)).toEqual(['loop_done_reenters']);
   });
 
+  it('reports invalid iteration limits on standalone loop nodes before execution', () => {
+    for (const cap of [0, -1, 101, 1.5, Number.NaN, 'forever']) {
+      const result = validateLoopCycleSafety({
+        nodes: [node('t', 'trigger'), node('loop', 'loop', { max_iterations: cap })],
+        edges: [edge('t', 'loop')],
+      });
+      expect(result.map(issue => issue.code)).toEqual(['unbounded_loop']);
+      expect(result[0].nodeIds).toEqual(['loop']);
+    }
+  });
+
+  it('does not emit duplicate iteration-limit errors for a loop in a cycle', () => {
+    const result = validateLoopCycleSafety({
+      nodes: [node('l', 'loop', { max_iterations: -1 }), node('worker')],
+      edges: [edge('l', 'worker', 'body'), edge('worker', 'l')],
+    });
+    expect(result.map(issue => issue.code)).toEqual(['unbounded_loop']);
+  });
+
   it('bounds iterations and preserves the engine default when omitted', () => {
     for (const cap of [0, -1, 101, 1.5, Number.NaN, 'forever']) {
       expect(validateLoopCycleSafety({
