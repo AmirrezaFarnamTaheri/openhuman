@@ -60,6 +60,42 @@ fn query_terms(input: &str) -> BTreeSet<String> {
         .collect()
 }
 
+/// Locate a whole lexical query token, including camel-case parts, using
+/// byte offsets at UTF-8 character boundaries. A prefix inside "superuser"
+/// must not count as a match for "user".
+fn first_matched_token_byte(line: &str, query: &BTreeSet<String>) -> Option<usize> {
+    let mut begin: Option<usize> = None;
+    let mut prior_lower = false;
+    let matching = |start: usize, end: usize| {
+        let value = &line[start..end];
+        (2..=64).contains(&value.chars().count())
+            && query.contains(&value.to_lowercase())
+    };
+    for (byte, ch) in line.char_indices() {
+        if !ch.is_alphanumeric() {
+            if let Some(start) = begin {
+                if matching(start, byte) { return Some(start); }
+            }
+            begin = None;
+            prior_lower = false;
+            continue;
+        }
+        if prior_lower && ch.is_uppercase() {
+            if let Some(start) = begin {
+                if matching(start, byte) { return Some(start); }
+            }
+            begin = Some(byte);
+        } else if begin.is_none() {
+            begin = Some(byte);
+        }
+        prior_lower = ch.is_lowercase();
+    }
+    if let Some(start) = begin {
+        if matching(start, line.len()) { return Some(start); }
+    }
+    None
+}
+
 fn evidence(doc: &SourceDocument, query: &BTreeSet<String>) -> (BTreeSet<String>, Vec<Value>) {
     let mut all_found = BTreeSet::new();
     let mut spans = Vec::new();
@@ -71,9 +107,18 @@ fn evidence(doc: &SourceDocument, query: &BTreeSet<String>) -> (BTreeSet<String>
         }
         all_found.extend(hits.iter().cloned());
         if spans.len() < MAX_EVIDENCE_LINES {
+            let line_chars = line.chars().count();
+            let hit_byte = first_matched_token_byte(line, query).unwrap_or(0);
+            let hit_column = line[..hit_byte].chars().count();
+            let start = if line_chars > MAX_LINE_CHARS {
+                hit_column.saturating_sub(MAX_LINE_CHARS / 3)
+                    .min(line_chars - MAX_LINE_CHARS)
+            } else { 0 };
             spans.push(json!({
                 "line": line_number + 1,
-                "text": line.chars().take(MAX_LINE_CHARS).collect::<String>(),
+                "column_start": start + 1,
+                "line_char_count": line_chars,
+                "text": line.chars().skip(start).take(MAX_LINE_CHARS).collect::<String>(),
                 "matched_terms": hits
             }));
         }
