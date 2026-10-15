@@ -53,10 +53,12 @@ describe('ModelFeasibilityPreview catalog browsing', () => {
   it('reveals additional sorted results on demand, not only the first eight', () => {
     render(<ModelFeasibilityPreview models={manyModels} />);
     expect(screen.queryByText('demo/candidate-16')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show more models' }));
-    expect(screen.getByText('demo/candidate-15')).toBeTruthy();
+    expect(screen.queryByText('demo/candidate-9')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show more models' }));
     expect(screen.getByText('demo/candidate-16')).toBeTruthy();
+    expect(screen.queryByText('demo/candidate-9')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more models' }));
+    expect(screen.getByText('demo/candidate-9')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Show more models' })).toBeNull();
   });
 
