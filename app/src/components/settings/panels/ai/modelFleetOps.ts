@@ -289,6 +289,27 @@ export function upsertModelImageEndpoint(
   return next;
 }
 
+/** Identify a proposed provider preset refresh that could re-route an already
+ * stored credential. Return only opaque provider IDs, never secrets or tokens.
+ */
+export function keyedProviderDestinationChanges<
+  T extends { id: string; endpoint: string; authStyle: string; maskedKey: string },
+  U extends { id: string; endpoint: string; authStyle: string },
+>(
+  before: readonly T[],
+  after: readonly U[]
+): string[] {
+  const newById = new Map(after.map(provider => [provider.id, provider]));
+  return before.filter(provider => {
+    if (!provider.maskedKey.startsWith('••••')) return false;
+    const candidate = newById.get(provider.id);
+    return candidate !== undefined && (
+      candidate.endpoint !== provider.endpoint ||
+      candidate.authStyle !== provider.authStyle
+    );
+  }).map(provider => provider.id);
+}
+
 /** Explicit model-id-to-protocol mapping. Unknown models remain Auto.
  * Keep a null-prototype object so user-provided ids cannot mutate its prototype.
  */
