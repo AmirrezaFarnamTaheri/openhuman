@@ -158,7 +158,7 @@ describe('cached-input token suitability (within total input)', () => {
   });
 
   it('rejects impossible cached-input volumes and non-integer counts', () => {
-    for (const cachedInputTokens of [-1, 1.5, 1001, Number.POSITIVE_INFINITY]) {
+    for (const cachedInputTokens of [-1, 1.5, 1001, Number.POSITIVE_INFINITY, null as unknown as number]) {
       expect(() => assessModelFeasibility([
         model('cache'),
       ], req({ inputTokens: 1000, cachedInputTokens }))).toThrow(/Invalid/);
