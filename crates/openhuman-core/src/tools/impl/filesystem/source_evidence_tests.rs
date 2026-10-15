@@ -731,3 +731,26 @@ async fn non_utf8_filename_cannot_be_silently_counted_as_complete_scan() {
     assert_eq!(result["complete"], false);
     assert_eq!(result["truncated_reason"], "non_utf8_path");
 }
+
+
+#[cfg(unix)]
+#[tokio::test]
+async fn unix_backslash_filename_must_remain_usable_as_safe_page_cursor() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("src")).unwrap();
+    std::fs::write(project.path().join("src/file.rs"), "fn directory() {}\n").unwrap();
+    std::fs::write(project.path().join("src\\file.rs"), "fn literal() {}\n").unwrap();
+    std::fs::write(project.path().join("t.rs"), "fn tail() {}\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let page = run(&tool, json!({
+        "operation": "scan", "max_files": 1, "after_path": "src/file.rs"
+    })).await;
+    assert_eq!(page["files"][0]["path"], "src\\file.rs");
+    assert_eq!(page["next_after_path"], "src\\file.rs");
+    let final_page = run(&tool, json!({
+        "operation": "scan", "max_files": 1, "after_path": page["next_after_path"]
+    })).await;
+    assert_eq!(final_page["files"][0]["path"], "t.rs");
+    assert_eq!(final_page["complete"], true);
+}
