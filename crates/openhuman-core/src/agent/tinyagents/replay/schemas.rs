@@ -38,7 +38,7 @@ use tinyagents_harness::observability::AgentObservation;
 use crate::core::all::{ControllerFuture, RegisteredController};
 use crate::core::{ControllerSchema, FieldSchema, TypeSchema};
 
-use super::ops::{list_active_runs, read_run_events_page, read_run_status};
+use super::ops::{list_active_runs, read_run_events_page, read_run_local_checks, read_run_status};
 use tinyagents_harness::observability::replay::{DEFAULT_EVENTS_LIMIT, MAX_EVENTS_LIMIT};
 
 const NAMESPACE: &str = "agent";
@@ -58,6 +58,11 @@ struct RunEventsParams {
 
 #[derive(Debug, Deserialize)]
 struct RunStatusParams {
+    run_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RunLocalChecksParams {
     run_id: String,
 }
 
@@ -103,6 +108,10 @@ pub(crate) fn all_agent_replay_registered_controllers() -> Vec<RegisteredControl
         RegisteredController {
             schema: replay_schema("runs_active"),
             handler: handle_runs_active,
+        },
+        RegisteredController {
+            schema: replay_schema("run_local_checks"),
+            handler: handle_run_local_checks,
         },
     ]
 }
@@ -196,6 +205,23 @@ fn replay_schema(function: &str) -> ControllerSchema {
                 name: "runs",
                 ty: TypeSchema::Array(Box::new(TypeSchema::Json)),
                 comment: "Active HarnessRunStatus snapshots matching the filter.",
+                required: true,
+            }],
+        },
+        "run_local_checks" => ControllerSchema {
+            namespace: NAMESPACE,
+            function: "run_local_checks",
+            description: "Read-only, bounded local test/build/lint process evidence derived from                           TinyAgents run journal events. A passing command is not complete task                           verification, source coverage or final-commit CI. No command text is returned.",
+            inputs: vec![FieldSchema {
+                name: "run_id",
+                ty: TypeSchema::String,
+                comment: "Durable run identifier in the configured workspace.",
+                required: true,
+            }],
+            outputs: vec![FieldSchema {
+                name: "local_checks",
+                ty: TypeSchema::Json,
+                comment: "Local-check counts, last possible source edit offset, partial flag and freshness evidence; task_verified always false.",
                 required: true,
             }],
         },
@@ -304,6 +330,21 @@ fn handle_runs_active(params: Map<String, Value>) -> ControllerFuture {
 
         serde_json::to_value(RunsActiveResponse { runs })
             .map_err(|e| format!("serialize response failed: {e}"))
+    })
+}
+
+/// Return a narrowly scoped verification fact summary without copying
+/// source, prompts, command arguments or tool output into the response.
+fn handle_run_local_checks(params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        let payload: RunLocalChecksParams = serde_json::from_value(Value::Object(params))
+            .map_err(|err| format!("invalid params: {err}"))?;
+        let workspace = configured_workspace().await?;
+        let receipt = read_run_local_checks(&workspace, &payload.run_id)
+            .await
+            .map_err(|err| format!("read local checks failed: {err:#}"))?;
+        serde_json::to_value(receipt)
+            .map_err(|err| format!("serialize local checks failed: {err}"))
     })
 }
 
