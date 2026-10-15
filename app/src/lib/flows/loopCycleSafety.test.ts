@@ -146,6 +146,29 @@ describe('validateLoopCycleSafety', () => {
     }).map(issue => issue.code)).toEqual(['cycle_without_bound']);
   });
 
+
+  it('examines incident edges rather than rescanning all edges for every cycle', () => {
+    const components = 1200;
+    const nodes = Array.from({ length: components }, (_, i) => [
+      node('loop-' + i, 'loop'), node('task-' + i),
+    ]).flat();
+    let targetReads = 0;
+    const edges = Array.from({ length: components }, (_, i) => [
+      edge('loop-' + i, 'task-' + i, 'body'),
+      edge('task-' + i, 'loop-' + i),
+    ]).flat().map(record => new Proxy(record, {
+      get(target, prop, receiver) {
+        if (prop === 'to_node') targetReads++;
+        return Reflect.get(target, prop, receiver);
+      },
+    }));
+
+    expect(validateLoopCycleSafety({ nodes, edges })).toEqual([]);
+    // A full graph scan inside each SCC is quadratic, even with only
+    // two edges per component. The validator must stay linear in edge reads.
+    expect(targetReads).toBeLessThan(edges.length * 15);
+  });
+
   it('validates a 14k-node imported DAG without recursion overflow', () => {
     const nodes = Array.from({ length: 14000 }, (_, index) => node('n' + index));
     const edges = Array.from({ length: 13999 }, (_, index) =>
