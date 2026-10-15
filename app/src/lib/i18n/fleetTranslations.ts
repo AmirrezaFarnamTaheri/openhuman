@@ -328,11 +328,90 @@ const messages = {
   ],
 } satisfies Record<Locale, readonly string[]>;
 
+// New Model Fleet controls and read-only suitability widget.
+// Locale overrides are expanded below; the English baseline covers missing
+// translations without rendering raw keys in the product.
+const maturationEnglish = {
+  "feasibility.contextTooSmall": "Context smaller than input + output tokens",
+  "feasibility.visionUnavailable": "Vision unsupported in saved metadata",
+  "feasibility.overBudget": "Estimated cost exceeds budget",
+  "feasibility.unknownContext": "Context size unknown",
+  "feasibility.unknownVision": "Vision capability unknown",
+  "feasibility.unknownPrice": "Price missing, zero or invalid",
+  "feasibility.aria": "Model suitability preview",
+  "feasibility.title": "Model suitability and cost preview",
+  "feasibility.advisory": "Based on saved metadata, not verified live prices, quotas, keys or availability. This is advisory only and does not change any workload route.",
+  "feasibility.input": "Estimated input tokens",
+  "feasibility.cached": "Cached input tokens (within input)",
+  "feasibility.output": "Estimated output tokens",
+  "feasibility.budget": "Cost limit (USD, optional)",
+  "feasibility.budgetAria": "Estimated cost limit in USD",
+  "feasibility.noLimit": "No limit",
+  "feasibility.requireVision": "Require vision",
+  "feasibility.invalidCached": "Cached input must be within total input tokens.",
+  "feasibility.invalidCounts": "Enter non-negative whole token counts (cached input is a subset) and an optional non-negative cost limit.",
+  "feasibility.fitCount": "Saved-metadata fit",
+  "feasibility.unknownCount": "unknown",
+  "feasibility.excludedCount": "excluded by supplied constraints",
+  "feasibility.search": "Search suitability results",
+  "feasibility.filter": "Filter suitability status",
+  "feasibility.all": "All statuses",
+  "feasibility.fits": "Metadata fit",
+  "feasibility.unknown": "Unknown eligibility",
+  "feasibility.excluded": "Excluded",
+  "feasibility.fitDescription": "Matches saved metadata; availability unverified",
+  "feasibility.excludedDescription": "Excluded by constraints",
+  "feasibility.costUnknown": "Cost unknown",
+  "feasibility.empty": "No saved models to evaluate.",
+  "feasibility.noMatch": "No models match these filters.",
+  "feasibility.showing": "Showing",
+  "feasibility.of": "of",
+  "feasibility.matching": "matching model entries",
+  "feasibility.more": "Show more models",
+  "fleet.reauthRequired": "Re-enter the API key in the provider editor before changing its endpoint or authentication.",
+  "fleet.groupSyncHintSafe": "Saved provider endpoints are preserved by default. Review and explicitly approve changes; credentialed providers must be updated through the editor with a new key.",
+  "fleet.approveProviderSync": "Approve replacing official endpoints and authentication styles for configured providers",
+  "fleet.previewProviderChanges": "Preview provider changes",
+  "fleet.providerNeedsKey": "Requires key re-entry in editor",
+  "fleet.presetHintSafe": "Import missing model presets without changing saved model metadata. Updating existing vision, context and prices is optional and may replace manual edits. Routes and credentials are never changed.",
+  "fleet.approveMetadataRefresh": "Approve replacing saved model metadata",
+  "fleet.previewModelChanges": "Preview model changes",
+  "fleet.refreshLabel": "refresh saved metadata",
+  "fleet.addLabel": "add missing preset"
+} as const;
+
+const maturationLocales: Record<Locale, Partial<Record<keyof typeof maturationEnglish, string>>> = {
+  "en": {},
+  "es": {},
+  "fr": {},
+  "de": {},
+  "pt": {},
+  "it": {},
+  "tr": {},
+  "ru": {},
+  "pl": {},
+  "id": {},
+  "ja": {},
+  "ko": {},
+  "zh-CN": {},
+  "ar": {},
+  "hi": {},
+  "bn": {},
+};
+
 export const fleetTranslations = Object.fromEntries(
   Object.entries(messages).map(([locale, values]) => [
     locale,
-    Object.fromEntries(keys.map((key, index) => ['settings.ai.' + key, values[index]])),
+    {
+      ...Object.fromEntries(keys.map((key, index) => ['settings.ai.' + key, values[index]])),
+      ...Object.fromEntries(Object.entries(maturationEnglish).map(([key, value]) =>
+        ['settings.ai.' + key, maturationLocales[locale as Locale][key as keyof typeof maturationEnglish] ?? value]
+      )),
+    },
   ])
 ) as Record<Locale, Record<string, string>>;
 
-export const fleetTranslationKeys = keys.map(key => 'settings.ai.' + key);
+export const fleetTranslationKeys = [
+  ...keys.map(key => 'settings.ai.' + key),
+  ...Object.keys(maturationEnglish).map(key => 'settings.ai.' + key),
+];
