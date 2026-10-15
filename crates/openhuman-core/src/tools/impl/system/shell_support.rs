@@ -147,6 +147,7 @@ fn verification_kind(command: &str) -> Option<&'static str> {
     }
 }
 
+#[cfg(test)]
 pub(super) fn is_verification_command(command: &str) -> bool {
     verification_kind(command).is_some()
 }
