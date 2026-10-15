@@ -297,6 +297,25 @@ describe('provider-submit transport boundary', () => {
 
 
 describe('provider save concurrency and rollback isolation', () => {
+
+  it('redacts an echoed candidate credential from preview errors', async () => {
+    const secret = 'candidate-sensitive-secret';
+    api.listProviderModels.mockRejectedValue(new Error('upstream rejected ' + secret));
+    const persist = vi.fn();
+    const { result } = renderHook(() => useCloudProviderEditorSubmit({
+      editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
+      persist, t: key => key, onDone: vi.fn(),
+    }));
+    await act(async () => {
+      await expect(result.current({
+        id: '', slug: 'provider-example', label: 'Provider',
+        endpoint: 'https://api.example/v1', authStyle: 'bearer', maskedKey: '',
+      }, secret)).rejects.toThrow(/\[redacted\]/);
+    });
+    expect(persist).not.toHaveBeenCalled();
+    expect(api.setCloudProviderKey).not.toHaveBeenCalled();
+  });
+
   it('refuses overlapping submissions and releases the guard after the first saves', async () => {
     let release: (() => void) | undefined;
     const pending = new Promise<void>(resolve => { release = resolve; });
