@@ -21,7 +21,7 @@ import {
   syncConfiguredProviderPresets,
   syncModelPresets,
   updateSelectedGroupSettings,
-  validModelFleetEndpoint,
+  validModelFleetImageEndpoint,
 } from './modelFleetOps';
 import { validProdexDestination } from './prodexEndpointPolicy';
 import { ProviderAccountFleet } from './ProviderAccountFleet';
@@ -169,8 +169,8 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     void run(
       async () => {
         if (!selectedProviders.size) throw new Error('Select one or more providers.');
-        if (!clear && !validModelFleetEndpoint(groupImageUrl)) {
-          throw new Error('The image endpoint must be a valid http(s) base URL.');
+        if (!clear && !validModelFleetImageEndpoint(groupImageUrl)) {
+          throw new Error('Image endpoints require HTTPS or loopback HTTP.');
         }
         if (
           !clear &&
@@ -206,8 +206,8 @@ export function ModelFleetPanel({ settings, persist }: Props) {
         if (!id || id.length > 200 || /\p{Cc}/u.test(id)) {
           throw new Error('Enter a valid model id (up to 200 characters).');
         }
-        if (!remove && (!modelImageUrl.trim() || !validModelFleetEndpoint(modelImageUrl))) {
-          throw new Error('Enter a valid image API base URL for the model.');
+        if (!remove && (!modelImageUrl.trim() || !validModelFleetImageEndpoint(modelImageUrl))) {
+          throw new Error('Enter an image endpoint using HTTPS or loopback HTTP.');
         }
         if (
           !remove &&
