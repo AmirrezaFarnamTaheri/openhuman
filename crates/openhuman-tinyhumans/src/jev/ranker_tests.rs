@@ -76,3 +76,33 @@ fn no_embedding_provider_disables_the_search() {
         "{err:?}"
     );
 }
+
+
+#[test]
+fn transient_jev_failures_trip_a_bounded_provider_circuit() {
+    let start = std::time::Instant::now();
+    let mut circuit = JevCircuit::default();
+    assert!(circuit.can_attempt(17, start));
+    circuit.record_failure(17, start);
+    circuit.record_failure(17, start);
+    assert!(circuit.can_attempt(17, start), "first two failures may retry");
+    circuit.record_failure(17, start);
+    assert!(!circuit.can_attempt(17, start), "third failure should short circuit");
+    assert!(!circuit.can_attempt(17, start + Duration::from_secs(19)));
+    assert!(circuit.can_attempt(17, start + Duration::from_secs(21)));
+}
+
+#[test]
+fn jev_circuit_resets_after_success_and_credential_route_rotation() {
+    let start = std::time::Instant::now();
+    let mut circuit = JevCircuit::default();
+    for _ in 0..3 { circuit.record_failure(10, start); }
+    assert!(!circuit.can_attempt(10, start));
+    assert!(circuit.can_attempt(11, start), "new route/credential may recover");
+    circuit.record_failure(11, start);
+    circuit.record_success(11);
+    assert!(circuit.can_attempt(11, start));
+    circuit.record_failure(11, start);
+    circuit.record_failure(11, start);
+    assert!(circuit.can_attempt(11, start), "success clears prior streak");
+}
