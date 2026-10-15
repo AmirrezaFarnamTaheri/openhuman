@@ -67,13 +67,21 @@ are now indexed once and inspected only for nodes belonging to that SCC.
 The existing iterative Kosaraju and residual-cycle checks remain intact,
 and side-entry / done-port validation retains the same behavior.
 
-New regressions assert TinyFlows' global run-budget parity and count property
-accesses through Proxy-backed edge records, detecting a return to quadratic
-edge scanning without timing-sensitive performance thresholds.
+The pinned engine also checks `max_iterations` on **every** loop node,
+even one not wired into a cycle. The frontend validator now performs that
+check once per node before SCC processing, avoiding the prior false
+negative on standalone loops and duplicate errors for cyclic loops.
 
-An independently reconstructed TypeScript validator harness passed 8 of 8
-cases, including a 14,000-node acyclic graph and 1,200 separate loop SCCs
-(9,600 target-field reads for 2,400 edges), and strict TypeScript checking
-of that reconstruction succeeded. **This does not claim that the actual
+New regressions assert TinyFlows' global run-budget parity, standalone
+loop configuration validation, and count property accesses through
+Proxy-backed edge records, detecting a return to quadratic edge
+scanning without timing-sensitive performance thresholds.
+
+An independently reconstructed TypeScript validator harness passed **10
+of 10** cases, including a 14,000-node acyclic graph and 1,200 separate
+loop SCCs (9,600 target-field reads for 2,400 edges). Its standalone
+iteration-limit regression first failed against the earlier frontend logic,
+then passed after the correction; strict TypeScript checking of the
+reconstruction succeeded. **This does not claim that the actual
 repository tests or build ran**: latest-head CI and a full checked-out
 repository are still required.
