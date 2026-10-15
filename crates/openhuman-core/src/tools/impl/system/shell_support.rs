@@ -114,7 +114,8 @@ pub(super) fn is_verification_command(command: &str) -> bool {
     if args.iter().any(|arg| {
         matches!(
             *arg,
-            "--help" | "--version" | "--list" | "--no-run" |
+            "-h" | "-V" | "--help" | "--version" | "--list" |
+            "-list" | "--collect-only" | "--no-run" | "--dry-run" |
             "--if-present" | "--passWithNoTests"
         )
     }) {
