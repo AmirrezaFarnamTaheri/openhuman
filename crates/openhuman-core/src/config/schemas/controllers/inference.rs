@@ -154,8 +154,9 @@ pub(super) fn handle_update_model_settings(params: Map<String, Value>) -> Contro
                                 rotation_strategy,
                                 tool_call_codec: e.tool_call_codec,
                                 model_transports:
-                                    crate::config::schema::cloud_providers::normalize_model_transports(
+                                    crate::config::schema::cloud_providers::normalize_model_transports_for_auth(
                                         e.model_transports,
+                                        auth_style,
                                     )?,
                                 default_model: e.default_model,
                             };
