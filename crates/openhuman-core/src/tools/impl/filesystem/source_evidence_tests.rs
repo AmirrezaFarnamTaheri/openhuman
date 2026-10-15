@@ -863,3 +863,18 @@ async fn misspelled_tool_fields_do_not_turn_narrow_requests_into_root_scans() {
     let schema = tool.parameters_schema();
     assert_eq!(schema["additionalProperties"], false);
 }
+
+
+#[tokio::test]
+async fn rejected_unknown_argument_keys_are_not_echoed_into_model_context() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let sensitive_key = format!("SECRET_ACCESS_TOKEN_{}", "x".repeat(5000));
+    let mut args = json!({"operation":"scan"});
+    args.as_object_mut().unwrap().insert(sensitive_key.clone(), Value::Null);
+    let message = tool.execute(args).await.unwrap_err().to_string();
+    assert!(!message.contains("SECRET_ACCESS_TOKEN"));
+    assert!(!message.contains(&sensitive_key));
+    assert!(message.len() < 256, "error must stay bounded and non-echoing");
+}
