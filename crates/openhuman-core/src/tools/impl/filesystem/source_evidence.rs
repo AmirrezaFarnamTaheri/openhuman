@@ -48,6 +48,9 @@ impl SourceEvidenceTool {
         if !resolved.starts_with(&root) {
             anyhow::bail!("source evidence path is outside the active workspace");
         }
+        if excluded_ancestor(&root, &resolved) || ignored(&resolved, false) {
+            anyhow::bail!("source evidence path is excluded");
+        }
         let result = match op {
             "scan" => scan(&scoped, &root, &resolved, &args, false).await?,
             "graph" => scan(&scoped, &root, &resolved, &args, true).await?,
@@ -107,6 +110,18 @@ fn explicitly_targets_symlink(policy: &SecurityPolicy, path: &str) -> bool {
         }
     }
     false
+}
+
+/// An explicit file path cannot bypass the same deny rules that the
+/// directory walker uses. Apply these rules to all descendants, not only
+/// the basename of a selected file.
+fn excluded_ancestor(root: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(root) else { return true; };
+    relative.components().any(|part| {
+        let std::path::Component::Normal(name) = part else { return false; };
+        let Some(name) = name.to_str() else { return true; };
+        SKIP_DIRS.contains(&name) || name.starts_with(".cache")
+    })
 }
 
 fn ignored(path: &Path, directory: bool) -> bool {
@@ -230,25 +245,29 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     let mut source_bytes = 0usize;
     let mut last_scanned: Option<String> = None;
     for path in entries.into_iter().take(max_files) {
-        last_scanned = Some(relative(root, &path));
         let metadata = match tokio::fs::symlink_metadata(&path).await {
             Ok(value) => value,
             Err(_) => { truncated.get_or_insert("filesystem_changed"); continue; }
         };
+        // Preserve a resume point for each inspected/skipped file, but never
+        // advance past a file refused by the *total* byte ceiling.
+        let label = relative(root, &path);
         if metadata.len() > MAX_FILE_BYTES {
             truncated.get_or_insert("oversize_file");
+            last_scanned = Some(label);
             continue;
         }
         let Some(bytes) = read_checked(policy, &path).await? else {
             truncated.get_or_insert("unreadable_or_unsupported_file");
+            last_scanned = Some(label);
             continue;
         };
         if total.saturating_add(bytes.len()) > MAX_TOTAL_BYTES {
             truncated = Some("max_total_bytes"); break;
         }
         total += bytes.len();
+        last_scanned = Some(label.clone());
         let digest = hex_digest(&bytes);
-        let label = relative(root, &path);
         if label.len() > 180 {
             truncated.get_or_insert("path_length_limit");
             continue;
@@ -270,7 +289,14 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
         files.push(json!({"path":label,"source_hash":digest,"size_bytes":bytes.len(),"matches":matches}));
     }
     let generation = format!("{:x}",generation.finalize());
-    let next_after_path = if truncated == Some("max_files") { last_scanned } else { None };
+    let next_after_path = if matches!(truncated, Some("max_files" | "max_total_bytes")) {
+        last_scanned
+    } else {
+        None
+    };
+    // Lexical page cursors and explicit subdirectory selections only observe
+    // part of the workspace: they cannot justify unique repository edges.
+    let catalog_complete = truncated.is_none() && after.is_empty() && path == root;
     if graph_mode {
         let max_edges = args.get("max_edges").and_then(Value::as_u64).unwrap_or(64).clamp(1,64) as usize;
         let focus = args.get("focus_path").and_then(Value::as_str);
@@ -278,7 +304,7 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
             anyhow::bail!("invalid focus_path");
         }
         let mut graph = build_graph(&graph_docs, max_edges, focus);
-        if truncated.is_some() {
+        if !catalog_complete {
             // An observed unique candidate is not unique in a catalog whose
             // unscanned files could contain a second matching implementation.
             // Incomplete evidence must not justify definite edges or impact.
@@ -301,16 +327,19 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
         graph["generation"] = json!(generation);
         graph["scope_path"] = json!(relative(root, path));
         graph["scope_is_workspace"] = json!(path == root);
+        graph["after_path"] = json!(after);
+        graph["catalog_complete"] = json!(catalog_complete);
         graph["next_after_path"] = json!(next_after_path);
-        graph["scan_complete"] = json!(truncated.is_none());
+        graph["scan_complete"] = json!(catalog_complete);
         graph["truncated_reason"] = json!(truncated);
         graph["observed_bytes"] = json!(source_bytes);
-        if truncated.is_some() { graph["edges_complete"] = json!(false); }
+        if !catalog_complete { graph["edges_complete"] = json!(false); }
         return Ok(graph);
     }
     let mut response = json!({
         "operation":"scan","generation":generation,
-        "complete":truncated.is_none(),"truncated_reason":truncated,
+        "complete":truncated.is_none(),"catalog_complete":catalog_complete,
+        "after_path":after,"truncated_reason":truncated,
         "next_after_path":next_after_path,
         "observed_bytes":source_bytes, "files":files,
         "snapshot_atomic":false
