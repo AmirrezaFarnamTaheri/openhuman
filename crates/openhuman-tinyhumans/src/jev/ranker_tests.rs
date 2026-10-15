@@ -106,3 +106,21 @@ fn jev_circuit_resets_after_success_and_credential_route_rotation() {
     circuit.record_failure(11, start);
     assert!(circuit.can_attempt(11, start), "success clears prior streak");
 }
+
+
+#[test]
+fn stale_response_from_previous_route_cannot_reopen_new_route_circuit() {
+    let now = std::time::Instant::now();
+    let mut circuit = JevCircuit::default();
+    assert!(circuit.can_attempt(12, now));
+    assert!(circuit.can_attempt(13, now)); // credentials changed in flight
+    for _ in 0..5 { circuit.record_failure(12, now); }
+    assert!(circuit.can_attempt(13, now));
+    circuit.record_failure(13, now);
+    circuit.record_failure(13, now);
+    assert!(circuit.can_attempt(13, now));
+    circuit.record_failure(13, now);
+    assert!(!circuit.can_attempt(13, now));
+    circuit.record_success(12); // stale success also cannot reset
+    assert!(!circuit.can_attempt(13, now));
+}
