@@ -484,3 +484,61 @@ async fn hidden_cloud_and_machine_credential_directories_are_never_indexed() {
             "must reject explicit machine-credential directory: {candidate}");
     }
 }
+
+
+#[tokio::test]
+async fn locate_ranks_hash_anchored_source_lines_without_a_remote_model() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("src")).unwrap();
+    std::fs::write(project.path().join("src/session_manager.ts"),
+        "export function assertSessionFresh(s: Session) { return s.expiresAt > Date.now(); }\n").unwrap();
+    std::fs::write(project.path().join("src/billing.ts"),
+        "export function chargeInvoice() { return 1; }\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"locate","query":"session freshness","path":"."})).await;
+    assert_eq!(result["operation"], "locate");
+    assert_eq!(result["results"][0]["path"], "src/session_manager.ts");
+    assert_eq!(result["results"][0]["evidence"][0]["line"], 1);
+    assert_eq!(result["results"][0]["source_hash"].as_str().unwrap().len(), 64);
+    assert_eq!(result["ranking_kind"], "local_lexical_heuristic");
+    assert_eq!(result["source_of_truth_verified"], false);
+    assert_eq!(result["catalog_complete"], true);
+}
+
+#[tokio::test]
+async fn locate_is_explicitly_partial_when_file_budget_or_cursor_restricts_catalog() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    for index in 0..5 {
+        std::fs::write(project.path().join(format!("{index}.rs")),
+            "fn authentication_check() {}\n").unwrap();
+    }
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({
+        "operation":"locate","query":"authentication check","max_files":2
+    })).await;
+    assert_eq!(result["catalog_complete"], false);
+    assert_eq!(result["ranking_exhaustive"], false);
+    assert_eq!(result["truncated_reason"], "max_files");
+    assert!(!result["results"].as_array().unwrap().is_empty());
+
+    let page = run(&tool, json!({
+        "operation":"locate","query":"authentication check","after_path":"1.rs"
+    })).await;
+    assert_eq!(page["catalog_complete"], false);
+    assert_eq!(page["ranking_exhaustive"], false);
+}
+
+#[tokio::test]
+async fn locate_refuses_blank_queries_and_never_indexes_hidden_credentials() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("main.rs"), "fn authentication_check() {}\n").unwrap();
+    std::fs::write(project.path().join(".env"), "authentication_check_secret = do_not_read").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    assert!(tool.execute(json!({"operation":"locate","query":"  "})).await.is_err());
+    let result = run(&tool, json!({"operation":"locate","query":"authentication check"})).await;
+    assert!(result.to_string().find(".env").is_none());
+    assert_eq!(result["results"][0]["path"], "main.rs");
+}
