@@ -30,6 +30,8 @@ struct LexicalState {
     block_depth: usize,
     js_template: bool,
     python_triple: Option<u8>,
+    rust_raw_hashes: Option<usize>,
+    rust_multiline_quote: Option<u8>,
 }
 
 /// Conservative lexical mask for candidate statement locations, not an AST.
@@ -37,11 +39,30 @@ struct LexicalState {
 fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) -> Vec<bool> {
     let bytes = line.as_bytes();
     let mut visible = vec![false; bytes.len()];
-    let mut quote: Option<u8> = None;
+    let mut quote = if matches!(syntax, SourceSyntax::Rust) {
+        state.rust_multiline_quote
+    } else {
+        None
+    };
     let mut index = 0;
     while index < bytes.len() {
         let current = bytes[index];
         let next = bytes.get(index + 1).copied();
+        // Rust raw strings can contain arbitrary module-looking declarations,
+        // braces and comment delimiters across many lines. Keep the exact
+        // number of raw-string hashes until a matching closing delimiter.
+        if let Some(hashes) = state.rust_raw_hashes {
+            if current == b'"'
+                && bytes.get(index + 1..index + 1 + hashes)
+                    .is_some_and(|tail| tail.iter().all(|byte| *byte == b'#'))
+            {
+                state.rust_raw_hashes = None;
+                index += 1 + hashes;
+            } else {
+                index += 1;
+            }
+            continue;
+        }
         if let Some(triple) = state.python_triple {
             if bytes.get(index..index + 3) == Some(&[triple, triple, triple][..]) {
                 state.python_triple = None;
@@ -83,6 +104,25 @@ fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) ->
             }
             continue;
         }
+        // Parse the opening raw-string delimiter exactly: r"...",
+        // r###"..."###, br#"..."#. Only run this in Rust, before
+        // treating '#', '/', quotes and braces as ordinary code.
+        if matches!(syntax, SourceSyntax::Rust) {
+            let prefix = if current == b'r' { Some(1) }
+                else if current == b'b' && next == Some(b'r') { Some(2) }
+                else { None };
+            if let Some(prefix_len) = prefix {
+                let mut cursor = index + prefix_len;
+                while bytes.get(cursor) == Some(&b'#') {
+                    cursor += 1;
+                }
+                if bytes.get(cursor) == Some(&b'"') {
+                    state.rust_raw_hashes = Some(cursor - index - prefix_len);
+                    index = cursor + 1;
+                    continue;
+                }
+            }
+        }
         if matches!(syntax, SourceSyntax::Python)
             && matches!(current, b'\'' | b'"')
             && bytes.get(index..index + 3) == Some(&[current, current, current][..])
@@ -110,6 +150,11 @@ fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) ->
         }
         visible[index] = true;
         index += 1;
+    }
+    if matches!(syntax, SourceSyntax::Rust) {
+        // Ordinary Rust string literals can also span source lines. Do not
+        // reset an unclosed double quote at every newline.
+        state.rust_multiline_quote = quote.filter(|delimiter| *delimiter == b'"');
     }
     visible
 }
@@ -275,7 +320,11 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
             }
             let imports: Vec<(&str, String)> = if rust {
                 let trimmed = line.trim_start();
-                if trimmed.starts_with("#[path") {
+                if trimmed.starts_with("#[path")
+                    && line.find("#[path").is_some_and(|byte| {
+                        code_mask.get(byte).copied().unwrap_or(false)
+                    })
+                {
                     pending_custom_path = true;
                     continue;
                 }
