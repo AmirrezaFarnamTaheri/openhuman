@@ -148,7 +148,14 @@ fn hex_digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 fn relative(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/")
+    let label = path.strip_prefix(root).unwrap_or(path).to_string_lossy().into_owned();
+    // A backslash is a literal, valid filename character on Unix. Replacing
+    // it with '/' would alias two distinct files into one provenance path.
+    // Only normalize on Windows, where backslash really is a separator.
+    #[cfg(windows)]
+    { label.replace('\\', "/") }
+    #[cfg(not(windows))]
+    { label }
 }
 fn bounded_line(s: &str) -> String {
     s.chars().take(MAX_LINE_CHARS).collect()
@@ -239,6 +246,15 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
     while let Some((next, depth)) = paths.pop() {
         visited += 1;
         if visited > max_entries { truncated = Some("max_entries"); break; }
+        // JSON paths cannot round-trip arbitrary byte sequences through a
+        // lossy UTF-8 formatter. Do not silently omit such files and then
+        // report a complete source catalog.
+        if next.strip_prefix(root).unwrap_or(&next).components()
+            .any(|part| part.as_os_str().to_str().is_none())
+        {
+            truncated.get_or_insert("non_utf8_path");
+            continue;
+        }
         let metadata = match tokio::fs::symlink_metadata(&next).await {
             Ok(meta) => meta,
             Err(_) => { truncated = Some("filesystem_changed"); continue; }
