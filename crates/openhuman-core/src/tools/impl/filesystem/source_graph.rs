@@ -105,9 +105,16 @@ fn candidate_paths(source: &str, spec: &str, kind: &str) -> Vec<String> {
     ) {
         vec![stem]
     } else {
-        ["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts"]
-            .iter()
-            .map(|ext| format!("{stem}.{ext}"))
+        // A literal resource path may name an observed JSON, CSS or other
+        // text asset without a script extension. Include the exact name,
+        // then script suffix candidates. Unknown dotted stems such as
+        // user.service remain conservative and can be ambiguous.
+        std::iter::once(stem.clone())
+            .chain(
+                ["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts"]
+                    .iter()
+                    .map(|ext| format!("{stem}.{ext}")),
+            )
             .chain(["ts", "tsx", "js", "jsx"].iter().map(|ext| format!("{stem}/index.{ext}")))
             .collect()
     }
