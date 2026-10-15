@@ -372,7 +372,7 @@ describe('provider save concurrency and rollback isolation', () => {
         { ...existing, endpoint: 'https://new.example/v1' }, 'replacement-key'
       )).rejects.toThrow(/keyring locked/);
     });
-    expect(api.loadAISettings).toHaveBeenCalledTimes(1);
+    expect(api.loadAISettings).not.toHaveBeenCalled();
     expect(api.flushCloudProviders).not.toHaveBeenCalled();
     expect(persist).toHaveBeenCalledTimes(1);
   });
