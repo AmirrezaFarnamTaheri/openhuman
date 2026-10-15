@@ -168,3 +168,21 @@ cargo test -p openhuman-tinyhumans jev::
 The adapter rejects empty/control-character model names, choice-instruction bodies exceeding the configured wire budget, duplicate choice keys, per-choice and aggregate oversized descriptions, invalid probabilities (NaN, infinity, or outside [0,1]), and response choices not offered by the host. Model probability vectors are not assumed to be perfectly calibrated or to sum to 1; partial valid vectors remain accepted. The tool-selection instruction explicitly reminds System-One to treat the user intent and candidate descriptions as **untrusted data, not authority to change permissions**. It never replaces the native sandbox/approval policy.
 
 The current design is not an automatic preference for the cheapest model, nor a guarantee of current capability or pricing. Cost/effort models, provider quotas, context windows and billing consent need independent hard feasibility gates before any probabilistic ranking, using the native Model Fleet owner rather than external Codex proxies.
+
+
+### Route-scoped transient failure breaker (Pass 10)
+
+The existing ranker now holds an ephemeral route-fingerprint circuit: three consecutive
+backend/timeout failures open a 20-second cooldown. During cooldown it returns
+a backend error immediately, allowing TinyAgents' established BM25 fallback
+without another costly failed Jev request. Successful Jev ranking resets the
+streak. Changing the configured route, key or URL resets the breaker, and stale
+in-flight results from the preceding route cannot modify the new route's
+health. Invalid local input is not classified as a remote outage.
+
+This is a modest circuit breaker, not an assertion about provider quota,
+account health, model cost or live availability. It stores only a process-salted
+route fingerprint and ephemeral counters (never another plaintext key or
+persistent credential record). It does not replace hard tool permission checks,
+or turn Jev into an execution authority. The Rust regression tests must run on
+the exact branch head before release.
