@@ -92,7 +92,7 @@ describe('model-fleet preset management', () => {
       cost_per_1m_output: 100,
       context_window: 1,
     };
-    const result = syncModelPresets([initial, old]);
+    const result = syncModelPresets([initial, old], FLEET_MODEL_PRESETS, { updateExisting: true });
     expect(result.models.find(m => m.id === old.id && m.provider === old.provider)?.vision).toBe(
       preset.vision
     );
@@ -123,7 +123,7 @@ describe('model-fleet preset management', () => {
         model_image_endpoints: { vision: 'https://vision.example/v1' },
       },
     ];
-    const { providers, updated } = syncConfiguredProviderPresets(rows);
+    const { providers, updated } = syncConfiguredProviderPresets(rows, { updateExisting: true });
     expect(updated).toBe(1);
     expect(providers[0].label).toBe('My OpenRouter');
     expect(providers[0].image_endpoint).toBe(rows[0].image_endpoint);
