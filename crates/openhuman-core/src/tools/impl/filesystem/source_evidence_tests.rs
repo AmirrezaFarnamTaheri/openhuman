@@ -465,3 +465,22 @@ async fn sensitive_directory_exclusion_is_case_insensitive_and_blocks_nested_fil
             "case-insensitive deny boundary must reject {target}");
     }
 }
+
+#[tokio::test]
+async fn hidden_cloud_and_machine_credential_directories_are_never_indexed() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    for directory in [".ssh", ".aws", ".kube", ".azure", ".gnupg", ".docker"] {
+        let folder = project.path().join(directory);
+        std::fs::create_dir(&folder).unwrap();
+        std::fs::write(folder.join("config"), "DO_NOT_SURFACE_CREDENTIAL").unwrap();
+    }
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"scan","query":"DO_NOT_SURFACE"})).await;
+    assert_eq!(result["files"].as_array().unwrap().len(), 0);
+    for directory in [".ssh", ".aws", ".kube", ".azure", ".gnupg", ".docker"] {
+        let candidate = format!("{directory}/config");
+        assert!(tool.execute(json!({"operation":"scan","path":candidate})).await.is_err(),
+            "must reject explicit machine-credential directory: {candidate}");
+    }
+}
