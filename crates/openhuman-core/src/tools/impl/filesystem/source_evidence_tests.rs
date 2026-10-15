@@ -612,3 +612,31 @@ async fn verification_can_reopen_the_exact_match_window_from_a_locate_result() {
     assert_eq!(result["lines"][0]["text"], evidence["text"]);
     assert!(result["lines"][0]["text"].as_str().unwrap().contains("authSessionFresh"));
 }
+
+
+#[tokio::test]
+async fn verification_column_cursor_has_strict_bounds_and_defaults_to_first_column() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("chars.rs"), "🙂abc\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let catalog = run(&tool, json!({"operation":"scan"})).await;
+    let hash = catalog["files"][0]["source_hash"].as_str().unwrap();
+    let default = run(&tool, json!({
+        "operation":"verify", "path":"chars.rs", "expected_sha256":hash,
+        "start_line":1, "end_line":1
+    })).await;
+    assert_eq!(default["lines"][0]["text"], "🙂abc");
+    assert_eq!(default["lines"][0]["column_start"], 1);
+    let middle = run(&tool, json!({
+        "operation":"verify", "path":"chars.rs", "expected_sha256":hash,
+        "start_column":2, "start_line":1, "end_line":1
+    })).await;
+    assert_eq!(middle["lines"][0]["text"], "abc");
+    for column in [0_u64, 256 * 1024 + 2] {
+        assert!(tool.execute(json!({
+            "operation":"verify", "path":"chars.rs", "expected_sha256":hash,
+            "start_column":column
+        })).await.is_err(), "invalid one-based cursor {column}");
+    }
+}
