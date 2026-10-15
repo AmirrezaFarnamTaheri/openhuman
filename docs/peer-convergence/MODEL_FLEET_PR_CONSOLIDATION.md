@@ -75,16 +75,24 @@ gaps without introducing a parallel inference configuration path:
 - New suitability and consent controls go through the application's i18n
   resolver. Major controls have locale-specific translations; untranslated
   explanatory messages fall back to English rather than raw keys.
-- Provider save is single-flight per editor instance. If settings persisted
-  but credential storage fails, the compensation path first reads the live
-  provider list and restores its original list **only if** it still matches
-  the attempted write. It refuses to stomp a divergent concurrent edit and
-  redacts candidate keys echoed by a failing gateway.
+- Provider save is single-flight per editor instance. A **credentialed
+  provider whose destination changes is detached from live routing before
+  the replacement key is written**, then reattached after key storage succeeds.
+  This introduces a temporary availability gap but avoids routing an old key
+  to the new destination (or vice versa). If a keyring write fails or its
+  outcome is ambiguous, do **not** restore the old endpoint; leave routing
+  detached and require explicit reload/recovery.
+- For other failed configuration writes, compensation checks the observed live
+  provider list before restoring the prior list. It refuses to overwrite
+  divergent concurrent edits and redacts keys echoed by gateway errors.
   
 ### Remaining durability and acceptance constraints
 
 This is **not a cross-store transaction**: the configuration RPC and encrypted
-credential store remain separate. The live-snapshot compensation reduces common
+credential store remain separate. If the process exits during detachment or
+key replacement, the provider may stay unavailable until the user retries.
+A failed keyring RPC can also leave a replacement key stored despite an error;
+the editor intentionally refuses unsafe rollback in that case. The live-snapshot compensation reduces common
 client races but does not provide an atomic compare-and-swap against changes
 between the snapshot and the rollback RPC, nor protection against process
 termination. A native transactional/revisioned persistence design is required
