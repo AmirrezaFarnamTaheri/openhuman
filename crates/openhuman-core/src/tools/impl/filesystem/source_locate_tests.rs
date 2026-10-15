@@ -136,7 +136,7 @@ fn long_source_line_excerpt_includes_the_actual_matching_symbol() {
     assert_eq!(excerpt["line"], 1);
     assert!(excerpt["text"].as_str().unwrap().contains("criticalFunction"),
         "a line hit should show its matching token, not an unrelated prefix");
-    assert!(excerpt["excerpt_start_column"].as_u64().unwrap() > 1);
+    assert!(excerpt["column_start"].as_u64().unwrap() > 1);
     assert_eq!(excerpt["excerpt_truncated"], true);
 }
 
@@ -157,6 +157,6 @@ fn first_column_excerpt_keeps_original_text_and_provenance() {
     let result = rank_sources(&docs, "load account", 5);
     let evidence = &result["results"][0]["evidence"][0];
     assert_eq!(evidence["text"], "fn loadAccount() {}");
-    assert_eq!(evidence["excerpt_start_column"], 1);
+    assert_eq!(evidence["column_start"], 1);
     assert_eq!(evidence["excerpt_truncated"], false);
 }
