@@ -67,7 +67,9 @@ describe('useCloudProviderEditorSubmit', () => {
       maskedKey: '••••stored',
     };
     const saved = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
-    const persist = vi.fn().mockImplementation(async () => { calls.push('persist'); });
+    const persist = vi.fn().mockImplementation(async (nextSettings: typeof saved) => {
+      calls.push(nextSettings.cloudProviders.length === 0 ? 'detach' : 'attach');
+    });
     const { result } = renderHook(() => useCloudProviderEditorSubmit({
       editing: existing, draft: saved, saved, persist,
       t: key => key, onDone: vi.fn(),
@@ -75,13 +77,18 @@ describe('useCloudProviderEditorSubmit', () => {
     await act(async () => {
       await result.current({ ...existing, endpoint: 'https://new.example/v1' }, 'replacement-key');
     });
-    expect(calls).toEqual(['preview', 'persist', 'store']);
+    expect(calls).toEqual(['preview', 'detach', 'store', 'attach']);
     expect(api.flushCloudProviders).not.toHaveBeenCalled();
     expect(api.listProviderModels).toHaveBeenCalledWith(
       'existing', 'replacement-key',
       expect.objectContaining({ slug: 'existing', endpoint: 'https://new.example/v1' })
     );
     expect(api.setCloudProviderKey).toHaveBeenCalledWith('existing', 'replacement-key');
+    expect(persist).toHaveBeenCalledTimes(2);
+    expect(persist.mock.calls[0][0].cloudProviders).toEqual([]);
+    expect(persist.mock.calls[1][0].cloudProviders).toEqual([
+      expect.objectContaining({ endpoint: 'https://new.example/v1' }),
+    ]);
   });
 
   it('keeps both stores untouched if preview verification rejects a new credential', async () => {
@@ -187,13 +194,9 @@ describe('useCloudProviderEditorSubmit', () => {
       maskedKey: '••••stored',
     };
     const saved = { ...EMPTY_SETTINGS, cloudProviders: [previous] };
-    api.loadAISettings.mockResolvedValue({
-      ...saved,
-      cloudProviders: [{
-        id: previous.id, slug: previous.slug, label: previous.label,
-        endpoint: 'https://new.example/v1', auth_style: 'bearer',
-      }],
-    });
+    // During key replacement the old route has been detached, so the old
+    // credential cannot reach the replacement endpoint.
+    api.loadAISettings.mockResolvedValue({ ...saved, cloudProviders: [] });
     const persist = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useCloudProviderEditorSubmit({
       editing: previous, draft: saved, saved, persist,
