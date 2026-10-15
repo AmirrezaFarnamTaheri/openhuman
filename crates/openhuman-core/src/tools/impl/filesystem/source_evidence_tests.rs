@@ -671,3 +671,17 @@ async fn scanned_long_line_excerpt_contains_the_search_hit() {
     assert!(hit["column_start"].as_u64().unwrap() > 1);
     assert_eq!(hit["excerpt_truncated"], true);
 }
+
+
+#[tokio::test]
+async fn scanned_unicode_line_preserves_utf8_boundaries_in_cropped_excerpt() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("unicode.rs"), format!("{}needle🧠\n", "🙂".repeat(200))).unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let result = run(&tool, json!({"operation":"scan","query":"needle🧠"})).await;
+    let hit = &result["files"][0]["matches"][0];
+    assert!(hit["text"].as_str().unwrap().contains("needle🧠"));
+    assert!(hit["text"].as_str().unwrap().chars().count() <= 160);
+    assert!(hit["column_start"].as_u64().unwrap() > 1);
+}
