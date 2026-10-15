@@ -193,21 +193,25 @@ describe('validateLoopCycleSafety', () => {
     expect(fullEdgeIterations).toBeLessThanOrEqual(3);
   });
 
-  it('preserves original edge order when emitting multiple loop-side and done-port issues', () => {
+  it('preserves original edge order even when diagnostic targets sort differently', () => {
     const issues = validateLoopCycleSafety({
       nodes: [
-        node('head', 'loop'), node('work'),
+        node('head', 'loop'), node('a'), node('b'),
         node('outside1'), node('outside2'),
       ],
       edges: [
-        edge('outside1', 'work'),
-        edge('head', 'work', 'done'),
-        edge('outside2', 'work'),
-        edge('work', 'head'),
+        edge('outside1', 'b'),
+        edge('head', 'a', 'done'),
+        edge('outside2', 'a'),
+        edge('a', 'b'),
+        edge('b', 'head'),
       ],
     });
     expect(issues.map(issue => issue.code)).toEqual([
       'loop_side_entry', 'loop_done_reenters', 'loop_side_entry',
+    ]);
+    expect(issues.map(issue => issue.nodeIds[0])).toEqual([
+      'outside1', 'head', 'outside2',
     ]);
   });
 
