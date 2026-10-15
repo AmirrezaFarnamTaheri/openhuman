@@ -149,6 +149,11 @@ export function applyProviderBulkPatch<T extends { slug: string }>(
   selected: ReadonlySet<string>,
   patch: Partial<CloudProviderCreds>
 ): T[] {
+  // Model-specific and group-wide image requests reuse real bearer/API keys.
+  // Never allow a bulk caller to install an off-loopback plaintext endpoint.
+  if (patch.image_endpoint != null && !validModelFleetImageEndpoint(patch.image_endpoint)) {
+    throw new Error('Image endpoints require HTTPS or loopback HTTP.');
+  }
   const mutable: Partial<CloudProviderCreds> = {
     ...(patch.image_endpoint !== undefined ? { image_endpoint: patch.image_endpoint } : {}),
     ...(patch.rotation_strategy !== undefined
@@ -214,6 +219,11 @@ export function updateSelectedGroupSettings<
     rotationStrategy?: 'round_robin' | 'least_busy' | 'priority_weighted';
   }
 ): T[] {
+  // Enforce the destination boundary for ALL callers, including preset or
+  // future bulk-edit surfaces that bypass the current panel's form check.
+  if (patch.imageEndpoint !== undefined && !validModelFleetImageEndpoint(patch.imageEndpoint)) {
+    throw new Error('Image endpoints require HTTPS or loopback HTTP.');
+  }
   // The settings model uses the full enum. A caller may have narrower inferred
   // literals, but updating rotation always retains the same runtime structure.
   return groups.map(group =>
