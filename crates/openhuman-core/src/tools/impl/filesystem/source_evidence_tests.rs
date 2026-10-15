@@ -389,3 +389,59 @@ async fn scoped_graph_reports_projection_scope_without_claiming_repository_cover
     assert_eq!(result["impact_exhaustive"], false);
     assert_eq!(result["nodes"].as_array().unwrap().len(), 1);
 }
+
+
+#[tokio::test]
+async fn explicit_sensitive_ancestor_paths_are_excluded_even_when_file_basename_is_safe() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join(".git")).unwrap();
+    std::fs::write(project.path().join(".git/config"), "fake-token = never-return").unwrap();
+    std::fs::create_dir(project.path().join("node_modules")).unwrap();
+    std::fs::write(project.path().join("node_modules/notes.rs"), "fake-token = never-return").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    for requested in [".git/config", "node_modules/notes.rs"] {
+        assert!(tool.execute(json!({"operation":"scan","path":requested})).await.is_err(),
+            "must reject explicitly targeted excluded ancestor {requested}");
+        assert!(tool.execute(json!({
+            "operation":"verify", "path":requested,
+            "expected_sha256":"0".repeat(64)
+        })).await.is_err());
+    }
+}
+
+#[tokio::test]
+async fn paginated_graph_never_marks_last_page_as_complete_repository_catalog() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("a.ts"), "import './z';\n").unwrap();
+    std::fs::write(project.path().join("z.ts"), "export const z = 1;\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let graph = run(&tool, json!({
+        "operation":"graph","after_path":"a.ts","focus_path":"z.ts"
+    })).await;
+    assert_eq!(graph["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(graph["catalog_complete"], false);
+    assert_eq!(graph["impact"], json!([]));
+    assert_eq!(graph["impact_omitted_reason"], "incomplete_catalog");
+    assert_eq!(graph["scan_complete"], false);
+    assert_eq!(graph["after_path"], "a.ts");
+}
+
+#[tokio::test]
+async fn byte_budget_partial_scan_supplies_resume_cursor() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let body = "a".repeat(255 * 1024);
+    for i in 0..12 {
+        std::fs::write(project.path().join(format!("{i:02}.rs")), &body).unwrap();
+    }
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let first = run(&tool, json!({"operation":"scan"})).await;
+    assert_eq!(first["complete"], false);
+    assert_eq!(first["truncated_reason"], "max_total_bytes");
+    let cursor = first["next_after_path"].as_str().expect("byte budget cursor");
+    assert_eq!(cursor, "07.rs");
+    let second = run(&tool, json!({"operation":"scan","after_path":cursor})).await;
+    assert_eq!(second["files"][0]["path"], "08.rs");
+}
