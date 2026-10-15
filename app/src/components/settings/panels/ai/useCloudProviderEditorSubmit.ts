@@ -179,6 +179,7 @@ export function useCloudProviderEditorSubmit({
       let settingsPersisted = false;
       let settingsWriteAttempted = false;
       let replacementKeyStored = false;
+      let replacementKeyWriteAttempted = false;
       // Detach any active old-key route before replacing a key for a new
       // destination. While detached, both an old key/new endpoint and a new
       // key/old endpoint combination are impossible through live config.
@@ -216,6 +217,9 @@ export function useCloudProviderEditorSubmit({
           settingsWriteAttempted = true;
           await persist({ ...draft, cloudProviders: detachedProviders });
           settingsPersisted = true;
+          // A failed RPC does not prove the keyring write was rolled back.
+          // From this point onward the old route must remain unavailable.
+          replacementKeyWriteAttempted = true;
           await setCloudProviderKey(upserted.slug, apiKey);
           replacementKeyStored = true;
           // Never restore the former endpoint after the new key has replaced
@@ -236,7 +240,7 @@ export function useCloudProviderEditorSubmit({
         // The provider snapshot is reloaded only after an attempted write.
         let safeToResetLocalState = false;
         let conflictOrUnknown = false;
-        if (settingsWriteAttempted && !replacementKeyStored) {
+        if (settingsWriteAttempted && !replacementKeyWriteAttempted) {
           try {
             const current = await loadAISettings();
             const observed = providerListFingerprint(current.cloudProviders);
@@ -264,16 +268,16 @@ export function useCloudProviderEditorSubmit({
             console.warn('[ai-settings] provider state could not be verified; rollback skipped.');
           }
         }
-        if (replacementKeyStored) {
-          // A completed key replacement cannot be undone without access to
+        if (replacementKeyWriteAttempted) {
+          // A completed OR ambiguous key replacement cannot be undone without access to
           // the previous secret. Never restore the old provider destination:
           // doing so would forward the *new* key to the former endpoint.
           const detail = redactCandidateSecrets(
             error instanceof Error ? error.message : 'Provider save failed', apiKey
           );
           throw new Error(detail +
-            '. The replacement key is stored, but the provider may be detached. ' +
-            'Reload settings and retry the provider configuration.');
+            '. The replacement-key write outcome is uncertain; the provider was detached ' +
+            'to avoid cross-endpoint credential exposure. Reload settings and retry.');
         }
         if (settingsPersisted && safeToResetLocalState) {
           // Restore the UI snapshot only when core state is confirmed restored.
