@@ -640,3 +640,20 @@ async fn verification_column_cursor_has_strict_bounds_and_defaults_to_first_colu
         })).await.is_err(), "invalid one-based cursor {column}");
     }
 }
+
+
+#[tokio::test]
+async fn graph_does_not_treat_unused_literal_query_as_truncated_file_evidence() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let imports = "import './b';\n".repeat(5);
+    std::fs::write(project.path().join("a.ts"), imports).unwrap();
+    std::fs::write(project.path().join("b.ts"), "export const b = 1;\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let response = run(&tool, json!({"operation":"graph","query":"import"})).await;
+    assert_eq!(response["scan_complete"], true,
+        "graph operation must not invoke literal scan match truncation");
+    assert_eq!(response["catalog_complete"], true);
+    assert_eq!(response["edges"][0]["status"], "resolved");
+    assert_eq!(response["edges"][0]["to"], "b.ts");
+}
