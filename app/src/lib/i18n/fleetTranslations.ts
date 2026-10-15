@@ -377,7 +377,31 @@ const maturationEnglish = {
   "fleet.approveMetadataRefresh": "Approve replacing saved model metadata",
   "fleet.previewModelChanges": "Preview model changes",
   "fleet.refreshLabel": "refresh saved metadata",
-  "fleet.addLabel": "add missing preset"
+  "fleet.addLabel": "add missing preset",
+  "fleet.healthUnavailable": "Fleet health is unavailable.",
+  "fleet.selectProvidersError": "Select one or more providers.",
+  "fleet.imageEndpointError": "Image endpoints require HTTPS or loopback HTTP.",
+  "fleet.chooseGroupError": "Choose a provider group.",
+  "fleet.modelImageEndpointError": "Enter an image endpoint using HTTPS or loopback HTTP.",
+  "fleet.selectModelsError": "Select one or more models.",
+  "fleet.contextError": "Context window must be an integer between 0 and 100,000,000.",
+  "fleet.selectPatchError": "Choose at least one field to update.",
+  "fleet.noKeyUsage": "No inference key usage recorded in this session.",
+  "fleet.selectProvider": "Select provider",
+  "fleet.selected": "selected",
+  "fleet.groupImageAria": "Group image API base URL",
+  "fleet.rotationAria": "Multi-token selection strategy",
+  "fleet.imageGroupAria": "Image endpoint provider group",
+  "fleet.imageModelIdAria": "Image endpoint model id",
+  "fleet.modelImageAria": "Model image API base URL",
+  "fleet.searchAria": "Filter model presets",
+  "fleet.selectModel": "Select model",
+  "fleet.visionLabel": "vision",
+  "fleet.keepUnchanged": "Keep unchanged",
+  "fleet.enabled": "Enabled",
+  "fleet.disabled": "Disabled",
+  "fleet.leaveBlank": "Leave blank to keep",
+  "fleet.bulkContextAria": "Bulk context tokens"
 } as const;
 
 const maturationLocales: Record<Locale, Partial<Record<keyof typeof maturationEnglish, string>>> = {
