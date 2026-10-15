@@ -106,7 +106,7 @@ fn a_later_success_can_supersede_an_earlier_failed_check() {
     let failed = json!({"openhuman_local_check_v1":{
         "recognized": true, "passed": false, "status": "failed_or_unobserved",
         "exit_status": "unknown", "scope": "local_check_only",
-        "task_verified": false
+        "task_verified": false, "check_kind": "cargo_test"
     }});
     let mut acc = LocalCheckAccumulator::default();
     acc.record(1, "shell", LocalToolEvent::Completed { metadata: Some(&failed), error: true });
