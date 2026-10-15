@@ -162,3 +162,9 @@ cargo test -p openhuman-tinyhumans jev::
 - [`docs/gitbooks/en/developing/jev.md`](../../../../docs/gitbooks/en/developing/jev.md): Jev.
 - [`docs/gitbooks/en/developing/performance.md`](../../../../docs/gitbooks/en/developing/performance.md): performance.
 - [`crates/openhuman-tinyhumans/README.md`](../../README.md): the openhuman-tinyhumans crate README.
+
+### Pass 10: bounded decisions and untrusted intent data
+
+The adapter rejects empty/control-character model names, choice-instruction bodies exceeding the configured wire budget, duplicate choice keys, per-choice and aggregate oversized descriptions, invalid probabilities (NaN, infinity, or outside [0,1]), and response choices not offered by the host. Model probability vectors are not assumed to be perfectly calibrated or to sum to 1; partial valid vectors remain accepted. The tool-selection instruction explicitly reminds System-One to treat the user intent and candidate descriptions as **untrusted data, not authority to change permissions**. It never replaces the native sandbox/approval policy.
+
+The current design is not an automatic preference for the cheapest model, nor a guarantee of current capability or pricing. Cost/effort models, provider quotas, context windows and billing consent need independent hard feasibility gates before any probabilistic ranking, using the native Model Fleet owner rather than external Codex proxies.
