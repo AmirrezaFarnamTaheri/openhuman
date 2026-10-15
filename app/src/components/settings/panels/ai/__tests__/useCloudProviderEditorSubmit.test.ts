@@ -187,6 +187,13 @@ describe('useCloudProviderEditorSubmit', () => {
       maskedKey: '••••stored',
     };
     const saved = { ...EMPTY_SETTINGS, cloudProviders: [previous] };
+    api.loadAISettings.mockResolvedValue({
+      ...saved,
+      cloudProviders: [{
+        id: previous.id, slug: previous.slug, label: previous.label,
+        endpoint: 'https://new.example/v1', auth_style: 'bearer',
+      }],
+    });
     const persist = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useCloudProviderEditorSubmit({
       editing: previous, draft: saved, saved, persist,
@@ -205,8 +212,9 @@ describe('useCloudProviderEditorSubmit', () => {
     expect(persist).toHaveBeenLastCalledWith(saved);
   });
 
-  it('restores possible partial writes when saving the provider config fails', async () => {
+  it('does not rewrite unchanged core settings after a rejected provider config save', async () => {
     api.listProviderModels.mockResolvedValue([]);
+    api.loadAISettings.mockResolvedValue({ ...EMPTY_SETTINGS, cloudProviders: [] });
     const persist = vi.fn().mockRejectedValue(new Error('settings write failed'));
     const { result } = renderHook(() => useCloudProviderEditorSubmit({
       editing: 'new', draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS,
@@ -218,7 +226,8 @@ describe('useCloudProviderEditorSubmit', () => {
         endpoint: 'https://api.example/v1', authStyle: 'bearer', maskedKey: '',
       }, 'new-key')).rejects.toThrow('settings write failed');
     });
-    expect(api.flushCloudProviders).toHaveBeenCalledTimes(1);
+    expect(api.loadAISettings).toHaveBeenCalledTimes(1);
+    expect(api.flushCloudProviders).not.toHaveBeenCalled();
     expect(api.setCloudProviderKey).not.toHaveBeenCalled();
   });
 });
