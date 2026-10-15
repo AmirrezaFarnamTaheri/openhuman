@@ -109,3 +109,19 @@ fn location_excerpt_contains_the_actual_match_on_very_long_unicode_lines() {
     assert_eq!(excerpt["line"], 1);
     assert!(excerpt["text"].as_str().unwrap().chars().count() <= 160);
 }
+
+
+#[test]
+fn bounded_query_keeps_late_specific_symbols_instead_of_alphabetical_prefix() {
+    let query = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform zuluCritical";
+    let docs = vec![
+        src("src/generic.rs", "fn totally_unrelated() {}\n"),
+        src("src/target.rs", "fn zuluCritical() {}\n"),
+    ];
+    let found = rank_sources(&docs, query, 5);
+    assert_eq!(found["effective_query_terms"], 16);
+    assert_eq!(found["results"][0]["path"], "src/target.rs",
+        "late user constraints must not disappear under sorted-set truncation");
+    assert!(found["results"][0]["matched_terms"].as_array().unwrap()
+        .iter().any(|value| value == "zulu" || value == "critical"));
+}
