@@ -46,3 +46,34 @@ All new Rust production code/tests require `cargo test`, `cargo check`, `cargo f
 6. Operator cockpit for routing, permission, cost, source freshness and verification telemetry.
 
 Adapt conceptually from peer code; the instruction to assume peer projects are MIT does not change their real licenses or third-party notices. In particular, review Apache/dual-licensed or unlicensed dependencies before distributing adapted code.
+
+
+## Pass 11: TinyFlows authoring parity and bounded cycle validation
+
+The authoritative pinned `tinyflows` validator (`tinyhumansai/tinyflows` at
+`64476125ae506886a9febb0df3b3c2c250d2a689`) requires exactly **one**
+trigger and treats its positive `recursion_limit` or `max_node_visits`
+as a **run-level** bound on every cycle in the workflow. It does not require
+each cyclic SCC to be reachable separately from the trigger. Accordingly,
+the OpenHuman frontend retains the same global single-trigger semantics;
+trigger count remains the core validator's responsibility. An earlier
+reachability-gated frontend change was reverted after source verification,
+as it was stricter than the pinned runtime.
+
+A separate genuine performance defect was retained and fixed: the canvas
+validator previously inspected **all** graph edges for every cyclic strongly
+connected component, making many independent loops quadratic. Incoming edges
+are now indexed once and inspected only for nodes belonging to that SCC.
+The existing iterative Kosaraju and residual-cycle checks remain intact,
+and side-entry / done-port validation retains the same behavior.
+
+New regressions assert TinyFlows' global run-budget parity and count property
+accesses through Proxy-backed edge records, detecting a return to quadratic
+edge scanning without timing-sensitive performance thresholds.
+
+An independently reconstructed TypeScript validator harness passed 8 of 8
+cases, including a 14,000-node acyclic graph and 1,200 separate loop SCCs
+(9,600 target-field reads for 2,400 edges), and strict TypeScript checking
+of that reconstruction succeeded. **This does not claim that the actual
+repository tests or build ran**: latest-head CI and a full checked-out
+repository are still required.
