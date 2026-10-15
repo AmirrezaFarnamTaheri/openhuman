@@ -8,11 +8,13 @@ export interface FeasibilityModel {
   context_window?: number | null;
   vision?: boolean | null;
   cost_per_1m_input?: number | null;
+  cost_per_1m_cached_input?: number | null;
   cost_per_1m_output?: number | null;
 }
 
 export interface ModelRequirements {
   inputTokens: number;
+  cachedInputTokens?: number;
   outputTokens: number;
   requiresVision: boolean;
   maxEstimatedCostUSD: number | null;
@@ -54,7 +56,10 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
   requirements: ModelRequirements
 ): ModelFeasibilityReport<T> {
   const { inputTokens, outputTokens, requiresVision, maxEstimatedCostUSD } = requirements;
+  const cachedInputTokens = requirements.cachedInputTokens ?? 0;
   if (
+    !Number.isSafeInteger(cachedInputTokens) || cachedInputTokens < 0 ||
+    cachedInputTokens > inputTokens ||
     !Number.isSafeInteger(inputTokens) ||
     inputTokens < 0 ||
     !Number.isSafeInteger(outputTokens) ||
@@ -86,13 +91,20 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
     }
 
     const inputPrice = model.cost_per_1m_input;
+    const cachedInputPrice = model.cost_per_1m_cached_input;
     const outputPrice = model.cost_per_1m_output;
-    // A saved price is required only for a token component actually used.
-    // Zero prices with positive usage still mean unknown, not verified free.
-    const inputKnown = inputTokens === 0 || (knownNonnegative(inputPrice) && inputPrice > 0);
-    const outputKnown = outputTokens === 0 || (knownNonnegative(outputPrice) && outputPrice > 0);
-    const estimated = inputKnown && outputKnown
-      ? ((inputTokens === 0 ? 0 : inputTokens * (inputPrice as number)) +
+    const uncachedInputTokens = inputTokens - cachedInputTokens;
+    // Each consumed component needs a positive saved price; zero-price
+    // metadata with actual usage remains unknown, not verified free.
+    const uncachedKnown = uncachedInputTokens === 0 ||
+      (knownNonnegative(inputPrice) && inputPrice > 0);
+    const cachedKnown = cachedInputTokens === 0 ||
+      (knownNonnegative(cachedInputPrice) && cachedInputPrice > 0);
+    const outputKnown = outputTokens === 0 ||
+      (knownNonnegative(outputPrice) && outputPrice > 0);
+    const estimated = uncachedKnown && cachedKnown && outputKnown
+      ? ((uncachedInputTokens === 0 ? 0 : uncachedInputTokens * (inputPrice as number)) +
+         (cachedInputTokens === 0 ? 0 : cachedInputTokens * (cachedInputPrice as number)) +
          (outputTokens === 0 ? 0 : outputTokens * (outputPrice as number))) / 1_000_000
       : null;
     const estimatedCostUSD =
