@@ -176,3 +176,46 @@ fn system_one_total_choice_description_budget_is_bounded() {
     assert!(TinyJevEvaluator::validate(&input).is_err(),
         "per-option limits alone cannot bound cumulative token/context cost");
 }
+
+
+#[test]
+fn system_one_rejects_unbounded_host_instructions_and_invalid_model_names() {
+    let mut input = request(Some(&"repeated configuration text ".repeat(400)));
+    assert!(TinyJevEvaluator::validate(&input).is_err());
+    input = request(None);
+    input.model = "\ninvalid-model".into();
+    assert!(TinyJevEvaluator::validate(&input).is_err());
+    input.model = " ".into();
+    assert!(TinyJevEvaluator::validate(&input).is_err());
+}
+
+#[test]
+fn system_one_always_treats_request_and_option_descriptions_as_data() {
+    let input = request(Some("Which skill family should be chosen?"));
+    let wire = TinyJevEvaluator::build(&input);
+    let Some(Question::Choice(choice)) = wire.questions.get("tool") else { panic!("missing choice") };
+    let instructions = choice.instructions.as_str().unwrap();
+    assert!(instructions.contains("Which skill family should be chosen?"));
+    assert!(instructions.contains("untrusted data"));
+    assert!(instructions.contains("not instructions"));
+}
+
+#[test]
+fn malformed_probability_vectors_are_rejected_before_tool_ranking() {
+    let input = request(None);
+    let valid = BTreeMap::from([
+        ("SLACK_SEND_MESSAGE".to_string(), 0.8_f64),
+        ("none".to_string(), 0.2_f64),
+    ]);
+    assert!(validate_choice_numbers(&input, &valid, 0.85, Some(0.9)).is_ok());
+    for probability in [f64::NAN, f64::INFINITY, -0.1, 1.1] {
+        let bad = BTreeMap::from([("SLACK_SEND_MESSAGE".into(), probability)]);
+        assert!(validate_choice_numbers(&input, &bad, 0.9, None).is_err());
+    }
+    assert!(validate_choice_numbers(&input, &valid, f64::NAN, None).is_err());
+    assert!(validate_choice_numbers(&input, &valid, 0.9, Some(-0.1)).is_err());
+    assert!(validate_choice_numbers(
+        &input, &BTreeMap::from([("INVENTED_TOOL".into(), 1.0)]), 0.9, None
+    ).is_err());
+    assert!(validate_choice_numbers(&input, &BTreeMap::new(), 0.9, None).is_err());
+}
