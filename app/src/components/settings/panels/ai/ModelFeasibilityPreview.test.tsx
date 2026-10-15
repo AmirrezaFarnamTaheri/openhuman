@@ -62,7 +62,7 @@ describe('ModelFeasibilityPreview catalog browsing', () => {
 
   it('filters the full catalog by model identity and selected fit status', () => {
     render(<ModelFeasibilityPreview models={manyModels} />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search suitability results' }), {
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search suitability results' }), {
       target: { value: 'candidate-16' },
     });
     expect(screen.getByText('demo/candidate-16')).toBeTruthy();
