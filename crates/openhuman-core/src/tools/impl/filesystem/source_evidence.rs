@@ -252,6 +252,12 @@ fn parse_line_range(args: &Value) -> anyhow::Result<(usize, usize)> {
     }
     Ok((usize::try_from(start)?, usize::try_from(end)?))
 }
+#[cfg(unix)]
+fn same_file_identity(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
 async fn read_checked(policy: &SecurityPolicy, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
     // Authorization is per file, not inherited from the scanned directory.
     let Ok(actual) = policy.validate_path(&path.to_string_lossy()).await else {
@@ -279,6 +285,14 @@ async fn read_checked(policy: &SecurityPolicy, path: &Path) -> anyhow::Result<Op
     if !metadata.is_file() || metadata.len() > MAX_FILE_BYTES {
         return Ok(None);
     }
+    // The path can be replaced after validation but before open. Compare
+    // the opened descriptor's identity to the initially authorized file,
+    // not just the descriptor's size/type. Reject substitutions before
+    // returning any source bytes to the model-facing evidence layer.
+    #[cfg(unix)]
+    if !same_file_identity(&initial, &metadata) {
+        return Ok(None);
+    }
     let mut bounded = file.take(MAX_FILE_BYTES + 1);
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
     if bounded.read_to_end(&mut bytes).await.is_err() {
@@ -290,6 +304,18 @@ async fn read_checked(policy: &SecurityPolicy, path: &Path) -> anyhow::Result<Op
     // Fail closed if a symlink or parent was retargeted during the read.
     if policy.validate_path(&path.to_string_lossy()).await.ok().as_ref() != Some(&actual) {
         return Ok(None);
+    }
+    #[cfg(unix)]
+    {
+        // A parent can briefly be retargeted and then restored before the
+        // canonical-path comparison. Recheck the current file against the
+        // same descriptor that supplied the evidence bytes.
+        let Ok(current) = tokio::fs::metadata(path).await else {
+            return Ok(None);
+        };
+        if !same_file_identity(&metadata, &current) {
+            return Ok(None);
+        }
     }
     Ok(Some(bytes))
 }
