@@ -56,3 +56,53 @@ This is an ordering/freshness rule for already recorded local tool outcomes,
 not a claim of test coverage, production correctness, or final-commit CI.
 Focused regression tests were added for failure-after-pass and
 pass-after-failure sequences; Rust compilation remains a merge gate.
+
+
+## Pass 13: Distinct test failures cannot be laundered through unrelated green checks
+
+The first journal projection tracked only the most recent passing/failed check
+offset. This could label a mission local_check_observed after a **failed
+cargo test** followed by a **successful cargo fmt**, even though formatting
+does not repair or validate a failed test. The model-facing final-verification
+instruction was not enough to prevent that machine-level misreporting.
+
+The ShellTool now adds a fixed check_kind field (e.g. cargo_test,
+cargo_fmt, pytest, vitest) to its **host-only** check outcome envelope.
+It is a bounded code-defined category, never the raw command, model/user
+arguments, source path, test name, credentials, stdout or stderr. The replay
+parser accepts only the corresponding hardcoded category allowlist. Legacy
+receipts without a category remain readable, but their failures cannot
+automatically be cleared.
+
+Even the same category does **not** prove identical invocation: successful
+cargo test -p frontend must not be taken as proof that a previous failed
+cargo test -p backend has been rerun. Accordingly any observed failure in a
+run remains an unresolved failure in that run; launch a clean verification run
+after fixing the issue. The report adds sorted unresolved_check_kinds and
+unattributed_failures (from legacy category-less receipts). The original
+task_verified=false guarantee is unchanged.
+
+A second defect was that the replay projected *unknown* tool names as
+non-mutating. A third-party use_skill target, MCP plugin or newly registered
+filesystem tool can write source without having a name in a fixed mutator list;
+a prior green check would remain falsely fresh. The replay now makes the
+opposite conservative inference: only a small allowlist of known native
+read-only tools preserves local-check freshness. **Unknown tools may mutate**
+and invalidate earlier receipts, even if a particular invocation happened to
+be harmless. Without signed permission/effect metadata from the harness, a
+name-derived read-only guess cannot be treated as proof.
+
+### Important limits
+
+- The status failed_local_check means **the run contains an unresolved observed
+  failure**; it does not claim the current source necessarily still fails.
+- A clean newer run may record a successful local check, but the operator must
+  still establish complete command scope, source generation and latest commit
+  CI independently.
+- A trustworthy future upgrade would use an *authorized*, privacy-preserving
+  invocation identity and source-generation proof before allowing same-run
+  recovery. Persisting command strings, unsalted predictable hashes or model
+  judgments as verification authority would be a regression.
+- The additional Rust tests are committed, not compiled or executed against
+  the current PR head in this session. Run the actual local_checks and
+  verification_tests filters on a Rust-enabled host before promotion.
