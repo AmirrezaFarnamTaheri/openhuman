@@ -36,6 +36,12 @@ fn local_check_rejects_commands_that_obscure_exit_status_or_execute_other_action
         "cargo test -- --list",
         "cargo test --no-run",
         "cargo test --help",
+        "cargo test -h",
+        "cargo test -V",
+        "pytest --collect-only",
+        "go test -list .",
+        "npm run build -- --dry-run",
+        "cargo test --dry-run",
         "cargo test --version",
         "npm test -- --passWithNoTests",
         "pnpm test --if-present",
@@ -84,4 +90,12 @@ fn local_check_receipt_preserves_existing_host_metadata() {
     passed.metadata = Some(serde_json::json!({"trace_id":"original"}));
     append_verification_receipt(&mut passed, "cargo test", true);
     assert_eq!(passed.metadata.as_ref().unwrap()["trace_id"], "original");
+}
+
+#[test]
+fn local_check_host_metadata_does_not_change_model_facing_output() {
+    let mut result = ToolResult::success("local stdout");
+    append_verification_receipt(&mut result, "cargo test", true);
+    assert_eq!(result.output(), "local stdout");
+    assert!(!result.output().contains("openhuman_local_check_v1"));
 }
