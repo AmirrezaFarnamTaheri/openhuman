@@ -119,6 +119,7 @@ export function useCloudProviderEditorSubmit({
       const changedDestination = previous !== null && (
         previous.slug !== upserted.slug ||
         previous.endpoint !== upserted.endpoint ||
+        previous.authStyle !== upserted.authStyle ||
         (previous.caCertPem ?? '') !== (upserted.caCertPem ?? '')
       );
       if (savedKeyExists && changedDestination && !apiKey) {
