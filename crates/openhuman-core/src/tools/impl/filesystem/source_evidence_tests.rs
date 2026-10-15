@@ -754,3 +754,34 @@ async fn unix_backslash_filename_must_remain_usable_as_safe_page_cursor() {
     assert_eq!(final_page["files"][0]["path"], "t.rs");
     assert_eq!(final_page["complete"], true);
 }
+
+
+#[tokio::test]
+async fn source_evidence_excludes_workspace_auth_material_without_hiding_auth_source_code() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join(".openhuman")).unwrap();
+    std::fs::create_dir(project.path().join("src")).unwrap();
+    for secret in [".openhuman/credentials.toml", ".netrc", ".envrc",
+                   ".git-credentials", "auth.json", "token.json",
+                   "service-account.json"] {
+        std::fs::write(project.path().join(secret), "SOURCE_SECRET_DO_NOT_EXPOSE").unwrap();
+    }
+    std::fs::write(project.path().join("src/auth.ts"),
+        "export function auth() { return true; }\n").unwrap();
+    let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
+    let scan = run(&tool, json!({
+        "operation":"scan", "query":"SOURCE_SECRET_DO_NOT_EXPOSE"
+    })).await;
+    assert_eq!(scan["complete"], true);
+    assert_eq!(scan["files"].as_array().unwrap().len(), 1);
+    assert_eq!(scan["files"][0]["path"], "src/auth.ts");
+    assert!(!scan.to_string().contains("SOURCE_SECRET_DO_NOT_EXPOSE"));
+
+    for secret in [".openhuman/credentials.toml", ".netrc", ".envrc",
+                   ".git-credentials", "auth.json", "token.json",
+                   "service-account.json"] {
+        assert!(tool.execute(json!({"operation":"scan","path":secret})).await.is_err(),
+            "sensitive path must be refused: {secret}");
+    }
+}
