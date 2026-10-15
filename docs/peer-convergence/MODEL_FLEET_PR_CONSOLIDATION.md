@@ -51,3 +51,48 @@ claimed passed** until executed against the exact final SHA.
 The combined work deliberately does not assert broad 2API peer parity, a
 fully automatic protocol capability detector, or true incremental Responses
 SSE. The currently pinned Responses transport buffers a unary request.
+
+
+## October 15 follow-up: editor safety and operator UX
+
+The follow-up regression pass on canonical PR #8 closes several UI-contract
+gaps without introducing a parallel inference configuration path:
+
+- Direct keyed image-model edits use a shared UTF-8/Unicode-validated,
+  null-prototype-safe updater. Its 512-entry budget, replacement behavior and
+  HTTPS/loopback boundary match the existing mapping parser and native policy.
+  Both textual mappings and the per-row editor are subject to the same limit.
+- Preset import defaults to **add missing models only**. Refreshing metadata
+  for an existing model requires a separate opt-in; the panel previews
+  additions/refreshes and the fields that can be overwritten. Provider
+  endpoint/auth synchronization likewise requires approval, displays its
+  before/after values and refuses to re-target a stored key. Re-enter a new
+  credential through the dedicated provider editor when the endpoint changes.
+- Suitability results now expose the complete saved-model catalog through
+  searchable, status-filtered, accessible eight-row increments. Cost, capability
+  and eligibility are still metadata-only; browsing does **not** route traffic,
+  validate entitlements or certify live prices.
+- New suitability and consent controls go through the application's i18n
+  resolver. Major controls have locale-specific translations; untranslated
+  explanatory messages fall back to English rather than raw keys.
+- Provider save is single-flight per editor instance. If settings persisted
+  but credential storage fails, the compensation path first reads the live
+  provider list and restores its original list **only if** it still matches
+  the attempted write. It refuses to stomp a divergent concurrent edit and
+  redacts candidate keys echoed by a failing gateway.
+  
+### Remaining durability and acceptance constraints
+
+This is **not a cross-store transaction**: the configuration RPC and encrypted
+credential store remain separate. The live-snapshot compensation reduces common
+client races but does not provide an atomic compare-and-swap against changes
+between the snapshot and the rollback RPC, nor protection against process
+termination. A native transactional/revisioned persistence design is required
+before advertising crash-atomic credential updates.
+
+Regressions were added to the existing Vitest suites for image IDs, limits,
+preset consent, credential re-target checks, suitability browsing/localization
+and provider-save overlap/rollback. A separate isolated TypeScript/Node
+image-mapping contract passed seven checks; it is **not** a substitute for
+OpenHuman's Vitest, Rust, Tauri and hosted CI suites. Keep PR #8 draft until
+full tests and latest-head checks have actually passed.
