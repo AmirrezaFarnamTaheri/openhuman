@@ -77,3 +77,5 @@ jobs:
           path: upstream-audit/
           if-no-files-found: warn
           retention-days: 30
+
+# Non-destructive: actions only inspect git history in a temporary runner checkout.
