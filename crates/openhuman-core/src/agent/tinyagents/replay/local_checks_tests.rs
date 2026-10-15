@@ -101,7 +101,7 @@ fn a_later_failed_check_supersedes_earlier_success() {
 }
 
 #[test]
-fn a_later_success_can_supersede_an_earlier_failed_check() {
+fn a_later_success_cannot_certify_a_failed_suite_without_invocation_identity() {
     let passed = passing_receipt();
     let failed = json!({"openhuman_local_check_v1":{
         "recognized": true, "passed": false, "status": "failed_or_unobserved",
@@ -113,8 +113,8 @@ fn a_later_success_can_supersede_an_earlier_failed_check() {
     acc.record(2, "shell", LocalToolEvent::Completed { metadata: Some(&passed), error: false });
     let result = acc.finish("run", true);
     assert_eq!(result.failed_checks, 1);
-    assert_eq!(result.status, "local_check_observed");
-    assert!(result.check_after_last_known_mutation);
+    assert_eq!(result.status, "failed_local_check");
+    assert!(!result.check_after_last_known_mutation);
     assert!(!result.task_verified);
 }
 
@@ -177,7 +177,7 @@ fn unrelated_formatter_success_does_not_hide_a_failed_test_suite() {
 }
 
 #[test]
-fn successful_rerun_can_resolve_its_own_failed_check_kind() {
+fn same_check_category_cannot_prove_that_the_failed_invocation_was_rerun() {
     let failed = json!({"openhuman_local_check_v1":{
         "recognized":true,"passed":false,"status":"failed_or_unobserved",
         "exit_status":"unknown","scope":"local_check_only",
@@ -188,9 +188,9 @@ fn successful_rerun_can_resolve_its_own_failed_check_kind() {
     acc.record(1,"shell",LocalToolEvent::Completed{metadata:Some(&failed),error:true});
     acc.record(2,"shell",LocalToolEvent::Completed{metadata:Some(&passed),error:false});
     let report = acc.finish("a",true);
-    assert_eq!(report.status,"local_check_observed");
-    assert!(report.unresolved_check_kinds.is_empty());
-    assert!(report.check_after_last_known_mutation);
+    assert_eq!(report.status,"failed_local_check");
+    assert_eq!(report.unresolved_check_kinds,vec!["cargo_test"]);
+    assert!(!report.check_after_last_known_mutation);
 }
 
 #[test]
@@ -247,4 +247,17 @@ fn unsupported_check_kind_cannot_forge_a_successful_receipt() {
     let report = acc.finish("a",true);
     assert_eq!(report.status,"no_local_check");
     assert_eq!(report.passed_checks,0);
+}
+
+
+#[test]
+fn independent_clean_journal_can_report_a_new_successful_check() {
+    let passed = passing_receipt();
+    let mut clean = LocalCheckAccumulator::default();
+    clean.record(1, "file_write", LocalToolEvent::Completed {metadata:None,error:false});
+    clean.record(2, "shell", LocalToolEvent::Completed {metadata:Some(&passed),error:false});
+    let result = clean.finish("new-run",true);
+    assert_eq!(result.status,"local_check_observed");
+    assert!(result.unresolved_check_kinds.is_empty());
+    assert_eq!(result.unattributed_failures,0);
 }
