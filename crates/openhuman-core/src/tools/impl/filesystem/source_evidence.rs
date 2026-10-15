@@ -153,6 +153,23 @@ fn relative(root: &Path, path: &Path) -> String {
 fn bounded_line(s: &str) -> String {
     s.chars().take(MAX_LINE_CHARS).collect()
 }
+
+/// Return a source excerpt showing the exact literal hit. A line-number-only
+/// reference with an unrelated first-160-column prefix is not useful evidence,
+/// especially for minified files. Columns count Unicode scalar values.
+fn bounded_scan_match(line: &str, query: &str) -> (String, usize, bool) {
+    let byte = line.find(query).unwrap_or(0);
+    let hit_column = line[..byte].chars().count();
+    let line_chars = line.chars().count();
+    let left_context = (MAX_LINE_CHARS.saturating_sub(query.chars().count())) / 3;
+    let start = if line_chars > MAX_LINE_CHARS {
+        hit_column.saturating_sub(left_context).min(line_chars - MAX_LINE_CHARS)
+    } else {
+        0
+    };
+    let excerpt = line.chars().skip(start).take(MAX_LINE_CHARS).collect();
+    (excerpt, start + 1, line_chars > MAX_LINE_CHARS)
+}
 fn parse_line_range(args: &Value) -> anyhow::Result<(usize, usize)> {
     let start = args.get("start_line").and_then(Value::as_u64).unwrap_or(1);
     let end = args.get("end_line").and_then(Value::as_u64).unwrap_or(start.saturating_add(39));
@@ -299,7 +316,13 @@ async fn scan(policy: &SecurityPolicy, root: &Path, path: &Path, args: &Value, g
             let all: Vec<_> = text.lines().enumerate()
                 .filter(|(_,line)| line.contains(query)).collect();
             if all.len() > MAX_MATCHES { truncated.get_or_insert("max_matches_per_file"); }
-            all.into_iter().take(MAX_MATCHES).map(|(i,line)| json!({"line":i+1,"text":bounded_line(line)})).collect()
+            all.into_iter().take(MAX_MATCHES).map(|(i,line)| {
+                let (text, column_start, excerpt_truncated) = bounded_scan_match(line, query);
+                json!({
+                    "line": i + 1, "text": text, "column_start": column_start,
+                    "excerpt_truncated": excerpt_truncated
+                })
+            }).collect()
         };
         source_bytes += bytes.len();
         files.push(json!({"path":label,"source_hash":digest,"size_bytes":bytes.len(),"matches":matches}));
