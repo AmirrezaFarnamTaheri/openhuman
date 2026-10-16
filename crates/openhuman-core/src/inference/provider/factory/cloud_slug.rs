@@ -245,8 +245,11 @@ pub(super) fn resolve_cloud_slug<'a>(
         fallback_diagnostics::missing_provider_credentials_message(role, slug, local_chat)
     };
 
-    let key = lookup_key_for_slug(slug, config)
-        .map_err(|e| anyhow::anyhow!("{} (underlying error: {e})", missing_credentials()))?;
+    // The underlying auth-store error can contain secret material. Never
+    // attach it to a user/model-visible error or its Debug source chain.
+    let key = lookup_key_for_slug(slug, config).map_err(|source| {
+        super::credentials::redact_credential_lookup_error(source, missing_credentials())
+    })?;
 
     // A readable auth profile with no key for this slug returns `Ok("")`, which
     // would otherwise build a client with an empty bearer and surface as a raw
