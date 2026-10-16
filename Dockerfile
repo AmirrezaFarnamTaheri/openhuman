@@ -50,7 +50,6 @@ WORKDIR /build
 # compile-time assets together so the build sees the real workspace.
 COPY Cargo.toml Cargo.lock rust-toolchain.toml build.rs README.md ./
 COPY crates/ crates/
-COPY examples/ examples/
 COPY tests/ tests/
 COPY vendor/ vendor/
 RUN cargo build --locked --profile "${CARGO_PROFILE}" -p openhuman-cli --bin openhuman-core && \
