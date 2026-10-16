@@ -18,6 +18,7 @@ use super::*;
 /// unknown) is rejected outright — resuming an already-settled thread_id is
 /// no longer treated as a harmless no-op, it's a clear error.
 pub async fn flows_resume(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     flow_id: &str,
     thread_id: &str,
@@ -209,6 +210,7 @@ pub async fn flows_resume(
     let compiled = tinyflows::compiler::compile(&flow.graph).map_err(|e| e.to_string())?;
     let config_arc = Arc::new(config.clone());
     let caps = crate::flows::tinyflows::build_capabilities(
+        ctx,
         config_arc.clone(),
         format!("flow:{flow_id}"),
         Some(FlowRunContext {

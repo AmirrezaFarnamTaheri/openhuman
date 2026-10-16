@@ -65,12 +65,12 @@ use super::{
 /// down); surface it as a store error rather than propagating the panic into
 /// the RPC dispatcher, which would turn a transient store fault into a 500-shaped
 /// unknown failure.
-async fn run<T, F>(operation: &'static str, f: F) -> Result<T, String>
+async fn run<T, F>(ctx: DispatchCtx, operation: &'static str, f: F) -> Result<T, String>
 where
     F: FnOnce() -> Result<T, String> + Send + 'static,
     T: Send + 'static,
 {
-    match crate::core::runtime::DispatchCtx::ambient().spawn_blocking(f).await {
+    match ctx.spawn_blocking(f).await {
         Ok(result) => result,
         Err(error) => {
             tracing::warn!(
@@ -91,7 +91,7 @@ pub async fn ensure_thread(
     workspace_dir: PathBuf,
     request: CreateConversationThread,
 ) -> Result<ConversationThread, String> {
-    run("ensure_thread", move || {
+    run(ctx.clone(), "ensure_thread", move || {
         store::ensure_thread(&ctx, workspace_dir, request)
     })
     .await
@@ -102,7 +102,7 @@ pub async fn list_threads(
     ctx: DispatchCtx,
     workspace_dir: PathBuf,
 ) -> Result<Vec<ConversationThread>, String> {
-    run("list_threads", move || {
+    run(ctx.clone(), "list_threads", move || {
         store::list_threads(&ctx, workspace_dir)
     })
     .await
@@ -114,7 +114,7 @@ pub async fn get_messages(
     workspace_dir: PathBuf,
     thread_id: String,
 ) -> Result<Vec<ConversationMessage>, String> {
-    run("get_messages", move || {
+    run(ctx.clone(), "get_messages", move || {
         store::get_messages(&ctx, workspace_dir, &thread_id)
     })
     .await
@@ -127,7 +127,7 @@ pub async fn append_message(
     thread_id: String,
     message: ConversationMessage,
 ) -> Result<ConversationMessage, String> {
-    run("append_message", move || {
+    run(ctx.clone(), "append_message", move || {
         store::append_message(&ctx, workspace_dir, &thread_id, message)
     })
     .await
@@ -141,7 +141,7 @@ pub async fn update_message(
     message_id: String,
     patch: ConversationMessagePatch,
 ) -> Result<ConversationMessage, String> {
-    run("update_message", move || {
+    run(ctx.clone(), "update_message", move || {
         store::update_message(&ctx, workspace_dir, &thread_id, &message_id, patch)
     })
     .await
@@ -154,7 +154,7 @@ pub async fn delete_messages_from(
     thread_id: String,
     message_id: String,
 ) -> Result<Option<usize>, String> {
-    run("delete_messages_from", move || {
+    run(ctx.clone(), "delete_messages_from", move || {
         store::delete_messages_from(&ctx, workspace_dir, &thread_id, &message_id)
     })
     .await
@@ -168,7 +168,7 @@ pub async fn update_thread_title(
     title: String,
     updated_at: String,
 ) -> Result<ConversationThread, String> {
-    run("update_thread_title", move || {
+    run(ctx.clone(), "update_thread_title", move || {
         store::update_thread_title(&ctx, workspace_dir, &thread_id, &title, &updated_at)
     })
     .await
@@ -182,7 +182,7 @@ pub async fn update_thread_working_dir(
     working_dir: Option<String>,
     updated_at: String,
 ) -> Result<ConversationThread, String> {
-    run("update_thread_working_dir", move || {
+    run(ctx.clone(), "update_thread_working_dir", move || {
         store::update_thread_working_dir(&ctx, workspace_dir, &thread_id, working_dir, &updated_at)
     })
     .await
@@ -196,7 +196,7 @@ pub async fn update_thread_labels(
     labels: Vec<String>,
     updated_at: String,
 ) -> Result<ConversationThread, String> {
-    run("update_thread_labels", move || {
+    run(ctx.clone(), "update_thread_labels", move || {
         store::update_thread_labels(&ctx, workspace_dir, &thread_id, labels, &updated_at)
     })
     .await
@@ -209,7 +209,7 @@ pub async fn delete_thread(
     thread_id: String,
     deleted_at: String,
 ) -> Result<bool, String> {
-    run("delete_thread", move || {
+    run(ctx.clone(), "delete_thread", move || {
         store::delete_thread(&ctx, workspace_dir, &thread_id, &deleted_at)
     })
     .await
@@ -222,7 +222,7 @@ pub async fn transcript_key(
     workspace_dir: PathBuf,
     thread_id: String,
 ) -> Result<Option<String>, String> {
-    run("transcript_key", move || {
+    run(ctx.clone(), "transcript_key", move || {
         ConversationStore::new(ctx, workspace_dir).transcript_key(&thread_id)
     })
     .await
@@ -236,7 +236,7 @@ pub async fn record_transcript_key(
     thread_id: String,
     key: String,
 ) -> Result<String, String> {
-    run("record_transcript_key", move || {
+    run(ctx.clone(), "record_transcript_key", move || {
         ConversationStore::new(ctx, workspace_dir).record_transcript_key(&thread_id, &key)
     })
     .await
@@ -247,7 +247,7 @@ pub async fn purge_threads(
     ctx: DispatchCtx,
     workspace_dir: PathBuf,
 ) -> Result<ConversationPurgeStats, String> {
-    run("purge_threads", move || {
+    run(ctx.clone(), "purge_threads", move || {
         store::purge_threads(&ctx, workspace_dir)
     })
     .await
@@ -264,7 +264,7 @@ pub async fn search_cross_thread_messages(
     limit: usize,
     exclude_thread_id: Option<String>,
 ) -> Result<Vec<CrossThreadHit>, String> {
-    run("search_cross_thread_messages", move || {
+    run(ctx.clone(), "search_cross_thread_messages", move || {
         ConversationStore::new(ctx, workspace_dir).search_cross_thread_messages(
             &query,
             limit,

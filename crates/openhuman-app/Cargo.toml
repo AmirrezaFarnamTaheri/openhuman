@@ -70,7 +70,6 @@ serde_json = "1"
 # `openhuman-rpc`'s own: `http-client` (the relay client), `server` (the
 # embedded JSON-RPC server and `host::desktop`) and `jev` (the Jev-backed
 # `tool_search` ranker the product ships).
-tinymcp = { path = "../../vendor/tinymcp/crates/tinymcp", default-features = false, features = ["ui"] }
 openhuman-rpc = { path = "../openhuman-rpc", default-features = false, features = [
     "os-keyring",
     "http-client",
@@ -94,6 +93,9 @@ openhuman-rpc = { path = "../openhuman-rpc", default-features = false, features 
     "tinymemes",
     "storage-sqlite",
 ] }
+# The widget scheme reduces CSP origins with `tinymcp_bus::ui`'s pure rules.
+# The contract, not the module crate: hosts reach modules through `*-bus`.
+tinymcp-bus = { path = "../../vendor/tinymcp/crates/tinymcp-bus" }
 # Tauri core and plugins. Use upstream Tauri's native WebView runtime (Wry),
 # rather than the removed Chromium/CEF fork.
 tauri = { version = "2.11", default-features = false, features = [

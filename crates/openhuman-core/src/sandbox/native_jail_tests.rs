@@ -139,6 +139,7 @@ async fn disabled_tinybox_module_never_falls_back_to_host_execution() -> anyhow:
     config.modules.enabled = false;
 
     let result = execute(
+        &crate::core::runtime::DispatchCtx::host_default(),
         &config,
         &policy,
         &format!("touch '{}'", marker.display()),
@@ -251,6 +252,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
         docker_overrides: None,
     };
     let output = execute(
+        &crate::core::runtime::DispatchCtx::host_default(),
         &config,
         &policy,
         "printf tinybox-jailed-ok; printf safe-error >&2",
@@ -266,6 +268,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
     assert_eq!(output.stderr, "safe-error");
 
     let output = execute(
+        &crate::core::runtime::DispatchCtx::host_default(),
         &config,
         &policy,
         "i=0; while [ $i -lt 1500 ]; do printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; i=$((i + 1)); done",
@@ -284,6 +287,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
     );
 
     let output = super::super::shell_exec::run_host(
+        &crate::core::runtime::DispatchCtx::host_default(),
         &config,
         "printf cron-module-ok; printf cron-stderr >&2",
         workspace.path(),
@@ -299,6 +303,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
     assert_eq!(output.stderr, "cron-stderr");
 
     let output = super::super::shell_exec::run_host(
+        &crate::core::runtime::DispatchCtx::host_default(),
         &config,
         "false | true",
         workspace.path(),
@@ -312,6 +317,7 @@ async fn released_tinybox_runs_a_native_jail_through_the_pinned_loader() -> anyh
     assert!(output.success(), "cron preserves default pipeline status");
 
     let output = super::super::shell_exec::run_host(
+        &crate::core::runtime::DispatchCtx::host_default(),
         &config,
         "sleep 10",
         workspace.path(),

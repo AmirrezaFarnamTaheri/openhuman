@@ -81,7 +81,7 @@ async fn dispatch_triage(
         payload,
     );
 
-    let outcome = run_triage(&ctx, &envelope)
+    let outcome = run_triage(ctx, &envelope)
         .await
         .map_err(|e| format!("[task_sources:route] triage evaluation failed: {e}"))?;
 
@@ -90,7 +90,7 @@ async fn dispatch_triage(
             // Remote payload: the task arrived from an external board, so the
             // dispatch parks rather than running on a trust root (#5634).
             let origin = remote_trigger_origin(&envelope);
-            with_origin(origin, apply_decision(&ctx, run, &envelope))
+            with_origin(origin, apply_decision(ctx, run, &envelope))
                 .await
                 .map_err(|e| format!("[task_sources:route] apply_decision failed: {e}"))?;
             tracing::debug!(

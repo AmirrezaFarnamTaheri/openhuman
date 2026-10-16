@@ -150,6 +150,12 @@ export const ALLOW = new Map(
       "match tokio::fs::OpenOptions::new()",
       "reserves the artifact's content file in the user-visible files folder; the bytes stay a file on every backend (the port has no blob store), only the records moved",
     ],
+    [
+      "media/generation/artifact_tool.rs",
+      "json-write",
+      "let mut file = tokio::fs::OpenOptions::new()",
+      "copies a generated media blob into the artifact's reserved user-visible file; the finalized file remains the artifact bytes on every backend because the storage port has no blob store",
+    ],
   ].reduce((map, [path, rule, site, reason]) => {
     const key = `${SRC}${path}`;
     map.set(key, [...(map.get(key) ?? []), { rule, site, reason }]);

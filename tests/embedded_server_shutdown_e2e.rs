@@ -86,7 +86,10 @@ async fn shutdown_token_stops_listener() {
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(serve_desktop(builder, server_token, ready_tx));
 
-    let ready = match tokio::time::timeout(Duration::from_secs(30), ready_rx).await {
+    // Full desktop bootstrap can exceed 30s on a cold CI runner while the
+    // module search path and background services initialize. Match the host's
+    // 60s core-ready budget; this test is about shutdown after readiness.
+    let ready = match tokio::time::timeout(Duration::from_secs(60), ready_rx).await {
         Ok(Ok(ready)) => ready,
         Ok(Err(_)) => {
             let result = server.await.expect("embedded server task should not panic");

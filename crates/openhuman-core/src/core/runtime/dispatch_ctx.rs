@@ -65,14 +65,22 @@ impl DispatchCtx {
         Self { core }
     }
 
-    /// The context for work that arrives with none of its own: a bus event, a
-    /// module host callback, a shutdown hook. Outside SaaS that is the process
-    /// default, the one context a single-user host has. In SaaS it is the
-    /// task's own tenant scope only, so work that lost its tenant fails closed
-    /// instead of acting as the operator.
+    /// The context for work that arrives with none of its own and no tenant on
+    /// the wire: a socket-driven bus event, a module host callback, a shutdown
+    /// hook. Outside SaaS that is the process default, the one context a
+    /// single-user host has. In SaaS it is unbound, so work that lost its
+    /// tenant fails closed instead of acting as the operator. It never reads
+    /// the calling task's scope; an event that names its tenant uses
+    /// [`for_event`](Self::for_event), a caller holding a context passes it.
     pub fn host_default() -> Self {
-        if super::is_saas() {
-            Self::ambient()
+        Self::host_default_in(super::is_saas())
+    }
+
+    /// [`host_default`](Self::host_default) as a pure function of the mode, so
+    /// the SaaS rule is testable without locking the test process to SaaS.
+    pub(crate) fn host_default_in(saas: bool) -> Self {
+        if saas {
+            Self::unbound()
         } else {
             Self::process_default()
         }

@@ -67,13 +67,21 @@ async fn wait_done(config: &Config) -> BackfillView {
 async fn refuses_without_consent_and_with_memory_off() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    let error = start(&DispatchCtx::ambient(), &config, BackfillStartParams { consent: false })
-        .await
-        .unwrap_err();
+    let error = start(
+        &DispatchCtx::ambient(),
+        &config,
+        BackfillStartParams { consent: false },
+    )
+    .await
+    .unwrap_err();
     assert_eq!(error.code(), INVALID_REQUEST);
-    let error = start(&DispatchCtx::ambient(), &config, BackfillStartParams { consent: true })
-        .await
-        .unwrap_err();
+    let error = start(
+        &DispatchCtx::ambient(),
+        &config,
+        BackfillStartParams { consent: true },
+    )
+    .await
+    .unwrap_err();
     assert_eq!(error.code(), MEMORY_OFF);
 }
 
@@ -128,9 +136,13 @@ async fn stores_past_chats_once_and_skips_what_live_logging_took() {
     assert_eq!(before.state.phase, ImportPhase::Idle);
     assert_eq!((before.pending_threads, before.pending_turns), (2, 3));
 
-    let started = start(&DispatchCtx::ambient(), &config, BackfillStartParams { consent: true })
-        .await
-        .unwrap();
+    let started = start(
+        &DispatchCtx::ambient(),
+        &config,
+        BackfillStartParams { consent: true },
+    )
+    .await
+    .unwrap();
     assert_eq!(started.state.threads_total, 2);
     let done = wait_done(&config).await;
     assert_eq!(done.state.phase, ImportPhase::Done, "{:?}", done.state);
@@ -152,9 +164,13 @@ async fn stores_past_chats_once_and_skips_what_live_logging_took() {
     );
 
     // A second run has nothing to send.
-    start(&DispatchCtx::ambient(), &config, BackfillStartParams { consent: true })
-        .await
-        .unwrap();
+    start(
+        &DispatchCtx::ambient(),
+        &config,
+        BackfillStartParams { consent: true },
+    )
+    .await
+    .unwrap();
     let again = wait_done(&config).await;
     assert_eq!(again.state.items_stored, 0);
     assert_eq!(stored(&engine, filter).await.len(), 6);

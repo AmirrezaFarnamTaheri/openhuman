@@ -47,8 +47,43 @@ const EX63_ENV = { CI_SCRATCH_DIR: "/scratch" };
 
 test("EX63 installs script dependencies only after changed areas are detected", () => {
   const detect = ciLanes.indexOf("- name: Detect changed areas");
-  const install = ciLanes.indexOf("- name: Install jq for release-script tests");
-  assert.ok(detect >= 0 && install > detect, "filter outputs must exist before they gate jq installation");
+  const install = ciLanes.indexOf(
+    "- name: Install jq for release-script tests",
+  );
+  const python = ciLanes.indexOf("- name: Setup Python for lanes");
+  const start = ciLanes.indexOf("- name: Start lanes");
+  assert.ok(
+    detect >= 0 && install > detect && python > detect && start > python,
+    "area detection and Python setup must precede lane startup",
+  );
+  const nextStep = ciLanes.indexOf("\n      - name:", install + 1);
+  const installBlock = ciLanes.slice(
+    install,
+    nextStep < 0 ? undefined : nextStep,
+  );
+  assert.doesNotMatch(
+    installBlock,
+    /\bsudo\b|apt-get/,
+    "the pinned jq download does not require package installation",
+  );
+  assert.match(installBlock, /JQ_SHA256/);
+  assert.match(installBlock, /sha256sum -c/);
+
+  const pythonBlock = ciLanes.slice(
+    python,
+    ciLanes.indexOf("\n      - name:", python + 1),
+  );
+  assert.match(pythonBlock, /python-version: "3\.12"/);
+  assert.match(pythonBlock, /update-environment: false/);
+  const startBlock = ciLanes.slice(
+    start,
+    ciLanes.indexOf("\n      - name:", start + 1),
+  );
+  assert.match(
+    startBlock,
+    /OPENHUMAN_CI_PYTHON: \$\{\{ steps\.python\.outputs\.python-path \}\}/,
+    "the pinned Python interpreter is passed to the lanes without exporting its PATH",
+  );
 });
 
 test("EX63 provides jq without root and before the lanes start", () => {

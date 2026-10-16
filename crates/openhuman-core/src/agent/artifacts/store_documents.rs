@@ -267,7 +267,8 @@ pub(super) async fn on_docs<T: Send + 'static>(
     docs: Docs,
     f: impl FnOnce(Docs) -> anyhow::Result<T> + Send + 'static,
 ) -> Result<T, String> {
-    crate::core::runtime::DispatchCtx::ambient().spawn_blocking(move || f(docs))
+    crate::core::runtime::DispatchCtx::ambient()
+        .spawn_blocking(move || f(docs))
         .await
         .map_err(|e| format!("[artifacts] storage task failed: {e}"))?
         .map_err(|e| format!("[artifacts] storage: {e:#}"))

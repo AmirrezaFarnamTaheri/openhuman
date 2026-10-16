@@ -367,7 +367,11 @@ async fn run_through_scheduler(config: &Config, job_id: &str) {
         &config.workspace_dir,
         &config.action_dir,
     ));
-    let mut dispatcher = JobDispatcher::new(config, &security);
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        config,
+        &security,
+    );
     dispatcher.dispatch(vec![job]).await.unwrap();
     dispatcher.drain().await;
 }
@@ -427,7 +431,11 @@ async fn scheduler_flow_runs_active_hours_job_and_reschedules_inside_window() {
         &config.workspace_dir,
         &config.workspace_dir,
     ));
-    let mut dispatcher = JobDispatcher::new(&config, &security);
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &security,
+    );
     dispatcher.dispatch(vec![job.clone()]).await.unwrap();
     dispatcher.drain().await;
 

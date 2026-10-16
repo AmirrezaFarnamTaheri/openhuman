@@ -209,7 +209,8 @@ pub async fn status(ctx: &DispatchCtx, config: &Config) -> MemoryResult<Backfill
 pub async fn start(
     ctx: &DispatchCtx,
     config: &Config,
-    params: BackfillStartParams) -> MemoryResult<BackfillView> {
+    params: BackfillStartParams,
+) -> MemoryResult<BackfillView> {
     if !params.consent {
         return Err(MemoryError::invalid(
             "storing past chats uploads them to the selected engine; pass consent: true",

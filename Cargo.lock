@@ -5413,7 +5413,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hkdf 0.12.4",
- "hmac 0.13.0",
+ "hmac 0.12.1",
  "hostname",
  "iana-time-zone",
  "libc",
@@ -5432,7 +5432,6 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "sha2 0.10.9",
- "sha2 0.11.0",
  "starship-battery",
  "sysinfo",
  "tar",
@@ -5473,7 +5472,6 @@ dependencies = [
  "tinyinference-providers",
  "tinyinference-voice",
  "tinyjuice-bus",
- "tinymcp",
  "tinymcp-bus",
  "tinymemes-bus",
  "tinymemory-api",
@@ -9453,13 +9451,12 @@ dependencies = [
 
 [[package]]
 name = "tinymcp"
-version = "0.18.5"
+version = "0.18.6"
 dependencies = [
  "base64 0.23.1",
  "dirs 7.0.0",
  "futures-util",
  "parking_lot",
- "regex",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -9483,8 +9480,9 @@ dependencies = [
 
 [[package]]
 name = "tinymcp-bus"
-version = "0.18.5"
+version = "0.18.6"
 dependencies = [
+ "base64 0.23.1",
  "schemars",
  "serde",
  "serde_json",

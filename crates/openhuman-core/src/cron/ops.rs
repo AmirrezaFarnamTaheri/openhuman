@@ -267,7 +267,7 @@ async fn run_and_record(
 ) -> (bool, String) {
     let run_id = uuid::Uuid::new_v4().to_string();
     let started_at = chrono::Utc::now();
-    let (success, output) = cron::scheduler::execute_job_now(config, job, &run_id).await;
+    let (success, output) = cron::scheduler::execute_job_now(ctx, config, job, &run_id).await;
     let finished_at = chrono::Utc::now();
     let duration_ms = (finished_at - started_at).num_milliseconds();
     let status = if success { "ok" } else { "error" };

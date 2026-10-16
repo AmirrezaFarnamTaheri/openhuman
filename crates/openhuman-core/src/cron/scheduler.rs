@@ -26,7 +26,6 @@ mod tests;
 
 #[allow(unused_imports)]
 use crate::core::runtime::DispatchCtx;
-use agent_run::*;
 #[allow(unused_imports)]
 use delivery::*;
 #[allow(unused_imports)]
@@ -63,7 +62,7 @@ pub fn is_running() -> bool {
     SchedulerSlot::is_running(LOOP_SCOPE)
 }
 
-pub async fn run(config: Config) -> Result<()> {
+pub async fn run(ctx: &crate::core::runtime::DispatchCtx, config: Config) -> Result<()> {
     let Some(_slot) = SchedulerSlot::acquire(LOOP_SCOPE) else {
         tracing::warn!(
             "[cron:scheduler] a scheduler loop is already running; not starting another"
@@ -93,7 +92,7 @@ pub async fn run(config: Config) -> Result<()> {
     // interval, forever. `None` means "nothing emitted yet for this run",
     // so the first successful tick is treated as a transition and emits.
     let mut last_emitted_health: Option<bool> = None;
-    let mut dispatcher = JobDispatcher::new(&config, &security);
+    let mut dispatcher = JobDispatcher::new(ctx, &config, &security);
     let mut agents = LiveAgentSchedulers::default();
 
     loop {
@@ -138,7 +137,7 @@ impl LiveAgentSchedulers {
                 };
                 let dispatcher = scheduler
                     .entry(agent_id.clone())
-                    .or_insert_with(|| JobDispatcher::new(&config, &security));
+                    .or_insert_with(|| JobDispatcher::new(&dispatch, &config, &security));
                 match dispatcher.tick(&config).await {
                     Ok(0) => {}
                     Ok(count) => {
@@ -174,13 +173,18 @@ pub async fn run_live_agent_pass(max_concurrent: usize) {
 /// Run `job` now under the caller's `run_id` (also the id its delivery and
 /// run record use), with the same executor, retry budget and failure
 /// classification as a scheduled run. The caller holds the job's run claim.
-pub async fn execute_job_now(config: &Config, job: &CronJob, run_id: &str) -> (bool, String) {
+pub async fn execute_job_now(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    job: &CronJob,
+    run_id: &str,
+) -> (bool, String) {
     let security = Arc::new(SecurityPolicy::from_config(
         &config.autonomy,
         &config.workspace_dir,
         &config.action_dir,
     ));
-    let binding = host::Binding::current(config, security);
+    let binding = host::Binding::new(ctx, config, security);
     let ports = host::ports(&binding);
     match execute_with_retry(&ports, &host::scheduler_config(config), job, run_id).await {
         Ok(attempt) => (attempt.success, attempt.output),

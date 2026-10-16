@@ -589,12 +589,15 @@ async fn dispatch(
             }
             let ctx = std::sync::Arc::clone(rt.context());
             let chat_env = options.chat_env;
+            let dispatch =
+                openhuman_core::core::runtime::DispatchCtx::new(std::sync::Arc::clone(&ctx));
             let turn: futures_box::BoxFuture<'_, Result<AgentReply, CoreError>> =
                 Box::pin(async move {
                     use openhuman_core::inference::host_runtime::ops::{
                         agent_chat_reply_for, AgentChatTarget,
                     };
-                    let mut config = openhuman_core::config::rpc::load_config_with_timeout()
+                    let mut config = dispatch
+                        .load_config()
                         .await
                         .map_err(|raw| CoreError::from_rpc_string(AGENT_CHAT, raw))?;
                     let target = match request.agent_id.as_deref().map(str::trim) {

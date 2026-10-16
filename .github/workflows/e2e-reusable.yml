@@ -165,7 +165,11 @@ jobs:
 
       - name: Run E2E (${{ inputs.spec_label }})
         if: ${{ !inputs.full }}
+        env:
+          E2E_USE_TAURI_DRIVER: "1"
         run: |
+          export XDG_DATA_HOME="$(mktemp -d /tmp/openhuman-e2e-xdg.XXXXXX)"
+          chmod 700 "$XDG_DATA_HOME"
           bash scripts/ci-cancel-aware.sh \
             xvfb-run -a --server-args="-screen 0 1280x960x24" \
             bash app/scripts/e2e-run-session.sh "${{ inputs.spec_path }}" "${{ inputs.spec_label }}"
@@ -450,7 +454,10 @@ jobs:
           cat "$module_root/modules.env" >> "$GITHUB_ENV"
 
       - name: Run Rust E2E suite (tests/*_e2e.rs vs mock backend)
-        run: bash scripts/ci-cancel-aware.sh pnpm test:rust:e2e
+        run: |
+          export XDG_DATA_HOME="$(mktemp -d /tmp/openhuman-rust-e2e-xdg.XXXXXX)"
+          chmod 700 "$XDG_DATA_HOME"
+          bash scripts/ci-cancel-aware.sh pnpm test:rust:e2e
 
       # No artifact uploads here either — same release-workflow reuse
       # concern as the Tauri job above. Mock-backend log lives at
@@ -860,6 +867,8 @@ jobs:
         env:
           E2E_BAIL_ON_FAILURE: ${{ vars.E2E_BAIL_ON_FAILURE || '' }}
         run: |
+          export XDG_DATA_HOME="$(mktemp -d /tmp/openhuman-e2e-xdg.XXXXXX)"
+          chmod 700 "$XDG_DATA_HOME"
           BAIL_FLAG=""
           if [[ "${E2E_BAIL_ON_FAILURE:-}" == "1" ]]; then
             BAIL_FLAG="--bail"

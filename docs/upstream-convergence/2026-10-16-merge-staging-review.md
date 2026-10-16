@@ -1,5 +1,7 @@
 # OpenHuman upstream integration — staging review (2026-10-16)
 
+> **Historical snapshot:** The unresolved-path inventory below described the *initial* merge staging. Subsequent reconciliation commits addressed those paths. Read [the current upstream refresh audit](./2026-10-16-latest-upstream-sync-audit.md) for the latest tree comparison, implementation decisions, and remaining verification gates.
+
 **NOT READY TO MERGE.** This staging branch exists to preserve the exact original Git histories while auditing how to combine their working trees.
 
 - Fork main: `7070ff332c9a69032e22a0b6c7431eea462e162d` (754 fork-exclusive commits).

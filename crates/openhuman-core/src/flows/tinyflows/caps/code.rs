@@ -45,6 +45,8 @@ use tinybox_bus::CommandClass;
 /// no policy check and no approval gate at all.
 pub struct OpenHumanCode {
     pub config: Arc<Config>,
+    /// The context the run acts under, handed over by whoever started it.
+    pub ctx: DispatchCtx,
     pub security: Arc<SecurityPolicy>,
     /// The run's approval context (flow run correlation), handed to the gate
     /// with every acting dispatch.
@@ -83,8 +85,7 @@ impl CodeRunner for OpenHumanCode {
             return Err(EngineError::Capability(reason));
         }
 
-        // Transitional (#7801): the flow caps carry no context yet.
-        let dispatch = DispatchCtx::ambient();
+        let dispatch = self.ctx.clone();
         let outcome: Result<Value> = async {
         let policy = resolve_sandbox_policy(
             &dispatch,
@@ -151,7 +152,8 @@ impl CodeRunner for OpenHumanCode {
                 "[flows] code: running sandboxed script"
             );
 
-            execute_in_sandbox(&dispatch, 
+            execute_in_sandbox(
+                &dispatch,
                 &policy,
                 &command,
                 &self.config.action_dir,

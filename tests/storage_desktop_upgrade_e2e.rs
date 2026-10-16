@@ -412,12 +412,18 @@ async fn host_documents(backend: &dyn StorageBackend) -> usize {
 
 async fn import_modules(workspace: &Path) {
     use openhuman_core::modules;
-    modules::import_legacy_mcp(workspace).await;
-    modules::import_legacy_connectors(workspace).await;
+    let ctx = openhuman_core::core::runtime::DispatchCtx::process_default();
+    modules::import_legacy_mcp(&ctx, workspace).await;
+    modules::import_legacy_connectors(&ctx, workspace).await;
     #[cfg(feature = "web3")]
-    assert!(modules::import_legacy_x402(workspace).await);
-    modules::import_legacy_tinybox(workspace).await;
-    modules::import_legacy_tinyjuice(&workspace.join("ccr"), Some(Duration::from_secs(3600))).await;
+    assert!(modules::import_legacy_x402(&ctx, workspace).await);
+    modules::import_legacy_tinybox(&ctx, workspace).await;
+    modules::import_legacy_tinyjuice(
+        &ctx,
+        &workspace.join("ccr"),
+        Some(Duration::from_secs(3600)),
+    )
+    .await;
 }
 
 async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(case: Case) {
@@ -442,7 +448,11 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     };
 
     // First boot: every host importer runs and none is left without a source.
-    let reports = import::run(&openhuman_core::core::runtime::DispatchCtx::process_default(), &config).await;
+    let reports = import::run(
+        &openhuman_core::core::runtime::DispatchCtx::process_default(),
+        &config,
+    )
+    .await;
     assert!(!reports.is_empty());
     if case.driver == Driver::File {
         // The file backend deliberately has no atomic read-checked batch
@@ -469,7 +479,11 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
 
         // A partial attempt leaves its import marker absent, allowing a
         // later retry on a backend that supports atomic validation.
-        let again = import::run(&openhuman_core::core::runtime::DispatchCtx::process_default(), &config).await;
+        let again = import::run(
+        &openhuman_core::core::runtime::DispatchCtx::process_default(),
+        &config,
+    )
+    .await;
         let sessions = again
             .iter()
             .find(|report| report.domain == "sessions")

@@ -212,9 +212,7 @@ pub async fn pre_turn(
     let dispatch = ctx.clone();
     let identity = identity.clone();
     let thread = input.thread_id.clone();
-    let task = ctx.spawn(async move {
-        pre_turn_work(&dispatch, &config, &identity, input).await
-    });
+    let task = ctx.spawn(async move { pre_turn_work(&dispatch, &config, &identity, input).await });
     let pack = match tokio::time::timeout(timeout, task).await {
         Ok(Ok(pack)) => pack,
         Ok(Err(error)) => {
@@ -279,10 +277,13 @@ pub(crate) async fn pre_turn_work(
             tokio::time::Instant::now() + timeout.saturating_sub(Duration::from_millis(100));
         async move {
             let zone = config.time_zone();
-            tokio::time::timeout_at(deadline, super::date_hint::extract(&ctx, &config, &text, &zone))
-                .await
-                .ok()
-                .flatten()
+            tokio::time::timeout_at(
+                deadline,
+                super::date_hint::extract(&ctx, &config, &text, &zone),
+            )
+            .await
+            .ok()
+            .flatten()
         }
     });
     let pack = async move {

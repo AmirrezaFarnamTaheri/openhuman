@@ -32,3 +32,7 @@ mod policy_disabled_tests;
 
 #[cfg(test)]
 mod proptest_tests;
+
+#[cfg(test)]
+#[path = "policy_media_artifact_tests.rs"]
+mod policy_media_artifact_tests;

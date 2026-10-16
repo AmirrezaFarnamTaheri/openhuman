@@ -20,7 +20,13 @@ pub(super) async fn run_agent_job(
     job: &CronJob,
 ) -> (bool, String, Option<String>) {
     let run_id = uuid::Uuid::new_v4().to_string();
-    run_agent_job_for_run(&crate::core::runtime::DispatchCtx::host_default(), config, job, &run_id).await
+    run_agent_job_for_run(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        config,
+        job,
+        &run_id,
+    )
+    .await
 }
 
 pub(super) async fn run_agent_job_for_run(

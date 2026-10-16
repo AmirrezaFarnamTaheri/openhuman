@@ -303,7 +303,7 @@ impl ShellTool {
             context,
             crate::sandbox::shell_progress::HEARTBEAT_INTERVAL,
             |meter| {
-                self.run_with_security_in_context(&ctx, command, requested_timeout, context, meter)
+                self.run_with_security_in_context(ctx, command, requested_timeout, context, meter)
             },
         )
         .await;
@@ -340,7 +340,7 @@ impl ShellTool {
         command: &str,
         requested_timeout: Option<u64>,
     ) -> (bool, ToolResult) {
-        self.run_with_security_in_context(&ctx, command, requested_timeout, None, None)
+        self.run_with_security_in_context(ctx, command, requested_timeout, None, None)
             .await
     }
 
@@ -421,7 +421,7 @@ impl ShellTool {
             let action_dir = saas_action_dir;
             return match resolved {
                 Ok(policy) => {
-                    self.run_in_policy(&ctx, policy, command, requested_timeout, &action_dir, meter)
+                    self.run_in_policy(ctx, policy, command, requested_timeout, &action_dir, meter)
                         .await
                 }
                 Err(why) => {
@@ -435,7 +435,7 @@ impl ShellTool {
         // A sandboxed agent or an explicit operator backend uses the sandbox
         // execution path. Security checks above still apply.
         let sandbox_required = match crate::sandbox::command_requires_sandbox(
-            &ctx,
+            ctx,
             crate::agent::tinyagents::host::run_context::sandbox_mode_for_tool(context),
         )
         .await
@@ -451,7 +451,7 @@ impl ShellTool {
         if sandbox_required {
             let action_dir = self.effective_action_dir_for_context(context);
             return self
-                .run_sandboxed(&ctx, command, requested_timeout, &action_dir, meter)
+                .run_sandboxed(ctx, command, requested_timeout, &action_dir, meter)
                 .await;
         }
 
@@ -652,7 +652,7 @@ impl ShellTool {
             &config,
             false,
         );
-        self.run_in_policy(&ctx, policy, command, requested_timeout, action_dir, meter)
+        self.run_in_policy(ctx, policy, command, requested_timeout, action_dir, meter)
             .await
     }
 
@@ -697,7 +697,7 @@ impl ShellTool {
         );
 
         let result = sandbox::ops::execute_in_sandbox_metered(
-            &ctx, &policy, command, action_dir, extra_env, effective, meter,
+            ctx, &policy, command, action_dir, extra_env, effective, meter,
         )
         .await;
         (true, exec_result(result, effective))

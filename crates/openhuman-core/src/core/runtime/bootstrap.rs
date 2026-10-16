@@ -39,7 +39,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // SQLite files (approvals, devices, notifications, task sources) into it
     // once, read-only, before anything below opens those stores. A no-op
     // without a backend; failures are logged and retried at the next boot.
-    for report in crate::storage::import::run(&cfg).await {
+    for report in crate::storage::import::run(ctx, &cfg).await {
         if let Err(error) = report.outcome {
             log::warn!(
                 "[runtime] legacy {} store import failed: {error:#}",
@@ -164,10 +164,8 @@ pub(crate) async fn bootstrap_core_runtime(
         // result never reached its chat thread is still pending in the durable
         // completion log (`<workspace>/.openhuman/background_completions.jsonl`).
         // Schedule its delivery turn through the normal idle-gated path.
-        let redelivering = crate::agent::orchestration::background_delivery::recover_on_boot(
-            ctx,
-            &workspace_dir,
-        );
+        let redelivering =
+            crate::agent::orchestration::background_delivery::recover_on_boot(ctx, &workspace_dir);
         if redelivering > 0 {
             log::info!(
                 "[runtime] scheduled redelivery of undelivered background completions for \

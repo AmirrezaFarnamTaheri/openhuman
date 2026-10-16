@@ -5033,12 +5033,14 @@ async fn json_rpc_web_chat_custom_chat_provider_with_auth_none_omits_auth_header
         )),
         "reinjecting a reserved provider must retain its CA bundle"
     );
-    let (model, model_id) = openhuman_core::inference::provider::create_chat_model_with_model_id(
-        "chat",
-        &loaded_config,
-        0.0,
-    )
-    .expect("custom auth-none model should build");
+    let (model, model_id) =
+        openhuman_core::inference::provider::create_chat_model_with_model_id_in(
+            &openhuman_core::core::runtime::DispatchCtx::host_default(),
+            "chat",
+            &loaded_config,
+            0.0,
+        )
+        .expect("custom auth-none model should build");
     let direct = model
         .invoke(
             &(),

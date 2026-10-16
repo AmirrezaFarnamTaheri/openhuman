@@ -91,6 +91,7 @@ pub(crate) async fn require_backend(_config: &Config, _expected: &str) -> anyhow
 
 /// Run a command inside TinyBox's native jail and keep its resource lifecycle module-owned.
 pub(crate) async fn execute(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     policy: &SandboxPolicy,
     command: &str,
@@ -102,6 +103,7 @@ pub(crate) async fn execute(
 ) -> anyhow::Result<SandboxExecResult> {
     #[cfg(feature = "modules")]
     {
+        let ctx = ctx.clone();
         let config = config.clone();
         let policy = policy.clone();
         let command = command.to_owned();
@@ -110,6 +112,7 @@ pub(crate) async fn execute(
         // The worker owns cancellation and resource cleanup if the caller drops its wait.
         tokio::spawn(async move {
             execute_owned(
+                &ctx,
                 &config,
                 &policy,
                 &command,
@@ -127,6 +130,7 @@ pub(crate) async fn execute(
     #[cfg(not(feature = "modules"))]
     {
         let _ = (
+            ctx,
             config,
             policy,
             command,
@@ -142,6 +146,7 @@ pub(crate) async fn execute(
 
 #[cfg(feature = "modules")]
 async fn execute_owned(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     policy: &SandboxPolicy,
     command: &str,
@@ -183,7 +188,7 @@ async fn execute_owned(
     // TinyBox adds its own per-call scratch directory to the writable grants and
     // points TMPDIR, TMP and TEMP at it unless the caller overrides them.
     run.jail = Some(jail_request(policy, isolation)?);
-    super::shell_exec::run(config, run).await
+    super::shell_exec::run(ctx, config, run).await
 }
 
 /// The caller's environment overrides, which must be UTF-8 to cross the bus.

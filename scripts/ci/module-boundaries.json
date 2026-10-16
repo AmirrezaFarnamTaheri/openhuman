@@ -115,11 +115,6 @@
   "pendingContracts": [],
   "exceptions": [
     {
-      "scope": "hosts",
-      "package": "tinymcp",
-      "reason": "#7205 tinymcp::ui pure rules; move to tinymcp-bus tracked under #7868"
-    },
-    {
       "scope": "tinychannels-bus",
       "package": "anyhow",
       "reason": "tinychannels-bus (vendor/tinychannels) still carries a provider trait with async-trait/anyhow/tokio::sync; the contract needs to be split upstream in tinyhumansai/tinychannels before this edge can go (tracked under #7523)."
@@ -133,6 +128,16 @@
       "scope": "tinychannels-bus",
       "package": "tokio",
       "reason": "tinychannels-bus (vendor/tinychannels) still carries a provider trait with async-trait/anyhow/tokio::sync; the contract needs to be split upstream in tinyhumansai/tinychannels before this edge can go (tracked under #7523)."
+    },
+    {
+      "scope": "tinyconnectors-bus",
+      "package": "hmac",
+      "reason": "TinyConnectors #72 adds optional pure Composio webhook verification helpers to the bus contract for hosts that own the endpoint; this edge is enabled only by its opt-in webhook feature and is recorded for contract-boundary review."
+    },
+    {
+      "scope": "tinyconnectors-bus",
+      "package": "sha2",
+      "reason": "TinyConnectors #72 adds optional pure Composio webhook verification helpers to the bus contract for hosts that own the endpoint; this edge is enabled only by its opt-in webhook feature and is recorded for contract-boundary review."
     }
   ],
   "excludedSubsystems": [

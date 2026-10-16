@@ -62,7 +62,7 @@ pub async fn download_artifact_to_downloads(
     if artifact_id.trim().is_empty() {
         return Err("artifact_id must not be empty".to_string());
     }
-    let config = openhuman_rpc::embed::config::load_config_with_timeout().await?;
+    let config = openhuman_rpc::embed::config::load_host_config().await?;
     let roots = openhuman_rpc::embed::artifacts::FileRoots::from_config(&config);
     let source = resolve_source(&config.workspace_dir, &roots, &artifact_id).await?;
     if filename.trim().is_empty() {

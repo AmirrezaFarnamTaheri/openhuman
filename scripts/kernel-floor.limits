@@ -715,4 +715,10 @@
 #                      is two packages and one name: `tinymcp` (new name) and a
 #                      second major of `dirs` (v7.0.0; the name was already
 #                      present). Measured on macOS; CI re-measures on Linux.
-flows:330:305:2
+# 328/304/2 2026-10-15 The profile gateway reuses the `hmac` 0.12 and `sha2`
+#                      0.10 versions already in the flows graph for its
+#                      HMAC-SHA256 user-header signature, instead of adding
+#                      hmac 0.13 / sha2 0.11 and their digest closure. The
+#                      measured graph sheds two package versions and one
+#                      unique name with no native change.
+flows:328:304:2

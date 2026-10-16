@@ -222,9 +222,8 @@ tinyconnectors-bus = { path = "../../vendor/tinyconnectors/crates/tinyconnectors
 
 
 
-# tinymcp: pure tool-UI rules only (`tinymcp::ui`). The MCP runtime itself runs
-# as a module behind `tinymcp-bus`.
-tinymcp = { path = "../../vendor/tinymcp/crates/tinymcp", default-features = false, features = ["ui"] }
+# tinymcp's contract, including the pure tool-UI rules (`tinymcp_bus::ui`). The
+# MCP runtime itself runs as a module behind it.
 tinymcp-bus = { path = "../../vendor/tinymcp/crates/tinymcp-bus", features = ["schemars"] }
 # The transport-free channel vocabulary: inbound envelopes, outbound intents,
 # the config schema, controller metadata and relay frames. UNCONDITIONAL — `DomainEvent` embeds
@@ -333,8 +332,7 @@ x25519-dalek = { version = "2", features = ["static_secrets"] }
 hkdf = "0.12"
 hex = "0.4"
 # The host-owned SaaS gateway signature uses HMAC with SHA-256.
-hmac = "0.13"
-sha2_011 = { package = "sha2", version = "0.11" }
+hmac = "0.12"
 tokio-util = { version = "0.7", features = ["rt", "io"] }
 # tokio-tungstenite is declared per-target below so the TLS backend
 # (native-tls on Windows, rustls on macOS / Linux) matches the reqwest

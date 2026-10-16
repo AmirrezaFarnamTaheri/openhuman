@@ -121,11 +121,24 @@ MOCK_API_PORT="${MOCK_API_PORT:-18505}"
 MOCK_API_URL="http://127.0.0.1:${MOCK_API_PORT}"
 MOCK_LOG="${MOCK_LOG:-/tmp/openhuman-rust-e2e-mock.log}"
 MOCK_PID=""
+CREATED_XDG_DATA_HOME=""
+
+# TinyBus rejects module-search paths under a shared runner HOME mount. Keep
+# module state created by this test runner in an owner-only scratch directory.
+if [ -z "${XDG_DATA_HOME:-}" ]; then
+  XDG_DATA_HOME="$(mktemp -d "${TMPDIR:-/tmp}/openhuman-rust-e2e-xdg.XXXXXX")"
+  chmod 700 "$XDG_DATA_HOME"
+  export XDG_DATA_HOME
+  CREATED_XDG_DATA_HOME="$XDG_DATA_HOME"
+fi
 
 cleanup() {
   if [ -n "$MOCK_PID" ]; then
     kill "$MOCK_PID" 2>/dev/null || true
     wait "$MOCK_PID" 2>/dev/null || true
+  fi
+  if [ -n "$CREATED_XDG_DATA_HOME" ]; then
+    rm -rf "$CREATED_XDG_DATA_HOME" 2>/dev/null || true
   fi
 }
 trap cleanup EXIT
@@ -149,6 +162,14 @@ echo "[rust-e2e] Mock backend healthy."
 
 export BACKEND_URL="$MOCK_API_URL"
 export VITE_BACKEND_URL="$MOCK_API_URL"
+
+# The Linux/macOS CI host may not provide a usable Secret Service. Supply a
+# per-run encryption key so the core's encrypted storage backend can persist
+# the E2E session without depending on the host keyring. Never print the key.
+if [ -z "${OPENHUMAN_KEYRING_MASTER_KEY:-}" ] && [ -z "${OPENHUMAN_KEYRING_MASTER_KEY_FILE:-}" ]; then
+  OPENHUMAN_KEYRING_MASTER_KEY="$(openssl rand -hex 32)"
+  export OPENHUMAN_KEYRING_MASTER_KEY
+fi
 
 # The agent-harness E2E surface drives very large async futures in debug builds
 # (the typed sub-agent runner + the full agentic brain turn exercised by

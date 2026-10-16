@@ -43,6 +43,8 @@ use tinytools::Tool as _;
 /// **unknown** credential fails the request closed (`EngineError::Capability`)
 /// rather than silently sending it unauthenticated.
 pub struct OpenHumanHttp {
+    /// The context the run acts under, handed over by whoever started it.
+    pub ctx: crate::core::runtime::DispatchCtx,
     pub security: Arc<SecurityPolicy>,
     pub http_config: HttpRequestConfig,
     pub http_creds: Arc<HttpCredentialsStore>,
@@ -197,7 +199,7 @@ impl HttpClient for OpenHumanHttp {
         }
 
         let tool = http_request_tool(
-            &crate::core::runtime::DispatchCtx::ambient(),
+            &self.ctx,
             self.security.clone(),
             self.http_config.allowed_domains.clone(),
             self.http_config.max_response_size,

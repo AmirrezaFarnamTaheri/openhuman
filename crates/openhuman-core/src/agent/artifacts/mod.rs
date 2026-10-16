@@ -7,6 +7,7 @@ mod store_documents;
 pub mod tools;
 pub mod types;
 
+pub(crate) use files::resolve_ready_file_meta;
 pub use files::{resolve_ready_file, FileRoots};
 pub use migrate::{migrate_legacy_artifacts, MigrationReport};
 pub use schemas::{
