@@ -44,10 +44,8 @@ pub(super) struct InferenceCloudProviderUpdate {
     #[serde(default)]
     tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
     #[serde(default)]
-    model_transports: std::collections::HashMap<
-        String,
-        crate::config::schema::cloud_providers::ModelTransport,
-    >,
+    model_transports:
+        std::collections::HashMap<String, crate::config::schema::cloud_providers::ModelTransport>,
     #[serde(default)]
     ca_cert_pem: Option<String>,
     // keep until v0.66 (review after 2027-01-11): incoming RPC discriminator
@@ -153,18 +151,24 @@ struct ModelFleetResetParams {
 
 /// Model-fleet health and cooldowns are process-local, keyed by workspace.
 /// The response contains only counts and statuses, never raw token material.
-pub(super) fn handle_inference_model_fleet_status(_params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_inference_model_fleet_status(
+    ctx: DispatchCtx,
+    _params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         let status = crate::inference::provider::factory::model_fleet_health(&config);
         to_json(Outcome::new(status, vec![]))
     })
 }
 
-pub(super) fn handle_inference_model_fleet_reset(params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn handle_inference_model_fleet_reset(
+    ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
         let update = deserialize_params::<ModelFleetResetParams>(params)?;
-        let config = config_rpc::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         crate::inference::provider::factory::model_fleet_reset(&config, &update.slug)?;
         to_json(Outcome::new(
             serde_json::json!({ "reset": true, "provider": update.slug }),
@@ -409,13 +413,11 @@ mod tool_codec_update_contract_tests {
             ("qnml", ToolCallCodec::Qnml),
             ("tagged_json", ToolCallCodec::TaggedJson),
         ] {
-            let input: InferenceCloudProviderUpdate = serde_json::from_value(
-                serde_json::json!({
-                    "slug": "peer-gateway",
-                    "endpoint": "https://example.net/v1",
-                    "tool_call_codec": wire,
-                }),
-            )
+            let input: InferenceCloudProviderUpdate = serde_json::from_value(serde_json::json!({
+                "slug": "peer-gateway",
+                "endpoint": "https://example.net/v1",
+                "tool_call_codec": wire,
+            }))
             .expect("valid codec name");
             assert_eq!(input.tool_call_codec, expected);
         }

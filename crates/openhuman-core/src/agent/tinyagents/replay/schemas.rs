@@ -338,8 +338,11 @@ fn handle_runs_active(ctx: DispatchCtx, params: Map<String, Value>) -> Controlle
 /// Refuse path-like, control and unbounded strings before touching config,
 /// storage, or logging. A malformed user-supplied ID is never proof of a run.
 fn validate_local_check_run_id(id: &str) -> Result<(), String> {
-    if id.is_empty() || id.len() > 128
-        || !id.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'-'))
+    if id.is_empty()
+        || id.len() > 128
+        || !id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'-'))
     {
         return Err("invalid params: malformed run_id".to_owned());
     }
@@ -348,17 +351,16 @@ fn validate_local_check_run_id(id: &str) -> Result<(), String> {
 
 /// Return a narrowly scoped verification fact summary without copying
 /// source, prompts, command arguments or tool output into the response.
-fn handle_run_local_checks(params: Map<String, Value>) -> ControllerFuture {
+fn handle_run_local_checks(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload: RunLocalChecksParams = serde_json::from_value(Value::Object(params))
             .map_err(|err| format!("invalid params: {err}"))?;
         validate_local_check_run_id(&payload.run_id)?;
-        let workspace = configured_workspace().await?;
+        let workspace = configured_workspace(&ctx).await?;
         let receipt = read_run_local_checks(&workspace, &payload.run_id)
             .await
             .map_err(|err| format!("read local checks failed: {err:#}"))?;
-        serde_json::to_value(receipt)
-            .map_err(|err| format!("serialize local checks failed: {err}"))
+        serde_json::to_value(receipt).map_err(|err| format!("serialize local checks failed: {err}"))
     })
 }
 
