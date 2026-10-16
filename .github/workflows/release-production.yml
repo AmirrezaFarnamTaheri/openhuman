@@ -119,6 +119,7 @@ jobs:
       base_url: ${{ steps.resolve.outputs.base_url }}
     steps:
       - name: Generate GitHub App token
+        if: github.repository == 'tinyhumansai/openhuman'
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
@@ -134,7 +135,7 @@ jobs:
         with:
           ref: release
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ steps.app-token.outputs.token || github.token }}
           submodules: recursive
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -147,7 +148,7 @@ jobs:
           package-manager-cache: false
       - name: Configure Git
         env:
-          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
           git config user.name "github-actions[bot]"
