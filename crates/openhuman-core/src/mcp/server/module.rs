@@ -411,7 +411,9 @@ impl ServerSession {
         {
             *pending = Some(PendingCallback::Running {
                 id: callback_id.clone(),
-                task: crate::core::runtime::DispatchCtx::ambient()
+                // The host callback runs under the process default, like
+                // `host_dispatch`: the MCP server is a single-tenant host.
+                task: crate::core::runtime::DispatchCtx::process_default()
                     .spawn((self.callback_dispatch)(call)),
             });
         }

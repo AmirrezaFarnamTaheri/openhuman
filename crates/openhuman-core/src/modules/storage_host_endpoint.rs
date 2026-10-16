@@ -103,7 +103,9 @@ impl StorageHost {
         let tx = relay.tx.clone();
         relay.fed_by = Some(Arc::downgrade(binding));
         relay.bridge = Some(
-            crate::core::runtime::DispatchCtx::ambient().spawn(async move {
+            // The forwarder only moves signals between channels and reads no
+            // scope, so it needs no tenant.
+            crate::core::runtime::DispatchCtx::host_default().spawn(async move {
                 loop {
                     match signals.recv().await {
                         Ok(signal) => {
