@@ -3099,8 +3099,7 @@ pub fn is_insufficient_credits_event(event: &sentry::protocol::Event<'_>) -> boo
 /// [`tinyinference_llm::failure::body_indicates_quota_exhausted`], so
 /// the emit-site guard and this `before_send` net can't drift. Shared with the
 /// event-level filter [`is_quota_exhausted_event`].
-/// Kept public for legacy integrations that use the shared failure predicate
-/// even when crash reporting is disabled.
+/// Public for callers that inspect failures without crash reporting.
 pub fn is_quota_exhausted_message(body: &str) -> bool {
     tinyinference_llm::failure::body_indicates_quota_exhausted(body)
 }
