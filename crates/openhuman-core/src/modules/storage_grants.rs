@@ -49,8 +49,6 @@ pub(crate) enum Denied {
     Schema,
     /// The selector is not part of the contract, or carries no usable target.
     Malformed,
-    /// The selector needs a bus stream, which this host does not serve yet.
-    Unsupported,
 }
 
 impl Denied {
@@ -62,7 +60,6 @@ impl Denied {
             Self::ReadOnly => "read-only-grant",
             Self::Schema => "schema-is-host-only",
             Self::Malformed => "malformed-request",
-            Self::Unsupported => "unsupported-selector",
         }
     }
 }
@@ -257,7 +254,18 @@ pub(crate) fn authorize(
     // bind when one is refused, so a grant without (say) blobs would leave the
     // whole module without storage. It reveals nothing of the data and every
     // other call on an ungranted object is still refused.
-    if !grant.has_object(object) && selector != "Capabilities" {
+    if selector == "Capabilities" && !grant.has_object(object) {
+        return match object {
+            Object::Documents => Ok(Plan::Answer(serde_json::json!({ "capabilities": [] }))),
+            Object::Blobs => Ok(Plan::Answer(serde_json::json!({
+                "presigned_urls": false,
+                "ttl": false,
+                "max_key_len": 0,
+            }))),
+            Object::Streams | Object::Secrets => Err(Denied::Object),
+        };
+    }
+    if !grant.has_object(object) {
         return Err(Denied::Object);
     }
     let write = is_write(object, selector);
@@ -290,7 +298,7 @@ fn is_write(object: Object, selector: &str) -> bool {
         ) | (
             Object::Streams,
             "Append" | "AppendBatch" | "AppendBatchIfOffset" | "TruncateBefore" | "DeleteStream"
-        ) | (Object::Blobs, "Put" | "Delete" | "PresignPut")
+        ) | (Object::Blobs, "Put" | "PutStream" | "Delete" | "PresignPut")
             | (Object::Secrets, "Set" | "Delete")
     )
 }
@@ -342,10 +350,16 @@ fn documents(grant: &StorageGrant, selector: &str, request: &Value) -> Result<Pl
                 write: false,
             })
         }
-        // Watches are projected to bus signals, which this host does not
-        // route per module yet; opening one would leave a native watch task
-        // with nobody to tell, so it is refused instead of half-served.
-        "WatchOpen" | "WatchClose" => Err(Denied::Unsupported),
+        // A watch is bound to the module's own server, and its invalidations
+        // are unicast to that module's peer (`emit_to`), so the grant only has
+        // to cover the collection. Closing names a handle the module's own
+        // binding issued; another module's id is `NotFound` there.
+        "WatchOpen" => {
+            let collection = text(request, "collection")?;
+            grant.collection(collection)?;
+            Ok(forward(collection))
+        }
+        "WatchClose" => Ok(forward("")),
         "Capabilities" => Ok(forward("")),
         _ => Err(Denied::Malformed),
     }
@@ -392,16 +406,15 @@ fn streams(grant: &StorageGrant, selector: &str, request: &Value) -> Result<Plan
 
 fn blobs(grant: &StorageGrant, selector: &str, request: &Value) -> Result<Plan, Denied> {
     match selector {
-        // Streamed bodies need a bus stream argument, which the dynamic
-        // interface here does not carry; the inline selectors cover small
-        // blobs and these refuse rather than pretend.
-        "PutStream" | "GetStream" => Err(Denied::Unsupported),
-        "Get" | "GetRange" | "Head" | "PresignGet" => {
+        // The streamed transfers carry the request head as `request`; the body
+        // travels on a peer-bound bus stream the endpoint opens or accepts
+        // (`Connection::accept_stream_from` / `open_stream`).
+        "Get" | "GetStream" | "GetRange" | "Head" | "PresignGet" => {
             let key = text(request, "key")?;
             let granted = StorageGrant::prefixed(&grant.blob_prefixes, key)?;
             Ok(forward(granted))
         }
-        "Put" | "Delete" | "PresignPut" => {
+        "Put" | "PutStream" | "Delete" | "PresignPut" => {
             let key = text(request, "key")?;
             let granted = StorageGrant::prefixed(&grant.blob_prefixes, key)?;
             Ok(forward(granted))

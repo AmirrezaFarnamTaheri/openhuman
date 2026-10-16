@@ -1,16 +1,16 @@
 //! Sandbox domain controller schemas and RPC handlers.
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
-use crate::config::rpc as config_rpc;
 use crate::core::all::{ControllerFuture, RegisteredController};
 use crate::core::Outcome;
 use crate::core::{ControllerSchema, FieldSchema, TypeSchema};
 
 /// Refuse with the typed `COMPONENT_DISABLED:sandbox` error while `[components]
-/// sandbox` is off. Read from the ambient core context; with none, it is on.
-fn gate() -> Result<(), String> {
-    if super::ops::sandbox_component_off() {
+/// sandbox` is off for the context the call runs under; with none, it is on.
+fn gate(ctx: &DispatchCtx) -> Result<(), String> {
+    if super::ops::sandbox_component_off(ctx) {
         return Err(crate::core::runtime::components::component_disabled("sandbox").encode());
     }
     Ok(())
@@ -77,7 +77,7 @@ pub fn schemas(function: &str) -> ControllerSchema {
             outputs: vec![FieldSchema {
                 name: "status",
                 ty: TypeSchema::Json,
-                comment: "Backend handle with kind, status, and backend_id.",
+                comment: "Backend handle with kind, status, backend_id, and (local) isolation.",
                 required: true,
             }],
         },
@@ -167,9 +167,9 @@ pub fn schemas(function: &str) -> ControllerSchema {
 /// requested name — so `backend:"docker"` on a native-config host reports Local,
 /// matching what a real session on that host would run. Reporting the requested
 /// backend instead was the conflation fixed in #6081.
-fn handle_status(params: Map<String, Value>) -> ControllerFuture {
+fn handle_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        gate()?;
+        gate(&ctx)?;
         let backend_str = params
             .get("backend")
             .and_then(|v| v.as_str())
@@ -185,8 +185,8 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
             .unwrap_or(false);
 
         let mode = match backend_str {
-            "docker" | "local" => crate::agent::harness::definition::SandboxMode::Sandboxed,
-            _ => crate::agent::harness::definition::SandboxMode::None,
+            "docker" | "local" => tinyagents_definition::SandboxMode::Sandboxed,
+            _ => tinyagents_definition::SandboxMode::None,
         };
 
         // Load the user's live config so the reported policy reflects the
@@ -194,7 +194,7 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
         // and the mounted workspace, not the compiled-in `RuntimeConfig::default()`
         // (#6081). A failed config load surfaces to the caller rather than
         // silently answering from defaults.
-        let config = match config_rpc::load_config_with_timeout().await {
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(err) => {
                 log::warn!("[sandbox] handle_status config load failed error={err}");
@@ -203,6 +203,7 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
         };
 
         let mut policy = super::ops::resolve_sandbox_policy(
+            &ctx,
             mode,
             &config.workspace_dir,
             &config.workspace_dir,
@@ -224,9 +225,9 @@ fn handle_status(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
+fn handle_resolve_policy(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        gate()?;
+        gate(&ctx)?;
         let mode_str = params
             .get("sandbox_mode")
             .and_then(|v| v.as_str())
@@ -237,9 +238,9 @@ fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
             .unwrap_or(false);
 
         let mode = match mode_str {
-            "sandboxed" => crate::agent::harness::definition::SandboxMode::Sandboxed,
-            "read_only" => crate::agent::harness::definition::SandboxMode::ReadOnly,
-            _ => crate::agent::harness::definition::SandboxMode::None,
+            "sandboxed" => tinyagents_definition::SandboxMode::Sandboxed,
+            "read_only" => tinyagents_definition::SandboxMode::ReadOnly,
+            _ => tinyagents_definition::SandboxMode::None,
         };
 
         // Load the user's live config so the resolved policy honors the
@@ -247,7 +248,7 @@ fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
         // and the user's action dir, not the compiled-in `RuntimeConfig::default()`
         // and `default_action_dir()` (#6081). A failed config load surfaces to
         // the caller rather than silently answering from defaults.
-        let config = match config_rpc::load_config_with_timeout().await {
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(err) => {
                 log::warn!("[sandbox] handle_resolve_policy config load failed error={err}");
@@ -263,6 +264,7 @@ fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
         // set directly. Re-deriving it here from `action_dir_override` alone
         // would silently ignore an embedder's programmatic `action_dir` (#6081).
         let mut policy = super::ops::resolve_sandbox_policy(
+            &ctx,
             mode,
             &config.action_dir,
             &config.workspace_dir,
@@ -283,10 +285,10 @@ fn handle_resolve_policy(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_cleanup_orphans(_params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async {
-        gate()?;
-        let config = match crate::config::ops::load_config_with_timeout().await {
+fn handle_cleanup_orphans(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        gate(&ctx)?;
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => return Err(error),
         };
@@ -300,15 +302,15 @@ fn handle_cleanup_orphans(_params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_validate_policy(params: Map<String, Value>) -> ControllerFuture {
+fn handle_validate_policy(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        gate()?;
+        gate(&ctx)?;
         let policy_val = params.get("policy").cloned().unwrap_or(Value::Null);
         let policy: super::types::SandboxPolicy = match serde_json::from_value(policy_val) {
             Ok(p) => p,
             Err(e) => return Err(format!("Invalid policy: {e}")),
         };
-        let config = crate::config::ops::load_config_with_timeout().await?;
+        let config = ctx.load_config().await?;
         // The module owns the verdict; a missing one is an error, never "valid".
         let issues = super::docker::validate_docker_policy(&config, &policy)
             .await

@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 
 // NOTE: the title_log_fingerprint / collapse_whitespace copies were removed
 // here (plan.md §2.1) — threads/title.rs (the owning module) already covers
@@ -185,17 +186,20 @@ async fn message_append_returns_typed_not_found_for_stale_thread() {
     let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
     let thread_id = "thread-missing";
 
-    let err = message_append(AppendConversationMessageRequest {
-        thread_id: thread_id.to_string(),
-        message: ConversationMessageRecord {
-            id: "msg-1".to_string(),
-            content: "hello".to_string(),
-            message_type: "text".to_string(),
-            extra_metadata: Value::Null,
-            sender: "user".to_string(),
-            created_at: "2026-01-01T00:00:00Z".to_string(),
+    let err = message_append(
+        &DispatchCtx::process_default(),
+        AppendConversationMessageRequest {
+            thread_id: thread_id.to_string(),
+            message: ConversationMessageRecord {
+                id: "msg-1".to_string(),
+                content: "hello".to_string(),
+                message_type: "text".to_string(),
+                extra_metadata: Value::Null,
+                sender: "user".to_string(),
+                created_at: "2026-01-01T00:00:00Z".to_string(),
+            },
         },
-    })
+    )
     .await
     .expect_err("missing thread must return a typed not-found error");
 
@@ -215,10 +219,13 @@ async fn generate_title_returns_typed_not_found_for_stale_thread() {
     let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
     let thread_id = "thread-missing";
 
-    let err = thread_generate_title(GenerateConversationThreadTitleRequest {
-        thread_id: thread_id.to_string(),
-        assistant_message: None,
-    })
+    let err = thread_generate_title(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        GenerateConversationThreadTitleRequest {
+            thread_id: thread_id.to_string(),
+            assistant_message: None,
+        },
+    )
     .await
     .expect_err("missing thread must return a typed not-found error");
 
@@ -243,6 +250,7 @@ async fn generate_title_leaves_custom_title_unchanged() {
         .expect("load config")
         .workspace_dir;
     conversations_store::append_message(
+        &crate::core::runtime::DispatchCtx::ambient(),
         dir,
         thread_id,
         ConversationMessage {
@@ -256,10 +264,13 @@ async fn generate_title_leaves_custom_title_unchanged() {
     )
     .unwrap();
 
-    let outcome = thread_generate_title(GenerateConversationThreadTitleRequest {
-        thread_id: thread_id.to_string(),
-        assistant_message: None,
-    })
+    let outcome = thread_generate_title(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        GenerateConversationThreadTitleRequest {
+            thread_id: thread_id.to_string(),
+            assistant_message: None,
+        },
+    )
     .await
     .expect("generate title");
 
@@ -278,10 +289,13 @@ async fn generate_title_returns_existing_title_when_no_user_message_exists() {
     let thread_id = "thread-no-user";
     create_thread_with_title(&workspace, thread_id, "Chat Jan 1 1:00 AM").await;
 
-    let outcome = thread_generate_title(GenerateConversationThreadTitleRequest {
-        thread_id: thread_id.to_string(),
-        assistant_message: Some("assistant reply".into()),
-    })
+    let outcome = thread_generate_title(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        GenerateConversationThreadTitleRequest {
+            thread_id: thread_id.to_string(),
+            assistant_message: Some("assistant reply".into()),
+        },
+    )
     .await
     .expect("generate title");
 
@@ -304,6 +318,7 @@ async fn generate_title_falls_back_to_first_user_message_when_assistant_missing(
         .workspace_dir;
     let user_message = "Please summarize the latest five email threads for me.";
     conversations_store::append_message(
+        &crate::core::runtime::DispatchCtx::ambient(),
         dir,
         thread_id,
         ConversationMessage {
@@ -317,10 +332,13 @@ async fn generate_title_falls_back_to_first_user_message_when_assistant_missing(
     )
     .unwrap();
 
-    let outcome = thread_generate_title(GenerateConversationThreadTitleRequest {
-        thread_id: thread_id.to_string(),
-        assistant_message: None,
-    })
+    let outcome = thread_generate_title(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        GenerateConversationThreadTitleRequest {
+            thread_id: thread_id.to_string(),
+            assistant_message: None,
+        },
+    )
     .await
     .expect("generate title");
 
@@ -351,6 +369,7 @@ async fn thread_delete_removes_persisted_turn_state_snapshot() {
     // thread must discard it so it's never delivered into a dead thread.
     use crate::agent::orchestration::background_completions as bg;
     bg::record_completion(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &dir,
         "sess-del",
         "sub-del-1",
@@ -361,10 +380,13 @@ async fn thread_delete_removes_persisted_turn_state_snapshot() {
     .await;
     assert_eq!(bg::pending_for(&dir, thread_id).len(), 1);
 
-    thread_delete(DeleteConversationThreadRequest {
-        thread_id: thread_id.to_string(),
-        deleted_at: "2026-01-01T00:02:00Z".into(),
-    })
+    thread_delete(
+        &DispatchCtx::process_default(),
+        DeleteConversationThreadRequest {
+            thread_id: thread_id.to_string(),
+            deleted_at: "2026-01-01T00:02:00Z".into(),
+        },
+    )
     .await
     .expect("delete thread");
 
@@ -410,6 +432,7 @@ async fn threads_purge_removes_every_turn_state_snapshot() {
     // them all since no parent thread survives.
     use crate::agent::orchestration::background_completions as bg;
     bg::record_completion(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &dir,
         "sess-p1",
         "sub-p1",
@@ -419,6 +442,7 @@ async fn threads_purge_removes_every_turn_state_snapshot() {
     )
     .await;
     bg::record_completion(
+        &crate::core::runtime::DispatchCtx::ambient(),
         &dir,
         "sess-p2",
         "sub-p2",
@@ -428,9 +452,12 @@ async fn threads_purge_removes_every_turn_state_snapshot() {
     )
     .await;
 
-    threads_purge(EmptyRequest {})
-        .await
-        .expect("purge threads should also clear snapshots");
+    threads_purge(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        EmptyRequest {},
+    )
+    .await
+    .expect("purge threads should also clear snapshots");
 
     assert!(bg::pending_for(&dir, "thread-a").is_empty());
     assert!(bg::pending_for(&dir, "thread-b").is_empty());
@@ -465,10 +492,13 @@ async fn thread_update_title_rejects_empty_and_whitespace_only_titles() {
     let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
 
     for title in ["", "   "] {
-        let err = thread_update_title(crate::threads::UpdateConversationThreadTitleRequest {
-            thread_id: "t-1".to_string(),
-            title: title.to_string(),
-        })
+        let err = thread_update_title(
+            &crate::core::runtime::DispatchCtx::ambient(),
+            crate::threads::UpdateConversationThreadTitleRequest {
+                thread_id: "t-1".to_string(),
+                title: title.to_string(),
+            },
+        )
         .await
         .expect_err("blank title must be rejected");
 
@@ -491,10 +521,13 @@ async fn thread_delete_forgets_its_conversation_memory_or_queues_it() {
         .expect("load config")
         .workspace_dir;
 
-    thread_delete(DeleteConversationThreadRequest {
-        thread_id: thread_id.to_string(),
-        deleted_at: "2026-01-01T00:02:00Z".into(),
-    })
+    thread_delete(
+        &DispatchCtx::process_default(),
+        DeleteConversationThreadRequest {
+            thread_id: thread_id.to_string(),
+            deleted_at: "2026-01-01T00:02:00Z".into(),
+        },
+    )
     .await
     .expect("delete thread");
 

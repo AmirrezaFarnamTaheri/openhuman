@@ -7,6 +7,9 @@
 use std::sync::Arc;
 
 #[cfg(test)]
+use crate::core::runtime::DispatchCtx;
+
+#[cfg(test)]
 use async_trait::async_trait;
 #[cfg(test)]
 use parking_lot::Mutex;
@@ -208,8 +211,10 @@ impl ConversationStore for ConversationHistoryStore {
         session_key: &str,
         limit: usize,
     ) -> anyhow::Result<Vec<ConversationMessage>> {
-        let messages = crate::threads::store::get_messages(self.workspace_dir.clone(), session_key)
-            .map_err(|e| anyhow::anyhow!(e))?;
+        let ctx = DispatchCtx::host_default();
+        let messages =
+            crate::threads::store::get_messages(&ctx, self.workspace_dir.clone(), session_key)
+                .map_err(|e| anyhow::anyhow!(e))?;
         let start = messages.len().saturating_sub(limit);
         Ok(messages[start..]
             .iter()
@@ -222,9 +227,11 @@ impl ConversationStore for ConversationHistoryStore {
     }
 
     async fn append(&self, session_key: &str, message: ConversationMessage) -> anyhow::Result<()> {
+        let ctx = DispatchCtx::host_default();
         let now = chrono::Utc::now().to_rfc3339();
         // `append_message` requires the thread to exist; create-or-noop first.
         crate::threads::store::ensure_thread(
+            &ctx,
             self.workspace_dir.clone(),
             crate::threads::store::CreateConversationThread {
                 id: session_key.to_string(),
@@ -245,8 +252,13 @@ impl ConversationStore for ConversationHistoryStore {
             sender: message.role,
             created_at: now,
         };
-        crate::threads::store::append_message(self.workspace_dir.clone(), session_key, stored)
-            .map_err(|e| anyhow::anyhow!(e))?;
+        crate::threads::store::append_message(
+            &ctx,
+            self.workspace_dir.clone(),
+            session_key,
+            stored,
+        )
+        .map_err(|e| anyhow::anyhow!(e))?;
         Ok(())
     }
 }

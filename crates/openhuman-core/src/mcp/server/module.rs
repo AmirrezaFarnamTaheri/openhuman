@@ -20,12 +20,21 @@ use tinymcp_bus::{
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{
-    config::Config,
-    modules::{client::ModuleCallError, client::ModuleClient},
-};
+use crate::config::Config;
+use tinybus::module::{ModuleCallError, ModuleClient};
 
 use super::handler;
+
+/// The host callback for a session: dispatches under the process default
+/// context (the MCP server is a single-tenant host), held weakly so a
+/// long-lived session never pins it.
+fn host_dispatch() -> impl Fn(ServerHostCall) -> HostCallbackFuture + Send + Sync + 'static {
+    let weak = crate::core::runtime::DispatchCtx::process_default().downgrade();
+    move |call| {
+        let ctx = crate::core::runtime::DispatchCtx::from_weak(weak.as_ref());
+        Box::pin(handler::dispatch(ctx, call))
+    }
+}
 
 const MODULE: &str = "tinymcp";
 const POLL_INTERVAL: Duration = Duration::from_millis(5);
@@ -184,7 +193,7 @@ impl ServerSession {
     pub(super) fn port_for_config(config: &Config) -> Arc<dyn ServerPort> {
         Self::register_shutdown_hook(config.clone());
         Arc::new(TinyMcpPort {
-            client: ModuleClient::new(config.clone()),
+            client: crate::modules::client(config.clone()),
         })
     }
 
@@ -195,7 +204,7 @@ impl ServerSession {
         crate::core::shutdown::register(move || {
             let config = config.clone();
             async move {
-                let client = ModuleClient::new(config);
+                let client = crate::modules::client(config);
                 if let Err(error) = client
                     .call::<usize>(MODULE, names::methods::SERVER_SHUTDOWN, ())
                     .await
@@ -212,7 +221,7 @@ impl ServerSession {
     }
 
     async fn open_with_port(port: Arc<dyn ServerPort>) -> Result<Self, ServerError> {
-        Self::open_with_port_and_dispatch(port, |call| Box::pin(handler::dispatch(call))).await
+        Self::open_with_port_and_dispatch(port, host_dispatch()).await
     }
 
     pub(super) async fn open_with_port_and_dispatch<F, Fut>(
@@ -272,7 +281,7 @@ impl ServerSession {
             .map_err(ServerError::Module)?;
         Ok(Self {
             port,
-            callback_dispatch: Arc::new(|call| Box::pin(handler::dispatch(call))),
+            callback_dispatch: Arc::new(host_dispatch()),
             id,
             next_operation: AtomicU64::new(1),
             operation: tokio::sync::Mutex::new(()),
@@ -402,7 +411,10 @@ impl ServerSession {
         {
             *pending = Some(PendingCallback::Running {
                 id: callback_id.clone(),
-                task: tokio::spawn((self.callback_dispatch)(call)),
+                // The host callback runs under the process default, like
+                // `host_dispatch`: the MCP server is a single-tenant host.
+                task: crate::core::runtime::DispatchCtx::process_default()
+                    .spawn((self.callback_dispatch)(call)),
             });
         }
         let result = match pending.as_mut() {

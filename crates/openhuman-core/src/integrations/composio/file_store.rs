@@ -20,14 +20,25 @@ pub(crate) const IDENTITIES_FILE: &str = "composio_identities.json";
 pub(crate) const USER_SCOPES_FILE: &str = "composio_user_scopes.json";
 
 /// Moves a pre-documents `<workspace>/integrations/<name>` file into the
-/// document store, once: the value is stored only if none exists yet, then the
-/// file is renamed to `<name>.migrated` so it is never imported again and the
-/// old data stays recoverable. A missing file is the common case and a no-op.
+/// document store, once: the value is stored only if none exists yet, then a
+/// marker document records that the import finished. The legacy file is only
+/// ever read, never renamed or rewritten, so the old data stays byte-identical.
+/// A missing file is the common case and a no-op.
 async fn import_legacy(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     docs: &super::file_store_documents::Docs,
     name: &'static str,
 ) -> Result<(), String> {
+    let marker_docs = docs.clone();
+    let done = ctx
+        .spawn_blocking(move || marker_docs.legacy_imported(name))
+        .await
+        .map_err(|error| format!("[composio:store] checking legacy {name} failed: {error}"))?
+        .map_err(|error| format!("[composio:store] checking legacy {name} failed: {error:#}"))?;
+    if done {
+        return Ok(());
+    }
     let path = config.workspace_dir.join("integrations").join(name);
     let bytes = match tokio::fs::read(&path).await {
         Ok(bytes) => bytes,
@@ -41,18 +52,12 @@ async fn import_legacy(
     let value: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|error| format!("[composio:store] parsing legacy {name} failed: {error}"))?;
     let docs = docs.clone();
-    let wrote =
-        crate::core::runtime::spawn_blocking_scoped(move || docs.import_if_absent(name, value))
-            .await
-            .map_err(|error| format!("[composio:store] importing legacy {name} failed: {error}"))?
-            .map_err(|error| {
-                format!("[composio:store] importing legacy {name} failed: {error:#}")
-            })?;
+    let wrote = ctx
+        .spawn_blocking(move || docs.import_if_absent(name, value))
+        .await
+        .map_err(|error| format!("[composio:store] importing legacy {name} failed: {error}"))?
+        .map_err(|error| format!("[composio:store] importing legacy {name} failed: {error:#}"))?;
     log::debug!("[composio:store] legacy import name={name} wrote={wrote}");
-    let migrated = path.with_file_name(format!("{name}.migrated"));
-    if let Err(error) = tokio::fs::rename(&path, &migrated).await {
-        log::warn!("[composio:store] could not retire legacy {name}: {error}");
-    }
     Ok(())
 }
 
@@ -61,16 +66,20 @@ async fn import_legacy(
 /// # Errors
 ///
 /// The value cannot be read or does not parse as `T`.
-pub(crate) async fn load<T>(config: &Config, name: &'static str) -> Result<T, String>
+pub(crate) async fn load<T>(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    name: &'static str,
+) -> Result<T, String>
 where
     T: DeserializeOwned + Default + Send + 'static,
 {
     let docs = super::file_store_documents::current(&config.workspace_dir)
         .map_err(|e| format!("[composio:store] {e:#}"))?;
-    import_legacy(config, &docs, name).await?;
+    import_legacy(ctx, config, &docs, name).await?;
     // The document port is reached through a blocking bridge; keep it off the
     // async worker, under the caller's context.
-    crate::core::runtime::spawn_blocking_scoped(move || docs.load(name))
+    ctx.spawn_blocking(move || docs.load(name))
         .await
         .map_err(|error| format!("[composio:store] reading {name} failed: {error}"))?
         .map_err(|error| format!("[composio:store] reading {name} failed: {error:#}"))
@@ -84,6 +93,7 @@ where
 ///
 /// The value cannot be read or written.
 pub(crate) async fn update<T, R>(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     name: &'static str,
     change: impl Fn(&mut T) -> (R, bool) + Send + 'static,
@@ -94,8 +104,8 @@ where
 {
     let docs = super::file_store_documents::current(&config.workspace_dir)
         .map_err(|e| format!("[composio:store] {e:#}"))?;
-    import_legacy(config, &docs, name).await?;
-    crate::core::runtime::spawn_blocking_scoped(move || docs.update(name, change))
+    import_legacy(ctx, config, &docs, name).await?;
+    ctx.spawn_blocking(move || docs.update(name, change))
         .await
         .map_err(|error| format!("[composio:store] updating {name} failed: {error}"))?
         .map_err(|error| format!("[composio:store] updating {name} failed: {error:#}"))
@@ -107,7 +117,12 @@ where
 ///
 /// The value cannot be serialized or written.
 #[cfg(test)]
-pub(crate) async fn save<T>(config: &Config, name: &'static str, value: &T) -> Result<(), String>
+pub(crate) async fn save<T>(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    name: &'static str,
+    value: &T,
+) -> Result<(), String>
 where
     T: Serialize,
 {
@@ -115,7 +130,7 @@ where
         .map_err(|e| format!("[composio:store] {e:#}"))?;
     let value = serde_json::to_value(value)
         .map_err(|error| format!("[composio:store] serializing failed: {error}"))?;
-    crate::core::runtime::spawn_blocking_scoped(move || docs.save(name, &value))
+    ctx.spawn_blocking(move || docs.save(name, &value))
         .await
         .map_err(|error| format!("[composio:store] writing {name} failed: {error}"))?
         .map_err(|error| format!("[composio:store] writing {name} failed: {error:#}"))

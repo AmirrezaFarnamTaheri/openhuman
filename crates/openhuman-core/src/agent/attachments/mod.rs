@@ -1,6 +1,7 @@
 //! Durable user uploads in the acting workspace. Provider resolution never
 //! changes the original file or writes inline media into session records.
 
+use crate::core::runtime::DispatchCtx;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -160,6 +161,7 @@ pub(crate) fn action_root(config: &Config, scope: &AttachmentAccessScope) -> Pat
 /// Uploads must be written, validated and read under this one root; the turn
 /// runs with `action_dir` replaced by the thread's folder (#7714).
 pub(crate) async fn thread_action_dir(
+    ctx: &DispatchCtx,
     config: &Config,
     threads_dir: &Path,
     thread_id: Option<&str>,
@@ -167,14 +169,20 @@ pub(crate) async fn thread_action_dir(
     let Some(thread_id) = thread_id.filter(|id| !id.is_empty()) else {
         return Ok(config.action_dir.clone());
     };
-    let bound = crate::threads::ops::thread_working_dir(threads_dir.to_path_buf(), thread_id)
+    let bound = crate::threads::ops::thread_working_dir(ctx, threads_dir.to_path_buf(), thread_id)
         .await
         .map_err(anyhow::Error::msg)?;
     Ok(bound.unwrap_or_else(|| config.action_dir.clone()))
 }
 
 fn policy(config: &Config, root: &Path) -> SecurityPolicy {
-    SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, root)
+    let policy = SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir, root);
+    *policy
+        .media_files_roots
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+        Some(crate::agent::artifacts::FileRoots::from_config(config));
+    policy
 }
 
 /// Resolve a local attachment under the same filesystem policy as acting
@@ -427,6 +435,7 @@ pub(crate) async fn stage(
 /// Explicit image forwarding for delegation. A filename mentioned in prose
 /// grants no read; only the typed argument or a legacy image marker does.
 pub(crate) async fn delegation_prompt(
+    ctx: &crate::core::runtime::DispatchCtx,
     prompt: &str,
     args: &serde_json::Value,
     workspace: Option<&tinytools::WorkspaceDescriptor>,
@@ -454,9 +463,7 @@ pub(crate) async fn delegation_prompt(
     ) {
         anyhow::bail!("local attachment reads are disabled for external channel input");
     }
-    let mut config = crate::config::rpc::load_config_with_timeout()
-        .await
-        .map_err(anyhow::Error::msg)?;
+    let mut config = ctx.load_config().await.map_err(anyhow::Error::msg)?;
     if let Some(workspace) = workspace {
         config.action_dir = workspace.root.clone();
     }
@@ -469,6 +476,7 @@ pub(crate) async fn delegation_prompt(
 
 /// Validate a vision task's explicit references before constructing inference.
 pub(crate) async fn has_resolvable_image(
+    ctx: &crate::core::runtime::DispatchCtx,
     prompt: &str,
     workspace: Option<&tinytools::WorkspaceDescriptor>,
     origin: Option<&crate::agent::turn_origin::AgentTurnOrigin>,
@@ -487,9 +495,7 @@ pub(crate) async fn has_resolvable_image(
     if paths.is_empty() {
         return Ok(false);
     }
-    let mut config = crate::config::rpc::load_config_with_timeout()
-        .await
-        .map_err(anyhow::Error::msg)?;
+    let mut config = ctx.load_config().await.map_err(anyhow::Error::msg)?;
     if matches!(
         origin,
         Some(crate::agent::turn_origin::AgentTurnOrigin::ExternalChannel { .. })

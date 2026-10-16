@@ -120,11 +120,13 @@ pub(super) fn forbidden_path_argument(security: &SecurityPolicy, command: &str) 
 }
 
 pub(super) async fn run_job_command(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     security: &SecurityPolicy,
     job: &CronJob,
 ) -> (bool, String) {
     run_job_command_with_timeout(
+        ctx,
         config,
         security,
         job,
@@ -134,6 +136,7 @@ pub(super) async fn run_job_command(
 }
 
 pub(super) async fn run_job_command_with_timeout(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     security: &SecurityPolicy,
     job: &CronJob,
@@ -167,6 +170,7 @@ pub(super) async fn run_job_command_with_timeout(
     // Cron keeps host execution semantics (the host's own network, no jail)
     // and a pipeline's default exit status: retries are spent on it.
     let output = match crate::sandbox::shell_exec::run_host(
+        ctx,
         config,
         &job.command,
         &config.action_dir,
@@ -174,6 +178,7 @@ pub(super) async fn run_job_command_with_timeout(
         std::collections::BTreeMap::new(),
         timeout,
         true,
+        None,
     )
     .await
     {

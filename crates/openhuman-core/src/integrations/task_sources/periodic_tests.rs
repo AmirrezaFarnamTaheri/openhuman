@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 use crate::integrations::task_sources::types::{
     provider_can_fetch, FilterSpec, ProviderSlug, SourceTarget,
 };
@@ -159,7 +160,7 @@ async fn a_tick_over_an_unfetchable_source_records_nothing() {
 
     CoreContext::scope(
         CoreContext::for_test_with_config(DomainSet::full(), config.clone()),
-        run_one_tick(),
+        run_one_tick(&DispatchCtx::process_default()),
     )
     .await
     .expect("a tick must not fail");
@@ -195,7 +196,13 @@ async fn manual_fetch_still_returns_the_explanatory_error() {
     std::fs::create_dir_all(&config.workspace_dir).expect("workspace");
 
     let s = source("ts-manual-path-xyz", 1800);
-    let outcome = pipeline::run_source_once(&config, &s, FetchReason::Manual).await;
+    let outcome = pipeline::run_source_once(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        &config,
+        &s,
+        FetchReason::Manual,
+    )
+    .await;
 
     let error = outcome
         .error

@@ -5,6 +5,7 @@
 //! transport, authenticated wallet-backend transport, and a confirmation
 //! decision bound to an in-flight confirmed execution request.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::{Mutex, OnceLock};
@@ -73,13 +74,28 @@ fn endpoint_references() -> &'static Mutex<HashMap<String, EndpointReference>> {
     ENDPOINT_REFERENCES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Whether the payment was quoted for the chat the acting turn is in.
+///
+/// An x402 payment is approved with a forced approval, which only a `WebChat`
+/// turn can raise, and that origin carries the same thread and client the turn's
+/// chat context does. The origin is therefore the chat to compare against; the
+/// callback arrives over the bus with no run context of its own.
 fn x402_request_owner_matches(
     request: &AuthorizeX402PaymentRequest,
-    context: &crate::security::approval::ApprovalChatContext,
+    origin: Option<&crate::agent::turn_origin::AgentTurnOrigin>,
 ) -> bool {
-    request.owner.as_ref().is_some_and(|owner| {
-        owner.thread_id == context.thread_id && owner.client_id == context.client_id
-    })
+    let Some(crate::agent::turn_origin::AgentTurnOrigin::WebChat {
+        thread_id,
+        client_id,
+        ..
+    }) = origin
+    else {
+        return false;
+    };
+    request
+        .owner
+        .as_ref()
+        .is_some_and(|owner| &owner.thread_id == thread_id && &owner.client_id == client_id)
 }
 
 fn x402_approval_facts(request: &AuthorizeX402PaymentRequest) -> serde_json::Value {
@@ -146,8 +162,9 @@ pub(super) fn has_endpoint_reference_for_test(reference: &str) -> bool {
 }
 
 pub(crate) async fn wallet_accounts_snapshot(
+    ctx: &DispatchCtx,
 ) -> Result<tinywallet_bus::wire::WalletAccountsResponse, String> {
-    let status = crate::web3::wallet::status()
+    let status = crate::web3::wallet::status(ctx)
         .await
         .map_err(|error| error.to_string())?
         .value;
@@ -500,7 +517,9 @@ impl WalletHost {
     /// the host's custody store through this callback.
     async fn wallet_accounts(&self) -> tinybus::Result<HostResponse> {
         Ok(HostResponse::WalletAccounts(
-            wallet_accounts_snapshot().await.map_err(callback_error)?,
+            wallet_accounts_snapshot(&DispatchCtx::host_default())
+                .await
+                .map_err(callback_error)?,
         ))
     }
 
@@ -618,7 +637,8 @@ impl WalletHost {
 
     /// Perform only the named authenticated wallet-backend request.
     async fn wallet_backend(&self, request: WalletBackendRequest) -> tinybus::Result<HostResponse> {
-        let config = crate::config::rpc::load_config_with_timeout()
+        let config = DispatchCtx::host_default()
+            .load_config()
             .await
             .map_err(callback_error)?;
         let client =
@@ -677,9 +697,8 @@ impl WalletHost {
         &self,
         request: AuthorizeX402PaymentRequest,
     ) -> tinybus::Result<HostResponse> {
-        let owner_matches = crate::security::approval::APPROVAL_CHAT_CONTEXT
-            .try_with(|context| x402_request_owner_matches(&request, context))
-            .unwrap_or(false);
+        let origin = crate::core::runtime::DispatchCtx::ambient_turn().turn_origin();
+        let owner_matches = x402_request_owner_matches(&request, origin.as_ref());
         let approved = if owner_matches {
             if let Some(gate) = crate::security::approval::ApprovalGate::try_global() {
                 matches!(

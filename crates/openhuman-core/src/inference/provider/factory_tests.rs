@@ -189,6 +189,10 @@ mod crate_native_diagnostics_tests;
 mod crate_native_tests;
 #[path = "factory_egress_fallback_tests.rs"]
 mod egress_fallback_tests;
+#[path = "factory_explicit_ctx_tests.rs"]
+mod explicit_ctx_tests;
+#[path = "factory_managed_ledger_tests.rs"]
+mod managed_ledger_tests;
 #[path = "factory_route_resolution_tests.rs"]
 mod route_resolution_tests;
 
@@ -497,4 +501,17 @@ fn grouped_legacy_keys_and_named_tokens_are_deduplicated() {
         super::credentials::lookup_token_account_fleet("google", &config, "first,second", false)
             .unwrap();
     assert_eq!(keys, vec!["first", "second", "third"]);
+}
+
+#[test]
+fn provider_credential_lookup_failures_do_not_disclose_underlying_secrets() {
+    // The credential store or a provider SDK may include sensitive values in
+    // a lower-level error. Neither Display nor the Debug/error-chain view may
+    // reveal them to an RPC caller, UI, crash report or model.
+    let secret = "sk-sensitive-test-only-1234";
+    let source = anyhow::anyhow!("backend read failed: Authorization: Bearer {secret}");
+    let safe = "[chat-factory] provider credentials are unavailable".to_string();
+    let error = super::credentials::redact_credential_lookup_error(source, safe.clone());
+    assert_eq!(error.to_string(), safe);
+    assert!(!format!("{error:?}").contains(secret));
 }

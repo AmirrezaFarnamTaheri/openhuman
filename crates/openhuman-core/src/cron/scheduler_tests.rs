@@ -1,10 +1,11 @@
+use super::agent_run::{build_agent_for_cron_job, run_agent_job, EMPTY_AGENT_OUTPUT};
 use super::*;
-use crate::agent::error::AgentError;
 use crate::config::Config;
 use crate::security::SecurityPolicy;
 use chrono::{Duration as ChronoDuration, Timelike, Utc};
 use std::sync::Arc;
 use tempfile::TempDir;
+use tinyagents_harness::agent_error::AgentError;
 use tinyflows_schedule::types::JobType;
 use tinyflows_schedule::types::SessionTarget;
 use {
@@ -172,7 +173,13 @@ async fn retryable_shell_failure_consumes_the_whole_retry_budget() {
     let counter = tmp.path().join("retryable-attempts.log");
     let job = test_job(&counting_failure_command(&counter));
 
-    let (success, output) = execute_job_now(&config, &job, "test-run").await;
+    let (success, output) = execute_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "test-run",
+    )
+    .await;
 
     assert!(
         !success,
@@ -230,7 +237,13 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
     );
 
     let started = std::time::Instant::now();
-    let (success, output) = execute_job_now(&config, &job, "test-run").await;
+    let (success, output) = execute_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "test-run",
+    )
+    .await;
     let elapsed = started.elapsed();
 
     assert!(!success, "a blocked job cannot succeed; got {output}");
@@ -275,7 +288,13 @@ async fn a_shell_job_runs_on_this_platform() {
 
     let job = test_job("echo tinyhumans");
 
-    let (success, output) = run_job_command(&config, &security, &job).await;
+    let (success, output) = run_job_command(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        &config,
+        &security,
+        &job,
+    )
+    .await;
 
     assert!(success, "the shell job did not succeed: {output}");
     assert!(
@@ -325,7 +344,13 @@ async fn a_pipeline_reports_its_last_stage_rather_than_pipefail() {
 
     let job = test_job("false | true");
 
-    let (success, output) = run_job_command(&config, &security, &job).await;
+    let (success, output) = run_job_command(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        &config,
+        &security,
+        &job,
+    )
+    .await;
 
     assert!(
         success,

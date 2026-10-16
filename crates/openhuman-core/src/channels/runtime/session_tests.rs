@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::runtime::DispatchCtx;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -86,7 +87,7 @@ async fn clear_session_invalidates_old_channels_and_opens_a_fresh_generation() {
     };
     let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(false);
     let old_session = channel_session();
-    crate::security::credentials::ops::clear_session(&config)
+    crate::security::credentials::ops::clear_session(&DispatchCtx::process_default(), &config)
         .await
         .unwrap();
     assert!(old_session.is_cancelled());
@@ -102,21 +103,25 @@ async fn channel_sign_in_resumes_listener_service_after_logout() {
     let observed_cleanups = Arc::clone(&cleanups);
     let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
     let (cleaned_tx, mut cleaned_rx) = tokio::sync::mpsc::unbounded_channel();
-    let service = spawn_channel_service_with(controller.clone(), move |session| {
-        let starts = Arc::clone(&observed_starts);
-        let cleanups = Arc::clone(&observed_cleanups);
-        let started_tx = started_tx.clone();
-        let cleaned_tx = cleaned_tx.clone();
-        async move {
-            let generation = starts.fetch_add(1, Ordering::SeqCst) + 1;
-            let cleanups_before_start = cleanups.load(Ordering::SeqCst);
-            let _ = started_tx.send((session.clone(), cleanups_before_start));
-            session.cancelled().await;
-            let completed_cleanup = cleanups.fetch_add(1, Ordering::SeqCst) + 1;
-            let _ = cleaned_tx.send((generation, completed_cleanup));
-            Ok(())
-        }
-    });
+    let service = spawn_channel_service_with(
+        &DispatchCtx::unbound(),
+        controller.clone(),
+        move |session| {
+            let starts = Arc::clone(&observed_starts);
+            let cleanups = Arc::clone(&observed_cleanups);
+            let started_tx = started_tx.clone();
+            let cleaned_tx = cleaned_tx.clone();
+            async move {
+                let generation = starts.fetch_add(1, Ordering::SeqCst) + 1;
+                let cleanups_before_start = cleanups.load(Ordering::SeqCst);
+                let _ = started_tx.send((session.clone(), cleanups_before_start));
+                session.cancelled().await;
+                let completed_cleanup = cleanups.fetch_add(1, Ordering::SeqCst) + 1;
+                let _ = cleaned_tx.send((generation, completed_cleanup));
+                Ok(())
+            }
+        },
+    );
 
     let (old, initial_cleanups) = started_rx.recv().await.expect("initial channel generation");
     assert_eq!(initial_cleanups, 0);
@@ -167,16 +172,20 @@ async fn channel_service_created_during_logout_waits_for_sign_in() {
     let starts = Arc::new(AtomicUsize::new(0));
     let observed_starts = Arc::clone(&starts);
     let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
-    let service = spawn_channel_service_with(controller.clone(), move |session| {
-        let starts = Arc::clone(&observed_starts);
-        let started_tx = started_tx.clone();
-        async move {
-            starts.fetch_add(1, Ordering::SeqCst);
-            let _ = started_tx.send(session.clone());
-            session.cancelled().await;
-            Ok(())
-        }
-    });
+    let service = spawn_channel_service_with(
+        &DispatchCtx::unbound(),
+        controller.clone(),
+        move |session| {
+            let starts = Arc::clone(&observed_starts);
+            let started_tx = started_tx.clone();
+            async move {
+                starts.fetch_add(1, Ordering::SeqCst);
+                let _ = started_tx.send(session.clone());
+                session.cancelled().await;
+                Ok(())
+            }
+        },
+    );
 
     assert!(
         tokio::time::timeout(std::time::Duration::from_millis(20), started_rx.recv())

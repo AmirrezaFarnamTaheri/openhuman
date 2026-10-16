@@ -8,6 +8,7 @@ pub mod savings;
 pub mod schemas;
 pub mod tools;
 
+use crate::core::runtime::DispatchCtx;
 use tinyjuice_bus::names::methods;
 use tinyjuice_bus::types::{AgentTokenjuiceCompression, CompressorKind};
 
@@ -150,6 +151,7 @@ pub async fn install_from_config(config: &crate::config::Config) -> Result<(), S
     // disk tier wrote move across first (once per directory, best effort).
     if let Some(root) = request.disk_tier_root.as_deref() {
         crate::modules::import_legacy_tinyjuice(
+            &crate::core::runtime::DispatchCtx::ambient(),
             std::path::Path::new(root),
             request.ccr_ttl_secs.map(std::time::Duration::from_secs),
         )
@@ -174,8 +176,8 @@ pub async fn install_from_config(config: &crate::config::Config) -> Result<(), S
 }
 
 /// Construct explicit access over the shared process-wide loader.
-pub(super) fn client(config: &crate::config::Config) -> crate::modules::client::ModuleClient {
-    crate::modules::client::ModuleClient::new(config.clone())
+pub(super) fn client(config: &crate::config::Config) -> tinybus::module::ModuleClient {
+    crate::modules::client(config.clone())
 }
 
 /// Everything the module considers about one tool result.
@@ -348,7 +350,7 @@ fn compacted_from(response: tinyjuice_bus::wire::CompactResponse) -> CompactedTo
 }
 
 async fn record_savings(
-    client: &crate::modules::client::ModuleClient,
+    client: &tinybus::module::ModuleClient,
     response: &tinyjuice_bus::wire::CompactResponse,
 ) {
     use std::str::FromStr as _;
@@ -440,9 +442,10 @@ mod repl_module_tests;
 
 /// Run a typed query inside TinyJuice; cached originals stay inside the module.
 pub async fn query(
+    ctx: &DispatchCtx,
     request: tinyjuice_bus::wire::QueryRequest,
 ) -> Result<tinyjuice_bus::wire::QueryResponse, String> {
-    let config = crate::config::ops::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     query_for_config(&config, request).await
 }
 
@@ -458,8 +461,8 @@ pub(crate) async fn query_for_config(
 }
 
 /// Extract HTML through the compiled module independently of compression settings.
-pub async fn extract_html(html: String) -> Result<String, String> {
-    let config = crate::config::ops::load_config_with_timeout().await?;
+pub async fn extract_html(ctx: &DispatchCtx, html: String) -> Result<String, String> {
+    let config = ctx.load_config().await?;
     let response: tinyjuice_bus::wire::HtmlResponse = client(&config)
         .call("tinyjuice", methods::EXTRACT_HTML, (html,))
         .await

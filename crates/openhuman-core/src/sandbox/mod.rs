@@ -16,6 +16,7 @@ pub(crate) mod native_jail;
 pub mod ops;
 pub mod schemas;
 pub(crate) mod shell_exec;
+pub(crate) mod shell_progress;
 pub mod types;
 
 pub use ops::{
@@ -28,5 +29,5 @@ pub use schemas::{
 };
 pub use types::{
     DockerOverrides, ElevatedOp, SandboxBackendHandle, SandboxBackendKind, SandboxExecRequest,
-    SandboxExecResult, SandboxPolicy, SandboxStatus,
+    SandboxExecResult, SandboxIsolation, SandboxPolicy, SandboxStatus,
 };

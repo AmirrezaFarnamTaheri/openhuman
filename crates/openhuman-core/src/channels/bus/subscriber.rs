@@ -65,7 +65,9 @@ impl EventHandler<DomainEvent> for ChannelInboundSubscriber {
         }
 
         let session = crate::channels::runtime::session::channel_session();
-        let config = match crate::config::rpc::load_config_with_timeout().await {
+        // An inbound channel event carries no context of its own.
+        let ctx = crate::core::runtime::DispatchCtx::host_default();
+        let config = match ctx.load_config().await {
             Ok(config) => config,
             Err(error) => {
                 tracing::error!("[channel-inbound] failed to load configuration: {error}");
@@ -73,7 +75,7 @@ impl EventHandler<DomainEvent> for ChannelInboundSubscriber {
             }
         };
         let identity = match crate::modules::channel_controller::prepare_identity(
-            &crate::modules::client::ModuleClient::new(config.clone()),
+            &crate::modules::client(config.clone()),
             tinychannels_bus::module_inbound::PrepareChannelIdentityRequest {
                 channel: channel.clone(),
                 sender: sender.clone(),
@@ -103,6 +105,7 @@ impl EventHandler<DomainEvent> for ChannelInboundSubscriber {
             };
 
         let request_id = match crate::web_chat::start_chat(
+            &ctx,
             &client_id,
             &thread_id,
             message,
@@ -272,7 +275,7 @@ impl EventHandler<DomainEvent> for ChannelInboundSubscriber {
 async fn flush_events(
     reply: &ModuleProgressiveReply,
     pending: &mut Vec<ProgressiveEvent>,
-) -> Result<(), crate::modules::client::ModuleCallError> {
+) -> Result<(), tinybus::module::ModuleCallError> {
     if pending.is_empty() {
         return Ok(());
     }

@@ -10,7 +10,7 @@ use {tinyflows_schedule::types::CronJob, tinyflows_schedule::types::SessionTarge
 
 /// Recency window the morning briefing installs around its turn so Composio
 /// task-fetch tools only surface tasks created/changed in the last day. Read
-/// by the `composio_execute` handler via `current_task_recency_window`.
+/// by the `composio_execute` handler via the run context (`OpenHumanRunExt`).
 pub(super) const MORNING_BRIEFING_TASK_RECENCY_SECS: u64 = 24 * 60 * 60;
 
 /// [`run_agent_job_for_run`] under a fresh run id.
@@ -20,16 +20,23 @@ pub(super) async fn run_agent_job(
     job: &CronJob,
 ) -> (bool, String, Option<String>) {
     let run_id = uuid::Uuid::new_v4().to_string();
-    run_agent_job_for_run(config, job, &run_id).await
+    run_agent_job_for_run(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        config,
+        job,
+        &run_id,
+    )
+    .await
 }
 
 pub(super) async fn run_agent_job_for_run(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     job: &CronJob,
     run_id: &str,
 ) -> (bool, String, Option<String>) {
     let name = job.name.clone().unwrap_or_else(|| "cron-job".to_string());
-    let prefixed_prompt = build_run_prompt(config, job, &name).await;
+    let prefixed_prompt = build_run_prompt(ctx, config, job, &name).await;
 
     // Apply per-job model override onto a cloned Config, so the Agent
     // sees it through the normal `default_model` path without mutating
@@ -60,7 +67,7 @@ pub(super) async fn run_agent_job_for_run(
     } else {
         let agent_id = selected_agent_id;
         if let Some(registry) =
-            crate::agent::harness::definition::AgentDefinitionRegistry::current()
+            crate::agent::harness::host_definition::AgentDefinitionRegistry::current()
         {
             if let Some(def) = registry.get(agent_id) {
                 tracing::debug!(
@@ -79,7 +86,7 @@ pub(super) async fn run_agent_job_for_run(
                 // that workload, regardless of which provider it lives
                 // on. Inherit / Exact keep their literal `resolve()`
                 // behaviour because neither relies on the `-v1` trick.
-                use crate::agent::harness::definition::ModelSpec;
+                use tinyagents_definition::ModelSpec;
                 let fallback_model = effective
                     .default_model
                     .clone()
@@ -92,7 +99,8 @@ pub(super) async fn run_agent_job_for_run(
                         // discarded — `create_chat_model_with_model_id` wraps the
                         // same `create_chat_provider` resolution, so the model id is
                         // identical; temperature is irrelevant to id resolution.
-                        match crate::inference::provider::create_chat_model_with_model_id(
+                        match crate::inference::provider::create_chat_model_with_model_id_in(
+                            ctx,
                             workload,
                             &effective,
                             effective.default_temperature,
@@ -152,7 +160,7 @@ pub(super) async fn run_agent_job_for_run(
                 target = ?job.session_target,
                 "[cron] building isolated agent for scheduled job"
             );
-            match build_agent_for_cron_job(&effective, job) {
+            match build_agent_for_cron_job(ctx, &effective, job) {
                 Ok(BuiltCronAgent { mut agent, context }) => {
                     // Tag events so downstream subscribers can correlate
                     // cron-triggered turns. `cron` is the channel so the
@@ -164,6 +172,21 @@ pub(super) async fn run_agent_job_for_run(
                     // conversation, with its frozen system prompt and stale tool
                     // names. Every run starts from a fresh prompt instead.
                     start_cron_turn_clean(&mut agent);
+                    // Morning briefing only: Composio task-fetch tools
+                    // (Linear/ClickUp/Notion/Asana) surface only recently
+                    // created/changed tasks. Other cron agents and all chat
+                    // turns leave the window unset. It rides the run context
+                    // (`OpenHumanRunExt`), not a task-local.
+                    if is_morning_briefing_job(job) {
+                        tracing::debug!(
+                            job_id = %job.id,
+                            recency_window_secs = MORNING_BRIEFING_TASK_RECENCY_SECS,
+                            "[cron] applying morning-briefing task recency window"
+                        );
+                        agent.set_task_recency_window(Some(std::time::Duration::from_secs(
+                            MORNING_BRIEFING_TASK_RECENCY_SECS,
+                        )));
+                    }
                     // Scope the run's origin around the turn. A job with no
                     // channel origin runs as `TrustedAutomation { Cron }`: the
                     // approval gate treats it as user-authorized automation
@@ -187,28 +210,7 @@ pub(super) async fn run_agent_job_for_run(
                         }
                         None => Box::pin(turn),
                     };
-                    // Morning briefing only: install a 24h task-recency window
-                    // so Composio task-fetch tools (Linear/ClickUp/Notion/Asana)
-                    // surface only recently created/changed tasks. Other cron
-                    // agents and all chat turns leave the window unset.
-                    if is_morning_briefing_job(job) {
-                        tracing::debug!(
-                            job_id = %job.id,
-                            recency_window_secs = MORNING_BRIEFING_TASK_RECENCY_SECS,
-                            "[cron] applying morning-briefing task recency window"
-                        );
-                        crate::integrations::composio::task_recency_context::with_task_recency_window(
-                            std::time::Duration::from_secs(MORNING_BRIEFING_TASK_RECENCY_SECS),
-                            turn,
-                        )
-                        .await
-                    } else {
-                        tracing::trace!(
-                            job_id = %job.id,
-                            "[cron] task recency window not applied for this job"
-                        );
-                        turn.await
-                    }
+                    turn.await
                 }
                 Err(e) => Err(e),
             }
@@ -275,6 +277,7 @@ pub(super) struct BuiltCronAgent {
 /// Build the session a cron agent job runs: the host-registered agent named
 /// by `job.agent_id` when there is one, else the registry definition.
 pub(super) fn build_agent_for_cron_job(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     job: &CronJob,
 ) -> anyhow::Result<BuiltCronAgent> {
@@ -282,10 +285,11 @@ pub(super) fn build_agent_for_cron_job(
         .agent_id
         .as_deref()
         .and_then(crate::agent::host_agents::resolve);
-    build_cron_agent(config, job, host_agent)
+    build_cron_agent(ctx, config, job, host_agent)
 }
 
 fn build_cron_agent(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     job: &CronJob,
     host_agent: Option<crate::agent::host_agents::HostAgent>,
@@ -310,7 +314,7 @@ fn build_cron_agent(
         });
     }
     let agent_id = job.agent_id.as_deref().unwrap_or("orchestrator");
-    match OpenHumanSessionHost::from_config_for_agent(config, agent_id) {
+    match OpenHumanSessionHost::from_config_for_agent(ctx, config, agent_id) {
         Ok(agent) => {
             tracing::debug!(
                 job_id = %job.id,
@@ -329,7 +333,7 @@ fn build_cron_agent(
                 error = %e,
                 "[cron] failed to build agent from definition; falling back to canonical orchestrator"
             );
-            OpenHumanSessionHost::from_config_for_agent(config, "orchestrator").map(|agent| {
+            OpenHumanSessionHost::from_config_for_agent(ctx, config, "orchestrator").map(|agent| {
                 BuiltCronAgent {
                     agent,
                     context: None,

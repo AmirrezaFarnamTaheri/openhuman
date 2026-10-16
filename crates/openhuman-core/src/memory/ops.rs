@@ -428,7 +428,11 @@ pub async fn forget(config: &Config, params: ForgetParams) -> MemoryResult<Forge
 /// layout v3, and the retired `user:<id>` one while it is still read); a legacy tree is left alone, because on a self-hosted CortexDB
 /// other accounts may share it (see `layout_migration`). An engine that
 /// cannot erase answers `UNSUPPORTED`.
-pub async fn erase_all(config: &Config, params: EraseAllParams) -> MemoryResult<EraseAllView> {
+pub async fn erase_all(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    params: EraseAllParams,
+) -> MemoryResult<EraseAllView> {
     if !params.confirm {
         return Err(MemoryError::invalid(
             "erasing all memory needs confirm: true; nothing erased comes back",
@@ -437,7 +441,7 @@ pub async fn erase_all(config: &Config, params: EraseAllParams) -> MemoryResult<
     let bound = bound(config)?;
     // Earlier durable tool writes must finish or be discarded before the
     // remote wipe; hold the owner barrier until the erase has completed.
-    let _writes = super::tool_writes::fence_and_clear(config).await?;
+    let _writes = super::tool_writes::fence_and_clear(ctx, config).await?;
     super::lifecycle::prefetch::invalidate(config);
     let mut request = EraseRequest::new(tinymemory_api::Reach::subtree(
         tinymemory_api::Namespace::ROOT,

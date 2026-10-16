@@ -2,13 +2,30 @@
 
 use super::*;
 
+/// Reconcile visible delegate names without reopening a caller's explicit
+/// restriction. Revoked names disappear; a newly connected name is admitted
+/// only for the wildcard belt.
+pub(in crate::agent::session_host) fn reconcile_synthesized_visibility(
+    visible: &mut std::collections::HashSet<String>,
+    previous: &std::collections::HashSet<String>,
+    next: &std::collections::HashSet<String>,
+    auto_include_new: bool,
+) {
+    for name in previous.difference(next) {
+        visible.remove(name);
+    }
+    if auto_include_new {
+        visible.extend(next.iter().cloned());
+    }
+}
+
 impl OpenHumanTurnPrelude {
     /// Rebuild every delegation-dependent tool view from the current cached
     /// integration set, replacing rather than appending. A revoked delegate is
     /// removed from the executable source, schema, and policy together before
     /// this request is prepared.
     pub(super) fn refresh_delegation_tool_surface(&self) -> anyhow::Result<()> {
-        use crate::agent::harness::definition::AgentDefinitionRegistry;
+        use crate::agent::harness::host_definition::AgentDefinitionRegistry;
         use crate::tools::orchestrator_tools::collect_orchestrator_tools;
         use tinytools::ToolPolicyEngine;
 
@@ -76,10 +93,11 @@ impl OpenHumanTurnPrelude {
             )
         });
         collected.extend(rebuilt);
-        super::super::managed_tools::reject_synthesized_collisions(
+        tinyagents_runtime::reject_synthesized_collisions(
             &surface.permanent_tool_names,
             &collected,
-        )?;
+        )
+        .map_err(anyhow::Error::msg)?;
         let synthesized =
             super::super::builder::drop_synthesized_name_collisions(&surface.tools, collected);
         let synthesized_names = synthesized

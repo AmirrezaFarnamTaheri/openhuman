@@ -59,8 +59,8 @@ mod tool_markup;
 pub(crate) use access_gates::current_host_requires_session;
 pub(crate) use chat_model::resolves_to_managed_backend;
 pub use chat_model::{
-    create_chat_model, create_chat_model_from_string, create_chat_model_from_string_with_model_id,
-    create_chat_model_with_model_id, probe_inference_readiness,
+    create_chat_model_from_string, create_chat_model_from_string_with_model_id,
+    create_chat_model_in, create_chat_model_with_model_id_in, probe_inference_readiness,
 };
 pub(crate) use credentials::openai_bearer_is_oauth;
 pub use credentials::{auth_key_for_slug, lookup_key_for_slug, redact_endpoint};
@@ -203,6 +203,7 @@ use crate::inference::provider::openai_codex::resolve_openai_codex_routing;
 use crate::inference::provider::openhuman_backend_model::OpenHumanBackendModel;
 use crate::inference::provider::ProviderRuntimeOptions;
 use crate::security::credentials::AuthService;
+use crate::security::egress::EgressLedger;
 use std::sync::Arc;
 use tinyagents_harness::providers::claude_agent_sdk::ClaudeAgentSdkProvider;
 use tinyinference_llm::model::{ChatModel, ModelRequest, ModelResponse, ModelStream};

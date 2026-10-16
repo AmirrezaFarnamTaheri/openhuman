@@ -40,12 +40,16 @@ pub(crate) struct Binding {
 }
 
 impl Binding {
-    /// A binding for the context the caller is running in.
-    pub(crate) fn current(config: &Config, security: Arc<SecurityPolicy>) -> Self {
+    /// A binding for the context `ctx` carries (none when it is unbound).
+    pub(crate) fn new(
+        ctx: &crate::core::runtime::DispatchCtx,
+        config: &Config,
+        security: Arc<SecurityPolicy>,
+    ) -> Self {
         Self {
             config: Arc::new(RwLock::new(config.clone())),
             security,
-            context: CoreContext::scoped().map(|ctx| Arc::downgrade(&ctx)),
+            context: ctx.core().map(Arc::downgrade),
         }
     }
 
@@ -62,6 +66,12 @@ impl Binding {
             .config
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = config.clone();
+    }
+
+    /// The dispatch context the bound context stands for: the bound one, or
+    /// (when it has since been dropped, or none was bound) the calling task's.
+    pub(crate) fn dispatch_ctx(&self) -> crate::core::runtime::DispatchCtx {
+        crate::core::runtime::DispatchCtx::from_weak(self.context.as_ref())
     }
 
     /// Runs `fut` under the bound context. A context that has since been
@@ -202,13 +212,23 @@ pub(crate) struct JobDispatcher {
 }
 
 impl JobDispatcher {
-    /// A dispatcher for the context the caller is running in.
-    pub(crate) fn new(config: &Config, security: &Arc<SecurityPolicy>) -> Self {
-        let binding = Binding::current(config, Arc::clone(security));
+    /// A dispatcher for the context `ctx` carries.
+    pub(crate) fn new(
+        ctx: &crate::core::runtime::DispatchCtx,
+        config: &Config,
+        security: &Arc<SecurityPolicy>,
+    ) -> Self {
+        let binding = Binding::new(ctx, config, Arc::clone(security));
         Self {
             scheduler: Scheduler::new(CLAIM_SCOPE, scheduler_config(config), ports(&binding)),
             binding,
         }
+    }
+
+    /// The dispatch context the scheduler's ports act under.
+    #[cfg(test)]
+    pub(crate) fn dispatch_ctx(&self) -> crate::core::runtime::DispatchCtx {
+        self.binding.dispatch_ctx()
     }
 
     /// Read the due jobs and dispatch them; the count dispatched. Errors when

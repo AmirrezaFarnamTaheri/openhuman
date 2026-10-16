@@ -3,9 +3,11 @@
 //! (#7717).
 
 use super::*;
+use crate::agent::tinyagents::middleware::repeated_failure::RepeatedToolFailureMiddleware;
 use crate::memory::test_fixtures::{bind_reference, config_in};
 use crate::memory::tools::{is_budget_refusal, MemoryTool};
 use tinyagents_harness::ids::CallId;
+use tinyagents_harness::middleware::is_repeat_call_exempt;
 use tinyagents_harness::tool::ToolExecutionContext;
 use tinytools::ToolCallOptions;
 
@@ -89,7 +91,7 @@ fn response_with(calls: &[TaToolCall]) -> tinyinference_llm::model::ModelRespons
 
 /// The write churn #7293 capped (one save re-issued round after round) no
 /// longer spends the memory budget, so the repeat guard installed by
-/// `harness_assembly` is what stops it: identical learns acknowledge
+/// `turn_middleware` is what stops it: identical learns acknowledge
 /// identically, and the guard halts the run.
 #[tokio::test]
 async fn an_identical_learn_loop_is_halted_by_the_repeat_guard() {

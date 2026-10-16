@@ -927,6 +927,7 @@ async fn the_agent_learn_returns_on_accept_and_recall_finds_it() {
     // recall may lag.
     let before = f.mock.request_rows().await.len();
     let learned = openhuman_core::memory::tools::run_action(
+        &openhuman_core::core::runtime::DispatchCtx::ambient(),
         &config,
         &json!({"action": "learn", "text": "Dave takes his coffee with oat milk"}),
         &facts,
@@ -1715,8 +1716,9 @@ async fn wait_for_request(f: &Fixture, what: &str, found: impl Fn(&str, &str) ->
 async fn a_later_chat_turn_carries_cached_memory_and_is_logged() {
     // Chat sessions resolve their hosted authority from the agent definition
     // registry, which the full runtime initialises at startup.
-    openhuman_core::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins()
-        .expect("builtin agent definitions");
+    openhuman_core::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins(
+    )
+    .expect("builtin agent definitions");
     let f = Fixture::new(true).await;
     f.learn("The user prefers launch events in Lisbon").await;
 

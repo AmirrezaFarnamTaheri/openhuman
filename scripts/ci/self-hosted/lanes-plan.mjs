@@ -189,7 +189,11 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
     {
       name: "static",
       checks: [
-        { name: "rust-fmt", when: rust, run: "cargo fmt --manifest-path Cargo.toml --package openhuman --package openhuman-cli --package openhuman-embed --package openhuman-modules-linked --package openhuman-rpc --package openhuman-tinyhumans --package openhuman-tui -- --check" },
+        {
+          name: "rust-fmt",
+          when: rust,
+          run: "cargo fmt --manifest-path Cargo.toml --package openhuman --package openhuman-cli --package openhuman-embed --package openhuman-modules-linked --package openhuman-rpc --package openhuman-tinyhumans --package openhuman-tui -- --check",
+        },
         {
           name: "rust-layout",
           when: core,
@@ -504,7 +508,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           run:
             "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features" +
             " --features modules,mcp,e2e-test-support --lib --" +
-            " modules::host:: modules::registry:: modules::storage_grant_tinywallet::" +
+            " modules::runtime:: modules::registry:: modules::storage_grant_tinywallet::" +
+            " modules::storage_grant_tinyconnectors::" +
             " mcp::server::resources:: test_support::introspect::",
         },
         {
@@ -536,7 +541,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         {
           // llvm-cov's RUSTFLAGS mode with the linker flag cleared, as in
           // ci-lite. ci-lite also clears RUSTC_WRAPPER because its container
-          // config installs sccache; on ex63 covEnv sets sccache on purpose.
+          // config installs sccache; on ex63 covEnv sets the wrapper on purpose.
           name: "tauri-coverage",
           when: areas.rustTauri,
           env: { ...covEnv },

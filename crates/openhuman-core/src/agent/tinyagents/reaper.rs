@@ -19,11 +19,15 @@ use std::path::Path;
 /// sweep visits `local` and then each known agent (`crate::storage::agents`).
 pub(crate) async fn reap_orphaned_runs(workspace: &Path) -> usize {
     let shared = crate::storage::installed_is_shared();
-    crate::storage::agents::for_each_scope("run reaper", || reap_unless_shared(workspace, shared))
-        .await
-        .into_iter()
-        .map(|(_, reaped)| reaped)
-        .sum()
+    crate::storage::agents::for_each_scope(
+        &crate::core::runtime::DispatchCtx::host_default(),
+        "run reaper",
+        |_| reap_unless_shared(workspace, shared),
+    )
+    .await
+    .into_iter()
+    .map(|(_, reaped)| reaped)
+    .sum()
 }
 
 async fn reap_unless_shared(workspace: &Path, shared: bool) -> usize {

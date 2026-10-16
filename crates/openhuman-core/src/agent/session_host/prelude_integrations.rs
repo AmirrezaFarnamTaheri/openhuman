@@ -23,8 +23,8 @@ impl OpenHumanTurnPrelude {
     /// The session's own definition, else the catalogue's entry for its id.
     pub(super) fn session_definition(
         &self,
-        registry: &crate::agent::harness::definition::AgentDefinitionRegistry,
-    ) -> Option<crate::agent::harness::definition::AgentDefinition> {
+        registry: &crate::agent::harness::host_definition::AgentDefinitionRegistry,
+    ) -> Option<crate::agent::harness::host_definition::AgentDefinition> {
         let definition = self
             .definition
             .as_deref()
@@ -102,7 +102,7 @@ impl OpenHumanTurnPrelude {
     ///   error instead of an unknown-tool failure.
     pub(super) fn rebuilt_recorded_tools(
         &self,
-        definition: &crate::agent::harness::definition::AgentDefinition,
+        definition: &crate::agent::harness::host_definition::AgentDefinition,
         base: &[Box<dyn tinytools::Tool>],
         synthesized: &[Box<dyn tinytools::Tool>],
         integrations: &[crate::agent::prompts::ConnectedIntegration],
@@ -118,7 +118,7 @@ impl OpenHumanTurnPrelude {
         if definition.subagents.iter().any(|entry| {
             matches!(
                 entry,
-                crate::agent::harness::definition::SubagentEntry::Skills(wildcard)
+                tinyagents_definition::SubagentEntry::Skills(wildcard)
                     if wildcard.matches_all()
             )
         }) {
@@ -297,7 +297,7 @@ impl OpenHumanTurnPrelude {
         if !self
             .definition
             .as_ref()
-            .is_some_and(|definition| definition.searches_connected_mcp)
+            .is_some_and(|definition| definition.extensions.searches_connected_mcp)
         {
             tracing::trace!(
                 agent = %self.agent_definition_id,
@@ -361,7 +361,7 @@ impl OpenHumanTurnPrelude {
         }
         let config = match self.runtime_config.clone() {
             Some(config) => Some(config),
-            None => crate::config::ops::load_current_or_init()
+            None => crate::config::ops::load_current_or_init(&self.dispatch_ctx())
                 .await
                 .ok()
                 .map(Arc::new),
@@ -383,11 +383,12 @@ impl OpenHumanTurnPrelude {
             connected.len(),
             self.agent_definition_id
         );
-        let mcp_servers = crate::mcp::registry::connections::connected_overview()
-            .await
-            .into_iter()
-            .map(|server| server.qualified_name)
-            .collect::<std::collections::HashSet<_>>();
+        let mcp_servers =
+            crate::mcp::registry::connections::connected_overview(&self.dispatch_ctx())
+                .await
+                .into_iter()
+                .map(|server| server.qualified_name)
+                .collect::<std::collections::HashSet<_>>();
         let mut mutable = self
             .mutable
             .lock()
@@ -399,7 +400,7 @@ impl OpenHumanTurnPrelude {
         let skills_changed = self.drain_host_events();
         let config = match self.runtime_config.clone() {
             Some(config) => Some(config),
-            None => crate::config::ops::load_current_or_init()
+            None => crate::config::ops::load_current_or_init(&self.dispatch_ctx())
                 .await
                 .ok()
                 .map(Arc::new),
@@ -426,11 +427,12 @@ impl OpenHumanTurnPrelude {
                 mutable.connected_integrations_authoritative = authoritative;
             }
         }
-        let connected_mcp = crate::mcp::registry::connections::connected_overview()
-            .await
-            .into_iter()
-            .map(|server| server.qualified_name)
-            .collect::<Vec<_>>();
+        let connected_mcp =
+            crate::mcp::registry::connections::connected_overview(&self.dispatch_ctx())
+                .await
+                .into_iter()
+                .map(|server| server.qualified_name)
+                .collect::<Vec<_>>();
         let mut mutable = self
             .mutable
             .lock()

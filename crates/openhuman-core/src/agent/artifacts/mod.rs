@@ -7,6 +7,7 @@ mod store_documents;
 pub mod tools;
 pub mod types;
 
+pub(crate) use files::resolve_ready_file_meta;
 pub use files::{resolve_ready_file, FileRoots};
 pub use migrate::{migrate_legacy_artifacts, MigrationReport};
 pub use schemas::{
@@ -14,7 +15,7 @@ pub use schemas::{
     all_registered_controllers as all_artifacts_registered_controllers,
 };
 pub use store::{
-    create_artifact, create_artifact_for_call, fail_artifact, finalize_artifact,
-    read_artifact_bytes,
+    create_artifact, create_artifact_for_call, create_artifact_regenerating, fail_artifact,
+    finalize_artifact, read_artifact_bytes,
 };
 pub use types::{ArtifactKind, ArtifactMeta, ArtifactStatus};

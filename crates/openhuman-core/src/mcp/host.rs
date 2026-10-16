@@ -19,13 +19,11 @@ pub fn set_default_config(config: &Config) {
     let _ = DEFAULT_CONFIG.set(config.clone());
 }
 
-/// The config named by the current scoped dispatch, or the process default
+/// The config named by the dispatch context `ctx`, or the process default
 /// outside a tenant scope.
-pub fn ambient_config() -> Option<Config> {
-    match crate::core::runtime::current_tenant() {
-        Ok(tenant) if tenant.is_scoped() => {
-            crate::core::runtime::CoreContext::with_current_embedder_config(Clone::clone)
-        }
+pub fn ambient_config(ctx: &crate::core::runtime::DispatchCtx) -> Option<Config> {
+    match ctx.tenant() {
+        Ok(tenant) if tenant.is_scoped() => ctx.embedder_config(),
         _ => DEFAULT_CONFIG.get().cloned(),
     }
 }
@@ -119,6 +117,7 @@ pub fn client_config(config: &Config) -> tinymcp_bus::McpClientConfig {
     client.client_identity.name = config.mcp_client.client_identity.name.clone();
     client.client_identity.title = config.mcp_client.client_identity.title.clone();
     client.client_identity.version = config.mcp_client.client_identity.version.clone();
+    client.client_identity.capabilities = tinymcp_bus::ui::client_capabilities();
     client.registry_auth = config.mcp_client.registry_auth.clone();
 
     // GitBooks uses dedicated deferred tools and is not part of the configured

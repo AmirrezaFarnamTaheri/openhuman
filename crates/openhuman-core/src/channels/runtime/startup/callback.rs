@@ -29,14 +29,16 @@ pub(super) struct ChannelHostCallbacks {
 
 impl ChannelHostCallbacks {
     pub(super) fn new(
+        ctx: &crate::core::runtime::DispatchCtx,
         config: Arc<Config>,
         context: Arc<OnceLock<Weak<ChannelRuntimeContext>>>,
         dispatch: mpsc::Sender<RuntimeChannelMessage>,
     ) -> Self {
         Self {
             config,
-            core_context: crate::core::runtime::CoreContext::current(),
-            tenant: crate::core::runtime::tenant::current_tenant_or_isolated(
+            core_context: ctx.resolved(),
+            tenant: crate::core::runtime::tenant::isolated_unless_tenant(
+                ctx.tenant(),
                 "channel_host_callback",
             ),
             cancellation: crate::channels::runtime::session::channel_session(),
@@ -159,6 +161,12 @@ impl ChannelHostCallbacks {
                 let context = self.context()?;
                 let tenant = &self.tenant;
                 let cancellation = &self.cancellation;
+                // The captured context is the carrier; without one the host's
+                // default context (none in SaaS, which fails closed).
+                let dispatch_ctx = match &self.core_context {
+                    Some(core) => crate::core::runtime::DispatchCtx::new(Arc::clone(core)),
+                    None => crate::core::runtime::DispatchCtx::host_default(),
+                };
                 let dispatch = async {
                     tokio::select! {
                         biased;
@@ -166,6 +174,7 @@ impl ChannelHostCallbacks {
                             Err(Error::failed("channel session ended"))
                         }
                         result = crate::channels::host::remote_control::dispatch_callback(
+                            &dispatch_ctx,
                             context.as_ref(),
                             tenant,
                             cancellation,

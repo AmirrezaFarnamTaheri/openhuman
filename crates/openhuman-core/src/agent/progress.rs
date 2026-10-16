@@ -91,6 +91,18 @@ pub enum AgentProgress {
         structured: Option<serde_json::Value>,
     },
 
+    /// A running tool reported progress through
+    /// `ToolRunContext::report_progress` (a shell call's elapsed time and
+    /// output, a media job's state). Falls between the call's
+    /// [`Self::ToolCallStarted`] and [`Self::ToolCallCompleted`]. Parent-scope
+    /// calls only.
+    ToolCallProgress {
+        /// Correlation id of the running call.
+        call_id: String,
+        /// Human-readable status line.
+        message: String,
+    },
+
     /// A sub-agent was spawned during tool execution.
     SubagentSpawned {
         agent_id: String,
@@ -181,7 +193,7 @@ pub enum AgentProgress {
         /// breaker or iteration cap) and handed back as incomplete. The trace
         /// collector closes the subagent span at `WARNING` with it. `None` for
         /// a sub-agent that finished normally.
-        stop: Option<crate::agent::turn_stop::TurnStop>,
+        stop: Option<tinyagents_harness::turn_stop::TurnStop>,
     },
 
     /// A sub-agent failed.
@@ -223,7 +235,7 @@ pub enum AgentProgress {
         iteration: u32,
         /// Maximum iterations configured for this child run.
         max_iterations: u32,
-        /// `true` when the agent uses [`IterationPolicy::Extended`](crate::agent::harness::definition::IterationPolicy::Extended).
+        /// `true` when the agent uses [`IterationPolicy::Extended`](tinyagents_definition::IterationPolicy::Extended).
         /// The UI uses this to show "step N" instead of "turn N/M".
         extended_policy: bool,
     },
@@ -355,7 +367,7 @@ pub enum AgentProgress {
     /// `total_usd` prefers backend-reported `charged_amount_usd`
     /// (sum of authoritative figures) and falls back to a tier-based
     /// token-rate estimate for calls that didn't carry one — see
-    /// [`crate::agent::cost::TurnCost::total_usd`].
+    /// [`tinyagents_harness::cost::TurnCost::total_usd`].
     TurnCostUpdated {
         /// Last model that contributed to this update.
         model: String,
@@ -422,7 +434,7 @@ pub enum AgentProgress {
         /// completion path. Content-free; the trace collector closes the turn
         /// span at `WARNING` with it. `None` for a turn that finished on its
         /// own.
-        stop: Option<crate::agent::turn_stop::TurnStop>,
+        stop: Option<tinyagents_harness::turn_stop::TurnStop>,
     },
 
     /// The turn's content: the user's prompt and the model's final reply.

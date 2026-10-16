@@ -1346,7 +1346,9 @@ const messages: TranslationMap = {
   'chat.stallWarning.thinking':
     "Hâlâ düşünüyor. 2 dakikadır yeni çıktı yok, ancak ajan çalışmaya devam ediyor. İptal etmek istiyorsanız Durdur'a basın.",
   'chat.stallWarning.working':
-    "Hâlâ çalışıyor. Bir adım 2 dakikadan uzun süredir yeni çıktı olmadan çalışıyor. İptal etmek istiyorsanız Durdur'a basın.",
+    "{duration} boyunca yeni çıktı yok. Ajan takılmış olabilir; iptal etmek için Durdur'a basın.",
+  'chat.stallWarning.toolRunning':
+    '{tool}. Derleme veya CI izleme gibi uzun adımlar biraz zaman alabilir.',
   'chat.filter.tasks': 'Görevler',
   'chat.selectThread': 'Bir sohbet dizisi seçin',
   'chat.noThreads': 'Henüz sohbet dizisi yok',
@@ -1901,6 +1903,23 @@ const messages: TranslationMap = {
   'conversations.tools.steps.other': '{count} adım',
   'conversations.tools.working': 'Çalışıyor',
   'conversations.tools.noOutput': 'Çıktı yok',
+  'conversations.mcpUi.openInBrowser': 'Tarayıcıda aç',
+  'conversations.mcpUi.showQr': "QR'ı göster",
+  'conversations.mcpUi.hideQr': "QR'ı gizle",
+  'conversations.mcpUi.scanToOpen': 'Açmak için telefonunla tara',
+  'conversations.mcpUi.openOnPhone': 'Telefonunda aç',
+  'conversations.mcpUi.copyLink': 'Bağlantıyı kopyala',
+  'conversations.mcpUi.copied': 'Kopyalandı',
+  'conversations.mcpUi.linksLabel': 'Bu aracın bağlantıları',
+  'conversations.mcpUi.widgetTitle': 'Araç görünümü',
+  'conversations.mcpUi.widgetLoading': 'Görünüm yükleniyor…',
+  'conversations.mcpUi.widgetUnavailable':
+    'Bu görünüm artık kullanılamıyor. Yeniden görmek için sunucuyu tekrar bağla.',
+  'conversations.mcpUi.confirmTitle': 'Bu işleme izin verilsin mi?',
+  'conversations.mcpUi.confirmBody':
+    'Bu görünüm {tool} çalıştırmak istiyor. Bu, o hizmette bir şeyi değiştirebilir.',
+  'conversations.mcpUi.confirmAllow': 'İzin ver',
+  'conversations.mcpUi.confirmDeny': 'Reddet',
   'conversations.tools.delegatedTo': 'Devredilen ajan: {agent}',
   'conversations.tools.parallelAgentsAggregating': 'Sonuçlar birleştiriliyor',
   'conversations.tools.openInBrowser': 'Tarayıcıda aç',
@@ -4847,6 +4866,8 @@ const messages: TranslationMap = {
   'conversations.tools.createDocument.done': 'Belge oluşturuldu',
   'conversations.tools.createPresentation.active': 'Sunum oluşturuluyor',
   'conversations.tools.createPresentation.done': 'Sunum oluşturuldu',
+  'conversations.tools.showView.done': 'Görünüm gösterildi',
+  'conversations.tools.showView.active': 'Görünüm gösteriliyor',
   'conversations.tools.recallMemories.active': 'Bellek kayıtları hatırlanıyor',
   'conversations.tools.recallMemories.done': 'Bellek kayıtları hatırlandı',
   'conversations.tools.saveToMemory.active': 'Belleğe kaydediliyor',

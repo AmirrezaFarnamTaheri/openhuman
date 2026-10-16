@@ -11,7 +11,7 @@ pub use tinybox_bus as contract;
 
 use crate::config::Config;
 
-use super::client::{ModuleCallError, ModuleClient};
+use tinybus::module::{ModuleCallError, ModuleClient};
 
 /// Registry id for the TinyBox module.
 pub const MODULE_ID: &str = "tinybox";
@@ -76,7 +76,7 @@ fn require_compatible(version: (u32, u32)) -> Result<(), ModuleCallError> {
     if contract::is_compatible(version) {
         return Ok(());
     }
-    ModuleClient::report_incompatible_contract(MODULE_ID);
+    crate::modules::report::incompatible_contract(MODULE_ID);
     Err(ModuleCallError::IncompatibleContract)
 }
 
@@ -221,7 +221,7 @@ pub async fn run_docker(
     request: contract::DockerRunRequest,
 ) -> Result<contract::DockerRunOutput, String> {
     let timeout = Duration::from_millis(request.timeout_ms).saturating_add(DOCKER_CALL_GRACE);
-    let client = ModuleClient::new(config.clone()).with_timeout(timeout);
+    let client = crate::modules::client(config.clone()).with_timeout(timeout);
     call_run_docker_with_client(&client, request).await
 }
 
@@ -234,7 +234,7 @@ pub async fn run_docker_without_workspace(
     request: contract::DockerRunRequest,
 ) -> Result<contract::DockerRunOutput, String> {
     let timeout = Duration::from_millis(request.timeout_ms).saturating_add(DOCKER_CALL_GRACE);
-    let client = ModuleClient::new(config.clone()).with_timeout(timeout);
+    let client = crate::modules::client(config.clone()).with_timeout(timeout);
     call_run_docker_without_workspace_with_client(&client, request).await
 }
 
@@ -435,12 +435,16 @@ where
 {
     // A registry index from before the storage contract moves into the
     // module's storage before its first call. Once per workspace, best effort.
-    super::import_legacy_tinybox(&config.workspace_dir).await;
+    super::import_legacy_tinybox(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config.workspace_dir,
+    )
+    .await;
     call_with_client(&module_client(config), member, request, confidential).await
 }
 
 fn module_client(config: &Config) -> ModuleClient {
-    ModuleClient::new(config.clone()).with_timeout(MODULE_CALL_TIMEOUT)
+    crate::modules::client(config.clone()).with_timeout(MODULE_CALL_TIMEOUT)
 }
 
 fn message(error: ModuleCallError) -> String {

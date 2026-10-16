@@ -14,7 +14,7 @@ publish = false
 result_large_err = "allow"
 
 [features]
-langfuse = ["openhuman-core/langfuse"]
+langfuse = ["openhuman-core/langfuse", "tinyagents-harness/langfuse"]
 # `channels` is in core's default set already; enabling it here too compiles
 # the `Runtime::channels` facade in a default build.
 default = ["openhuman-core/default", "channels", "modules"]
@@ -23,7 +23,7 @@ inference = ["openhuman-core/inference"]
 documents = ["openhuman-core/documents"]
 hosting = ["openhuman-core/hosting"]
 tinymemes = ["openhuman-core/tinymemes"]
-modules = ["openhuman-core/modules"]
+modules = ["openhuman-core/modules", "tinybus/modules"]
 voice = ["openhuman-core/voice"]
 web3 = ["openhuman-core/web3"]
 # Storage drivers for `[storage] url` (see the core `storage` domain).
@@ -78,6 +78,7 @@ tinymcp-bus = { path = "../../vendor/tinymcp/crates/tinymcp-bus" }
 # conversations in its own database, and the in-memory provider; same path as
 # the core's so one copy resolves.
 tinyagents-harness = { path = "../../vendor/tinyagents/crates/tinyagents-harness", default-features = false }
+tinyagents-definition = { path = "../../vendor/tinyagents/crates/tinyagents-definition" }
 tinyagents-session = { path = "../../vendor/tinyagents/crates/tinyagents-session" }
 # Native persisted todo codec exposed by the existing session-store contract.
 tinyagents-graph = { path = "../../vendor/tinyagents/crates/tinyagents-graph", default-features = false }

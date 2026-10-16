@@ -204,8 +204,8 @@ Three guards keep SaaS work from falling back to process-wide state:
   (`config/schema/load/saas_scope.rs`). It never resolves
   `OPENHUMAN_WORKSPACE`, `active_user.toml` or `~/.openhuman`.
 - **Scoped spawns.** `runtime/spawn.rs`'s `spawn_scoped` /
-  `spawn_blocking_scoped` carry the caller's `CoreContext` and memory identity
-  into the spawned task. `scripts/ci/check-saas-ambient.mjs` (`pnpm
+  `spawn_blocking_scoped` carry the caller's `CoreContext` into the spawned task
+  (the memory identity is explicit and is handed to spawned work as a value). `scripts/ci/check-saas-ambient.mjs` (`pnpm
   saas:ambient`) ratchets the bare spawns, direct `load_or_init` calls,
   environment writes and `home_dir()` lookups that remain.
   `CoreContext::propagate` follows the same rule in SaaS.
@@ -218,7 +218,7 @@ Three guards keep SaaS work from falling back to process-wide state:
   in-process tables keyed by caller-chosen thread or session ids,
   `session_key(&tenant)` for the host session store, and
   `storage::scope_for_profile` for the storage backend. A profile gets
-  fresh state slots, `current_slot` hands an unscoped SaaS task a throwaway
+  fresh state slots, `slot_for` hands an unscoped SaaS task a throwaway
   slot, and `CoreContext::tenant_in_use()` reports whether turns still run
   on a profile, so a host never evicts it mid-turn. The ratchet's
   `ambient-context` rule baselines the `CoreContext::current()` and

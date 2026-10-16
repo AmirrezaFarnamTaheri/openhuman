@@ -280,9 +280,22 @@ pub enum DomainEvent {
         key: String,
         category: String,
         namespace: String,
+        /// Chat thread of the turn whose tool call stored the entry; `None`
+        /// outside a chat turn (CLI, cron, queued background writes).
+        thread_id: Option<String>,
+        /// Client of that turn, for the web channel to fan the activity to.
+        client_id: Option<String>,
     },
     /// A memory recall query completed.
-    MemoryRecalled { query: String, hit_count: usize },
+    MemoryRecalled {
+        query: String,
+        hit_count: usize,
+        /// Chat thread of the turn whose tool call recalled; `None` outside a
+        /// chat turn.
+        thread_id: Option<String>,
+        /// Client of that turn.
+        client_id: Option<String>,
+    },
 
     // ── Channels ────────────────────────────────────────────────────────
     /// An inbound channel message from the transport layer, ready for processing.
@@ -396,6 +409,9 @@ pub enum DomainEvent {
     CronSystemJobDue {
         /// The job name, e.g. `memory_context_refresh`.
         job: String,
+        /// The tenant whose scheduler fired the job; `None` for the host's own.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tenant: Option<crate::core::runtime::Tenant>,
     },
     /// Live per-step progress of an in-flight `flows_run` / `flows_resume`
     /// (issue G2, live run observation). Published from
@@ -628,7 +644,7 @@ pub enum DomainEvent {
     /// `EgressSurfaceSubscriber` (defined in
     /// `crates/openhuman-core/src/web_chat/event_bus.rs`) when the emitting
     /// turn carries chat routing. `thread_id` / `client_id` come from the
-    /// ambient `APPROVAL_CHAT_CONTEXT` and are `None` for CLI / cron /
+    /// the egress ledger's chat routing and are `None` for CLI / cron /
     /// background transfers (no chat surface to route to).
     ///
     /// Only external transfers fire this event — local-only inference
@@ -707,7 +723,7 @@ pub enum DomainEvent {
     /// is on disk and ready to be downloaded. Published by
     /// [`crate::agent::artifacts::store::finalize_artifact`].
     /// Bridged to the web channel as an `artifact_ready` socket event
-    /// when the publishing turn carries an `APPROVAL_CHAT_CONTEXT`
+    /// when the publishing turn carries an `ApprovalChatContext`
     /// (see [`crate::security::approval::ApprovalChatContext`]).
     /// Sub-task #2779 of #1535.
     ArtifactReady {
@@ -734,7 +750,7 @@ pub enum DomainEvent {
         /// Final on-disk file size in bytes.
         size_bytes: u64,
         /// Chat thread the artifact belongs to, when the producing
-        /// turn carried an `APPROVAL_CHAT_CONTEXT`. `None` for CLI /
+        /// turn carried an `ApprovalChatContext`. `None` for CLI /
         /// cron / sub-agent paths — no client to fan out to.
         thread_id: Option<String>,
         /// Socket.IO client id (room) to surface the card to, when
@@ -798,7 +814,7 @@ pub enum DomainEvent {
         /// place without flicker.
         path: String,
         /// Chat thread the artifact belongs to, when the producing turn
-        /// carried an `APPROVAL_CHAT_CONTEXT`. `None` for CLI / cron /
+        /// carried an `ApprovalChatContext`. `None` for CLI / cron /
         /// sub-agent paths — no client to fan out to.
         thread_id: Option<String>,
         /// Socket.IO client id (room) to surface the card to, when known.
@@ -866,6 +882,9 @@ pub enum DomainEvent {
         toolkit: String,
         connection_id: String,
         connect_url: String,
+        /// The tenant that owns the connection; `None` for the host's own.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tenant: Option<crate::core::runtime::Tenant>,
     },
     /// A Composio connection was removed.
     ComposioConnectionDeleted {
@@ -897,6 +916,9 @@ pub enum DomainEvent {
         /// Whether a direct-mode API key is now present in the encrypted
         /// store. The key itself is never carried on the event.
         api_key_set: bool,
+        /// The tenant the change concerns; `None` for the host's own.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tenant: Option<crate::core::runtime::Tenant>,
     },
 
     // ── Triage ──────────────────────────────────────────────────────────
@@ -1241,7 +1263,12 @@ pub enum DomainEvent {
     /// `local` or `cleared` — never the credential itself. Subscribers that
     /// cache credential-derived state (the search module's managed routes)
     /// refresh on it.
-    CredentialChanged { kind: String },
+    CredentialChanged {
+        kind: String,
+        /// The tenant the change concerns; `None` for the host's own.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tenant: Option<crate::core::runtime::Tenant>,
+    },
 
     // ── Voice ────────────────────────────────────────────────────────────
     /// A voice domain event (PTT, transcription lifecycle, etc.).

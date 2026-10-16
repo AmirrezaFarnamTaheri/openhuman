@@ -287,7 +287,7 @@ pub async fn run_dispatch_harness(options: DispatchHarnessOptions) -> DispatchHa
         .get()
         .expect("bus initialised")
         .receiver();
-    let _ = crate::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins();
+    let _ = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins();
 
     let handler_roles = Arc::new(Mutex::new(Vec::new()));
     let handler_text = Arc::new(Mutex::new(String::new()));
@@ -432,6 +432,7 @@ pub async fn run_dispatch_harness(options: DispatchHarnessOptions) -> DispatchHa
         multimodal: MultimodalConfig::default(),
         multimodal_files: MultimodalFileConfig::default(),
         config: None,
+        core: None,
     });
 
     let expected_event_channel = options.channel_name.clone();

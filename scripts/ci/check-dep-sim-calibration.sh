@@ -113,7 +113,7 @@ cd "$(dirname "$0")/../.."
 # 316 -> 317: storage-file adds the first-party file driver.
 # 317 -> 318: pre-core registry vocabulary adds the pure tinycomputer-bus.
 
-# This matches the current `flows:328:304:2` entry in
+# This matches the current `flows:326:302:2` entry in
 # scripts/kernel-floor.limits; its preceding entries are historical.
 # 318 -> 313: connector implementation cut (-8) and explicit flows loader (+3).
 # 313 -> 304: current-main runtime removal and combined released module cuts.
@@ -123,11 +123,13 @@ cd "$(dirname "$0")/../.."
 # 298 -> 302 on 2026-10-13: tinyflows v0.8.14 replaces `tinyflows-sqlite` with
 # the `tinyflows-import` legacy importer (net zero by name) and the storage
 # stage re-measures the flows profile at 326 packages / 302 names / 2 native.
-# 302 -> 304 (2026-10-14): CI measured two additional reachable names
-# from consolidated upstream vendor pins; Cargo.lock retains the same global
-# name set, and neither native-build count nor physical dependency ownership
-# changed. Keep this independent simulator expectation aligned with the exact
-# Linux `flows` cargo tree rather than hiding a legitimate edge delta.
-EXPECTED_NAMES=304
+# 302 -> 304 on 2026-10-13: main already resolves 303; the direct `tinymcp`
+# (`ui`) dependency in openhuman-core adds the `tinymcp` name (329 packages /
+# 304 names / 2 native on Linux). See kernel-floor.limits.
+# 304 -> 303 on 2026-10-16: CI on merge base 63c951aea7 measures the flows
+# profile at 326 packages / 303 names / 2 native. See kernel-floor.limits.
+# Upstream measured 303 names. Re-run on the integrated fork before promotion.
+# If the fork adds legitimate reachability, review the graph, not the budget alone.
+EXPECTED_NAMES=303
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"

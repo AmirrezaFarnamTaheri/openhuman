@@ -64,11 +64,14 @@ pub(super) enum Outcome {
 
 /// Import the legacy delivery file under `workspace` into the module's scope of
 /// the installed storage backend.
-pub(super) async fn import_legacy_delivery(workspace: &Path) -> anyhow::Result<Outcome> {
+pub(super) async fn import_legacy_delivery(
+    ctx: &crate::core::runtime::DispatchCtx,
+    workspace: &Path,
+) -> anyhow::Result<Outcome> {
     let Some(backend) = crate::storage::installed() else {
         return Ok(Outcome::NoBackend);
     };
-    let scope = crate::modules::storage_host::current_module_scope(MODULE_ID)
+    let scope = crate::modules::storage_host::current_module_scope(ctx, MODULE_ID)
         .map_err(|error| anyhow::anyhow!("resolve the module scope: {:?}", error.kind()))?;
     let scoped = backend
         .for_scope(&scope)

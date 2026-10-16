@@ -250,6 +250,7 @@ struct ToolCallPort {
     arguments: SharedArc<Mutex<Vec<Value>>>,
     normalized_arguments: SharedArc<Mutex<Vec<Option<Value>>>>,
     connected: bool,
+    tool_meta: Option<Value>,
 }
 
 #[async_trait]
@@ -258,7 +259,7 @@ impl crate::mcp::module_client::McpModulePort for ToolCallPort {
         &self,
         _data_dir: &str,
         _config: &tinymcp_bus::McpClientConfig,
-    ) -> Result<tinymcp_bus::OpenConfiguredResponse, crate::modules::client::ModuleCallError> {
+    ) -> Result<tinymcp_bus::OpenConfiguredResponse, tinybus::module::ModuleCallError> {
         Ok(tinymcp_bus::OpenConfiguredResponse {
             object_path: "/test/mcp".to_owned(),
             transition_id: "open-test".to_owned(),
@@ -268,14 +269,14 @@ impl crate::mcp::module_client::McpModulePort for ToolCallPort {
     async fn close(
         &self,
         _data_dir: &str,
-    ) -> Result<Option<String>, crate::modules::client::ModuleCallError> {
+    ) -> Result<Option<String>, tinybus::module::ModuleCallError> {
         Ok(None)
     }
 
     async fn transition_status(
         &self,
         _transition_id: &str,
-    ) -> Result<tinymcp_bus::TransitionStatus, crate::modules::client::ModuleCallError> {
+    ) -> Result<tinymcp_bus::TransitionStatus, tinybus::module::ModuleCallError> {
         Ok(tinymcp_bus::TransitionStatus::Complete)
     }
 
@@ -285,7 +286,7 @@ impl crate::mcp::module_client::McpModulePort for ToolCallPort {
         member: &str,
         args: Value,
         _confidential: bool,
-    ) -> Result<Value, crate::modules::client::ModuleCallError> {
+    ) -> Result<Value, tinybus::module::ModuleCallError> {
         match member {
             tinymcp_bus::names::methods::STATUS => {
                 let statuses = self.connected.then(|| tinymcp_bus::ConnStatus {
@@ -298,14 +299,16 @@ impl crate::mcp::module_client::McpModulePort for ToolCallPort {
                     auth_hint: None,
                 });
                 serde_json::to_value(statuses.into_iter().collect::<Vec<_>>())
-                    .map_err(|_| crate::modules::client::ModuleCallError::ModuleFault)
+                    .map_err(|_| tinybus::module::ModuleCallError::ModuleFault)
             }
             tinymcp_bus::names::methods::LIST_TOOLS => {
                 if self.connected {
-                    serde_json::to_value(vec![tinymcp_bus::McpTool::new("forecast")])
-                        .map_err(|_| crate::modules::client::ModuleCallError::ModuleFault)
+                    let mut forecast = tinymcp_bus::McpTool::new("forecast");
+                    forecast.meta = self.tool_meta.clone();
+                    serde_json::to_value(vec![forecast])
+                        .map_err(|_| tinybus::module::ModuleCallError::ModuleFault)
                 } else {
-                    Err(crate::modules::client::ModuleCallError::ModuleFault)
+                    Err(tinybus::module::ModuleCallError::ModuleFault)
                 }
             }
             tinymcp_bus::names::methods::CONNECTED_OVERVIEW => {
@@ -320,37 +323,36 @@ impl crate::mcp::module_client::McpModulePort for ToolCallPort {
                         tools: vec![tinymcp_bus::McpTool::new("forecast")],
                     });
                 serde_json::to_value(overview.into_iter().collect::<Vec<_>>())
-                    .map_err(|_| crate::modules::client::ModuleCallError::ModuleFault)
+                    .map_err(|_| tinybus::module::ModuleCallError::ModuleFault)
             }
             tinymcp_bus::names::methods::TOOL_CALL => {
                 let arguments = args
                     .get(2)
                     .cloned()
-                    .ok_or(crate::modules::client::ModuleCallError::ModuleFault)?;
+                    .ok_or(tinybus::module::ModuleCallError::ModuleFault)?;
                 self.arguments.lock().unwrap().push(arguments);
                 serde_json::to_value(tinymcp_bus::ToolCallOutcome {
                     result: json!({"content":[{"type":"text","text":"sunny"}]}),
                     is_error: false,
                     rendered: tinymcp_bus::McpToolResult::success("sunny"),
                 })
-                .map_err(|_| crate::modules::client::ModuleCallError::ModuleFault)
+                .map_err(|_| tinybus::module::ModuleCallError::ModuleFault)
             }
-            _ => Err(crate::modules::client::ModuleCallError::IncompatibleContract),
+            _ => Err(tinybus::module::ModuleCallError::IncompatibleContract),
         }
     }
 
     async fn validate_server_arguments(
         &self,
         _request: tinymcp_bus::ValidateServerArgumentsRequest,
-    ) -> Result<tinymcp_bus::ServerArgumentsValidation, crate::modules::client::ModuleCallError>
-    {
-        Err(crate::modules::client::ModuleCallError::IncompatibleContract)
+    ) -> Result<tinymcp_bus::ServerArgumentsValidation, tinybus::module::ModuleCallError> {
+        Err(tinybus::module::ModuleCallError::IncompatibleContract)
     }
 
     async fn normalize_tool_arguments(
         &self,
         arguments: Option<Value>,
-    ) -> Result<serde_json::Map<String, Value>, crate::modules::client::ModuleCallError> {
+    ) -> Result<serde_json::Map<String, Value>, tinybus::module::ModuleCallError> {
         self.normalized_arguments
             .lock()
             .unwrap()
@@ -361,16 +363,15 @@ impl crate::mcp::module_client::McpModulePort for ToolCallPort {
             Value::String(encoded) => serde_json::from_str::<Value>(&encoded)
                 .ok()
                 .and_then(|value| value.as_object().cloned())
-                .ok_or(crate::modules::client::ModuleCallError::ModuleFault),
-            _ => Err(crate::modules::client::ModuleCallError::ModuleFault),
+                .ok_or(tinybus::module::ModuleCallError::ModuleFault),
+            _ => Err(tinybus::module::ModuleCallError::ModuleFault),
         }
     }
 
     async fn prepare_agent_tools(
         &self,
         _request: tinymcp_bus::PrepareAgentToolsRequest,
-    ) -> Result<Vec<tinymcp_bus::McpToolPresentation>, crate::modules::client::ModuleCallError>
-    {
+    ) -> Result<Vec<tinymcp_bus::McpToolPresentation>, tinybus::module::ModuleCallError> {
         Ok(Vec::new())
     }
 }
@@ -437,4 +438,49 @@ async fn tool_call_preserves_missing_arguments_as_distinct_from_json_null() {
         arguments.lock().unwrap().as_slice(),
         &[json!({}), json!({})]
     );
+}
+
+#[tokio::test]
+async fn registry_tool_call_attaches_the_descriptor_widget() {
+    let dir = tempfile::tempdir().expect("temp workspace");
+    let config = workspace_config(dir.path());
+    let port = ToolCallPort {
+        connected: true,
+        tool_meta: Some(json!({"ui":{"resourceUri":"ui://widget/forecast.html"}})),
+        ..ToolCallPort::default()
+    };
+    crate::mcp::module_client::McpConfiguredClient::install_test_port(&config, Box::new(port))
+        .expect("test module port");
+
+    let result = McpRegistryToolCallTool::new(Arc::clone(&config))
+        .execute(json!({"server_id":"srv-1", "tool_name":"forecast", "arguments":{}}))
+        .await
+        .expect("call");
+
+    assert!(!result.is_error, "{}", result.text());
+    let metadata = result.metadata.expect("widget presentation");
+    assert_eq!(metadata["kind"], "mcp_ui");
+    assert_eq!(metadata["resource_uri"], "ui://widget/forecast.html");
+    assert_eq!(metadata["server_id"], "srv-1");
+    assert_eq!(metadata["tool"], "forecast");
+}
+
+#[tokio::test]
+async fn registry_tool_call_without_a_descriptor_widget_has_no_presentation() {
+    let dir = tempfile::tempdir().expect("temp workspace");
+    let config = workspace_config(dir.path());
+    let port = ToolCallPort {
+        connected: true,
+        ..ToolCallPort::default()
+    };
+    crate::mcp::module_client::McpConfiguredClient::install_test_port(&config, Box::new(port))
+        .expect("test module port");
+
+    let result = McpRegistryToolCallTool::new(Arc::clone(&config))
+        .execute(json!({"server_id":"srv-1", "tool_name":"forecast", "arguments":{}}))
+        .await
+        .expect("call");
+
+    assert!(!result.is_error, "{}", result.text());
+    assert!(result.metadata.is_none());
 }

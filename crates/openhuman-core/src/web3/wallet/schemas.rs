@@ -1,3 +1,4 @@
+use crate::core::runtime::DispatchCtx;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -427,138 +428,153 @@ pub fn wallet_schemas(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_status(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_status(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
-        crate::web3::wallet::status()
+        crate::web3::wallet::status(&ctx)
             .await?
             .into_cli_compatible_json()
     })
 }
 
-fn handle_setup(params: Map<String, Value>) -> ControllerFuture {
+fn handle_setup(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let payload: SetupWalletParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        crate::web3::wallet::setup(WalletSetupParams {
-            consent_granted: payload.consent_granted,
-            source: payload.source,
-            mnemonic_word_count: payload.mnemonic_word_count,
-            encrypted_mnemonic: Some(payload.encrypted_mnemonic),
-            accounts: payload.accounts,
-            force: payload.force,
-        })
+        crate::web3::wallet::setup(
+            &ctx,
+            WalletSetupParams {
+                consent_granted: payload.consent_granted,
+                source: payload.source,
+                mnemonic_word_count: payload.mnemonic_word_count,
+                encrypted_mnemonic: Some(payload.encrypted_mnemonic),
+                accounts: payload.accounts,
+                force: payload.force,
+            },
+        )
         .await?
         .into_cli_compatible_json()
     })
 }
 
-fn handle_balances(_params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async move { balances().await?.into_cli_compatible_json() })
+fn handle_balances(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move { balances(&ctx).await?.into_cli_compatible_json() })
 }
 
-fn handle_network_defaults(_params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async move { network_defaults().await?.into_cli_compatible_json() })
+fn handle_network_defaults(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move { network_defaults(&ctx).await?.into_cli_compatible_json() })
 }
 
-fn handle_supported_assets(_params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async move { supported_assets().await?.into_cli_compatible_json() })
+fn handle_supported_assets(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move { supported_assets(&ctx).await?.into_cli_compatible_json() })
 }
 
-fn handle_encode_erc20_transfer(params: Map<String, Value>) -> ControllerFuture {
+fn handle_encode_erc20_transfer(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: EncodeErc20TransferParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
         if parsed.chain != WalletChain::Evm {
             return Err("encode_erc20_transfer only supports the evm chain".to_string());
         }
-        serde_json::to_value(encode_erc20_transfer(&parsed.to_address, &parsed.amount_raw).await?)
-            .map_err(|e| format!("failed to encode ERC20 transfer output: {e}"))
+        serde_json::to_value(
+            encode_erc20_transfer(&ctx, &parsed.to_address, &parsed.amount_raw).await?,
+        )
+        .map_err(|e| format!("failed to encode ERC20 transfer output: {e}"))
     })
 }
 
-fn handle_chain_status(_params: Map<String, Value>) -> ControllerFuture {
-    Box::pin(async move { chain_status().await?.into_cli_compatible_json() })
+fn handle_chain_status(ctx: DispatchCtx, _params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move { chain_status(&ctx).await?.into_cli_compatible_json() })
 }
 
-fn handle_prepare_transfer(params: Map<String, Value>) -> ControllerFuture {
+fn handle_prepare_transfer(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: PrepareTransferParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        prepare_transfer(parsed).await?.into_cli_compatible_json()
+        prepare_transfer(&ctx, parsed, None)
+            .await?
+            .into_cli_compatible_json()
     })
 }
 
-fn handle_execute_prepared(params: Map<String, Value>) -> ControllerFuture {
+fn handle_execute_prepared(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: ExecutePreparedParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        execute_prepared(parsed).await?.into_cli_compatible_json()
+        execute_prepared(&ctx, parsed, None)
+            .await?
+            .into_cli_compatible_json()
     })
 }
 
-fn handle_tx_status(params: Map<String, Value>) -> ControllerFuture {
+fn handle_tx_status(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: TxQueryParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        tx_status(parsed.chain, parsed.evm_network, &parsed.hash)
+        tx_status(&ctx, parsed.chain, parsed.evm_network, &parsed.hash)
             .await?
             .into_cli_compatible_json()
     })
 }
 
-fn handle_tx_receipt(params: Map<String, Value>) -> ControllerFuture {
+fn handle_tx_receipt(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: TxQueryParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        tx_receipt(parsed.chain, parsed.evm_network, &parsed.hash)
+        tx_receipt(&ctx, parsed.chain, parsed.evm_network, &parsed.hash)
             .await?
             .into_cli_compatible_json()
     })
 }
 
-fn handle_lookup_tx(params: Map<String, Value>) -> ControllerFuture {
+fn handle_lookup_tx(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: TxQueryParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        lookup_tx(parsed.chain, parsed.evm_network, &parsed.hash)
+        lookup_tx(&ctx, parsed.chain, parsed.evm_network, &parsed.hash)
             .await?
             .into_cli_compatible_json()
     })
 }
 
-fn handle_reveal_recovery_phrase(_params: Map<String, Value>) -> ControllerFuture {
+fn handle_reveal_recovery_phrase(
+    ctx: DispatchCtx,
+    _params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
-        crate::web3::wallet::reveal_recovery_phrase()
+        crate::web3::wallet::reveal_recovery_phrase(&ctx)
             .await?
             .into_cli_compatible_json()
     })
 }
 
-fn handle_generate_mnemonic(params: Map<String, Value>) -> ControllerFuture {
+fn handle_generate_mnemonic(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: GenerateMnemonicParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        crate::web3::wallet::generate_recovery_phrase(parsed.word_count)
+        crate::web3::wallet::generate_recovery_phrase(&ctx, parsed.word_count)
             .await?
             .into_cli_compatible_json()
     })
 }
 
-fn handle_validate_mnemonic(params: Map<String, Value>) -> ControllerFuture {
+fn handle_validate_mnemonic(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let parsed: RecoveryPhraseParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        crate::web3::wallet::validate_recovery_phrase(parsed.phrase)
+        crate::web3::wallet::validate_recovery_phrase(&ctx, parsed.phrase)
             .await?
             .into_cli_compatible_json()
     })
 }
 
-fn handle_derive_recovery_material(params: Map<String, Value>) -> ControllerFuture {
+fn handle_derive_recovery_material(
+    ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
     Box::pin(async move {
         let parsed: RecoveryPhraseParams = serde_json::from_value(Value::Object(params))
             .map_err(|e| format!("invalid params: {e}"))?;
-        crate::web3::wallet::derive_recovery_material(parsed.phrase)
+        crate::web3::wallet::derive_recovery_material(&ctx, parsed.phrase)
             .await?
             .into_cli_compatible_json()
     })

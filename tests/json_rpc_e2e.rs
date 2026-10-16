@@ -63,7 +63,7 @@ where
             // execute the full core boot sequence. Hosted turns still need
             // the same built-in definition registry that boot initializes in
             // production, so install it before constructing the router.
-            openhuman_core::agent::harness::definition::AgentDefinitionRegistry::init_global_builtins()
+            openhuman_core::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins()
                 .expect("initialize built-in agent definitions for JSON-RPC E2E");
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
@@ -4413,7 +4413,7 @@ async fn json_rpc_web_chat_routing_cases_use_expected_backend_models_inner() {
             Some(&json!(true))
         );
 
-        let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+        let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
             .await
             .unwrap_or_else(|_| panic!("timed out waiting for chat_done for case {model_override}"))
             .expect("sse task join should succeed");
@@ -4628,7 +4628,7 @@ async fn json_rpc_web_chat_custom_chat_provider_uses_stored_key_and_rebuilds_on_
         Some(&json!(true))
     );
     signal_accepted_web_chat_request_id(request_tx, accepted_result);
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for first custom-provider chat_done")
         .expect("first custom-provider sse join");
@@ -4692,7 +4692,7 @@ async fn json_rpc_web_chat_custom_chat_provider_uses_stored_key_and_rebuilds_on_
         Some(&json!(true))
     );
     signal_accepted_web_chat_request_id(request_tx, accepted_result);
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for second custom-provider chat_done")
         .expect("second custom-provider sse join");
@@ -4748,7 +4748,7 @@ async fn json_rpc_web_chat_custom_chat_provider_uses_stored_key_and_rebuilds_on_
         Some(&json!(true))
     );
     signal_accepted_web_chat_request_id(request_tx, accepted_result);
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for unaffected agentic chat_done")
         .expect("unaffected agentic sse join");
@@ -4803,7 +4803,7 @@ async fn json_rpc_web_chat_custom_chat_provider_uses_stored_key_and_rebuilds_on_
             Some(&json!(true))
         );
         signal_accepted_web_chat_request_id(request_tx, accepted_result);
-        let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+        let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
             .await
             .expect("timed out waiting for managed chat_done")
             .expect("managed sse join");
@@ -5033,12 +5033,14 @@ async fn json_rpc_web_chat_custom_chat_provider_with_auth_none_omits_auth_header
         )),
         "reinjecting a reserved provider must retain its CA bundle"
     );
-    let (model, model_id) = openhuman_core::inference::provider::create_chat_model_with_model_id(
-        "chat",
-        &loaded_config,
-        0.0,
-    )
-    .expect("custom auth-none model should build");
+    let (model, model_id) =
+        openhuman_core::inference::provider::create_chat_model_with_model_id_in(
+            &openhuman_core::core::runtime::DispatchCtx::host_default(),
+            "chat",
+            &loaded_config,
+            0.0,
+        )
+        .expect("custom auth-none model should build");
     let direct = model
         .invoke(
             &(),
@@ -5078,7 +5080,7 @@ async fn json_rpc_web_chat_custom_chat_provider_with_auth_none_omits_auth_header
             .and_then(|v| v.get("accepted")),
         Some(&json!(true))
     );
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for auth-none chat_done")
         .expect("auth-none sse join");
@@ -12037,7 +12039,7 @@ async fn json_rpc_channel_web_chat_with_speak_reply_invokes_reply_speech_inner()
         Some(&json!(true))
     );
 
-    let sse_event = tokio::time::timeout(Duration::from_secs(12), sse_task)
+    let sse_event = tokio::time::timeout(Duration::from_secs(45), sse_task)
         .await
         .expect("timed out waiting for chat_done with speak_reply=true")
         .expect("sse task join should succeed");

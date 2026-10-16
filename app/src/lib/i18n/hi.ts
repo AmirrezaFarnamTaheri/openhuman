@@ -1306,7 +1306,9 @@ const messages: TranslationMap = {
   'chat.stallWarning.thinking':
     'अभी भी सोच रहा है। 2 मिनट से कोई नया आउटपुट नहीं आया, लेकिन एजेंट अभी भी काम कर रहा है। रद्द करना हो तो रोकें दबाएँ।',
   'chat.stallWarning.working':
-    'अभी भी काम कर रहा है। एक चरण बिना किसी नए आउटपुट के 2 मिनट से अधिक समय से चल रहा है। रद्द करना हो तो रोकें दबाएँ।',
+    '{duration} से कोई नया आउटपुट नहीं। एजेंट अटका हो सकता है; रद्द करने के लिए रोकें दबाएँ।',
+  'chat.stallWarning.toolRunning':
+    '{tool}। बिल्ड या CI निगरानी जैसे लंबे चरणों में समय लग सकता है।',
   'chat.filter.tasks': 'टास्क',
   'chat.selectThread': 'एक थ्रेड चुनें',
   'chat.noThreads': 'अभी कोई थ्रेड नहीं',
@@ -1869,6 +1871,23 @@ const messages: TranslationMap = {
   'conversations.tools.steps.other': '{count} चरण',
   'conversations.tools.working': 'काम जारी है',
   'conversations.tools.noOutput': 'कोई आउटपुट नहीं',
+  'conversations.mcpUi.openInBrowser': 'ब्राउज़र में खोलें',
+  'conversations.mcpUi.showQr': 'QR दिखाएँ',
+  'conversations.mcpUi.hideQr': 'QR छिपाएँ',
+  'conversations.mcpUi.scanToOpen': 'खोलने के लिए अपने फ़ोन से स्कैन करें',
+  'conversations.mcpUi.openOnPhone': 'अपने फ़ोन पर खोलें',
+  'conversations.mcpUi.copyLink': 'लिंक कॉपी करें',
+  'conversations.mcpUi.copied': 'कॉपी किया गया',
+  'conversations.mcpUi.linksLabel': 'इस टूल के लिंक',
+  'conversations.mcpUi.widgetTitle': 'टूल व्यू',
+  'conversations.mcpUi.widgetLoading': 'व्यू लोड हो रहा है…',
+  'conversations.mcpUi.widgetUnavailable':
+    'यह व्यू अब उपलब्ध नहीं है। इसे फिर से देखने के लिए सर्वर को दोबारा कनेक्ट करें।',
+  'conversations.mcpUi.confirmTitle': 'इस कार्रवाई की अनुमति दें?',
+  'conversations.mcpUi.confirmBody':
+    'यह व्यू {tool} चलाना चाहता है। इससे उस सेवा में कुछ बदल सकता है।',
+  'conversations.mcpUi.confirmAllow': 'अनुमति दें',
+  'conversations.mcpUi.confirmDeny': 'अस्वीकार करें',
   'conversations.tools.delegatedTo': '{agent} को सौंपा गया',
   'conversations.tools.parallelAgentsAggregating': 'परिणाम एकत्रित किए जा रहे हैं',
   'conversations.tools.openInBrowser': 'ब्राउज़र में खोलें',
@@ -4835,6 +4854,8 @@ const messages: TranslationMap = {
   'conversations.tools.createDocument.done': 'दस्तावेज़ बनाया',
   'conversations.tools.createPresentation.active': 'प्रेज़ेंटेशन बना रहा है',
   'conversations.tools.createPresentation.done': 'प्रेज़ेंटेशन बनाया',
+  'conversations.tools.showView.done': 'व्यू दिखाया गया',
+  'conversations.tools.showView.active': 'व्यू दिखाया जा रहा है',
   'conversations.tools.recallMemories.active': 'यादें खोज रहा है',
   'conversations.tools.recallMemories.done': 'यादें खोजीं',
   'conversations.tools.saveToMemory.active': 'मेमोरी में सहेज रहा है',

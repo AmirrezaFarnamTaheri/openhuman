@@ -115,7 +115,11 @@ async fn a_long_job_does_not_hold_up_the_next_poll() {
     let _fast = register("dispatch-fast", counting(Arc::clone(&fast_calls), Ok(())));
 
     let slow = due_system_job(&config, "dispatch-slow");
-    let mut dispatcher = JobDispatcher::new(&config, &security);
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &security,
+    );
     let mut health = None;
     // First poll picks up only the slow job.
     tick_once(&config, &mut health, &mut dispatcher).await;
@@ -170,7 +174,11 @@ async fn dispatch_claims_the_slot_so_a_running_job_is_not_due_again() {
         }),
     );
     let job = due_system_job(&config, "dispatch-claim");
-    let mut dispatcher = JobDispatcher::new(&config, &security(&config));
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &security(&config),
+    );
     dispatcher.dispatch(vec![job.clone()]).await.unwrap();
     let stored = cron::get_job(&config, &job.id).unwrap();
     assert!(stored.next_run > Utc::now(), "the running slot is claimed");
@@ -190,7 +198,11 @@ async fn a_job_already_in_flight_is_not_dispatched_again() {
     let _handler = register("dispatch-dedupe", counting(Arc::clone(&calls), Ok(())));
     let job = due_system_job(&config, "dispatch-dedupe");
     let running = crate::cron::ops::try_acquire_run(&job.id).expect("the job is free");
-    let mut dispatcher = JobDispatcher::new(&config, &security(&config));
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &security(&config),
+    );
     dispatcher.dispatch(vec![job.clone()]).await.unwrap();
     dispatcher.drain().await;
     drop(running);
@@ -219,7 +231,11 @@ async fn a_single_flight_job_records_the_missed_slot_as_skipped() {
     .unwrap();
     let job = cron::get_job(&config, &job.id).unwrap();
     let running = crate::cron::ops::try_acquire_run(&job.id).expect("the job is free");
-    let mut dispatcher = JobDispatcher::new(&config, &security(&config));
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &security(&config),
+    );
     dispatcher.dispatch(vec![job.clone()]).await.unwrap();
     dispatcher.drain().await;
     drop(running);
@@ -260,7 +276,13 @@ async fn zero_retries_means_exactly_one_attempt() {
     )
     .unwrap();
     let job = cron::get_job(&config, &job.id).unwrap();
-    let (success, output) = execute_job_now(&config, &job, "dispatch-run").await;
+    let (success, output) = execute_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "dispatch-run",
+    )
+    .await;
     assert!(!success);
     assert!(output.contains("boom"), "{output}");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
@@ -278,7 +300,13 @@ async fn without_a_policy_the_configured_retry_budget_applies() {
         counting(Arc::clone(&calls), Err("again".to_string())),
     );
     let job = due_system_job(&config, "dispatch-default-retries");
-    let (success, _) = execute_job_now(&config, &job, "dispatch-run").await;
+    let (success, _) = execute_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "dispatch-run",
+    )
+    .await;
     assert!(!success);
     assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
@@ -305,7 +333,11 @@ async fn a_system_job_handler_error_is_recorded_as_the_run_result() {
     )
     .unwrap();
     let job = cron::get_job(&config, &job.id).unwrap();
-    let mut dispatcher = JobDispatcher::new(&config, &security(&config));
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &security(&config),
+    );
     dispatcher.dispatch(vec![job.clone()]).await.unwrap();
     dispatcher.drain().await;
     let stored = cron::get_job(&config, &job.id).unwrap();
@@ -321,7 +353,13 @@ async fn a_system_job_without_a_handler_is_still_ok_on_dispatch() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
     let job = due_system_job(&config, "dispatch-unclaimed");
-    let (success, output) = execute_job_now(&config, &job, "dispatch-run").await;
+    let (success, output) = execute_job_now(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &job,
+        "dispatch-run",
+    )
+    .await;
     assert!(success);
     assert!(output.contains("dispatched"), "{output}");
 }
@@ -380,7 +418,11 @@ async fn an_upgraded_job_with_a_side_table_policy_keeps_firing_with_it() {
     assert_eq!(job.policy.retries, Some(0));
     assert!(job.policy.single_flight);
 
-    let mut dispatcher = JobDispatcher::new(&config, &security(&config));
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &security(&config),
+    );
     dispatcher.dispatch(vec![job]).await.unwrap();
     dispatcher.drain().await;
 
@@ -411,7 +453,11 @@ async fn a_flow_schedule_job_fires_through_the_trigger_sink() {
     force_due(&config, &job.id);
     let job = cron::get_job(&config, &job.id).unwrap();
 
-    let mut dispatcher = JobDispatcher::new(&config, &security(&config));
+    let mut dispatcher = JobDispatcher::new(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        &security(&config),
+    );
     dispatcher.dispatch(vec![job.clone()]).await.unwrap();
     dispatcher.drain().await;
 
@@ -449,8 +495,9 @@ async fn a_flow_schedule_job_is_skipped_when_the_flows_component_is_off() {
     let ctx = CoreContext::for_test_with_components(off);
     let security = security(&config);
     let cfg = config.clone();
+    let dispatch = crate::core::runtime::DispatchCtx::new(Arc::clone(&ctx));
     CoreContext::scope(ctx, async move {
-        let mut dispatcher = JobDispatcher::new(&cfg, &security);
+        let mut dispatcher = JobDispatcher::new(&dispatch, &cfg, &security);
         dispatcher.dispatch(vec![job]).await.unwrap();
         dispatcher.drain().await;
     })
@@ -461,4 +508,29 @@ async fn a_flow_schedule_job_is_skipped_when_the_flows_component_is_off() {
     assert!(output.contains("COMPONENT_DISABLED:flows"), "got: {output}");
     assert!(!output.contains("tick emitted"));
     assert!(stored.next_run > Utc::now(), "the recurrence moved on");
+}
+
+#[tokio::test]
+async fn a_dispatcher_binds_the_context_it_is_handed_not_the_ambient_one() {
+    let tmp = TempDir::new().unwrap();
+    let config = test_config(&tmp).await;
+    let security = security(&config);
+    let handed =
+        crate::core::runtime::CoreContext::for_test(crate::core::runtime::DomainSet::full(), None);
+    let ambient =
+        crate::core::runtime::CoreContext::for_test(crate::core::runtime::DomainSet::full(), None);
+
+    let dispatcher = crate::core::runtime::CoreContext::scope(Arc::clone(&ambient), async {
+        // Across an await the handed context is still the one bound.
+        tokio::task::yield_now().await;
+        JobDispatcher::new(
+            &crate::core::runtime::DispatchCtx::new(Arc::clone(&handed)),
+            &config,
+            &security,
+        )
+    })
+    .await;
+    let bound = dispatcher.dispatch_ctx();
+    assert!(Arc::ptr_eq(bound.core().expect("bound"), &handed));
+    assert!(!Arc::ptr_eq(bound.core().unwrap(), &ambient));
 }

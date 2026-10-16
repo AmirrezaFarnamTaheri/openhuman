@@ -6,12 +6,13 @@ use super::types::{
     ElevatedOp, SandboxBackendHandle, SandboxBackendKind, SandboxExecRequest, SandboxExecResult,
     SandboxPolicy, SandboxStatus, ELEVATED_TOOLS,
 };
-use crate::agent::harness::definition::SandboxMode;
 use crate::config::{RuntimeConfig, SandboxBackend, SandboxConfig};
+use crate::core::runtime::DispatchCtx;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::Path;
 use std::time::Duration;
+use tinyagents_definition::SandboxMode;
 
 /// Safe environment variables forwarded into sandboxed execution.
 ///
@@ -45,19 +46,22 @@ pub fn sandbox_off_value(value: Option<&str>) -> bool {
 /// Whether a command tool must use the sandbox execution path. An explicit
 /// backend in the active config is an operator requirement even when the
 /// agent definition uses the usual `SandboxMode::None` default.
-pub async fn command_requires_sandbox(sandbox_mode: Option<SandboxMode>) -> Result<bool, String> {
+pub async fn command_requires_sandbox(
+    ctx: &DispatchCtx,
+    sandbox_mode: Option<SandboxMode>,
+) -> Result<bool, String> {
     if crate::core::runtime::is_saas() {
         // Every SaaS command must enter the per-user container path, including
         // language tools whose agent definition does not request a sandbox.
         return Ok(true);
     }
-    if sandbox_disabled_by_host() {
+    if sandbox_disabled_by_host(ctx) {
         return Ok(false);
     }
     if matches!(sandbox_mode, Some(SandboxMode::Sandboxed)) {
         return Ok(true);
     }
-    let config = crate::config::ops::load_config_with_timeout().await?;
+    let config = ctx.load_config().await?;
     if config_disables_sandbox(&config) {
         return Ok(false);
     }
@@ -74,23 +78,26 @@ pub async fn command_requires_sandbox(sandbox_mode: Option<SandboxMode>) -> Resu
 /// SaaS always uses the user's container; other hosts apply the operator's
 /// backend selection while retaining an agent-level sandbox requirement.
 pub(crate) async fn resolve_command_policy(
+    ctx: &DispatchCtx,
     action_dir: &Path,
     state_dir: &Path,
 ) -> Result<SandboxPolicy, String> {
     if crate::core::runtime::is_saas() {
         return crate::profiles::tools::sandbox_policy(action_dir, state_dir);
     }
-    let config = crate::config::ops::load_config_with_timeout()
+    let config = ctx
+        .load_config()
         .await
         .map_err(|error| format!("Cannot read sandbox configuration: {error}"))?;
     let mut policy = resolve_sandbox_policy(
+        ctx,
         SandboxMode::Sandboxed,
         action_dir,
         state_dir,
         &config.runtime,
         false,
     );
-    if !config_disables_sandbox(&config) && !sandbox_disabled_by_host() {
+    if !config_disables_sandbox(&config) && !sandbox_disabled_by_host(ctx) {
         apply_requested_backend(&mut policy, &config.sandbox, &config.runtime, &config)
             .await
             .map_err(|error| error.to_string())?;
@@ -98,15 +105,14 @@ pub(crate) async fn resolve_command_policy(
     Ok(policy)
 }
 
-fn sandbox_disabled_by_host() -> bool {
-    sandbox_off_value(std::env::var(SANDBOX_OFF_ENV).ok().as_deref()) || sandbox_component_off()
+fn sandbox_disabled_by_host(ctx: &DispatchCtx) -> bool {
+    sandbox_off_value(std::env::var(SANDBOX_OFF_ENV).ok().as_deref()) || sandbox_component_off(ctx)
 }
 
-/// `[components] sandbox = false` in the ambient core context. With no context
-/// the component is on, since the set only narrows.
-pub(crate) fn sandbox_component_off() -> bool {
-    let off = crate::core::runtime::context::CoreContext::current()
-        .is_some_and(|ctx| !ctx.components().sandbox);
+/// `[components] sandbox = false` in the context `ctx` runs under. With no
+/// context the component is on, since the set only narrows.
+pub(crate) fn sandbox_component_off(ctx: &DispatchCtx) -> bool {
+    let off = !ctx.components().sandbox;
     if off {
         tracing::debug!("[sandbox] component 'sandbox' disabled, using the unsandboxed fallback");
     }
@@ -130,6 +136,7 @@ fn config_disables_sandbox(config: &crate::config::Config) -> bool {
 /// `state_dir` is the core's internal `workspace_dir`; host-side scratch such
 /// as output capture goes there instead of into `action_dir`.
 pub fn resolve_sandbox_policy(
+    ctx: &DispatchCtx,
     mode: SandboxMode,
     action_dir: &Path,
     state_dir: &Path,
@@ -139,7 +146,7 @@ pub fn resolve_sandbox_policy(
     let backend = match mode {
         SandboxMode::None => SandboxBackendKind::None,
         SandboxMode::ReadOnly => SandboxBackendKind::None,
-        SandboxMode::Sandboxed if sandbox_disabled_by_host() => {
+        SandboxMode::Sandboxed if sandbox_disabled_by_host(ctx) => {
             tracing::debug!(
                 env = SANDBOX_OFF_ENV,
                 "[sandbox] host disabled the sandbox; running sandboxed mode unconfined"
@@ -212,17 +219,19 @@ pub fn resolve_sandbox_policy(
 /// passes unnoticed. That is exactly how the original defect survived.
 #[cfg(any(feature = "modules", test))]
 pub(crate) fn local_status_for_jail(
-    available: bool,
-    suitable_for_untrusted_code: bool,
+    isolation: Option<super::types::SandboxIsolation>,
 ) -> SandboxStatus {
-    if available && suitable_for_untrusted_code {
+    if isolation.is_some() {
         SandboxStatus::Ready
     } else {
         SandboxStatus::Inactive
     }
 }
 
-pub async fn create_sandbox_backend(policy: &SandboxPolicy) -> SandboxBackendHandle {
+pub async fn create_sandbox_backend(
+    ctx: &DispatchCtx,
+    policy: &SandboxPolicy,
+) -> SandboxBackendHandle {
     if policy.backend != SandboxBackendKind::Docker {
         return create_sandbox_backend_with_config(policy, &crate::config::Config::default())
             .await
@@ -230,9 +239,10 @@ pub async fn create_sandbox_backend(policy: &SandboxPolicy) -> SandboxBackendHan
                 kind: policy.backend,
                 status: SandboxStatus::Error,
                 backend_id: None,
+                isolation: None,
             });
     }
-    let config = match crate::config::ops::load_config_with_timeout().await {
+    let config = match ctx.load_config().await {
         Ok(config) => config,
         Err(_) if policy.backend == SandboxBackendKind::Docker => {
             return docker_error_handle();
@@ -254,9 +264,10 @@ pub async fn create_sandbox_backend_with_config(
             kind: SandboxBackendKind::None,
             status: SandboxStatus::Ready,
             backend_id: None,
+            isolation: None,
         }),
         SandboxBackendKind::Local => {
-            let (backend_name, status) = super::native_jail::status(config).await?;
+            let (backend_name, status, isolation) = super::native_jail::status(config).await?;
             if status == SandboxStatus::Inactive {
                 tracing::warn!(
                     backend = backend_name,
@@ -267,6 +278,7 @@ pub async fn create_sandbox_backend_with_config(
                 kind: SandboxBackendKind::Local,
                 status,
                 backend_id: Some(backend_name),
+                isolation,
             })
         }
         SandboxBackendKind::Docker => docker::docker_backend_handle(config).await,
@@ -278,6 +290,7 @@ fn docker_error_handle() -> SandboxBackendHandle {
         kind: SandboxBackendKind::Docker,
         status: SandboxStatus::Error,
         backend_id: None,
+        isolation: None,
     }
 }
 
@@ -286,24 +299,41 @@ fn docker_error_handle() -> SandboxBackendHandle {
 /// Returns the sandboxed execution result. The caller (typically the
 /// shell tool) is responsible for converting this into a `ToolResult`.
 pub async fn execute_in_sandbox(
+    ctx: &DispatchCtx,
     policy: &SandboxPolicy,
     command: &str,
     working_dir: &Path,
     extra_env: HashMap<OsString, OsString>,
     timeout: Duration,
 ) -> anyhow::Result<SandboxExecResult> {
+    execute_in_sandbox_metered(ctx, policy, command, working_dir, extra_env, timeout, None).await
+}
+
+/// [`execute_in_sandbox`] that feeds `meter` with the command's output as it
+/// streams (the native backends; Docker reports elapsed time only), for the
+/// shell tool's progress line.
+pub(crate) async fn execute_in_sandbox_metered(
+    ctx: &DispatchCtx,
+    policy: &SandboxPolicy,
+    command: &str,
+    working_dir: &Path,
+    extra_env: HashMap<OsString, OsString>,
+    timeout: Duration,
+    meter: Option<super::shell_progress::ShellOutputMeter>,
+) -> anyhow::Result<SandboxExecResult> {
     // The saved backend is an operator's explicit isolation requirement. It
     // must be checked at the spawn boundary, including callers that resolved
     // their policy from an older or default RuntimeConfig.
     let mut effective_policy = policy.clone();
-    if !crate::core::runtime::is_saas() && sandbox_disabled_by_host() {
+    if !crate::core::runtime::is_saas() && sandbox_disabled_by_host(ctx) {
         effective_policy.backend = SandboxBackendKind::None;
     }
     let mut module_config = None;
-    let explicitly_requested = if crate::core::runtime::is_saas() || sandbox_disabled_by_host() {
+    let explicitly_requested = if crate::core::runtime::is_saas() || sandbox_disabled_by_host(ctx) {
         false
     } else {
-        let config = crate::config::ops::load_config_with_timeout()
+        let config = ctx
+            .load_config()
             .await
             .map_err(|e| anyhow::anyhow!("Cannot read sandbox configuration: {e}"))?;
         module_config = Some(config.clone());
@@ -335,26 +365,33 @@ pub async fn execute_in_sandbox(
             crate::config::ensure_usable_cwd(working_dir)?;
             let config = match module_config {
                 Some(config) => config,
-                None => crate::config::ops::load_config_with_timeout()
-                    .await
-                    .map_err(|error| {
-                        anyhow::anyhow!("Cannot read module configuration: {error}")
-                    })?,
+                None => ctx.load_config().await.map_err(|error| {
+                    anyhow::anyhow!("Cannot read module configuration: {error}")
+                })?,
             };
-            execute_unsandboxed(&config, policy, command, working_dir, &extra_env, timeout).await
+            execute_unsandboxed(
+                ctx,
+                &config,
+                policy,
+                command,
+                working_dir,
+                &extra_env,
+                timeout,
+                meter,
+            )
+            .await
         }
         SandboxBackendKind::Local => {
             crate::config::ensure_usable_cwd(working_dir)?;
             let config = match module_config {
                 Some(config) => config,
-                None => crate::config::ops::load_config_with_timeout()
-                    .await
-                    .map_err(|error| {
-                        anyhow::anyhow!("Cannot read module configuration: {error}")
-                    })?,
+                None => ctx.load_config().await.map_err(|error| {
+                    anyhow::anyhow!("Cannot read module configuration: {error}")
+                })?,
             };
             let policy = super::local_grants::with_resolved_grants(&config, policy).await?;
             super::native_jail::execute(
+                ctx,
                 &config,
                 &policy,
                 command,
@@ -362,6 +399,7 @@ pub async fn execute_in_sandbox(
                 &extra_env,
                 timeout,
                 explicitly_requested,
+                meter,
             )
             .await
         }
@@ -375,11 +413,9 @@ pub async fn execute_in_sandbox(
             };
             let config = match module_config {
                 Some(config) => config,
-                None => crate::config::ops::load_config_with_timeout()
-                    .await
-                    .map_err(|error| {
-                        anyhow::anyhow!("Cannot read module configuration: {error}")
-                    })?,
+                None => ctx.load_config().await.map_err(|error| {
+                    anyhow::anyhow!("Cannot read module configuration: {error}")
+                })?,
             };
             docker::docker_exec(&config, policy, &request).await
         }
@@ -440,12 +476,14 @@ pub(crate) async fn apply_requested_backend(
 /// [`SANDBOX_ENV_PASSTHROUGH`] names plus the Windows process-bootstrap
 /// variables), applies the caller's overrides and owns the scratch directory.
 async fn execute_unsandboxed(
+    ctx: &DispatchCtx,
     config: &crate::config::Config,
     policy: &SandboxPolicy,
     command: &str,
     working_dir: &Path,
     extra_env: &HashMap<OsString, OsString>,
     timeout: Duration,
+    meter: Option<super::shell_progress::ShellOutputMeter>,
 ) -> anyhow::Result<SandboxExecResult> {
     let mut env = std::collections::BTreeMap::new();
     for (name, value) in extra_env {
@@ -457,6 +495,7 @@ async fn execute_unsandboxed(
     std::fs::create_dir_all(&policy.state_dir)
         .map_err(|error| anyhow::anyhow!("Cannot prepare sandbox state directory: {error}"))?;
     super::shell_exec::run_host(
+        ctx,
         config,
         command,
         working_dir,
@@ -464,6 +503,7 @@ async fn execute_unsandboxed(
         env,
         timeout,
         false,
+        meter,
     )
     .await
 }

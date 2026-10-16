@@ -3,6 +3,7 @@
 //! These tests avoid live Composio/backend calls and exercise public helper
 //! surfaces that feed the JSON-RPC and agent-tool paths.
 
+use openhuman_core::core::runtime::DispatchCtx;
 use std::sync::{Arc, OnceLock};
 
 use serde_json::{json, Value};
@@ -123,6 +124,7 @@ async fn composio_ops_mode_is_local_and_trigger_history_reads_the_module_archive
     assert!(mode.pointer("/result/api_key_set").is_some());
 
     let history = openhuman_core::integrations::composio::ops::composio_list_trigger_history(
+        &openhuman_core::core::runtime::DispatchCtx::host_default(),
         &config,
         Some(0),
     )
@@ -469,5 +471,5 @@ fn composio_controller<'a>(
 
 async fn composio_call(controller: &RegisteredController, params: Value) -> Result<Value, String> {
     let params = params.as_object().cloned().unwrap_or_default();
-    (controller.handler)(params).await
+    (controller.handler)(DispatchCtx::process_default(), params).await
 }

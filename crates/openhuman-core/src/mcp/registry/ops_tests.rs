@@ -7,10 +7,10 @@
 
 use super::*;
 use crate::mcp::module_client::{McpConfiguredClient, McpModulePort};
-use crate::modules::client::ModuleCallError;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
+use tinybus::module::ModuleCallError;
 use tinymcp_bus::{
     OpenConfiguredResponse, ServerArgumentsValidation, TransitionStatus,
     ValidateServerArgumentsRequest,
@@ -209,7 +209,7 @@ fn refusals_name_only_tools_on_every_listing_belt() {
         .expect("built-ins load")
         .into_iter()
         .filter_map(|def| {
-            let crate::agent::harness::definition::ToolScope::Named(tools) = &def.tools else {
+            let tinyagents_definition::ToolScope::Named(tools) = &def.tools else {
                 return None;
             };
             let belt: Vec<String> = tools.iter().chain(&def.deferred_tools).cloned().collect();

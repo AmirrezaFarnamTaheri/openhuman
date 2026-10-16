@@ -92,6 +92,8 @@ pub(crate) fn enforce_node_tier_gate(
 /// `intercept_audited`, forcing the real parking/HITL flow. `GateDecision::Allow`
 /// (and any other origin shape) passes through unchanged — existing behavior.
 pub(crate) async fn gate_call_for_tier(
+    ctx: &crate::core::runtime::DispatchCtx,
+    approval: &crate::security::approval::ApprovalTurnContext,
     tier_decision: GateDecision,
     tool_name: &str,
     action_summary: &str,
@@ -103,7 +105,7 @@ pub(crate) async fn gate_call_for_tier(
         return (crate::security::approval::GateOutcome::Allow, None);
     };
 
-    match escalated_origin_for_prompt(tier_decision, turn_origin::current()) {
+    match escalated_origin_for_prompt(tier_decision, ctx.turn_origin()) {
         Some(escalated) => {
             tracing::debug!(
                 target: "flows",
@@ -113,12 +115,12 @@ pub(crate) async fn gate_call_for_tier(
             );
             turn_origin::with_origin(
                 escalated,
-                gate.intercept_audited(tool_name, action_summary, args_redacted),
+                gate.intercept_audited(approval, tool_name, action_summary, args_redacted),
             )
             .await
         }
         None => {
-            gate.intercept_audited(tool_name, action_summary, args_redacted)
+            gate.intercept_audited(approval, tool_name, action_summary, args_redacted)
                 .await
         }
     }

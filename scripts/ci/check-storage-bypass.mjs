@@ -67,6 +67,12 @@ const LEGACY_READER =
 export const ALLOW = new Map(
   [
     [
+      "util/classic_transcript_fixture.rs",
+      "json-write",
+      'std::fs::write(path, classic_jsonl(messages, meta)).expect("write the classic transcript");',
+      "test-only fixture (compiled under cfg(test)) that writes a retired-layout `session_raw/*.jsonl` file for the importer and rewrite tests; no store reads it back",
+    ],
+    [
       "security/approval/store_import.rs",
       "sqlite-open",
       "let conn = Connection::open(&db_path).with_context(|| {",
@@ -121,6 +127,18 @@ export const ALLOW = new Map(
       "paired with the OS keychain mnemonic (and holds it when there is no keychain): moves with the secrets work, not as a plain document",
     ],
     [
+      "agent/harness/artifact_offload/mod.rs",
+      "json-write",
+      "tokio::fs::write(&target, body)",
+      "a derived view of a blob-stored artifact, placed in the action dir so file_read can open the path a pointer hands back; the tenant's blob store stays the source of truth",
+    ],
+    [
+      "agent/harness/tool_result_artifacts/mod.rs",
+      "json-write",
+      "tokio::fs::write(&target, body).await?;",
+      "a derived view of a blob-stored tool-result artifact, written under the workspace's read-only artifacts root so file_read can open the key a pointer hands back; re-derived from the tenant's blob store on every read, which stays the source of truth",
+    ],
+    [
       "inference/tokenjuice/savings.rs",
       "json-write",
       "if let Err(e) = std::fs::write(path, json) {",
@@ -131,6 +149,12 @@ export const ALLOW = new Map(
       "json-write",
       "match tokio::fs::OpenOptions::new()",
       "reserves the artifact's content file in the user-visible files folder; the bytes stay a file on every backend (the port has no blob store), only the records moved",
+    ],
+    [
+      "media/generation/artifact_tool.rs",
+      "json-write",
+      "let mut file = tokio::fs::OpenOptions::new()",
+      "copies a generated media blob into the artifact's reserved user-visible file; the finalized file remains the artifact bytes on every backend because the storage port has no blob store",
     ],
   ].reduce((map, [path, rule, site, reason]) => {
     const key = `${SRC}${path}`;

@@ -7,9 +7,9 @@
 //! close a team, and — via `start_member` — spawn a live worker that claims and
 //! runs a task to completion (see [`super::runtime`]).
 
+use crate::core::runtime::DispatchCtx;
 use serde_json::{Map, Value};
 
-use crate::config::rpc as config_rpc;
 use crate::core::all::{ControllerFuture, RegisteredController};
 use crate::core::Outcome;
 use crate::core::{ControllerSchema, FieldSchema, TypeSchema};
@@ -252,11 +252,11 @@ fn schema_for(function: &str) -> ControllerSchema {
     }
 }
 
-fn handle_create(params: Map<String, Value>) -> ControllerFuture {
+fn handle_create(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] create.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] create.config_failed err={err}");
         })?;
         let lead = require_str(&params, "leadAgentId")?;
@@ -277,11 +277,11 @@ fn handle_create(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_list(params: Map<String, Value>) -> ControllerFuture {
+fn handle_list(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] list.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] list.config_failed err={err}");
         })?;
         let request: AgentTeamListRequest = if params.is_empty() {
@@ -303,11 +303,11 @@ fn handle_list(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_get(params: Map<String, Value>) -> ControllerFuture {
+fn handle_get(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] get.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] get.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -319,11 +319,11 @@ fn handle_get(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_assign_task(params: Map<String, Value>) -> ControllerFuture {
+fn handle_assign_task(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] assign_task.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] assign_task.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -346,11 +346,11 @@ fn handle_assign_task(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_claim_task(params: Map<String, Value>) -> ControllerFuture {
+fn handle_claim_task(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] claim_task.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] claim_task.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -365,11 +365,11 @@ fn handle_claim_task(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_message_member(params: Map<String, Value>) -> ControllerFuture {
+fn handle_message_member(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] message_member.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] message_member.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -393,11 +393,11 @@ fn handle_message_member(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_list_messages(params: Map<String, Value>) -> ControllerFuture {
+fn handle_list_messages(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] list_messages.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] list_messages.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -413,11 +413,11 @@ fn handle_list_messages(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_complete_task(params: Map<String, Value>) -> ControllerFuture {
+fn handle_complete_task(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] complete_task.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] complete_task.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -437,11 +437,11 @@ fn handle_complete_task(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_shutdown_member(params: Map<String, Value>) -> ControllerFuture {
+fn handle_shutdown_member(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] shutdown_member.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] shutdown_member.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -454,11 +454,11 @@ fn handle_shutdown_member(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_close(params: Map<String, Value>) -> ControllerFuture {
+fn handle_close(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] close.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] close.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -471,11 +471,11 @@ fn handle_close(params: Map<String, Value>) -> ControllerFuture {
     })
 }
 
-fn handle_start_member(params: Map<String, Value>) -> ControllerFuture {
+fn handle_start_member(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         let cid = new_correlation_id();
         log::debug!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] start_member.entry");
-        let config = config_rpc::load_config_with_timeout().await.inspect_err(|err| {
+        let config = ctx.load_config().await.inspect_err(|err| {
             log::warn!(target: "agent_team_rpc", "[agent_team_rpc][{cid}] start_member.config_failed err={err}");
         })?;
         let team_id = require_str(&params, "teamId")?;
@@ -484,6 +484,7 @@ fn handle_start_member(params: Map<String, Value>) -> ControllerFuture {
         // Test-only seam: pin the spawned worker to a model (e.g. the e2e mock).
         let model_override = opt_str(&params, "modelOverride");
         let outcome = runtime::start_member_run(
+            &ctx,
             &config,
             &team_id,
             &member_id,

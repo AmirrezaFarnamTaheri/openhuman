@@ -23,6 +23,7 @@
 //! - **Consent.** It uploads chat history to the selected engine, so
 //!   [`start`] refuses without `consent`.
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
@@ -131,17 +132,22 @@ struct ThreadPlan {
 }
 
 async fn plan(
+    ctx: &DispatchCtx,
     workspace_dir: &Path,
     bound: Option<&BoundEngine>,
     stored: &BTreeMap<String, u32>,
 ) -> MemoryResult<Vec<ThreadPlan>> {
-    let listed = threads::list_threads(workspace_dir.to_path_buf())
+    let listed = threads::list_threads(ctx.clone(), workspace_dir.to_path_buf())
         .await
         .map_err(|error| MemoryError::Engine(format!("reading chat threads failed: {error}")))?;
     let mut plans = Vec::new();
     for thread in listed {
-        let messages = match threads::get_messages(workspace_dir.to_path_buf(), thread.id.clone())
-            .await
+        let messages = match threads::get_messages(
+            ctx.clone(),
+            workspace_dir.to_path_buf(),
+            thread.id.clone(),
+        )
+        .await
         {
             Ok(messages) => messages,
             Err(error) => {
@@ -182,7 +188,7 @@ fn is_running(workspace_dir: &Path) -> bool {
 }
 
 /// `memory_conversations_backfill_status`.
-pub async fn status(config: &Config) -> MemoryResult<BackfillView> {
+pub async fn status(ctx: &DispatchCtx, config: &Config) -> MemoryResult<BackfillView> {
     let workspace_dir = &config.workspace_dir;
     let file = read_file(workspace_dir);
     let mut state = file.state;
@@ -191,7 +197,7 @@ pub async fn status(config: &Config) -> MemoryResult<BackfillView> {
         state.error = Some("the sync was interrupted; start it again to resume".to_string());
     }
     let bound = engine::resolve(config).engine().ok();
-    let plans = plan(workspace_dir, bound.as_ref(), &file.stored).await?;
+    let plans = plan(ctx, workspace_dir, bound.as_ref(), &file.stored).await?;
     Ok(BackfillView {
         state,
         pending_threads: plans.len() as u64,
@@ -200,7 +206,11 @@ pub async fn status(config: &Config) -> MemoryResult<BackfillView> {
 }
 
 /// `memory_conversations_backfill_start`: requires `consent` and memory on.
-pub async fn start(config: &Config, params: BackfillStartParams) -> MemoryResult<BackfillView> {
+pub async fn start(
+    ctx: &DispatchCtx,
+    config: &Config,
+    params: BackfillStartParams,
+) -> MemoryResult<BackfillView> {
     if !params.consent {
         return Err(MemoryError::invalid(
             "storing past chats uploads them to the selected engine; pass consent: true",
@@ -213,10 +223,10 @@ pub async fn start(config: &Config, params: BackfillStartParams) -> MemoryResult
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(workspace_dir.clone());
     if !claimed {
-        return status(config).await;
+        return status(ctx, config).await;
     }
     let mut file = read_file(&workspace_dir);
-    let plans = match plan(&workspace_dir, Some(&bound), &file.stored).await {
+    let plans = match plan(ctx, &workspace_dir, Some(&bound), &file.stored).await {
         Ok(plans) => plans,
         Err(error) => {
             release(&workspace_dir);

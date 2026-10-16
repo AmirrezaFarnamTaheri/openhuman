@@ -16,6 +16,7 @@ import { StoppedRun } from '@/components/assistant-ui/elements/stopped-run';
 import { ToolFallback } from '@/components/assistant-ui/elements/tool-fallback';
 import { File } from '@/components/assistant-ui/file';
 import { ThreadFollowupSuggestions } from '@/components/assistant-ui/follow-up-suggestions';
+import { useComposerFocusOnThreadOpen } from '@/components/assistant-ui/lib/useComposerFocusOnThreadOpen';
 import { cn } from '@/components/assistant-ui/lib/utils';
 import { MarkdownText } from '@/components/assistant-ui/markdown-text';
 import { ComposerQuotePreview, SelectionToolbar } from '@/components/assistant-ui/quote';
@@ -30,6 +31,9 @@ import {
   useAuiEditCapabilities,
   useAuiReloadCapability,
 } from '@/features/conversations/components/aui/auiThreadState';
+import { onComposerPrefill } from '@/features/conversations/tools/mcpUi/composerPrefill';
+import { McpWidgetStrip } from '@/features/conversations/tools/mcpUi/McpWidgetStrip';
+import { collectMessageWidgets } from '@/features/conversations/tools/mcpUi/messageWidgets';
 import { useT } from '@/lib/i18n/I18nContext';
 import { CHAT_ERROR_METADATA_KEY } from '@/store/threadSlice';
 import { fullTimestamp, relativeTime } from '@/utils/relativeTime';
@@ -670,6 +674,7 @@ const Composer: FC<{
       textbox?.removeAttribute('data-testid');
     };
   }, [messageInputLabel]);
+  useComposerFocusOnThreadOpen(inputWrapperRef);
 
   // Set for as long as an IME composition is open. The gate is a ref rather
   // than state because it is read from a microtask, not from a render.
@@ -679,6 +684,8 @@ const Composer: FC<{
   // composition before it runs. That stale write would rebuild the editor
   // mid-composition and cancel it -- #5763 again, one composition later.
   const isComposingTextRef = useRef(false);
+
+  useEffect(() => onComposerPrefill(text => aui.composer.setText(text)), [aui]);
   // ArrowUp recall only fires on an empty composer, so a caret move inside a
   // multi-line draft is never hijacked.
   const composerIsEmpty = useAuiState(state => state.composer.text.length === 0);
@@ -1141,6 +1148,8 @@ const AssistantMessage: FC = () => {
     MessageTasks,
   } = useContext(MessageComponentsContext);
   const stopped = useAuiState(isStoppedRun);
+  const parts = useAuiState(s => s.message.parts);
+  const widgets = useMemo(() => collectMessageWidgets(parts), [parts]);
 
   const ACTION_BAR_PT = 'pt-1.5';
   // `min-h` reserves the bar's height (`pt-1.5` + a `size-6` button = 7.5) so a
@@ -1194,8 +1203,17 @@ const AssistantMessage: FC = () => {
           })}>
           {({ part, children }) => {
             switch (part.type) {
-              case 'group-activity':
-                return <ActivityGroup group={part}>{children}</ActivityGroup>;
+              case 'group-activity': {
+                const groupWidgets = widgets.filter(widget =>
+                  part.indices.includes(widget.partIndex)
+                );
+                return (
+                  <>
+                    <ActivityGroup group={part}>{children}</ActivityGroup>
+                    <McpWidgetStrip widgets={groupWidgets} />
+                  </>
+                );
+              }
               case 'group-source':
                 return SourceGroup ? <SourceGroupSlot Component={SourceGroup} /> : null;
               case 'text':

@@ -123,13 +123,15 @@ pub async fn sweep(host: &ProfileHost, now: DateTime<Utc>) -> SweepReport {
         }
         let count = claimed.len();
         let profile_config = profile.config.clone();
-        let outcome = CoreContext::scope(Arc::clone(profile.context()), async move {
+        let profile_ctx = Arc::clone(profile.context());
+        let outcome = CoreContext::scope(Arc::clone(&profile_ctx), async move {
             let security = Arc::new(crate::security::SecurityPolicy::from_config(
                 &profile_config.autonomy,
                 &profile_config.workspace_dir,
                 &profile_config.action_dir,
             ));
-            let mut dispatcher = JobDispatcher::new(&profile_config, &security);
+            let dispatch = crate::core::runtime::DispatchCtx::new(Arc::clone(&profile_ctx));
+            let mut dispatcher = JobDispatcher::new(&dispatch, &profile_config, &security);
             if let Err(error) = dispatcher.dispatch(claimed).await {
                 log::warn!("[profiles][cron] dispatch failed: {error}");
             }

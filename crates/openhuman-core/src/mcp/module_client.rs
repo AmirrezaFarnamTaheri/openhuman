@@ -26,10 +26,8 @@ use tinymcp_bus::{
     ValidateServerArgumentsRequest,
 };
 
-use crate::{
-    config::Config,
-    modules::{client::ModuleCallError, client::ModuleClient},
-};
+use crate::config::Config;
+use tinybus::module::{ModuleCallError, ModuleClient};
 
 const MODULE: &str = "tinymcp";
 const TRANSITION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -413,7 +411,7 @@ impl McpConfiguredClient {
             .call_object(&object.object_path, member, args, confidential)
             .await?;
         serde_json::from_value(reply).map_err(|_| {
-            ModuleClient::report_malformed_reply(MODULE);
+            crate::modules::report::malformed_reply(MODULE);
             ModuleCallError::ModuleFault
         })
     }
@@ -466,7 +464,11 @@ impl McpConfiguredClient {
                     // Servers and audit rows from before the storage contract
                     // move into the module's storage before it reads them.
                     // Best effort: a failure is retried at the next open.
-                    crate::modules::import_legacy_mcp(std::path::Path::new(&self.data_dir)).await;
+                    crate::modules::import_legacy_mcp(
+                        &crate::core::runtime::DispatchCtx::ambient(),
+                        std::path::Path::new(&self.data_dir),
+                    )
+                    .await;
                     let reply = self.port.open_configured(&self.data_dir, &config).await;
                     state.open_replied(reply.clone().map_err(|_| ()));
                     reply?;

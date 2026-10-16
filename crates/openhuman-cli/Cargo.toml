@@ -235,8 +235,8 @@ required-features = ["storage-sqlite", "modules"]
 
 [[test]]
 # The released TinyMCP cdylib under the real host: add a server, restart the
-# core, list it (#7737). Requires e2e-test-support and a staged TinyMCP module;
-# dedicated E2E runners stage the pinned release and run the test.
+# core, list it (#7737). Its opt-in `e2e-test-support` feature is set by the
+# Rust e2e runners after they stage the registry-pinned TinyMCP release.
 name = "tinymcp_storage_smoke_e2e"
 path = "../../tests/tinymcp_storage_smoke_e2e.rs"
 required-features = ["storage-sqlite", "modules", "mcp", "e2e-test-support"]
@@ -352,7 +352,7 @@ serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 tinyinference-llm = { path = "../../vendor/tinyagents/vendor/tinyinference/crates/tinyinference-llm" }
 # The document-port contract for failure injection in cron storage regressions.
-tinystoragedrivers-core = { path = "../../vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
+tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v0.11.0" }
 tinytools = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools" }
 tinytools-std = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools-std" }
 # The completion log a detached sub-agent leaves, for the SaaS delivery-recovery e2e.
@@ -373,6 +373,7 @@ sha2 = "0.10"
 tar = "0.4"
 tinyagents-graph = { path = "../../vendor/tinyagents/crates/tinyagents-graph", features = ["sqlite", "storage-drivers"] }
 tinyagents-harness = { path = "../../vendor/tinyagents/crates/tinyagents-harness", features = ["sqlite", "multimodal"] }
+tinyagents-definition = { path = "../../vendor/tinyagents/crates/tinyagents-definition" }
 tinyagents-session = { path = "../../vendor/tinyagents/crates/tinyagents-session" }
 tinydocs-bus = { path = "../../vendor/tinydocs/crates/tinydocs-bus" }
 tinysearch-bus = { path = "../../vendor/tinysearch/crates/tinysearch-bus" }

@@ -27,6 +27,9 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     if session.is_cancelled() {
         return Ok(());
     }
+    // The listener runs for the host's own tenant (none in SaaS, where hosted
+    // channels go through the relay under their profile's context).
+    let dispatch = crate::core::runtime::DispatchCtx::host_default();
     // Initialize the global event bus singleton and register the tracing
     // subscriber for debug logging of all domain events.
     crate::core::bus::init().await.expect("bus init");
@@ -80,9 +83,9 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
 
     // Initialise the sub-agent definition registry from this workspace.
     // Idempotent — `bootstrap_core_runtime` may also call it.
-    if let Err(err) =
-        crate::agent::harness::AgentDefinitionRegistry::init_global(&config.workspace_dir)
-    {
+    if let Err(err) = crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+        &config.workspace_dir,
+    ) {
         tracing::warn!(
             "AgentDefinitionRegistry::init_global failed: {err} — \
              spawn_subagent will be unavailable until restart"
@@ -120,7 +123,7 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     // user-configured `[agent].agent_timeout_secs` (#5027).
     // Model, tools and the identity-refreshing system prompt (`turn_parts`),
     // shared with the hosted-channel relay.
-    let parts = build_channel_turn_parts(&config, &security, PromptToolDescs::Fixed)?;
+    let parts = build_channel_turn_parts(&dispatch, &config, &security, PromptToolDescs::Fixed)?;
     let model = parts.model.clone();
     let workspace = config.workspace_dir.clone();
     let skills = parts.skills.clone();
@@ -161,6 +164,7 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     let context_slot: Arc<OnceLock<Weak<crate::channels::context::ChannelRuntimeContext>>> =
         Arc::new(OnceLock::new());
     let preparing = ModuleChannelRuntime::prepare(
+        &dispatch,
         Arc::new(config.clone()),
         Arc::clone(&context_slot),
         dispatch_tx.clone(),
@@ -264,6 +268,7 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     println!("  🚦 In-flight message limit: {max_in_flight_messages}");
 
     let runtime_ctx = Arc::new(runtime_context(
+        &dispatch,
         &config,
         parts,
         Arc::clone(&channels_by_name),

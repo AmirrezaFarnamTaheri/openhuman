@@ -80,7 +80,7 @@ pub mod core {
     }
     pub mod runtime {
         pub use openhuman_core::core::runtime::{
-            current_tenant, is_saas, CoreContext, CoreRuntime, Mode, SaasConfig,
+            current_tenant, is_saas, CoreContext, CoreRuntime, DispatchCtx, Mode, SaasConfig,
         };
         pub mod saas {
             pub use openhuman_core::core::runtime::saas::build;
@@ -128,7 +128,7 @@ pub mod config {
         };
     }
     pub mod ops {
-        pub use openhuman_core::config::ops::load_config_with_timeout;
+        pub use openhuman_core::config::ops::{load_config_in, load_config_with_timeout};
     }
     pub mod rpc {
         pub use openhuman_core::config::rpc::load_config_with_timeout;
@@ -184,7 +184,10 @@ pub mod channels {
 /// OpenAI-compatible HTTP router.
 pub mod inference {
     pub mod embedding_host {
-        pub use openhuman_core::inference::embedding_host::default_embedding_provider_with_config;
+        pub use openhuman_core::inference::embedding_host::{
+            default_embedding_provider_for_chat, default_embedding_provider_with_config,
+            SharedEmbeddingModel,
+        };
     }
     pub mod provider {
         pub mod factory {
@@ -235,7 +238,7 @@ pub mod security {
         }
     }
     pub mod approval {
-        pub use openhuman_core::security::approval::ApprovalGate;
+        pub use openhuman_core::security::approval::{ApprovalChatContext, ApprovalGate};
     }
     pub mod pairing {
         pub use openhuman_core::security::pairing::is_public_bind;
@@ -325,7 +328,7 @@ pub mod voice {
             #[cfg(all(feature = "voice", feature = "http-server"))]
             pub use openhuman_core::voice::live::ws::handle_live_voice_ws;
             #[cfg(not(all(feature = "voice", feature = "http-server")))]
-            pub async fn handle_live_voice_ws<S, C>(_socket: S, _config: C) {}
+            pub async fn handle_live_voice_ws<S, X, C>(_socket: S, _ctx: X, _config: C) {}
         }
     }
     pub mod streaming {

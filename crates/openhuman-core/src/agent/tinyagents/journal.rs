@@ -43,6 +43,7 @@
 //!
 //! [`EventSink::with_stream_id`]: tinyagents_harness::events::EventSink::with_stream_id
 
+use crate::core::runtime::DispatchCtx;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -59,14 +60,14 @@ use tinyagents_harness::store::AppendStore;
 /// Best-effort live request → durable tinyagents journal stream map. The web
 /// progress bridge uses this at turn end to shadow-project spans from the
 /// journal and compare them against the live `SpanCollector` path during C4 S3.
-fn request_journal_runs() -> std::sync::Arc<RequestJournalRuns> {
-    crate::core::runtime::current_slot::<RequestJournalRuns>()
+fn request_journal_runs(ctx: &DispatchCtx) -> std::sync::Arc<RequestJournalRuns> {
+    crate::core::runtime::slot_for::<RequestJournalRuns>(ctx)
 }
 
 type RequestJournalRuns = Mutex<HashMap<String, String>>;
 
-pub(crate) fn register_request_journal_run(request_id: &str, run_id: &str) {
-    match request_journal_runs().lock() {
+pub(crate) fn register_request_journal_run(ctx: &DispatchCtx, request_id: &str, run_id: &str) {
+    match request_journal_runs(ctx).lock() {
         Ok(mut runs) => {
             runs.insert(request_id.to_string(), run_id.to_string());
             log::debug!(
@@ -84,8 +85,8 @@ pub(crate) fn register_request_journal_run(request_id: &str, run_id: &str) {
     }
 }
 
-pub(crate) fn take_request_journal_run(request_id: &str) -> Option<String> {
-    request_journal_runs()
+pub(crate) fn take_request_journal_run(ctx: &DispatchCtx, request_id: &str) -> Option<String> {
+    request_journal_runs(ctx)
         .lock()
         .ok()
         .and_then(|mut runs| runs.remove(request_id))
@@ -94,8 +95,8 @@ pub(crate) fn take_request_journal_run(request_id: &str) -> Option<String> {
 /// Resolve the workspace directory the tenant's journal and run-status stores
 /// belong to (the storage backend is resolved from it). Async because the
 /// config load is async; errors are surfaced so callers can log-and-skip.
-async fn resolve_workspace() -> anyhow::Result<PathBuf> {
-    let config = crate::config::ops::load_current_or_init()
+async fn resolve_workspace(ctx: &DispatchCtx) -> anyhow::Result<PathBuf> {
+    let config = crate::config::ops::load_current_or_init(ctx)
         .await
         .map_err(|e| anyhow::anyhow!("[journal] load config for workspace: {e}"))?;
     Ok(config.workspace_dir)
@@ -103,8 +104,10 @@ async fn resolve_workspace() -> anyhow::Result<PathBuf> {
 
 /// The journal and run-status stores a turn's events and status go to: the
 /// calling tenant's, in the storage backend.
-async fn journal_stores() -> anyhow::Result<(Arc<dyn AppendStore>, DriverStatusStore)> {
-    let workspace = resolve_workspace().await?;
+async fn journal_stores(
+    ctx: &DispatchCtx,
+) -> anyhow::Result<(Arc<dyn AppendStore>, DriverStatusStore)> {
+    let workspace = resolve_workspace(ctx).await?;
     let stores = crate::agent::session_store::stores_or_ephemeral(&workspace);
     let status = crate::agent::session_store::status_store_for(&workspace);
     Ok((stores.journal, status))
@@ -183,12 +186,13 @@ impl TurnJournal {
 /// [`OpenhumanEventBridge`]: crate::agent::tinyagents::observability::OpenhumanEventBridge
 /// [`EventSink::with_stream_id`]: tinyagents_harness::events::EventSink::with_stream_id
 pub(crate) async fn attach_turn_journal(
+    ctx: &DispatchCtx,
     events: &EventSink,
     model: &str,
     run_id: RunId,
     thread_id: Option<ThreadId>,
 ) -> Option<TurnJournal> {
-    let (journal_store, status_store) = match journal_stores().await {
+    let (journal_store, status_store) = match journal_stores(ctx).await {
         Ok(stores) => stores,
         Err(err) => {
             log::debug!("[journal] skipping journal attach; {err}");
@@ -248,10 +252,11 @@ pub(crate) async fn attach_turn_journal(
 /// relying on transient `AgentProgress` buffering. Best-effort: a missing store
 /// or unknown run yields an empty `Vec`, not an error.
 pub(crate) async fn read_run_events(
+    ctx: &DispatchCtx,
     run_id: &str,
     from_offset: u64,
 ) -> anyhow::Result<Vec<AgentObservation>> {
-    let (journal_store, _) = journal_stores().await?;
+    let (journal_store, _) = journal_stores(ctx).await?;
     let journal = StoreEventJournal::new(journal_store);
     journal
         .read_from(run_id, from_offset)

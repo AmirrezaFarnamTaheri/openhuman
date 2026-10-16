@@ -73,9 +73,11 @@ async fn http_adapter_blocks_under_readonly_tier() {
 
     let (_dir, creds) = http_cred_store();
     let http = OpenHumanHttp {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
         http_config: HttpRequestConfig::default(),
         http_creds: Arc::new(creds),
+        approval: Default::default(),
     };
 
     let request = json!({ "method": "GET", "url": "https://example.com" });
@@ -104,8 +106,10 @@ async fn composio_tool_call_blocks_under_readonly_tier() {
     use crate::security::AutonomyLevel;
 
     let tools = OpenHumanTools {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
+        approval: Default::default(),
     };
 
     let err = tools
@@ -149,8 +153,10 @@ async fn composio_read_action_allowed_under_readonly_tier() {
     // it may still fail downstream (no Composio session configured in
     // this test), but never with the policy-blocked marker.
     let tools = OpenHumanTools {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::ReadOnly)),
+        approval: Default::default(),
     };
     let err = tools
         .invoke("TWITTER_RECENT_SEARCH", json!({}), None)
@@ -185,8 +191,10 @@ async fn composio_read_action_does_not_prompt_under_supervised_tier() {
     );
 
     let tools = OpenHumanTools {
+        ctx: crate::core::runtime::DispatchCtx::ambient(),
         config: Arc::new(Config::default()),
         security: Arc::new(policy(AutonomyLevel::Supervised)),
+        approval: Default::default(),
     };
     let err = tools
         .invoke("TWITTER_RECENT_SEARCH", json!({}), None)
@@ -396,9 +404,11 @@ fn agent_node_runtime_resolves_to_the_definitions_effective_iteration_cap() {
     let config = resolver_test_config(&tmp);
     assert_eq!(config.agent.max_tool_iterations, 10);
 
-    crate::agent::harness::definition::AgentDefinitionRegistry::init_global(&config.workspace_dir)
-        .expect("agent registry init");
-    let def = crate::agent::harness::definition::AgentDefinitionRegistry::global()
+    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+        &config.workspace_dir,
+    )
+    .expect("agent registry init");
+    let def = crate::agent::harness::host_definition::AgentDefinitionRegistry::global()
         .expect("registry initialised")
         .get("planner")
         .expect("planner definition registered")
@@ -406,8 +416,12 @@ fn agent_node_runtime_resolves_to_the_definitions_effective_iteration_cap() {
     let expected = def.effective_max_iterations();
     assert_eq!(expected, 50);
 
-    let agent = crate::agent::OpenHumanSessionHost::from_config_for_agent(&config, "planner")
-        .expect("build planner agent");
+    let agent = crate::agent::OpenHumanSessionHost::from_config_for_agent(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        &config,
+        "planner",
+    )
+    .expect("build planner agent");
     assert_eq!(agent.agent_config().max_tool_iterations, expected);
 
     // And the timeout scaling this cap feeds into actually widens the

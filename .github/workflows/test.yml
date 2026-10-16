@@ -37,6 +37,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       CI: "true"
     steps:
+      # The TinyFlows fixture tree contains paths beyond MAX_PATH. Configure
+      # Git before checkout so recursive submodule checkout can create them.
+      - name: Enable long Git paths
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -66,3 +71,27 @@ jobs:
         run: |
           bash ../scripts/ci-cancel-aware.sh pnpm tauri build --debug --no-bundle \
             -c '{"bundle":{"createUpdaterArtifacts":false}}' -- --bin OpenHuman
+
+  fork-upstream-ancestry:
+    name: Fork ancestry and zero-behind guard
+    if: github.repository == 'AmirrezaFarnamTaheri/openhuman' && github.ref_name == 'sync/upstream-merge-review-20261016'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch the latest actual upstream head
+        run: |
+          git remote add upstream https://github.com/tinyhumansai/openhuman.git
+          git fetch --no-tags upstream +refs/heads/main:refs/remotes/upstream/main
+      - name: Check history-guard test behavior
+        run: node --test scripts/ci/tests/verify-upstream-sync.test.mjs
+      - name: Verify all original 754 commits and zero behind
+        run: |
+          node scripts/ci/verify-upstream-sync.mjs \
+            --original-fork 7070ff332c9a69032e22a0b6c7431eea462e162d \
+            --upstream refs/remotes/upstream/main \
+            --candidate HEAD \
+            --expected-original-unique 754

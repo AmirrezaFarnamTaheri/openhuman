@@ -10,11 +10,12 @@
 //!   reading alone.
 
 #[cfg(feature = "modules")]
-use super::super::call_effect::{call_effect, tool_sets_lookup, CallEffect};
-#[cfg(feature = "modules")]
 use super::super::failure_policy::recovery_policy_with_effect;
 use super::super::repeated_failure::recovery_policy;
 use super::*;
+use crate::agent::tinyagents::middleware::repeated_failure::RepeatedToolFailureMiddleware;
+#[cfg(feature = "modules")]
+use tinyagents_harness::middleware::{call_effect, tool_sets_lookup, CallEffect};
 
 /// The shape of a production refusal: the gate's marker, then its reason.
 const SHELL_BLOCK: &str =
@@ -44,7 +45,7 @@ async fn run_call(
 fn breaker() -> (
     RepeatedToolFailureMiddleware,
     SteeringHandle,
-    crate::agent::tinyagents::HaltSummarySlot,
+    tinyagents_harness::turn_outcome::HaltSummarySlot,
 ) {
     let handle = SteeringHandle::allow_all();
     let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
@@ -202,6 +203,7 @@ fn production_read_tools() -> Vec<Box<dyn tinytools::Tool>> {
     let security = std::sync::Arc::new(SecurityPolicy::default());
     let tools: Vec<Box<dyn tinytools::Tool>> = vec![
         Box::new(crate::tools::implementations::network::web_fetch_tool(
+            &crate::core::runtime::DispatchCtx::ambient(),
             security.clone(),
             vec!["example.com".into()],
             None,

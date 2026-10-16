@@ -64,7 +64,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 /// Complete definition accepted by [`AgentDefinitionSpec::from_base`].
-pub use openhuman_core::agent::harness::definition::AgentDefinition;
+pub use openhuman_core::agent::harness::host_definition::AgentDefinition;
 pub use openhuman_core::agent::turn_origin::{AgentTurnOrigin, TrustedAutomationSource};
 
 /// The origin of the executing turn, with its original chat or channel route.
@@ -102,9 +102,7 @@ pub use tinytools::{PermissionLevel, Tool, ToolExposure, ToolResult};
 /// Live agent-turn progress for in-process embedders.
 pub mod agent_progress {
     pub use openhuman_core::agent::progress::AgentProgress;
-    pub use openhuman_core::agent::progress_sink::{
-        current_progress_sink, with_progress_sink, ProgressSink, AGENT_PROGRESS_SINK,
-    };
+    pub use openhuman_core::agent::progress_sink::ProgressSink;
 }
 
 /// The skill registry: the host transport an embedder passes to
@@ -150,6 +148,7 @@ pub mod secret_storage;
 mod turn;
 mod turn_cancellation;
 mod turn_meter;
+mod turn_steering;
 
 /// Core internals for `openhuman-tinyhumans` and `openhuman-rpc` only; see
 /// the module docs. Not part of the host-facing API.
@@ -219,7 +218,8 @@ pub mod seams {
     pub use openhuman_core::agent::hooks::{PostTurnHook, ToolHook};
     pub use openhuman_core::agent::hooks::{ToolHookContext, ToolHookDecision, TurnContext};
     pub use openhuman_core::agent::stop_hooks::BudgetStopHook;
-    pub use openhuman_core::agent::stop_hooks::TurnCost;
+    pub use tinyagents_harness::cost::TurnCost;
+    pub use tinyagents_harness::middleware::{PolicyDecision, ToolCallPolicy};
     pub use tinyagents_harness::middleware::{StopDecision, StopHook};
     /// Product cost snapshot passed to harness-owned stop policies.
     pub type TurnState<'a> = tinyagents_harness::middleware::TurnState<'a, TurnCost>;
@@ -266,6 +266,7 @@ pub use complete::{
 pub use session_store::{InMemorySessionStores, SessionStoreProvider};
 pub use turn::{absolute, Route, Turn, TurnOutcome, TurnRequest};
 pub use turn_cancellation::TurnCancellation;
+pub use turn_steering::{SteerRefused, TurnSteering};
 
 use std::sync::Arc;
 
