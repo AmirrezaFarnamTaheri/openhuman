@@ -302,12 +302,10 @@ jobs:
           # must not assert a cause: on v0.63.21 both steps died on the same git
           # ENOBUFS and the "timed out" wording sent the investigation the wrong way.
           echo "::warning::AI release notes step did not succeed (outcome=${{ steps.ai-notes.outcome }}) — using deterministic notes. See the 'Generate AI release notes' step log for the reason."
-          node scripts/release/generate-release-notes.mjs \
-            --from latest-release \
-            --to "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --no-ai \
-            --output release-notes.md
+          # GitHub also supports repositories with no previous published release.
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f "tag_name=$TAG" \
+            --jq .body > release-notes.md
       - name: Create draft release with generated notes
         if: ${{ inputs.create_release }}
         id: create
