@@ -185,6 +185,8 @@ fn only_library_hosts_are_exempt_from_app_login() {
 
 #[path = "factory_crate_native_diagnostics_tests.rs"]
 mod crate_native_diagnostics_tests;
+#[path = "factory_explicit_ctx_tests.rs"]
+mod explicit_ctx_tests;
 #[path = "factory_crate_native_tests.rs"]
 mod crate_native_tests;
 #[path = "factory_egress_fallback_tests.rs"]
