@@ -235,8 +235,12 @@ async fn run_flow_body_inner(
         flow_id: flow_id.to_string(),
         run_id: thread_id.clone(),
     };
+    // The run acts under its own trusted `Workflow` origin: its capabilities
+    // read the origin from this context, not from the calling task's scope.
+    let origin = workflow_origin(flow_id, flow.require_approval);
+    let run_ctx = ctx.with_turn_origin(origin.clone());
     let caps = crate::flows::tinyflows::build_capabilities(
-        &ctx,
+        &run_ctx,
         config_arc.clone(),
         format!("flow:{flow_id}"),
         Some(flow_run),
@@ -288,7 +292,6 @@ async fn run_flow_body_inner(
         );
     };
 
-    let origin = workflow_origin(flow_id, flow.require_approval);
     // Per-run in-memory journal: tinyflows records every graph event as a
     // durable GraphObservation under the run's tinyagents run id, which the
     // post-run Langfuse export reads back. Process-local and dropped with the

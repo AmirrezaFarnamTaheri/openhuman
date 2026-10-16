@@ -23,6 +23,23 @@ pub(crate) const SENSITIVE_PAIRS: &[[&str; 2]] = &[
     ["microsoft", "crypto"],
     ["microsoft", "vault"],
 ];
+/// The credential stores above as absolute paths under `home`, for a jail that
+/// denies reads by path rather than by segment. macOS keeps keychains in
+/// `~/Library/Keychains`. The Windows DPAPI pairs have no fixed place under a
+/// home folder, so they stay with the segment check alone.
+#[cfg(any(feature = "modules", test))]
+pub(crate) fn home_credential_stores(home: &Path) -> Vec<PathBuf> {
+    let components = SENSITIVE_COMPONENTS.iter().map(|segment| match *segment {
+        "keychains" => home.join("Library").join("Keychains"),
+        segment => home.join(segment),
+    });
+    let files = SENSITIVE_FILES.iter().map(|file| home.join(file));
+    let pairs = SENSITIVE_PAIRS
+        .iter()
+        .filter(|[dir, _]| dir.starts_with('.'))
+        .map(|[dir, file]| home.join(dir).join(file));
+    components.chain(files).chain(pairs).collect()
+}
 /// Core OS directories matched by absolute (lower-cased) prefix. `/private` is
 /// intentionally absent: macOS temp dirs canonicalize under `/private/var`.
 pub(crate) const ALWAYS_FORBIDDEN_PREFIXES: &[&str] = &[

@@ -29,7 +29,7 @@ use openhuman_core::storage::{rusqlite, DocumentStoreExt, Scope, ScopedStorage, 
 use sha2::Digest;
 use tinyagents_session::transcript::{session_stem, SessionRef, TranscriptMessage, TranscriptMeta};
 use tinyagents_session::turn_state::TurnState;
-use tinystoragedrivers_core::Query;
+use tinystoragedrivers_core::{Capability, Query};
 
 // The classic-transcript fixture writer, shared with the core's unit tests.
 #[path = "../crates/openhuman-core/src/util/classic_transcript_fixture.rs"]
@@ -427,6 +427,22 @@ async fn import_modules(workspace: &Path) {
 }
 
 async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(case: Case) {
+    // Other drivers without checked-batch support cannot run the positive
+    // full-upgrade contract. The File driver's negative assertion below must
+    // still execute: it proves refusing an unsafe migration preserves data.
+    let local = case.backend().for_scope(&Scope::local()).unwrap();
+    if case.driver != Driver::File
+        && !local.documents().capabilities().contains(Capability::ValidatedBatch)
+    {
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stderr(),
+            "skipped {}: validated_batch is required for a complete session import",
+            case.driver.name()
+        );
+        return;
+    }
+
     std::env::set_var("OPENHUMAN_KEYRING_BACKEND", "file");
     std::env::set_var("OPENHUMAN_KEYRING_MASTER_KEY", "33".repeat(32));
 

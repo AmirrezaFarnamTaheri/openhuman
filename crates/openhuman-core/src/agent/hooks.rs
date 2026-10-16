@@ -248,6 +248,18 @@ pub trait ToolHook: Send + Sync {
         }
     }
 
+    /// [`before_tool_decision`](ToolHook::before_tool_decision) for the call
+    /// `dispatch` runs for: the context of the turn that raised it. A hook that
+    /// reads the acting tenant or profile overrides this and takes it from
+    /// `dispatch`; the default ignores it.
+    async fn before_tool_decision_in(
+        &self,
+        _dispatch: &crate::core::runtime::DispatchCtx,
+        context: &ToolHookContext,
+    ) -> ToolHookDecision {
+        self.before_tool_decision(context).await
+    }
+
     /// Observe a completed tool and optionally append text to its result, which
     /// the model then sees. Defaults to [`after_tool`](ToolHook::after_tool)
     /// with no appended text.

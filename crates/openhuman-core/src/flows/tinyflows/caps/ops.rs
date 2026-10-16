@@ -691,6 +691,7 @@ pub fn build_capabilities(
         approvals: None,
         memory: Some(Arc::new(
             crate::flows::tinyflows::memory_adapter::OpenHumanMemory {
+                ctx: ctx.clone(),
                 config: config.clone(),
                 security,
                 approval,

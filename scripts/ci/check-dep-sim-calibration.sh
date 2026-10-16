@@ -125,9 +125,11 @@ cd "$(dirname "$0")/../.."
 # stage re-measures the flows profile at 326 packages / 302 names / 2 native.
 # 302 -> 304 on 2026-10-13: main already resolves 303; the direct `tinymcp`
 # (`ui`) dependency in openhuman-core adds the `tinymcp` name (329 packages /
-# 304 names / 2 native on Linux). The later kernel-floor baseline is
-# flows:330:305:2, so remeasure this independent simulation against the
-# integrated Cargo.lock before claiming simulator/Cargo graph parity.
-EXPECTED_NAMES=304
+# 304 names / 2 native on Linux). See kernel-floor.limits.
+# 304 -> 303 on 2026-10-16: CI on merge base 63c951aea7 measures the flows
+# profile at 326 packages / 303 names / 2 native. See kernel-floor.limits.
+# Upstream measured 303 names. Re-run on the integrated fork before promotion.
+# If the fork adds legitimate reachability, review the graph, not the budget alone.
+EXPECTED_NAMES=303
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"

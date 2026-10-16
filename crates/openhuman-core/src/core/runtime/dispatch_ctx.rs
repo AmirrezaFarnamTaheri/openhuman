@@ -184,6 +184,21 @@ impl DispatchCtx {
         self.turn_origin()
             .or_else(|| Self::ambient_turn().turn_origin())
     }
+    /// This context with `origin` bound as its turn origin, for a run that
+    /// acts under a trusted entry point of its own (a saved flow). The base is
+    /// this context, else the calling task's turn scope, the process default,
+    /// or a bare one, the same resolution `agent::turn_origin::with_origin`
+    /// scopes under. This context is not mutated.
+    pub fn with_turn_origin(&self, origin: crate::agent::turn_origin::AgentTurnOrigin) -> Self {
+        let base = self
+            .core
+            .clone()
+            .or_else(CoreContext::scoped_for_turn)
+            .or_else(CoreContext::default_context)
+            .unwrap_or_else(CoreContext::bare);
+        Self::new(base.derive_channel_turn(None, Some(origin)))
+    }
+
     /// A non-owning handle on the bound context, for state that outlives the
     /// call (a session, a built turn). The tenant lease is the strong count of
     /// the context ([`CoreContext::tenant_in_use`]), so a long-lived holder

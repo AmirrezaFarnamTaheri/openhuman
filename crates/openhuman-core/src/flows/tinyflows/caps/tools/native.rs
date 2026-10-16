@@ -49,6 +49,7 @@ impl ToolBackend for NativeToolBackend {
         let summary = crate::security::approval::summarize_action(tool_name, &args);
         let redacted = crate::security::approval::redact_args(&args);
         let (outcome, audit_id) = super::super::gate_call_for_tier(
+            ctx.dispatch,
             ctx.approval,
             tier_decision,
             tool_name,

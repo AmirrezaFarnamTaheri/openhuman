@@ -840,7 +840,7 @@ impl OpenHumanSessionHost {
                             .unwrap_or_else(std::sync::PoisonError::into_inner)
                             .context_window = context_window;
                         let original_user_message = user_text_with_markers(&request.input);
-                        prelude.begin_user_effects(request);
+                        prelude.begin_user_effects(request, &options.run_context.data);
                         let turn = state
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner())
