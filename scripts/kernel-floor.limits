@@ -703,21 +703,16 @@
 #                      so the importer is net zero. Re-measured on this branch
 #                      with dep-sim --cut-nothing: 326 packages / 302 names / 2
 #                      native builds on Linux. No size claim.
-# 328/304/2 2026-10-14  Unified upstream-sync pin compatibility on PR #6.
-#                      Linux CI's exact `cargo tree -p openhuman -e normal
-#                      --no-default-features --features flows` profile now
-#                      resolves 328 packages / 304 distinct names / 2 native.
-#                      This is +2 packages/names over the October 13 baseline.
-#                      Global Cargo.lock still contains 932 package records and
-#                      the SAME set of 824 crate names as `main`: upstream
-#                      package and feature-edge updates make two previously
-#                      locked crates reachable in `flows`; no new external
-#                      projects entered the lockfile and the native set remains
-#                      libsqlite3-sys and ring. The pinned TinyFlows imports
-#                      remain required to read legacy flow/cron state and the
-#                      inference contract remains required for model routing.
-#                      This is an explicitly reviewed compatibility exception,
-#                      NOT a dependency shed and NOT a claim of faster builds.
-#                      Further reachable-graph shedding must lower BOTH this
-#                      floor and dep-sim's independent calibration together.
-flows:328:304:2
+# 330/305/2 2026-10-14 GROWTH, not a shed. openhuman-core takes a direct
+#                      `tinymcp` dependency with only the `ui` feature (the MCP
+#                      Apps rules: capability advertisement and tool-UI
+#                      resolution that render inline widgets in chat). It is
+#                      always on in product builds through `mcp`. Measured with
+#                      `scripts/kernel-floor.sh flows`, with and without the
+#                      `tinymcp` line: without it the merged tree resolves 328
+#                      packages / 304 names / 2 native (already above the
+#                      recorded 326/302); with it, 330 / 305 / 2. The delta
+#                      is two packages and one name: `tinymcp` (new name) and a
+#                      second major of `dirs` (v7.0.0; the name was already
+#                      present). Measured on macOS; CI re-measures on Linux.
+flows:330:305:2
