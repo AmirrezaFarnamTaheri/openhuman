@@ -480,12 +480,19 @@ pub(super) fn install_turn_middleware(
     // `ApprovalGate`, a denial short-circuits with a model-consumable result, and
     // an approved call records a terminal audit row. Replaces the inline approval
     // block that used to live in the legacy tool adapter.
+    // This approval gate wraps ToolPolicyMiddleware. A policy-denied call
+    // must not prompt the human before the inner layer rejects it (#7649).
+    // Hosted roots use OpenHumanSecurityGate instead of this legacy hook.
     if !hosted_security_gate {
+        let session_permission = tool_policy
+            .as_ref()
+            .map(|enforcement| (enforcement.session.clone(), enforcement.channel.clone()));
         harness.push_tool_middleware(Arc::new(ApprovalGateMiddleware::new(
             "approval_security",
-            Arc::new(middleware::approval::ApprovalSecurityMiddleware::new(
-                tool_sets.clone(),
-            )),
+            Arc::new(
+                middleware::approval::ApprovalSecurityMiddleware::new(tool_sets.clone())
+                    .with_session_permission(session_permission),
+            ),
         )));
     }
 
