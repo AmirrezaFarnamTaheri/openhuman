@@ -53,6 +53,16 @@ pub(crate) fn openai_bearer_is_oauth(config: &Config) -> bool {
         .is_some()
 }
 
+/// Drop the underlying credential-store failure rather than exposing an error
+/// chain which may contain raw access tokens, file contents, or bearer headers.
+/// Only the independently authored, nonsecret diagnostic reaches callers.
+pub(super) fn redact_credential_lookup_error(
+    _cause: impl std::fmt::Display,
+    safe_message: String,
+) -> anyhow::Error {
+    anyhow::anyhow!(safe_message)
+}
+
 /// Fetch the bearer token for a slug from the workspace `auth-profiles.json`.
 ///
 /// Tries `provider:<slug>` first (new key format), then the bare `<slug>`
@@ -94,11 +104,10 @@ pub fn lookup_key_for_slug(slug: &str, config: &Config) -> anyhow::Result<String
     // Fall back to legacy bare slug.
     let key = auth
         .get_provider_bearer_token(slug, None)
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "[chat-factory] failed to read API key for slug '{}': {}",
-                slug,
-                e
+        .map_err(|source| {
+            redact_credential_lookup_error(
+                source,
+                format!("[chat-factory] failed to read API key for slug '{slug}'"),
             )
         })?
         .unwrap_or_default();
@@ -123,9 +132,10 @@ pub fn lookup_key_for_slug(slug: &str, config: &Config) -> anyhow::Result<String
                 return Ok(token);
             }
             Ok(_) => {}
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "[chat-factory] openai oauth lookup failed: {e}"
+            Err(source) => {
+                return Err(redact_credential_lookup_error(
+                    source,
+                    "[chat-factory] openai oauth lookup failed".to_string(),
                 ));
             }
         }
