@@ -520,6 +520,7 @@ jobs:
             libasound2-dev libxdo-dev libxtst-dev libx11-dev libevdev-dev \
             clang
       - name: Verify Sentry DSN is present
+        if: github.repository == 'tinyhumansai/openhuman'
         env:
           OPENHUMAN_CORE_SENTRY_DSN: ${{ vars.OPENHUMAN_CORE_SENTRY_DSN || vars.OPENHUMAN_SENTRY_DSN }}
         run: |

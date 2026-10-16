@@ -50,6 +50,8 @@ COPY Cargo.toml Cargo.lock rust-toolchain.toml build.rs README.md ./
 COPY crates/openhuman-cli/Cargo.toml crates/openhuman-cli/Cargo.toml
 COPY crates/openhuman-core/Cargo.toml crates/openhuman-core/Cargo.toml
 COPY crates/openhuman-embed/Cargo.toml crates/openhuman-embed/Cargo.toml
+# Cargo validates explicitly declared examples even when building only the CLI.
+COPY crates/openhuman-embed/examples/ crates/openhuman-embed/examples/
 COPY crates/openhuman-modules-linked/Cargo.toml crates/openhuman-modules-linked/Cargo.toml
 COPY crates/openhuman-rpc/Cargo.toml crates/openhuman-rpc/Cargo.toml
 COPY crates/openhuman-tinyhumans/Cargo.toml crates/openhuman-tinyhumans/Cargo.toml

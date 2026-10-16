@@ -36,10 +36,10 @@ function redactCandidateSecrets(message: string, rawKeys: string): string {
 function providerListFingerprint(
   providers: ReadonlyArray<{
     id: string; slug: string; label: string; endpoint: string;
-    auth_style: string; image_endpoint?: string;
+    auth_style: string; image_endpoint?: string | null;
     model_image_endpoints?: Record<string, string>;
     model_transports?: Record<string, string>;
-    rotation_strategy?: string; tool_call_codec?: string; ca_cert_pem?: string;
+    rotation_strategy?: string | null; tool_call_codec?: string; ca_cert_pem?: string | null;
   }>
 ): string {
   return JSON.stringify(providers
@@ -179,7 +179,6 @@ export function useCloudProviderEditorSubmit({
 
       let settingsPersisted = false;
       let settingsWriteAttempted = false;
-      let replacementKeyStored = false;
       let replacementKeyWriteAttempted = false;
       // Detach any active old-key route before replacing a key for a new
       // destination. While detached, both an old key/new endpoint and a new
@@ -222,7 +221,6 @@ export function useCloudProviderEditorSubmit({
           // From this point onward the old route must remain unavailable.
           replacementKeyWriteAttempted = true;
           await setCloudProviderKey(upserted.slug, apiKey);
-          replacementKeyStored = true;
           // Never restore the former endpoint after the new key has replaced
           // it. If final persistence fails, keep the provider detached.
           await persist({ ...draft, cloudProviders: list });
