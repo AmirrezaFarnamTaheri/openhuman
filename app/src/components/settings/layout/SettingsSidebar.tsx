@@ -79,16 +79,32 @@ const SettingsSidebar = () => {
         <label className="block">
           <span className="sr-only">Search settings</span>
           <input type="search" value={search} onChange={event => setSearch(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Enter' && matchingRoutes.length > 0) {
+                event.preventDefault();
+                navigateToSettings(entryRoute(matchingRoutes[0]));
+                setSearch('');
+              }
+            }}
             placeholder="Search settings" aria-label="Search settings"
             className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm text-content placeholder:text-content-muted"
           />
         </label>
       }
       groups={searchGroups}
+      footer={term && matchingRoutes.length === 0 ? (
+        <p data-testid="settings-search-empty" role="status"
+          className="px-2 py-4 text-sm text-content-muted">
+          {t('settings.search.noResults', 'No matching settings')}
+        </p>
+      ) : undefined}
       selected={activeSidebarId ?? ''}
       onSelect={id => {
         const route = routeById.get(id);
-        if (route) navigateToSettings(route);
+        if (route) {
+          navigateToSettings(route);
+          setSearch('');
+        }
       }}
     />
   );
