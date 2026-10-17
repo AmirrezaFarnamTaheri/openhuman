@@ -403,7 +403,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
               disabled={autoLocalBusy || saving !== null}
               onClick={() => void startLocalMemory()}>
               {autoLocalBusy
-                ? t('memoryPage.engine.connecting')
+                ? t('memoryPage.engine.autoLocalStarting', 'Starting local memory…')
                 : t('memoryPage.engine.autoLocal', 'Start local memory')}
             </Button>
           </div>
@@ -456,6 +456,33 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
             saving === dialog ? { escape: false, backdrop: false, button: false } : undefined
           }
           onClose={() => setDialog(null)}>
+          {dialog === 'selfhost' && (
+            <div className="mb-4 space-y-2 rounded-lg border border-line bg-surface-muted p-3">
+              <p className="text-sm font-medium text-content">
+                {t('memoryPage.engine.autoLocalTitle', 'Memory on this computer')}
+              </p>
+              <p className="text-xs text-content-muted">
+                {t('memoryPage.engine.autoLocalHint',
+                  'OpenHuman sets up and connects local memory for you. Docker is required.')}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                data-testid="memory-engine-dialog-auto-local"
+                disabled={autoLocalBusy || saving !== null}
+                onClick={() => void startLocalMemory()}>
+                {autoLocalBusy
+                  ? t('memoryPage.engine.autoLocalStarting', 'Starting local memory…')
+                  : t('memoryPage.engine.autoLocal', 'Start local memory')}
+              </Button>
+              {autoLocalError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{autoLocalError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
           {panel(dialog)}
         </ModalShell>
       )}
