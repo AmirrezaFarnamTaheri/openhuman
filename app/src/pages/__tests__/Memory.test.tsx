@@ -104,9 +104,10 @@ describe('Memory page', () => {
     }
   });
 
-  it('defaults to Engine when an engine is active', async () => {
+  it('defaults to Explorer when an engine is active', async () => {
     renderAt('?tab=brain');
-    expect(await screen.findByTestId('stub-engine')).toBeInTheDocument();
+    expect(await screen.findByTestId('stub-explorer')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub-engine')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-ask')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-import')).not.toBeInTheDocument();
   });
