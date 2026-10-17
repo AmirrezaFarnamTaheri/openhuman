@@ -15,21 +15,20 @@ const WALKTHROUGH_PENDING_KEY = 'openhuman:walkthrough_pending';
 /**
  * Returns `true` when the walkthrough should be shown. This is true when:
  *  - The walkthrough has not yet been completed or skipped, AND
- *  - Either the pending flag was explicitly set (fresh onboarding), OR
- *    the caller indicates the user is already onboarded (migration path
- *    for existing users who upgrade to the Joyride version).
+ *  - The pending flag was set by an explicit user action. Completing
+ *    onboarding (or upgrading the app) never forces a multi-page tour.
  *
  * Wrapped in try/catch to gracefully handle SecurityError or quota exceptions
  * (e.g., in private-browsing mode or when storage is full/blocked).
  */
-export function isWalkthroughPending(userIsOnboarded = false): boolean {
+export function isWalkthroughPending(_userIsOnboarded = false): boolean {
   // Dev browser sessions (`VITE_DEV_SKIP_ONBOARDING`) skip the tour too; its
   // completion lives in this origin's localStorage, so a fresh DevTools
   // profile would otherwise replay it on every run.
   if (DEV_SKIP_ONBOARDING) return false;
   try {
     if (localStorage.getItem(WALKTHROUGH_KEY) === 'true') return false;
-    return localStorage.getItem(WALKTHROUGH_PENDING_KEY) === 'true' || userIsOnboarded;
+    return localStorage.getItem(WALKTHROUGH_PENDING_KEY) === 'true';
   } catch (e) {
     console.warn('[walkthrough] localStorage unavailable — treating as not pending', e);
     return false;
@@ -37,8 +36,7 @@ export function isWalkthroughPending(userIsOnboarded = false): boolean {
 }
 
 /**
- * Flags the walkthrough as pending. Called by OnboardingLayout when the user
- * completes the wizard and is about to navigate to /chat.
+ * Flags the walkthrough as pending only when the user opts into the tour.
  *
  * Best-effort: if localStorage is unavailable (SecurityError / quota) the
  * error is logged and the call is silently swallowed so navigation always

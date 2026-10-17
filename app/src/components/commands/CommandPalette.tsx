@@ -9,6 +9,7 @@ import type { RegisteredAction } from '../../lib/commands/types';
 import { useT } from '../../lib/i18n/I18nContext';
 import { entryRoute, SETTINGS_ROUTE_REGISTRY } from '../settings/settingsRouteRegistry';
 import type { Thread } from '../../types/thread';
+import { resetWalkthrough } from '../walkthrough/AppWalkthrough';
 import Kbd from './Kbd';
 import ThreadSearchGroups from './ThreadSearchGroups';
 
@@ -95,6 +96,11 @@ export default function CommandPalette({
       )
       .slice(0, 15);
   }, [onOpenSettingsRoute, search, t]);
+
+  function startTour(): void {
+    onOpenChange(false);
+    window.requestAnimationFrame(resetWalkthrough);
+  }
 
   function openSetting(route: string): void {
     onOpenChange(false);
@@ -186,6 +192,19 @@ export default function CommandPalette({
                   ))}
                 </Command.Group>
               )}
+              <Command.Group
+                heading={t('shortcuts.group.help', 'Help')}
+                className="**:[[cmdk-group-heading]]:px-4 **:[[cmdk-group-heading]]:py-1 **:[[cmdk-group-heading]]:text-xs **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:text-cmd-foreground-muted">
+                <Command.Item
+                  value="take a tour"
+                  keywords={['onboarding', 'guide', 'walkthrough', 'help']}
+                  data-testid="command-start-tour"
+                  onSelect={startTour}
+                  className="flex items-center gap-3 px-4 py-2 cursor-pointer aria-selected:bg-cmd-surface-elevated">
+                  <span className="w-4" aria-hidden />
+                  {t('walkthrough.takeTour', 'Take a tour')}
+                </Command.Item>
+              </Command.Group>
               {onOpenThread && (
                 <ThreadSearchGroups query={search} threads={threads} onOpenThread={openThread} />
               )}

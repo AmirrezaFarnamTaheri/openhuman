@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 
-import { setWalkthroughPending } from '../../components/walkthrough/AppWalkthrough';
 import { useCoreState } from '../../providers/CoreStateProvider';
 import { trackEvent } from '../../services/analytics';
 import { userScopedStorage } from '../../store/userScopedStorage';
@@ -102,14 +101,8 @@ const OnboardingLayout = () => {
     // Fire onboarding_complete analytics event before navigation.
     trackEvent('onboarding_complete');
 
-    // Flag the Joyride walkthrough as pending so it auto-starts on the chat landing surface.
-    // Best-effort: localStorage failures must not block navigation.
-    try {
-      setWalkthroughPending();
-      console.debug('[onboarding:layout] walkthrough pending flag set — navigating to /chat');
-    } catch (e) {
-      console.warn('[onboarding:layout] could not set walkthrough pending flag; continuing', e);
-    }
+    // No forced tour on the first chat. The optional command-palette
+    // "Take a tour" action invokes resetWalkthrough on demand.
 
     // The run is finished; drop the resumable draft so a later visit to
     // onboarding does not inherit stale choices. Deliberately NOT awaited:
