@@ -148,6 +148,16 @@ describe('ChipTabs', () => {
     expect(onChange).toHaveBeenCalledWith('three');
   });
 
+  it('emits one selection event per pointer activation', async () => {
+    const onChange = vi.fn();
+    render(<ChipTabs items={items} value="one" onChange={onChange} testIdPrefix="t" />);
+
+    await userEvent.click(screen.getByTestId('t-two'));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('two');
+  });
+
   it('uses an explicit per-item testId over the prefix', () => {
     render(
       <ChipTabs

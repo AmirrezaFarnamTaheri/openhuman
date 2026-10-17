@@ -137,6 +137,27 @@ describe('PairScreen', () => {
     });
   });
 
+  it('pairs from a pasted pairing link when scanning is not available', async () => {
+    const pairUrl = buildPairUrl();
+    mockIsHealthy.mockResolvedValue(true);
+    mockGetTransport.mockResolvedValue({
+      kind: 'tunnel',
+      isHealthy: mockIsHealthy,
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+
+    renderPairScreen();
+    await userEvent.click(screen.getByRole('button', { name: /paste pairing link/i }));
+    await userEvent.type(screen.getByRole('textbox', { name: /pairing link/i }), pairUrl);
+    await userEvent.click(screen.getByRole('button', { name: /connect to desktop/i }));
+
+    await waitFor(() => {
+      expect(mockSaveProfile).toHaveBeenCalledOnce();
+      expect(mockNavigate).toHaveBeenCalledWith('/human', { replace: true });
+    });
+    expect(mockScan).not.toHaveBeenCalled();
+  });
+
   it('expired QR -> shows expired message, no navigation', async () => {
     const expiredUrl = buildPairUrl({ exp: Math.floor(Date.now() / 1000) - 10 });
     mockScan.mockResolvedValueOnce({ content: expiredUrl });
