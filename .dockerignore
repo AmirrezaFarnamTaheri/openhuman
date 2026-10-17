@@ -22,7 +22,6 @@ dist/
 # CI / docs
 .github/
 docs/
-*.md
 !README.md
 !Cargo.lock
 
@@ -35,8 +34,7 @@ docs/
 .DS_Store
 Thumbs.db
 
-# Tests (not needed in build context)
-tests/
+# Cargo validates declared test targets; Rust also embeds Markdown assets.
 scripts/
 # Re-include the Docker entrypoint for the core image (Dockerfile COPYs it).
 # Re-include the parent directory first so older Docker pattern matchers that

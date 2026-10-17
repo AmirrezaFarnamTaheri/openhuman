@@ -583,8 +583,8 @@ jobs:
       # When uploading to a GH Release: push .deb / .AppImage / .msi / .exe
       # and their .sig siblings to the release. macOS goes through the
       # re-sign + notarize path below and uploads separately.
-      - name: Upload non-macOS installers to release
-        if: inputs.with_release_upload && matrix.settings.platform != 'macos-latest'
+      - name: Upload installers to release
+        if: inputs.with_release_upload && (matrix.settings.platform != 'macos-latest' || !inputs.with_macos_signing)
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -602,6 +602,7 @@ jobs:
           for root in "${BUNDLE_ROOTS[@]}"; do
             [ -d "$root" ] || continue
             for f in \
+              "$root"/dmg/*.dmg \
               "$root"/deb/*.deb \
               "$root"/appimage/*.AppImage \
               "$root"/appimage/*.AppImage.sig \
@@ -620,7 +621,7 @@ jobs:
           fi
           echo "Uploading:"
           printf '  %s\n' "${UPLOAD[@]}"
-          gh release upload "$TAG" "${UPLOAD[@]}" --repo tinyhumansai/openhuman --clobber
+          gh release upload "$TAG" "${UPLOAD[@]}" --repo "$GITHUB_REPOSITORY" --clobber
 
       # ---- macOS sign / notarize / repackage --------------------------------
       - name: Locate macOS .app bundle
@@ -687,6 +688,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ inputs.release_id }}
+          UPLOAD_REPO: ${{ github.repository }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY || secrets.UPDATER_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || secrets.UPDATER_PRIVATE_KEY_PASSWORD }}
         run: |

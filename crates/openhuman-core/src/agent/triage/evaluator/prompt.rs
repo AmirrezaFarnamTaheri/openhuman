@@ -73,6 +73,9 @@ pub(super) fn format_parse_error(err: &ParseError) -> String {
     match err {
         ParseError::NoJsonObject => "classifier reply had no JSON object".to_string(),
         ParseError::InvalidJson(src) => format!("classifier JSON invalid: {src}"),
+        ParseError::WrongTarget { action, expected } => {
+            format!("action `{action}` requires target_agent `{expected}`")
+        }
         ParseError::MissingTarget { action } => {
             format!("action `{action}` missing required target_agent/prompt")
         }
@@ -88,3 +91,7 @@ pub(crate) fn truncate_payload(payload: &serde_json::Value, max_bytes: usize) ->
     let end = crate::util::floor_char_boundary(&pretty, max_bytes);
     format!("{}\n[...truncated {dropped} bytes]", &pretty[..end])
 }
+
+#[cfg(test)]
+#[path = "prompt_tests.rs"]
+mod tests;
