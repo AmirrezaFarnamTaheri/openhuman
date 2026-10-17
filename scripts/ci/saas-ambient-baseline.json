@@ -421,14 +421,14 @@
   },
   {
     "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/cron/scheduler_gate/throttle.rs",
+    "path": "crates/openhuman-core/src/platform/llm_gate/throttle.rs",
     "line": 140,
     "text": "tokio::spawn(async move {",
     "occurrence": 1
   },
   {
     "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/cron/scheduler_gate/throttle.rs",
+    "path": "crates/openhuman-core/src/platform/llm_gate/throttle.rs",
     "line": 145,
     "text": "let signals = match tokio::task::spawn_blocking(move || signals::sample(&env)).await {",
     "occurrence": 1

@@ -145,7 +145,7 @@ async fn inference_gate_reports_signed_out_for_dynamic_agent_ref_only_graph() {
     //
     // Built as a struct literal for that reason: `graph()` would reject it,
     // and going through `graph()` would only prove the rule above twice.
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(true);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(true);
 
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
@@ -291,7 +291,7 @@ async fn proposal_omits_inference_status_for_tool_call_only_graph() {
 /// negative-cache test below (through `cached_probe_inference_readiness`).
 #[tokio::test]
 async fn flows_run_fails_cleanly_without_invoking_engine_when_inference_not_ready() {
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(true);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(true);
 
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
@@ -357,7 +357,7 @@ async fn flows_run_fails_cleanly_without_invoking_engine_when_inference_not_read
 #[tokio::test]
 async fn local_agent_flow_is_ready_without_openhuman_session() {
     let _inference = crate::inference::inference_test_guard_async().await;
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(true);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(true);
     let tmp = TempDir::new().unwrap();
     let mut config = test_config(&tmp);
     config.chat_provider = Some("omlx:test-model".into());
@@ -381,7 +381,7 @@ async fn local_agent_flow_is_ready_without_openhuman_session() {
 #[tokio::test]
 async fn claude_agent_flow_readiness_does_not_require_an_openhuman_session() {
     let _inference = crate::inference::inference_test_guard_async().await;
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(true);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(true);
     // Isolate the caller's session classification from CLI installation/auth
     // and provider availability. Layer 1 must still reject managed inference
     // even while the Layer 2 probe has an injected model.
@@ -452,7 +452,7 @@ fn harness_readiness_uses_runtime_role_and_node_override() {
 #[tokio::test]
 async fn harness_readiness_checks_session_for_execution_provider() {
     let _inference = crate::inference::inference_test_guard_async().await;
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(true);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(true);
     let _model =
         crate::inference::provider::factory::test_provider_override::install_model(Arc::new(
             tinyagents_harness::testkit::ScriptedModel::replies(vec!["OK"]),

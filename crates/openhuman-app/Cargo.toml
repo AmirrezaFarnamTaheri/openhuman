@@ -311,6 +311,25 @@ tinyinference-voice = { path = "../../vendor/tinyagents/vendor/tinyinference/cra
 # `Connection`) instead of a second one compiled only for the storage wire types.
 tinybus = { path = "../../vendor/tinybus/crates/tinybus" }
 
+[patch."https://github.com/tinyhumansai/tinystoragedrivers"]
+# One editable checkout every module resolves onto: each vendor/tiny* manifest
+# names tinystoragedrivers by git tag, and this redirects them all to
+# vendor/tinystoragedrivers. This reverses #7754's removal of the patch on
+# purpose. The vendored commit must stay semver-compatible with the tag modules
+# declare; scripts/ci/check-storage-owner.mjs enforces that every tsd package
+# resolves to a path under vendor/tinystoragedrivers/. tinystoragedrivers-tinybus
+# is left out: nothing here depends on it, and an unused patch warns. Add it with
+# the first dependent. The app world does not link the mongodb or s3 drivers, so
+# those are omitted here too (the root patch carries them).
+tinystoragedrivers = { path = "../../vendor/tinystoragedrivers/crates/tinystoragedrivers" }
+tinystoragedrivers-bus = { path = "../../vendor/tinystoragedrivers/crates/tinystoragedrivers-bus" }
+tinystoragedrivers-busproxy = { path = "../../vendor/tinystoragedrivers/crates/tinystoragedrivers-busproxy" }
+tinystoragedrivers-client = { path = "../../vendor/tinystoragedrivers/crates/tinystoragedrivers-client" }
+tinystoragedrivers-core = { path = "../../vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
+tinystoragedrivers-file = { path = "../../vendor/tinystoragedrivers/crates/tinystoragedrivers-file" }
+tinystoragedrivers-secrets = { path = "../../vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
+tinystoragedrivers-sqlite = { path = "../../vendor/tinystoragedrivers/crates/tinystoragedrivers-sqlite" }
+
 [patch.crates-io]
 # Keep reqwest defaults disabled in this independent Cargo world too. Without
 # this patch, the registry release reintroduces native-tls/OpenSSL on Linux.

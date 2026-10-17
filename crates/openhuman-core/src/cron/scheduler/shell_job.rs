@@ -3,7 +3,7 @@
 
 use crate::config::Config;
 use crate::security::SecurityPolicy;
-use tinyflows_schedule::types::CronJob;
+use tinyflows_bus::schedule::types::CronJob;
 use tokio::time::Duration;
 
 pub(super) const SHELL_JOB_TIMEOUT_SECS: u64 = 120;

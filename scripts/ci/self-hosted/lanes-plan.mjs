@@ -160,7 +160,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
   };
   const modulesDir = ex63
     ? `${scratch}/test-modules`
-    : "/opt/openhuman-test-modules/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}";
+    : "/tmp/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}";
   // EX63 lanes share one workspace and can run concurrently. Each lane's
   // native fixture directory and env-file are separate: the installer removes
   // and recreates per-module directories, which must never race another lane.
@@ -198,6 +198,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           name: "rust-layout",
           when: core,
           run: "node scripts/ci/check-openhuman-rust-layout.mjs",
+        },
+        {
+          // tinystoragedrivers owns every storage backend; reads cargo
+          // metadata for the root workspace and the app crate.
+          name: "storage-owner",
+          when: rust,
+          run: "node scripts/ci/check-storage-owner.mjs",
         },
         {
           name: "agent-runtime-boundary",
@@ -510,7 +517,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             " --features modules,mcp,e2e-test-support --lib --" +
             " modules::runtime:: modules::registry:: modules::storage_grant_tinywallet::" +
             " modules::storage_grant_tinyconnectors::" +
-            " mcp::server::resources:: test_support::introspect::",
+            " cron::bus_host::tests:: cron::documents_port::tests::" +
+            " mcp::server::resources:: test_support::introspect:: --test-threads=1",
         },
         {
           name: "kernel-floor",
@@ -588,9 +596,20 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           needs: ["test-modules"],
           run: withModules(
             `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
-            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join(""),
+            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join("") +
+            " --skip cron::bus_host::tests:: --skip cron::documents_port::tests::",
             "storage-drivers"
           ),
+        },
+        {
+          // TinyFlows owns a process-global module host during these tests.
+          // Keep them out of the broad storage test process, where unrelated
+          // cron tests can replace handlers while a callback is executing.
+          name: "cron-module-tests",
+          when: areas.storage,
+          run:
+            `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
+            " cron::bus_host::tests:: cron::documents_port::tests:: --test-threads=1",
         },
         {
           name: "storage-session-store-tests",

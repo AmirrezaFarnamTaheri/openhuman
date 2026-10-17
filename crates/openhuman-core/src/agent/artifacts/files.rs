@@ -77,6 +77,11 @@ impl FileRoots {
         &self.current
     }
 
+    /// Every vouched-for folder: [`Self::current`] and the trusted ones.
+    pub fn trusted(&self) -> &[PathBuf] {
+        &self.trusted
+    }
+
     /// Whether `root` is one of the vouched-for folders, compared canonically
     /// where the paths exist.
     fn trusts(&self, root: &Path) -> bool {

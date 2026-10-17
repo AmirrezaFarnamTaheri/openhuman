@@ -123,6 +123,7 @@ mod storage_import_tinymcp;
 mod storage_import_tinywallet;
 #[cfg(feature = "modules")]
 pub mod tinybox;
+pub(crate) mod tinyflows;
 #[cfg(feature = "modules")]
 mod tokenjuice_host;
 pub mod types;
@@ -170,7 +171,10 @@ pub use types::{LoadPolicy, ModuleRecord, ModuleSource, ModuleState, ModuleStatu
 /// Imports tinymcp's legacy SQLite files under `data_dir` into the module's
 /// storage, once per directory. Never fails the caller: an error is logged and
 /// the import is retried at the next open.
-pub async fn import_legacy_mcp(ctx: &crate::core::runtime::DispatchCtx, data_dir: &std::path::Path) {
+pub async fn import_legacy_mcp(
+    ctx: &crate::core::runtime::DispatchCtx,
+    data_dir: &std::path::Path,
+) {
     #[cfg(feature = "modules")]
     match storage_import_tinymcp::import_legacy(ctx, data_dir).await {
         Ok(outcome) => log::debug!("[mcp] legacy storage import: {outcome:?}"),

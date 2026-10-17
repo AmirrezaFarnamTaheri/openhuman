@@ -6,7 +6,7 @@ use std::sync::Arc;
 #[tokio::test]
 async fn independent_local_runtime_does_not_need_an_account_session() {
     let _guard = crate::inference::inference_test_guard_async().await;
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(true);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(true);
     run_in_session(CancellationToken::new(), async { Ok(()) })
         .await
         .unwrap();
@@ -85,7 +85,7 @@ async fn clear_session_invalidates_old_channels_and_opens_a_fresh_generation() {
         config_path: tmp.path().join("config.toml"),
         ..Default::default()
     };
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(false);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(false);
     let old_session = channel_session();
     crate::security::credentials::ops::clear_session(&DispatchCtx::process_default(), &config)
         .await

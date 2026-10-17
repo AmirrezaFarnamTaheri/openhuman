@@ -150,6 +150,16 @@
     "verification": "modules/runtime_tests.rs: the_module_bus_is_a_singleton_and_serves_proxies"
   },
   {
+    "file": "crates/openhuman-core/src/threads/artifact_rows.rs",
+    "scope": "",
+    "name": "ARTIFACT_ROW_HANDLE",
+    "type": "OnceLock<SubscriptionHandle>",
+    "count": 1,
+    "category": "A",
+    "reason": "Keeps the one process-wide event-bus subscription that writes artifact rows alive and makes registration idempotent; it holds no data, and each event names the workspace and thread its row is written to.",
+    "verification": "threads/artifact_rows_tests.rs: recording_an_artifact_twice_writes_one_row"
+  },
+  {
     "file": "crates/openhuman-core/src/tinymemes/callbacks.rs",
     "scope": "",
     "name": "REGISTRY",

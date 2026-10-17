@@ -213,7 +213,7 @@ pub async fn set_credential(
         } else {
             spawn_integrations_cache_warm(config);
         }
-        crate::cron::scheduler_gate::set_signed_out(false);
+        crate::platform::llm_gate::set_signed_out(false);
         #[cfg(feature = "channels")]
         crate::channels::session::resume_channel_service();
         tracing::info!(
@@ -344,7 +344,7 @@ pub async fn set_credential(
 
     // Open the scheduler gate now that a live credential is in place; workers
     // sleeping in the paused poll loop resume at their next iteration.
-    crate::cron::scheduler_gate::set_signed_out(false);
+    crate::platform::llm_gate::set_signed_out(false);
     #[cfg(feature = "channels")]
     crate::channels::session::resume_channel_service();
     // An API key wins over a session for every backend request. Keep the
@@ -460,7 +460,7 @@ pub async fn clear_credential(
             logs.push("api key cleared".to_string());
         }
         if !crate::security::credentials::session_support::has_backend_credential(config) {
-            crate::cron::scheduler_gate::set_signed_out(true);
+            crate::platform::llm_gate::set_signed_out(true);
         } else if removed_api_key {
             // Clearing the preferred API key exposes the surviving session.
             // Restore the session's process identity immediately.
@@ -484,7 +484,7 @@ pub async fn clear_credential(
     // restore the surviving key's runtime after that teardown has completed.
     if removed_session && api_key::has_api_key(config) {
         start_credential_gated_services(ctx, config).await;
-        crate::cron::scheduler_gate::set_signed_out(false);
+        crate::platform::llm_gate::set_signed_out(false);
         sentry_scope::clear();
         identity::clear_current_user();
         logs.push("credential-gated services restarted for api key".to_string());
@@ -513,7 +513,7 @@ async fn clear_session_credential(
     config: &Config,
 ) -> Result<Outcome<bool>, String> {
     let mut logs = Vec::new();
-    crate::cron::scheduler_gate::set_signed_out(true);
+    crate::platform::llm_gate::set_signed_out(true);
     #[cfg(feature = "web3")]
     if let Err(error) = crate::modules::web3_service::close_service(config).await {
         tracing::warn!(%error, "{LOG_PREFIX} failed to close Web3 service during sign-out");

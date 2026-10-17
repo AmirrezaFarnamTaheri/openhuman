@@ -180,7 +180,7 @@ jobs:
         env:
           E2E_USE_TAURI_DRIVER: "1"
         run: |
-          export XDG_DATA_HOME="$(mktemp -d /tmp/openhuman-e2e-xdg.XXXXXX)"
+          export XDG_DATA_HOME="$(mktemp -d /root/openhuman-e2e-xdg.XXXXXX)"
           chmod 700 "$XDG_DATA_HOME"
           bash scripts/ci-cancel-aware.sh \
             xvfb-run -a --server-args="-screen 0 1280x960x24" \
@@ -292,7 +292,9 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: ghcr.io/tinyhumansai/openhuman_ci:latest
-    timeout-minutes: 30
+    # The chat, skills, and journeys shard exceeded 30 minutes on a hosted
+    # runner. Give full-suite shards the same cold-cache budget as the build.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -364,7 +366,7 @@ jobs:
         run: |
           # Stage all native capabilities under a trusted tree, including
           # release manifests for confidential wallet and channel calls.
-          module_root="/opt/openhuman-test-modules/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          module_root="/root/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           bash scripts/ci/self-hosted/install-test-modules.sh \
             "$module_root" "$module_root/modules.env"
           cat "$module_root/modules.env" >> "$GITHUB_ENV"
@@ -417,7 +419,9 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: ghcr.io/tinyhumansai/openhuman_ci:latest
-    timeout-minutes: 30
+    # Run every Rust integration E2E suite even when the hosted container is
+    # cold; the prior 30-minute limit cancelled this lane before completion.
+    timeout-minutes: 60
     env:
       CARGO_INCREMENTAL: "0"
       RUST_BACKTRACE: "1"
@@ -460,14 +464,14 @@ jobs:
         run: |
           # Keep fixtures in a trusted tree and resolve their verified releases
           # from the same registry the product uses.
-          module_root="/opt/openhuman-test-modules/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          module_root="/root/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           bash scripts/ci/self-hosted/install-test-modules.sh \
             "$module_root" "$module_root/modules.env"
           cat "$module_root/modules.env" >> "$GITHUB_ENV"
 
       - name: Run Rust E2E suite (tests/*_e2e.rs vs mock backend)
         run: |
-          export XDG_DATA_HOME="$(mktemp -d /tmp/openhuman-rust-e2e-xdg.XXXXXX)"
+          export XDG_DATA_HOME="$(mktemp -d /root/openhuman-rust-e2e-xdg.XXXXXX)"
           chmod 700 "$XDG_DATA_HOME"
           bash scripts/ci-cancel-aware.sh pnpm test:rust:e2e
 
@@ -883,7 +887,7 @@ jobs:
         env:
           E2E_BAIL_ON_FAILURE: ${{ vars.E2E_BAIL_ON_FAILURE || '' }}
         run: |
-          export XDG_DATA_HOME="$(mktemp -d /tmp/openhuman-e2e-xdg.XXXXXX)"
+          export XDG_DATA_HOME="$(mktemp -d /root/openhuman-e2e-xdg.XXXXXX)"
           chmod 700 "$XDG_DATA_HOME"
           BAIL_FLAG=""
           if [[ "${E2E_BAIL_ON_FAILURE:-}" == "1" ]]; then

@@ -183,8 +183,8 @@ pub fn status(config: &Config) -> ImportState {
 /// The scheduler's pause, which includes being signed out.
 pub(crate) fn scheduler_paused() -> bool {
     matches!(
-        crate::cron::scheduler_gate::current_policy(),
-        crate::cron::scheduler_gate::Policy::Paused { .. }
+        crate::platform::llm_gate::current_policy(),
+        crate::platform::llm_gate::Policy::Paused { .. }
     )
 }
 

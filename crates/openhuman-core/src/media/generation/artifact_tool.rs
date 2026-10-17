@@ -1,20 +1,18 @@
 //! [`MediaArtifactTool`] — wraps a media-generation [`Tool`] (TinyAgents'
 //! `GenerateImageTool` / `GenerateVideoTool`, boxed in `super::tools`) so
-//! every file the inner tool saves is also tracked as an OpenHuman artifact,
-//! following the pattern `tools/impl/document/mod.rs` and
-//! `tools/impl/presentation/mod.rs` use for their own producers
-//! (`create_artifact` → write bytes → `finalize_artifact`/`fail_artifact`).
+//! every file the inner tool saves is also filed as a versioned OpenHuman
+//! artifact, through the same [`Production`] flow the document and
+//! presentation producers use.
 //!
 //! The inner tool writes bytes to its `MediaOutput` blob store and reports
 //! each blob key in its JSON result's `artifacts` array
 //! (`{"type": "image"|"video", "path", "media_type"|"format", "bytes"}`, see
 //! `tinyagents_harness::media::{GenerateImageTool, GenerateVideoTool}`). Host
 //! adapters may also report absolute file paths. This wrapper runs the inner
-//! tool unchanged, then for every reported output:
-//! reserves an artifact via `create_artifact_for_call` (recording the
-//! provider-assigned tool-call id so `ArtifactPending`/`Ready`/`Failed`
-//! correlate with the tool-call bubble, #C5), moves the file into the
-//! artifact's reserved path, and finalizes it — or fails just that one
+//! tool unchanged, then for every reported output: starts a [`Production`]
+//! (recording the provider-assigned tool-call id so the card correlates with
+//! the tool-call bubble, #C5), stores the blob or file into the artifact's
+//! reserved path, and completes it — or fails just that one
 //! artifact and annotates its entry with `artifact_error`, without
 //! disturbing the others (`n > 1` generations are common for images). On
 //! success each entry gains an `artifact_id` field so the model (and the
@@ -22,7 +20,7 @@
 //! tool's JSON/markdown result shape is preserved byte-for-byte.
 //!
 //! A run with no context (`execute`/`execute_with_options`, e.g. CLI/tests)
-//! still creates artifacts — `create_artifact_for_call` simply records no
+//! still creates artifacts — the production simply records no
 //! `tool_call_id` and the chat-context bridge in `agent/artifacts/store.rs`
 //! degrades to `thread_id = None` as it already does for every other
 //! producer.
@@ -38,9 +36,8 @@ use tinytools::{
 };
 use tokio::io::AsyncWriteExt;
 
-use crate::agent::artifacts::{
-    create_artifact_for_call, fail_artifact, finalize_artifact, ArtifactKind,
-};
+use crate::agent::artifacts::production::Production;
+use crate::agent::artifacts::ArtifactKind;
 use crate::security::approval::ApprovalChatContext;
 use crate::tools::host_extensions::tool_call_id;
 use tinyagents_harness::tinyinference_video::ProgressFn;
@@ -245,80 +242,74 @@ impl<T: Tool> MediaArtifactTool<T> {
             .unwrap_or("bin")
             .to_string();
         let title = Self::artifact_title(args, index, total);
-        let (meta, dest) = match create_artifact_for_call(
+        let kind = match self.kind {
+            ArtifactKind::Image => tiny_artifacts::ArtifactKind::Image,
+            _ => tiny_artifacts::ArtifactKind::File,
+        };
+        // Reserve the file in the files folder (the card shows
+        // "generating…", tied to this tool call's bubble) and open the
+        // versioned artifact under the same id.
+        let production = match Production::start(
             &self.workspace_dir,
-            &self.files_dir,
-            self.kind.clone(),
+            self.files_dir.clone(),
+            kind,
             &title,
             &ext,
             call_id,
+            None,
             chat,
         )
         .await
         {
-            Ok(pair) => pair,
+            Ok(production) => production,
             Err(err) => {
                 tracing::warn!(
                     target: "media_generation",
                     err = %err,
-                    "[media_generation] create_artifact failed; generated file left unfiled"
+                    "[media_generation] could not open the artifact; generated file left unfiled"
                 );
                 set_artifact_error(entry, &err);
                 return None;
             }
         };
+        let dest = production.path().to_path_buf();
         let stored = if src.is_absolute() {
             move_or_copy(src, &dest).await
         } else {
             self.file_blob(src, &dest).await
         };
-        match stored {
-            Ok(size_bytes) => {
-                let canonical = dest.canonicalize().ok();
-                let filed_path = canonical.as_deref().unwrap_or(&dest).display().to_string();
-                if let Some(obj) = entry.as_object_mut() {
-                    obj.insert("path".into(), json!(filed_path));
+        if let Err(err) = stored {
+            production.fail(&err).await;
+            tracing::warn!(
+                target: "media_generation",
+                err = %err,
+                artifact_id = %production.id(),
+                "[media_generation] failed to file generated media as an artifact"
+            );
+            set_artifact_error(entry, &err);
+            return None;
+        }
+        let canonical = dest.canonicalize().ok();
+        let filed_path = canonical.as_deref().unwrap_or(&dest).display().to_string();
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("path".into(), json!(filed_path));
+        }
+        // The stored file becomes the artifact's first version; the card turns
+        // ready from that record.
+        match self.complete_and_discard_blob(&production, src).await {
+            Ok(_) => {
+                if let (Some(allowed), Some(canonical)) = (&self.allowed_references, canonical) {
+                    allowed
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .insert(canonical);
                 }
-                match self
-                    .finalize_and_discard_blob(&meta.id, size_bytes, chat, src)
-                    .await
-                {
-                    Ok(updated) => {
-                        if let (Some(allowed), Some(canonical)) =
-                            (&self.allowed_references, canonical)
-                        {
-                            allowed
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                .insert(canonical);
-                        }
-                        if let Some(obj) = entry.as_object_mut() {
-                            obj.insert("artifact_id".into(), json!(updated.id));
-                        }
-                    }
-                    Err(err) => {
-                        let _ = fail_artifact(
-                            &self.workspace_dir,
-                            &self.files_dir,
-                            &meta.id,
-                            &err,
-                            chat,
-                        )
-                        .await;
-                        set_artifact_error(entry, &err);
-                    }
+                if let Some(obj) = entry.as_object_mut() {
+                    obj.insert("artifact_id".into(), json!(production.id()));
                 }
                 Some(filed_path)
             }
             Err(err) => {
-                let _ =
-                    fail_artifact(&self.workspace_dir, &self.files_dir, &meta.id, &err, chat).await;
-                tracing::warn!(
-                    target: "media_generation",
-                    err = %err,
-                    artifact_id = %meta.id,
-                    "[media_generation] failed to file generated media as an artifact"
-                );
                 set_artifact_error(entry, &err);
                 None
             }
@@ -342,17 +333,16 @@ impl<T: Tool> MediaArtifactTool<T> {
         }
     }
 
-    async fn finalize_and_discard_blob(
+    /// Complete `production` and only then discard its source blob, so a
+    /// failed completion leaves the blob for a retry.
+    async fn complete_and_discard_blob(
         &self,
-        artifact_id: &str,
-        size_bytes: u64,
-        chat: Option<&ApprovalChatContext>,
+        production: &Production,
         src: &Path,
-    ) -> Result<crate::agent::artifacts::ArtifactMeta, String> {
-        let finalized =
-            finalize_artifact(&self.workspace_dir, artifact_id, size_bytes, chat).await?;
+    ) -> Result<u64, String> {
+        let size = production.complete().await?;
         self.delete_blob_after_finalize(src).await;
-        Ok(finalized)
+        Ok(size)
     }
 
     /// Rehydrates finalized media paths after a session rebuild. Only Ready

@@ -18,8 +18,8 @@ use crate::web_chat::{publish_web_channel_event, WebChannelEvent};
 use anyhow::{anyhow, Result};
 use std::path::Path;
 use {
-    crate::cron::channel_bridge, tinyflows_schedule::types::CronJob,
-    tinyflows_schedule::types::DeliveryStatus, tinyflows_schedule::types::JobOrigin,
+    crate::cron::channel_bridge, tinyflows_bus::schedule::types::CronJob,
+    tinyflows_bus::schedule::types::DeliveryStatus, tinyflows_bus::schedule::types::JobOrigin,
 };
 
 /// What a scheduled run replies when it has nothing worth sending.

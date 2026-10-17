@@ -164,13 +164,16 @@ pub fn all_tools_with_runtime(
     tools.append(&mut vec![
         // Task & productivity tools (issue: agent-tool expansion).
         // Read/observe + bounded-write tools are registered here; the
-        // destructive/overextending siblings (artifact_delete,
+        // destructive/overextending siblings (delete_artifact,
         // task_source_add/update/remove) are registered too but ship
         // default-OFF via `tools::user_filter` (their toggle IDs default off
         // in onboarding). The per-call permission ladder still gates them.
     ]);
-    tools.extend(crate::agent::artifacts::tools::registered_tools(
-        config.clone(),
+    tools.extend(crate::agent::artifacts::tiny_store::registered_tools(
+        &config.workspace_dir,
+        crate::agent::artifacts::FileRoots::from_config(&config),
+        action_dir,
+        crate::integrations::file_storage::artifact_publisher(&config),
     ));
     tools.extend(crate::integrations::task_sources::tools::registered_tools(
         config.clone(),

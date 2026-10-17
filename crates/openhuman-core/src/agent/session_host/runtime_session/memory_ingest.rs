@@ -167,6 +167,10 @@ impl OpenHumanTurnPrelude {
             identity,
             thread_id,
             pack,
+            in_prompt_from: Arc::new(crate::memory::lifecycle::window::InPromptFrom::new(
+                in_prompt_from,
+                user_index,
+            )),
             core: self.host_env.core.clone(),
         }))
     }

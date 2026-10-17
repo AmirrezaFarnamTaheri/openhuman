@@ -347,6 +347,7 @@ pub(crate) async fn bootstrap_core_runtime(
         // (The approval/plan-review surface bridge is registered unconditionally
         // above — it must run even when this gate-install branch is skipped.)
         crate::web_chat::register_artifact_surface_subscriber();
+        crate::threads::artifact_rows::register_artifact_row_subscriber();
     } else {
         log::info!(
             "[runtime] approval gate DISABLED (OPENHUMAN_APPROVAL_GATE=0 honored on host={}) — \
@@ -365,6 +366,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // sets OPENHUMAN_APPROVAL_GATE=0 (CR #3328947323 on PR #3026). Idempotent
     // (OnceLock-guarded inside register_artifact_surface_subscriber).
     crate::web_chat::register_artifact_surface_subscriber();
+    crate::threads::artifact_rows::register_artifact_row_subscriber();
     // Memory-activity surface bridges DomainEvent::MemoryStored/Recalled onto
     // the web channel's `memory_activity` event (C5) — same unconditional
     // placement rationale as the bridges above. Idempotent (OnceLock-guarded).

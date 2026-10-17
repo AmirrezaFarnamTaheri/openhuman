@@ -337,8 +337,22 @@ async fn keeps_source_blob_when_artifact_finalization_fails() {
     )
     .with_blobs(Arc::clone(&blobs));
 
+    // An artifact whose file is gone cannot be completed.
+    let production = crate::agent::artifacts::production::Production::start(
+        &tool.workspace_dir,
+        tool.files_dir.clone(),
+        tiny_artifacts::ArtifactKind::Image,
+        "Finalize failure",
+        "png",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let _ = std::fs::remove_file(production.path());
     let error = tool
-        .finalize_and_discard_blob("missing-artifact", 11, None, Path::new(key))
+        .complete_and_discard_blob(&production, Path::new(key))
         .await
         .unwrap_err();
 
