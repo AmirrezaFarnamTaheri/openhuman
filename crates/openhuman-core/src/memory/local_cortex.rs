@@ -35,6 +35,8 @@ fn launch_args(key: &str) -> Vec<String> {
         CONTAINER,
         "--restart",
         "unless-stopped",
+        "--label",
+        "openhuman.managed=memory",
         "--publish",
         "127.0.0.1:3141:3141",
         "--volume",
@@ -158,7 +160,15 @@ pub async fn ensure_running(config: &Config) -> MemoryResult<String> {
             15,
         )
         .await?;
-        if !String::from_utf8_lossy(&image.stdout).trim().starts_with("cortexdb/cortexdb:") {
+        let label = checked(
+            &docker_bin,
+            &["container", "inspect", "--format", "{{index .Config.Labels \"openhuman.managed\"}}", CONTAINER],
+            15,
+        )
+        .await?;
+        if !String::from_utf8_lossy(&image.stdout).trim().starts_with("cortexdb/cortexdb:")
+            || String::from_utf8_lossy(&label.stdout).trim() != "memory"
+        {
             return Err(MemoryError::Unavailable(
                 "Another container already uses the local memory name".to_string(),
             ));
@@ -181,7 +191,7 @@ pub async fn ensure_running(config: &Config) -> MemoryResult<String> {
     } else {
         // Preserve a credential already configured for CortexDB. Using a new
         // password here would silently break switching back to a cloud endpoint.
-        let key = engine::read_cortexdb_key(config)
+        let key = engine::read_managed_cortexdb_key(config)
             .map_err(|_| MemoryError::Unavailable("Could not read the memory credential".to_string()))?
             .unwrap_or_else(|| format!("oh-{}", uuid::Uuid::new_v4().simple()));
         let args = launch_args(&key);

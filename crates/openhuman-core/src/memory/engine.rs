@@ -41,7 +41,9 @@ use sha2::{Digest, Sha256};
 use tinymemory_api::MemoryEngine;
 use tinymemory_integrations::{BearerSource, EngineCredential, EngineSettings};
 
-use crate::config::schema::MEMORY_CORTEXDB_KEY_NAME;
+use crate::config::schema::memory::{
+    MEMORY_CORTEXDB_KEY_NAME, MEMORY_CORTEXDB_LOCAL_KEY_NAME,
+};
 use crate::config::Config;
 use crate::security::credentials::session_support::resolve_backend_credential;
 use crate::security::credentials::{AuthService, DEFAULT_AUTH_PROFILE_NAME};
@@ -621,9 +623,27 @@ pub fn invalidate() {
     super::lifecycle::prefetch::invalidate_all();
 }
 
-/// The stored CortexDB API key, if any.
+/// A managed local endpoint is a separate credential identity from the cloud.
+/// Explicit manual endpoints retain the existing shared key for compatibility.
+fn cortex_key_name(config: &Config) -> &'static str {
+    if config.memory.endpoint_for(CORTEXDB_ENGINE).as_deref()
+        == Some(super::local_cortex::MANAGED_ENDPOINT)
+    {
+        MEMORY_CORTEXDB_LOCAL_KEY_NAME
+    } else {
+        MEMORY_CORTEXDB_KEY_NAME
+    }
+}
+
+pub fn read_managed_cortexdb_key(config: &Config) -> anyhow::Result<Option<String>> {
+    AuthService::from_config(config).get_provider_bearer_token(
+        MEMORY_CORTEXDB_LOCAL_KEY_NAME, None,
+    )
+}
+
+/// The current endpoint's CortexDB API key, if any.
 pub fn read_cortexdb_key(config: &Config) -> anyhow::Result<Option<String>> {
-    AuthService::from_config(config).get_provider_bearer_token(MEMORY_CORTEXDB_KEY_NAME, None)
+    AuthService::from_config(config).get_provider_bearer_token(cortex_key_name(config), None)
 }
 
 /// Stores the CortexDB API key in the credential store (never in config).
@@ -634,7 +654,7 @@ pub fn store_cortexdb_key(config: &Config, key: &str) -> MemoryResult<()> {
     }
     AuthService::from_config(config)
         .store_provider_token(
-            MEMORY_CORTEXDB_KEY_NAME,
+            cortex_key_name(config),
             DEFAULT_AUTH_PROFILE_NAME,
             key,
             HashMap::new(),
@@ -645,10 +665,10 @@ pub fn store_cortexdb_key(config: &Config, key: &str) -> MemoryResult<()> {
     Ok(())
 }
 
-/// Removes the stored CortexDB API key.
+/// Removes the current endpoint's CortexDB API key.
 pub fn clear_cortexdb_key(config: &Config) -> MemoryResult<bool> {
     AuthService::from_config(config)
-        .remove_profile(MEMORY_CORTEXDB_KEY_NAME, DEFAULT_AUTH_PROFILE_NAME)
+        .remove_profile(cortex_key_name(config), DEFAULT_AUTH_PROFILE_NAME)
         .map_err(|error| MemoryError::Engine(format!("removing the API key failed: {error}")))
 }
 
