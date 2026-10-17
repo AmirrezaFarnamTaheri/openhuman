@@ -474,21 +474,18 @@ function ChatComposerBody({
             {/* Human is a separate, stable action; Send and Stop retain one purpose. */}
             {onOpenHumanMode && (
               <Button
-                              type="button"
-                              iconOnly
-                              variant="tertiary"
-                              size="xs"
-                              analyticsId="chat-composer-human-mode"
-                              data-testid="human-mode-button"
-                              aria-label={t('composer.humanMode')}
-                              title={t('composer.humanMode')}
-                              onClick={() => {
-                                debug('[chat-composer] human-mode click');
-                                onOpenHumanMode?.();
-                              }}
-                              className={COMPOSER_SEND}>
-                              <HumanModeIcon />
-                            </Button>
+                type="button"
+                iconOnly
+                variant="tertiary"
+                size="xs"
+                analyticsId="chat-composer-human-mode"
+                data-testid="human-mode-button"
+                aria-label={t('composer.humanMode')}
+                title={t('composer.humanMode')}
+                onClick={onOpenHumanMode}
+                className={COMPOSER_SEND}>
+                <HumanModeIcon />
+              </Button>
             )}
             {showStopButton ? (
               <Button
