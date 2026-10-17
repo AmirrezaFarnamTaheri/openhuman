@@ -13,6 +13,7 @@ const HANDLERS: &[(&str, crate::core::all::ControllerHandler)] = &[
     ("engines_list", handlers::engines_list),
     ("engine_get", handlers::engine_get),
     ("engine_set", handlers::engine_set),
+    ("local_start", handlers::local_start),
     ("policy_get", handlers::policy_get),
     ("policy_set", handlers::policy_set),
     ("pack_preview", handlers::pack_preview),

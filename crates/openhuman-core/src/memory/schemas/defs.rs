@@ -2,10 +2,11 @@
 //! (`openhuman.memory_*`, see `docs/specs/memory-v2.md`).
 
 /// Every function of the namespace, in spec order.
-pub const FUNCTIONS: [&str; 35] = [
+pub const FUNCTIONS: [&str; 36] = [
     "engines_list",
     "engine_get",
     "engine_set",
+    "local_start",
     "policy_get",
     "policy_set",
     "pack_preview",
@@ -58,6 +59,15 @@ use common::req;
 /// `unknown` placeholder, as every namespace does.
 pub fn schema(function: &str) -> ControllerSchema {
     engine::schema(function)
+        .or_else(|| {
+            (function == "local_start").then_some(ControllerSchema {
+                namespace: "memory",
+                function: "local_start",
+                description: "Start app-managed local CortexDB through Docker and use it as the memory engine. No endpoint or key required.",
+                inputs: vec![],
+                outputs: common::out("Same as memory_engine_get."),
+            })
+        })
         .or_else(|| policy::schema(function))
         .or_else(|| retrieval::schema(function))
         .or_else(|| conversations::schema(function))

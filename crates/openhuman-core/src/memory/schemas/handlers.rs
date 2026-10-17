@@ -16,7 +16,9 @@ use crate::memory::types::{
     SourceRemovedView, SourcesAddParams, SourcesListView, SourcesRemoveParams, SourcesSyncParams,
     SourcesSyncView,
 };
-use crate::memory::{backfill, brain, engine, import, layout_migration, ops, sources};
+use crate::memory::{
+    backfill, brain, engine, import, layout_migration, local_cortex, ops, sources,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -127,7 +129,27 @@ pub(super) fn engine_set(ctx: DispatchCtx, params: Map<String, Value>) -> Contro
     })
 }
 
-pub(super) fn recall(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+pub(super) fn local_start(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        parse::<EmptyParams>(params)?;
+        let mut config = load(&ctx).await?;
+        let key = local_cortex::ensure_running(&config)
+            .await
+            .map_err(|error| error.to_string())?;
+        let params = EngineSetParams {
+            engine: engine::CORTEXDB_ENGINE.to_string(),
+            endpoint: Some(local_cortex::MANAGED_ENDPOINT.to_string()),
+            api_key: Some(key),
+        };
+        ops::apply_engine_set(&mut config, &params).map_err(|error| error.to_string())?;
+        config.components.memory = true;
+        save(&config).await.map_err(|error| error.to_string())?;
+        engine::invalidate();
+        to_json(ops::engine_get(&config).await)
+    })
+}
+
+
     rpc::<RecallParams, _>(
         ctx,
         params,
