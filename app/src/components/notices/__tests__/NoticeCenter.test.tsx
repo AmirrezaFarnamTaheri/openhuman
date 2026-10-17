@@ -105,6 +105,18 @@ describe('NoticeCenter', () => {
     expect(within(panel).getByText('API key required')).toBeInTheDocument();
   });
 
+  it('moves focus into opened notices and restores it to the trigger on close', async () => {
+    renderCenter([keyError]);
+    const trigger = screen.getByTestId('notice-trigger');
+
+    await userEvent.click(trigger);
+    expect(screen.getByTestId('notice-close')).toHaveFocus();
+
+    await userEvent.click(screen.getByTestId('notice-close'));
+    expect(screen.queryByTestId('notice-panel')).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
   it('raises the usage limit as a notice that cannot be dismissed at the limit', async () => {
     usageState.teamUsage = { plan: 'free' };
     usageState.isAtLimit = true;
