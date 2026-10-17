@@ -27,3 +27,14 @@ test('memory administration screens are not eagerly parsed by Explorer', () => {
   }
   assert.match(memory, /<Suspense fallback=/);
 });
+
+test('Connections does not parse provider management panels before they are selected', () => {
+  for (const component of [
+    'ComposioPanel', 'ComputerPanel', 'EmbeddingsPanel', 'LiveVoicePanel',
+    'LlmConnectionsPanel', 'SearchPanel', 'ToolsPanel', 'UsagePanel',
+    'VoiceConnectionsPanel', 'WalletPanel',
+  ]) {
+    assert.doesNotMatch(connections, new RegExp('^import ' + component + '[ ,]','m'));
+    assert.match(connections, new RegExp('const ' + component + ' = lazy\\(\\(\\) => import\\('));
+  }
+});

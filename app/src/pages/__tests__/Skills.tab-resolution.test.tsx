@@ -171,10 +171,10 @@ describe('Connections ?tab= resolution — canonical values', () => {
     }
   );
 
-  it('?tab=desktop resolves to the Computer tab', async () => {
+  it('?tab=desktop resolves to the lazy-loaded Computer tab', async () => {
     renderAt('?tab=desktop');
     expect(await selectedTab()).toBe('computer');
-    expect(screen.getByTestId('tab-body-computer')).toBeInTheDocument();
+    expect(await screen.findByTestId('tab-body-computer')).toBeInTheDocument();
   });
 
   it('?tab=welcome renders the landing overview', async () => {
