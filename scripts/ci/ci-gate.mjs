@@ -3,8 +3,7 @@
 // soon as ANY of the PR CI flows passes, and then cancels the GitHub-hosted
 // runs still working on that commit.
 //
-// Run by .github/workflows/ci-gate.yml on each `workflow_run` (requested and
-// completed) of the active flows below. That workflow runs from the default branch
+// Run by .github/workflows/ci-gate.yml on completion of either active flow. That workflow runs from the default branch
 // and never checks out PR code; this script only reads run and job state
 // through the API and writes a commit status.
 //
@@ -32,11 +31,23 @@ export const SOURCES = [
     workflow: "ci-fast-hosted.yml",
     name: "CI Fast (hosted)",
     job: "Lanes / CI Fast (hosted) Gate",
+    alternateJobs: ["Fork PR lanes (hosted) / CI Fast (hosted) Gate"],
     hosted: true,
   },
 ];
 
 const PR_EVENTS = new Set(["pull_request", "pull_request_target"]);
+
+/**
+ * Reusable workflows inherit a caller-job prefix in the Checks API. The
+ * upstream "Lanes" caller and the fork's "Fork PR lanes (hosted)" caller
+ * both require the same gate; neither a successful routing job nor an
+ * unrelated job may stand in for it.
+ */
+export function findDecisiveJob(source, jobs) {
+  const names = new Set([source.job, ...(source.alternateJobs ?? [])]);
+  return jobs.find(job => names.has(job.name)) ?? null;
+}
 
 function log(msg) {
   console.log(`[ci-gate] ${msg}`);
@@ -141,11 +152,10 @@ async function collect(repo, sha) {
     );
     if (jobs.status !== 200)
       throw new Error(`list jobs of run ${run.id}: HTTP ${jobs.status}`);
-    const job =
-      (jobs.data.jobs ?? []).find((j) => j.name === source.job) ?? null;
+    const job = findDecisiveJob(source, jobs.data.jobs ?? []);
     log(
       `${source.name}: run=${run.id} status=${run.status} conclusion=${run.conclusion} ` +
-        `job="${source.job}" ${job ? `${job.status}/${job.conclusion}` : "absent"}`,
+        `job="${job?.name ?? source.job}" ${job ? `${job.status}/${job.conclusion}` : "absent"}`,
     );
     entries.push({ source, run, job });
   }
