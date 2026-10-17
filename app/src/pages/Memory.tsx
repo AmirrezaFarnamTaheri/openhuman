@@ -87,7 +87,8 @@ export default function Memory() {
   const rawChip = params.get('brain');
   const requested = resolveMemoryChip(rawChip);
   const on = isMemoryOn(engine);
-  const chip: MemoryChip | null = requested ?? (engine ? 'engine' : null);
+  const defaultChip: MemoryChip = on ? 'explorer' : 'engine';
+  const chip: MemoryChip | null = requested ?? (engine ? defaultChip : null);
 
   const setChip = useCallback(
     (next: MemoryChip, replace = false) => {
@@ -108,9 +109,9 @@ export default function Memory() {
       if (requested !== rawChip) setChip(requested, true);
     } else if (engine) {
       // Unknown value: land on the default chip once it is known.
-      setChip('explorer', true);
+      setChip(defaultChip, true);
     }
-  }, [rawChip, requested, engine, setChip]);
+  }, [rawChip, requested, engine, defaultChip, setChip]);
 
   const headers: Record<MemoryChip, { title: string; description: string }> = {
     engine: { title: t('memoryPage.tabs.engine'), description: t('memoryPage.header.engine') },
