@@ -103,6 +103,7 @@ const AIPanel = ({
   const [editing, setEditing] = useState<CloudProvider | 'new' | null>(null);
   // Which workload's "Custom" dialog is currently open (null = closed).
   const [pickerFor, setPickerFor] = useState<WorkloadId | null>(null);
+  const [showChatActivationHint, setShowChatActivationHint] = useState(false);
   // Which provider slug's API-key dialog is currently open (null = closed).
   const [keyDialogFor, setKeyDialogFor] = useState<string | null>(null);
   // When the user toggles LM Studio / Ollama (local runtimes), we need to
@@ -138,6 +139,7 @@ const AIPanel = ({
     onConnected: () => {
       setKeyDialogFor(null);
       setPendingLocalLabel(null);
+      setShowChatActivationHint(true);
     },
   });
 
@@ -248,6 +250,19 @@ const AIPanel = ({
                   addOpen={addProviderOpen}
                   onAddOpenChange={onAddProviderOpenChange}
                 />
+                {showChatActivationHint && (
+                  <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-subtle bg-surface-muted px-4 py-3 text-sm text-content">
+                    <span>{t('settings.ai.providerConnectedRoutingHint', 'Provider connected. Choose which model your chats should use.')}</span>
+                    <button type="button" className="rounded-md bg-content px-3 py-2 font-medium text-surface"
+                      onClick={() => {
+                        setShowChatActivationHint(false);
+                        handleTabChange('routing');
+                        setPickerFor('chat');
+                      }}>
+                      {t('settings.ai.chooseChatModel', 'Choose chat model')}
+                    </button>
+                  </div>
+                )}
                 {!loading && (
                   <details className="mt-4 rounded-xl border border-border-subtle p-3">
                     <summary className="cursor-pointer text-sm font-medium text-content">
