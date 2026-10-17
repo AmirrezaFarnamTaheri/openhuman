@@ -205,6 +205,8 @@ describe('MemoryEngineTab', () => {
       fireEvent.click(screen.getByTestId('memory-engine-auto-local'));
 
       expect(await screen.findByTestId('memory-engine-auto-local-error')).toHaveTextContent('Docker');
+      fireEvent.click(screen.getByTestId('memory-auto-local-help'));
+      expect(hoisted.openUrl).toHaveBeenCalledWith('https://docs.docker.com/get-docker/');
     });
   });
 
