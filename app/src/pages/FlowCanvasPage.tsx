@@ -10,12 +10,12 @@
  *  - **Save persistence** — `onSave` runs `flows_update(id, { graph })`. NO
  *    autosave: a saved+enabled flow is live, so an accidental save would fire
  *    real schedules. Save is only ever the explicit button in the canvas.
- *  - **Unsaved-changes guard** — the canvas reports its dirty state up via
- *    `onDirtyChange`; while dirty we (a) warn on a hard tab close/reload via
- *    `beforeunload`, and (b) intercept the in-page Back button with a confirm
- *    dialog. (App-wide route interception would need a data router; this app
- *    mounts a `HashRouter`, so full `useBlocker` interception isn't available —
- *    the Back button is this page's only in-app navigation affordance.)
+ *  - **Unsaved-changes guard** — the canvas reports its dirty state via
+ *    `onDirtyChange`. While dirty, `beforeunload` protects hard reloads,
+ *    `FlowNavigationBlocker` intercepts in-app route changes through the
+ *    app's hash-based data router, and the local Back button uses the same
+ *    discard confirmation. Saving a new draft deliberately bypasses blocking
+ *    only after persistence succeeds.
  */
 import type { Viewport } from '@xyflow/react';
 import createDebug from 'debug';
@@ -1530,8 +1530,8 @@ export default function FlowCanvasPage() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [loadAttempt, setLoadAttempt] = useState(0);
-  // The app sidebar is hidden entirely on this route via App's `chromeless`
-  // check, so the builder owns the full viewport — nothing to do here.
+  // The editor stays inside the regular app shell; its dynamic sidebar
+  // projects the run history without duplicating the application's navigation.
   // "Fix with agent" (Phase 5c) navigates here with a repair seed in
   // `location.state` so the copilot opens preloaded with the failed run.
   const copilotSeed = useMemo(() => asCopilotRepairSeed(location.state), [location.state]);
