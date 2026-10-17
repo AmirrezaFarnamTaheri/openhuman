@@ -258,6 +258,7 @@ memory.
 | `memory_engines_list` | `{}` | `{engines: EngineDescriptor[], active: string\|null}` |
 | `memory_engine_get` | `{}` | `{engine, endpoint?, has_key, status: "ok"\|"degraded"\|"down"\|"off", reason?, fetch_modes}` |
 | `memory_engine_set` | `{engine, endpoint?, api_key?}` | same as `engine_get` |
+| `memory_local_start` | `{}` | start/reuse an app-owned localhost CortexDB Docker container and select it; same as `engine_get` |
 | `memory_policy_get` | `{}` | `{log_conversations, recall: {enabled, budget_tokens, learnings_limit, brain_limit, history_limit, team_limit, build_beliefs_every, pre_turn_timeout_ms, compaction_timeout_ms, build_delay_secs}, root, agent_id, host_bound}` |
 | `memory_policy_set` | `{log_conversations?, recall_enabled?, budget_tokens?, learnings_limit?, brain_limit?, history_limit?, team_limit?, build_beliefs_every?, pre_turn_timeout_ms?}` | same as `policy_get`; unknown keys refused |
 | `memory_pack_preview` | `{query?, thread_id?, agent_id?}` | `{agent_id, root, mode: "turn"\|"session", pack: {markdown, tokens, refs, sections, skipped, engine}}`; reads only |

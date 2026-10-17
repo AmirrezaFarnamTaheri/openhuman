@@ -10,6 +10,10 @@ alongside was deleted on 2026-10-01. The one check to require is **CI Gate**
 | `tinyhumansai` org member | `ci-fast.yml` (`pull_request_target`) | one job on a throwaway Firecracker microVM on the Hetzner EX63            |
 | anyone else               | `ci-fast-hosted.yml` (`pull_request`) | the same lanes split over GitHub-hosted jobs, with GitHub's Actions cache |
 
+On `AmirrezaFarnamTaheri/openhuman`, hosted PR lanes run directly; the
+upstream-only organization-membership routing job is skipped. The external
+runner gate in `ci-fast.yml` likewise never runs for a fork.
+
 Both call `.github/workflows/ci-lanes.yml`, which runs
 `scripts/ci/self-hosted/lanes.mjs`. The plan itself is in
 `scripts/ci/self-hosted/lanes-plan.mjs`, and

@@ -7,7 +7,8 @@
  *
  *   engine · migration · ask · explorer · learnings · conversations · brain · background · settings
  *
- * With no `?brain=` the page opens on the Provider (engine) chip. Retired
+ * With no `?brain=` the page opens on memory Explorer when available or
+ * Provider (engine) when disabled. Advanced chips are disclosed on request. Retired
  * values (v1's `graph`, `goals`, `sources`, `sync`, `history`; v2's
  * `documents` and `context`) are rewritten to their current chip. While
  * memory is off every chip but Engine shows an empty state that points there.
