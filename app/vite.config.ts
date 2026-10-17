@@ -7,6 +7,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { nodePolyfills } from "vite-plugin-node-polyfills";
+import { shouldGenerateSourcemaps } from "./scripts/build-sourcemaps.mjs";
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -275,10 +276,10 @@ export default defineConfig(async () => ({
     // truthy but not callable. Vite calls it both in the modulepreload
     // polyfill and the dynamic-import preload helper, before React mounts.
     modulePreload: false,
-    // Emit source maps so @sentry/vite-plugin can upload them; the plugin
-    // deletes the on-disk .map files after upload so users don't receive
-    // them in the shipped bundle.
-    sourcemap: true,
+    // The default production build should not emit large .map artifacts.
+    // Sentry builds retain them for upload (the plugin deletes them after
+    // upload), and debugging builds may explicitly opt in.
+    sourcemap: shouldGenerateSourcemaps(),
   },
   plugins: [
     nodePolyfills({
