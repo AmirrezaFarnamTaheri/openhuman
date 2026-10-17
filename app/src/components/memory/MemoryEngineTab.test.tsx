@@ -166,6 +166,23 @@ describe('MemoryEngineTab', () => {
     expect(screen.queryByTestId('memory-engines-soon')).not.toBeInTheDocument();
   });
 
+  it('allows managed local setup directly from the Local tab even with a signed-in account', async () => {
+    hoisted.localStart.mockResolvedValue({
+      ...LOCAL_ON,
+      endpoint: 'http://127.0.0.1:3141',
+    });
+    const { onStateChange } = renderTab(BUILTIN_ON);
+
+    pick('selfhost');
+    fireEvent.click(screen.getByTestId('memory-engine-dialog-auto-local'));
+
+    await waitFor(() => expect(hoisted.localStart).toHaveBeenCalledOnce());
+    expect(onStateChange).toHaveBeenCalledWith({
+      ...LOCAL_ON,
+      endpoint: 'http://127.0.0.1:3141',
+    });
+  });
+
   it('presents managed localhost memory without an endpoint to copy', () => {
     renderTab({
       engine: 'cortexdb',
