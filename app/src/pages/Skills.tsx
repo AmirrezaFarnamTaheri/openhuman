@@ -1,5 +1,5 @@
 import { Brain, Check, ChevronRight, Info, MessageSquare } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { renderChannelIcon } from '../components/channels/channelIcon';
@@ -65,7 +65,9 @@ import type { ToastNotification } from '../types/intelligence';
 import { IS_DEV } from '../utils/config';
 import { isLocalSessionToken } from '../utils/localSession';
 import { openhumanComposioGetMode } from '../utils/tauriCommands';
-import Memory from './Memory';
+// The Memory workspace imports nine powerful editor/explorer views. Do not
+// force every Connections/Apps visit to parse it or its sub-feature tree.
+const Memory = lazy(() => import('./Memory'));
 
 /** Small inline icon helper for the Connections sidebar nav. */
 const navIcon = (d: string) => (
@@ -1214,7 +1216,13 @@ export default function Skills() {
             {activeTab === 'mcp' ? (
               <McpServersPage />
             ) : activeTab === 'brain' ? (
-              <Memory />
+              <Suspense fallback={
+                <div role="status" className="text-sm text-content-muted" data-testid="connections-memory-loading">
+                  {t('memoryPage.loading')}
+                </div>
+              }>
+                <Memory />
+              </Suspense>
             ) : (
               <SkillsPage onToast={addToast} />
             )}
