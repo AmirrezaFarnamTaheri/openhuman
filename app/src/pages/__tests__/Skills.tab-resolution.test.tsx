@@ -193,3 +193,19 @@ describe('Connections ?tab= resolution — default and fallback', () => {
     expect(screen.queryByTestId('connections-welcome')).not.toBeInTheDocument();
   });
 });
+
+describe('Connections progressive navigation', () => {
+  it('keeps advanced destinations available without showing them all by default', async () => {
+    renderAt('?tab=composio');
+    expect(screen.queryByTestId('two-pane-nav-wallet')).not.toBeInTheDocument();
+    const showAll = screen.getByRole('button', { name: /show all connections/i });
+    showAll.click();
+    expect(screen.getByTestId('two-pane-nav-wallet')).toBeInTheDocument();
+  });
+
+  it('keeps an advanced tab visible when opened through a direct link', async () => {
+    renderAt('?tab=wallet');
+    expect(await selectedTab()).toBe('wallet');
+    expect(screen.getByTestId('two-pane-nav-wallet')).toBeInTheDocument();
+  });
+});
