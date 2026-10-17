@@ -14,6 +14,15 @@ test('no obsolete single-use or disabled package-build workflows remain register
   }
 });
 
+test('soft PR checklist and coverage checks share one checkout without losing either check', () => {
+  const quality = readFileSync(path('.github/workflows/pr-quality.yml'), 'utf8');
+  assert.match(quality, /metadata-checks:/);
+  assert.doesNotMatch(quality, /^  checklist-guard:/m);
+  assert.doesNotMatch(quality, /^  coverage-matrix:/m);
+  assert.match(quality, /name: Verify Submission Checklist/);
+  assert.match(quality, /name: Verify Coverage Matrix/);
+});
+
 test('release, PR, security and platform gates are preserved after consolidation', () => {
   for (const file of [
     '.github/workflows/ci-full.yml',
