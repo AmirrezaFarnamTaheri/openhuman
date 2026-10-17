@@ -6,7 +6,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import BrainRedirect from './components/routing/BrainRedirect';
 import ForwardSearch from './components/routing/ForwardSearch';
-import HumanPage from './features/human/HumanPage';
 import RouteLoadingScreen from './components/RouteLoadingScreen';
 import { getIsMobile } from './lib/platform';
 import Accounts from './pages/Accounts';
@@ -14,10 +13,6 @@ import AgentInsightsPreview from './pages/dev/AgentInsightsPreview';
 import AssistantUiDemoPage from './pages/dev/assistant-ui-demo';
 import ToolCallGallery from './pages/dev/ToolCallGallery';
 import UiGallery from './pages/dev/UiGallery';
-import Invites from './pages/Invites';
-import Notifications from './pages/Notifications';
-import Onboarding from './pages/onboarding/Onboarding';
-import { PttOverlayPage } from './pages/PttOverlayPage';
 import WebCallbackPage from './pages/WebCallbackPage';
 import Welcome from './pages/Welcome';
 import { IS_DEV } from './utils/config';
@@ -26,6 +21,13 @@ import { IS_DEV } from './utils/config';
 // every initial chat/Welcome bundle. React Router keeps the URL and auth
 // boundary stable while Suspense provides an accessible loading state.
 const AppRoutesIOS = lazy(() => import('./AppRoutesIOS'));
+const HumanPage = lazy(() => import('./features/human/HumanPage'));
+const Onboarding = lazy(() => import('./pages/onboarding/Onboarding'));
+const Invites = lazy(() => import('./pages/Invites'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const PttOverlayPage = lazy(() =>
+  import('./pages/PttOverlayPage').then(module => ({ default: module.PttOverlayPage }))
+);
 const Activity = lazy(() => import('./pages/Activity'));
 const FlowsPage = lazy(() => import('./pages/FlowsPage'));
 const Skills = lazy(() => import('./pages/Skills'));
