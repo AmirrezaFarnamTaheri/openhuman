@@ -63,6 +63,14 @@ test("a skipped decisive job is not a pass: an outsider's CI Fast run is pending
   assert.equal(verdict.description, "Waiting on CI Fast (hosted)");
 });
 
+test("an upstream routing-only completion remains pending until fork hosted CI starts", () => {
+  const verdict = decide([
+    entry(EX63, 1, "completed", "success", null),
+  ]);
+  assert.equal(verdict.state, "pending");
+  assert.match(verdict.description, /hosted CI/);
+});
+
 test("an EX63 failure waits for hosted CI instead of failing early", () => {
   const verdict = decide([
     entry(EX63, 1, "completed", "failure", {
