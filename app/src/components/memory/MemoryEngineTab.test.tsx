@@ -166,6 +166,22 @@ describe('MemoryEngineTab', () => {
     expect(screen.queryByTestId('memory-engines-soon')).not.toBeInTheDocument();
   });
 
+  it('presents managed localhost memory without an endpoint to copy', () => {
+    renderTab({
+      engine: 'cortexdb',
+      endpoint: 'http://127.0.0.1:3141',
+      has_key: true,
+      status: 'ok',
+      fetch_modes: ['hybrid'],
+    });
+    expect(screen.getByTestId('memory-engine-connected-selfhost')).toHaveTextContent(
+      'Memory on this computer'
+    );
+    expect(screen.getByTestId('memory-engine-connected-selfhost')).not.toHaveTextContent(
+      '127.0.0.1:3141'
+    );
+  });
+
   describe('automatic local memory', () => {
     it('offers one-click local memory to people using the app without sign-in', async () => {
       hoisted.signedIn = false;
