@@ -108,7 +108,7 @@ export default function Memory() {
       if (requested !== rawChip) setChip(requested, true);
     } else if (engine) {
       // Unknown value: land on the default chip once it is known.
-      setChip('engine', true);
+      setChip('explorer', true);
     }
   }, [rawChip, requested, engine, setChip]);
 

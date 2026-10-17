@@ -37,6 +37,7 @@ interface PageWelcomeExtraItem {
 }
 
 interface UsePageWelcomeViewOptions {
+  defaultView?: 'welcome' | 'main';
   /** Accessible label for the sidebar nav. */
   ariaLabel: string;
   /** Label for the Welcome entry. */
@@ -77,7 +78,7 @@ export function usePageWelcomeView(opts: UsePageWelcomeViewOptions): PageWelcome
   );
 
   const raw = new URLSearchParams(location.search).get('view') ?? '';
-  const view: PageWelcomeViewId = validViews.has(raw) ? raw : 'welcome';
+  const view: PageWelcomeViewId = validViews.has(raw) ? raw : (opts.defaultView ?? 'welcome');
 
   const setView = useCallback(
     (v: PageWelcomeViewId) => {

@@ -248,7 +248,14 @@ const AIPanel = ({
                   addOpen={addProviderOpen}
                   onAddOpenChange={onAddProviderOpenChange}
                 />
-                {!loading && <ModelFleetPanel settings={draft} persist={persist} />}
+                {!loading && (
+                  <details className="mt-4 rounded-xl border border-border-subtle p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-content">
+                      Advanced model and API key management
+                    </summary>
+                    <div className="mt-3"><ModelFleetPanel settings={draft} persist={persist} /></div>
+                  </details>
+                )}
                 {isDirty && (
                   <SaveBar
                     diffSummary={diffSummary}

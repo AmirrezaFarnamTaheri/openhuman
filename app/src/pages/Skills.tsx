@@ -591,8 +591,8 @@ export default function Skills() {
     if (raw === 'voice-agent' || raw === 'live-voice') return 'voice-agents';
     // Browser and Desktop are sub-tabs of Computer now.
     if (raw === 'browser' || raw === 'desktop') return 'computer';
-    // Default landing is the Welcome overview for the Connections page.
-    return 'welcome';
+    // Put the main integrations list first; Welcome remains accessible explicitly.
+    return 'composio';
   }, [location.search]);
 
   // `?section=` picks Computer's sub-tab; the legacy `?tab=browser|desktop`
