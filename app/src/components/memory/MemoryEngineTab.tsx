@@ -43,6 +43,7 @@ import {
   memoryErrorMessage,
 } from '../../services/api/memoryApi';
 import { isLocalSessionToken } from '../../utils/localSession';
+import { openUrl } from '../../utils/openUrl';
 import { Alert, AlertDescription, AlertTitle, Button } from '../ui';
 import { CenteredLoadingState } from '../ui/LoadingState';
 import { ModalShell } from '../ui/ModalShell';
@@ -256,7 +257,12 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
         description: t('memoryPage.engine.selfHost.title'),
       });
     } catch (err) {
-      setAutoLocalError(memoryErrorMessage(err, t));
+      setAutoLocalError(
+        `${memoryErrorMessage(err, t)} ${t(
+          'memoryPage.engine.autoLocalTroubleshoot',
+          'Start Docker Desktop (or Docker Engine) and make sure port 3141 is available.'
+        )}`
+      );
     } finally {
       setAutoLocalBusy(false);
     }
@@ -403,7 +409,17 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
           </div>
           {autoLocalError && (
             <Alert variant="destructive" data-testid="memory-engine-auto-local-error">
-              <AlertDescription>{autoLocalError}</AlertDescription>
+              <AlertDescription>
+                <span>{autoLocalError}</span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="tertiary"
+                  data-testid="memory-auto-local-help"
+                  onClick={() => void openUrl('https://docs.docker.com/get-docker/')}>
+                  {t('memoryPage.engine.autoLocalHelp', 'Install or start Docker')}
+                </Button>
+              </AlertDescription>
             </Alert>
           )}
         </div>
