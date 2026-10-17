@@ -48,6 +48,13 @@ import {
 
 const log = debug('openhuman:memory');
 
+// The navigation favors tasks a user can perform. Engine, migration and
+// background tuning remain one click away and always show when deep-linked.
+const MEMORY_NAV_ORDER: readonly MemoryChip[] = [
+  'explorer', 'ask', 'learnings', 'conversations', 'brain',
+  'engine', 'migration', 'background', 'settings',
+];
+
 export default function Memory() {
   const { t } = useT();
   const location = useLocation();
@@ -56,6 +63,7 @@ export default function Memory() {
   const authUserId = snapshot.auth.userId;
 
   const [engine, setEngine] = useState<EngineState | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [engines, setEngines] = useState<EngineDescriptor[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -143,6 +151,13 @@ export default function Memory() {
     },
   };
 
+  const everydayChips: readonly MemoryChip[] = on
+    ? ['explorer', 'ask', 'learnings', 'conversations', 'brain']
+    : ['engine', 'migration'];
+  const visibleChips = MEMORY_NAV_ORDER.filter(
+    id => showAdvanced || everydayChips.includes(id) || id === chip
+  );
+
   const activeLabel = isMemoryDisabled(engine)
     ? t('memoryPage.engine.disabled.title')
     : (engines.find(e => e.id === engine?.engine)?.label ?? engine?.engine ?? t('nav.brain'));
@@ -196,17 +211,20 @@ export default function Memory() {
       <SettingsTabbedPage<MemoryChip>
         title={t('nav.brain')}
         description={headers[chip ?? 'engine'].description}
-        tabs={[
-          { id: 'engine', label: t('memoryPage.tabs.engine') },
-          { id: 'migration', label: t('memoryPage.tabs.migration') },
-          { id: 'ask', label: t('memoryPage.tabs.ask') },
-          { id: 'explorer', label: t('memoryPage.tabs.explorer') },
-          { id: 'learnings', label: t('memoryPage.tabs.learnings') },
-          { id: 'conversations', label: t('memoryPage.tabs.conversations') },
-          { id: 'brain', label: t('memoryPage.tabs.brain') },
-          { id: 'background', label: t('memoryPage.tabs.background') },
-          { id: 'settings', label: t('memoryPage.tabs.settings') },
-        ]}
+        headerAction={
+          <Button
+            type="button"
+            variant="tertiary"
+            size="xs"
+            data-testid="memory-toggle-advanced"
+            aria-expanded={showAdvanced}
+            onClick={() => setShowAdvanced(value => !value)}>
+            {showAdvanced
+              ? t('memoryPage.advanced.fewer', 'Fewer options')
+              : t('memoryPage.advanced.show', 'Advanced')}
+          </Button>
+        }
+        tabs={visibleChips.map(id => ({ id, label: headers[id].title }))}
         value={chip ?? undefined}
         onChange={next => setChip(next)}
         tabsAriaLabel={t('nav.brain')}
