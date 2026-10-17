@@ -59,6 +59,9 @@ vi.mock('../../components/skills/SkillsExplorerTab', () => ({
 vi.mock('../../components/channels/mcp/McpServersPage', () => ({
   default: () => <div data-testid="tab-body-mcp-servers" />,
 }));
+vi.mock('../../components/skills/SkillsPage', () => ({
+  default: () => <div data-testid="tab-body-installed-skills" />,
+}));
 vi.mock('../Memory', () => ({
   default: () => <div data-testid="tab-body-memory" />,
 }));
@@ -198,6 +201,19 @@ describe('Connections ?tab= resolution — default and fallback', () => {
 });
 
 describe('Connections progressive navigation', () => {
+  it('loads the full MCP manager only when the MCP tab is opened', async () => {
+    renderAt('?tab=mcp');
+    expect(await selectedTab()).toBe('mcp');
+    expect(await screen.findByTestId('tab-body-mcp-servers')).toBeInTheDocument();
+  });
+
+  it('loads the installed Skills manager only when the Skills tab is opened', async () => {
+    renderAt('?tab=skills');
+    expect(await selectedTab()).toBe('skills');
+    expect(await screen.findByTestId('tab-body-installed-skills')).toBeInTheDocument();
+  });
+
+
   it('does not render Memory on ordinary Apps visits and opens it on demand', async () => {
     renderAt('?tab=composio');
     expect(screen.queryByTestId('tab-body-memory')).not.toBeInTheDocument();
