@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { renderChannelIcon } from '../components/channels/channelIcon';
 import ChannelSetupModal from '../components/channels/ChannelSetupModal';
-import McpServersPage from '../components/channels/mcp/McpServersPage';
+
 import ComposioConnectModal from '../components/composio/ComposioConnectModal';
 import {
   composioToolkitMeta,
@@ -42,7 +42,7 @@ import {
   SkillCategoryIcon,
 } from '../components/skills/skillIcons';
 import SkillSearchBar from '../components/skills/SkillSearchBar';
-import SkillsPage from '../components/skills/SkillsPage';
+
 import VoiceSetupModal from '../components/skills/VoiceSetupModal';
 import { Alert, AlertDescription } from '../components/ui/Alert';
 import Badge, { type BadgeVariant } from '../components/ui/Badge';
@@ -68,6 +68,8 @@ import { openhumanComposioGetMode } from '../utils/tauriCommands';
 // The Memory workspace imports nine powerful editor/explorer views. Do not
 // force every Connections/Apps visit to parse it or its sub-feature tree.
 const Memory = lazy(() => import('./Memory'));
+const McpServersPage = lazy(() => import('../components/channels/mcp/McpServersPage'));
+const SkillsPage = lazy(() => import('../components/skills/SkillsPage'));
 
 /** Small inline icon helper for the Connections sidebar nav. */
 const navIcon = (d: string) => (
@@ -1214,7 +1216,9 @@ export default function Skills() {
           // the LLM page does, so they take the pane whole.
           <div className="h-full p-4">
             {activeTab === 'mcp' ? (
-              <McpServersPage />
+              <Suspense fallback={<div role="status" className="text-sm text-content-muted">{t('common.loading')}</div>}>
+                <McpServersPage />
+              </Suspense>
             ) : activeTab === 'brain' ? (
               <Suspense fallback={
                 <div role="status" className="text-sm text-content-muted" data-testid="connections-memory-loading">
@@ -1224,7 +1228,9 @@ export default function Skills() {
                 <Memory />
               </Suspense>
             ) : (
-              <SkillsPage onToast={addToast} />
+              <Suspense fallback={<div role="status" className="text-sm text-content-muted">{t('common.loading')}</div>}>
+                <SkillsPage onToast={addToast} />
+              </Suspense>
             )}
           </div>
         ) : INTELLIGENCE_TABS.has(activeTab) ? (
