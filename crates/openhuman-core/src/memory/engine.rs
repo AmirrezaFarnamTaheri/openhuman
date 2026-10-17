@@ -41,9 +41,7 @@ use sha2::{Digest, Sha256};
 use tinymemory_api::MemoryEngine;
 use tinymemory_integrations::{BearerSource, EngineCredential, EngineSettings};
 
-use crate::config::schema::memory::{
-    MEMORY_CORTEXDB_KEY_NAME, MEMORY_CORTEXDB_LOCAL_KEY_NAME,
-};
+use crate::config::schema::{MEMORY_CORTEXDB_KEY_NAME, MEMORY_CORTEXDB_LOCAL_KEY_NAME};
 use crate::config::Config;
 use crate::security::credentials::session_support::resolve_backend_credential;
 use crate::security::credentials::{AuthService, DEFAULT_AUTH_PROFILE_NAME};
