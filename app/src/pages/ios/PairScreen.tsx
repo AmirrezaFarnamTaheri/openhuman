@@ -215,7 +215,7 @@ export const PairScreen: FC = () => {
           </button>
         )}
 
-        {state.kind === 'idle' && (
+        {(state.kind === 'idle' || state.kind === 'error' || state.kind === 'expired') && (
           <div className="w-full">
             <button type="button" onClick={() => setShowManualPairing(open => !open)}
               aria-expanded={showManualPairing}
