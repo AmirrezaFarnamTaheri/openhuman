@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const root = new URL('../../', import.meta.url);
+const root = new URL('../../../', import.meta.url);
 const read = path => readFileSync(new URL(path, root), 'utf8');
 
 test('fork PRs run hosted lanes directly, with no membership API round trip', () => {
