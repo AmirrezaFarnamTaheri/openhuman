@@ -703,6 +703,11 @@ export function memoryEngineSet(req: EngineSetRequest): Promise<EngineState> {
   return call<EngineState>(CORE_RPC_METHODS.memoryEngineSet, req);
 }
 
+/** One-click desktop-managed CortexDB. Requires a working Docker installation. */
+export function memoryLocalStart(): Promise<EngineState> {
+  return call<EngineState>(CORE_RPC_METHODS.memoryLocalStart);
+}
+
 // ─── Recall / fetch / store ──────────────────────────────────────────────────
 
 export function memoryRecall(req: RecallRequest): Promise<RecallAnswer> {

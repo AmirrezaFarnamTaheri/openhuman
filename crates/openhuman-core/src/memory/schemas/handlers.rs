@@ -19,7 +19,7 @@ use crate::memory::types::{
     SourceRemovedView, SourcesAddParams, SourcesListView, SourcesRemoveParams, SourcesSyncParams,
     SourcesSyncView,
 };
-use crate::memory::{backfill, brain, confine, engine, import, layout_migration, ops, sources};
+use crate::memory::{backfill, brain, confine, engine, import, layout_migration, local_cortex, ops, sources};
 
 fn parse<T: DeserializeOwned>(params: Map<String, Value>) -> Result<T, String> {
     serde_json::from_value(Value::Object(params))
@@ -69,6 +69,26 @@ pub(super) fn engine_set(ctx: DispatchCtx, params: Map<String, Value>) -> Contro
         }
         .await;
         result.map_err(String::from)?;
+        engine::invalidate();
+        to_json(ops::engine_get(&config).await)
+    })
+}
+
+/// Explicit opt-in: prepare the locally owned CortexDB container, then
+/// persist its endpoint and credential using the same engine setter as the UI.
+pub(super) fn local_start(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
+    Box::pin(async move {
+        parse::<EmptyParams>(params)?;
+        let mut config = load(&ctx).await?;
+        let key = local_cortex::ensure_running(&config).await.map_err(String::from)?;
+        let params = EngineSetParams {
+            engine: engine::CORTEXDB_ENGINE.to_string(),
+            endpoint: Some(local_cortex::MANAGED_ENDPOINT.to_string()),
+            api_key: Some(key),
+        };
+        ops::apply_engine_set(&mut config, &params).map_err(String::from)?;
+        config.components.memory = true;
+        save(&config).await.map_err(String::from)?;
         engine::invalidate();
         to_json(ops::engine_get(&config).await)
     })
