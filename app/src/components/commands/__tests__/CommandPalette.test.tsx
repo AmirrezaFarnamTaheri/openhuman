@@ -106,6 +106,24 @@ describe('CommandPalette', () => {
     expect(onOpenSettingsRoute).toHaveBeenCalledWith('privacy');
   });
 
+  it('starts a guided tour only when the user selects Take a tour', async () => {
+    const user = userEvent.setup();
+    localStorage.removeItem('openhuman:walkthrough_pending');
+    const onOpenChange = vi.fn();
+    render(<Harness open={true} onOpenChange={onOpenChange} />);
+
+    expect(localStorage.getItem('openhuman:walkthrough_pending')).toBeNull();
+    await user.type(screen.getByRole('combobox'), 'Take a tour');
+    await user.click(screen.getByTestId('command-start-tour'));
+    await act(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+    });
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(localStorage.getItem('openhuman:walkthrough_pending')).toBe('true');
+    localStorage.removeItem('openhuman:walkthrough_pending');
+  });
+
   it('renders footer hint advertising the in-palette shortcuts key', () => {
     render(<Harness open={true} onOpenChange={() => {}} />);
     // Advertises ⌘/ (works while the search box is focused), not ? (skipped in

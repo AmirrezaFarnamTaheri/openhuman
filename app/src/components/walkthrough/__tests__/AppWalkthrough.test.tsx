@@ -83,6 +83,10 @@ describe('isWalkthroughPending', () => {
     expect(isWalkthroughPending()).toBe(false);
   });
 
+  it('does not force a tour just because the user completed onboarding', () => {
+    expect(isWalkthroughPending(true)).toBe(false);
+  });
+
   it('returns true when pending flag is set and completed flag is not', () => {
     localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'true');
     expect(isWalkthroughPending()).toBe(true);

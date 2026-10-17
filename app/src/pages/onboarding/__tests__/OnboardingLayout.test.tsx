@@ -200,15 +200,16 @@ describe('OnboardingLayout — Joyride walkthrough integration (#1123)', () => {
     expect(mockSetOnboardingCompletedFlag).toHaveBeenCalledWith(true);
   });
 
-  it('sets the walkthrough pending flag in localStorage after completeAndExit', async () => {
+  it('finishes onboarding without interrupting the first chat with a guided tour', async () => {
     await setupLayout();
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('complete-btn'));
     });
 
-    // [#1123] Walkthrough pending flag should be set instead of welcome thread
-    expect(localStorage.getItem('openhuman:walkthrough_pending')).toBe('true');
+    expect(screen.getByTestId('chat-page')).toBeInTheDocument();
+    expect(localStorage.getItem('openhuman:walkthrough_pending')).toBeNull();
+    expect(mockSetWalkthroughPending).not.toHaveBeenCalled();
   });
 
   // [#1123] Old test — welcome thread in Redux state — replaced:
