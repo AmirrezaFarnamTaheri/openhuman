@@ -118,20 +118,53 @@ export function decide(entries) {
   };
 }
 
-async function api(path, { method = "GET", body } = {}) {
+export async function api(path, { method = "GET", body } = {}) {
   const base = process.env.GITHUB_API_URL || "https://api.github.com";
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${process.env.GH_TOKEN}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  return { status: res.status, data: text ? JSON.parse(text) : null };
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${process.env.GH_TOKEN}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    ...(body ? { "Content-Type": "application/json" } : {}),
+  };
+  const payload = body ? JSON.stringify(body) : undefined;
+
+  // GitHub's statuses API can occasionally answer HTTP 500 even after
+  // both CI lanes have completed. Retry only transient responses; permission
+  // and contract failures must remain visible. Duplicate status POSTs are
+  // safe because GitHub uses the latest state for a commit/context pair.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    let res;
+    try {
+      res = await fetch(`${base}${path}`, {
+        method,
+        headers,
+        body: payload,
+      });
+    } catch (error) {
+      if (attempt === 2) throw error;
+      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      continue;
+    }
+
+    const responseText = await res.text();
+    if (
+      [429, 500, 502, 503, 504].includes(res.status) &&
+      attempt < 2
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      continue;
+    }
+    let data = null;
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { message: responseText.slice(0, 200) };
+      }
+    }
+    return { status: res.status, data };
+  }
+  throw new Error("GitHub API retry budget exhausted");
 }
 
 async function collect(repo, sha) {
