@@ -7,7 +7,7 @@ OpenHuman can set up and connect local CortexDB memory without asking users to r
 Open **Connections → Memory → Engine**. On a local session with no working memory engine, select **Start local memory**. OpenHuman calls `memory_local_start`, which:
 
 1. Checks Docker Desktop or Docker Engine is installed and running.
-2. Reuses an existing **OpenHuman-owned** CortexDB container and its stored data, or starts the pinned CortexDB Docker image (`cortexdb/cortexdb:v0.10.2`) on the first request.
+2. Reuses an existing **OpenHuman-owned** CortexDB container and its stored data, or starts the pinned CortexDB Docker image (`cortexdb/cortexdb:v0.10.1`) on the first request.
 3. Binds **only** `127.0.0.1:3141`, provisions a bearer credential and stores it in OpenHuman's credential store.
 4. Waits for the server health endpoint, then selects the local engine in OpenHuman's existing memory configuration.
 

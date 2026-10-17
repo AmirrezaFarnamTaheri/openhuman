@@ -23,7 +23,7 @@ use crate::config::Config;
 use super::engine;
 use super::error::{MemoryError, MemoryResult};
 
-const IMAGE: &str = "cortexdb/cortexdb:v0.10.2";
+const IMAGE: &str = "cortexdb/cortexdb:v0.10.1";
 const CONTAINER: &str = "openhuman-cortexdb";
 pub const MANAGED_ENDPOINT: &str = "http://127.0.0.1:3141";
 

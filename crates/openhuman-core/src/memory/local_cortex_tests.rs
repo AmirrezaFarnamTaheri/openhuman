@@ -8,7 +8,7 @@ fn managed_launch_is_loopback_only_and_persists_storage() {
     assert!(args.windows(2).any(|pair| pair == ["--env", "CORTEX_API_KEY=test-key"]));
     assert!(args.windows(2).any(|pair| pair == ["--restart", "unless-stopped"]));
     assert!(args.windows(2).any(|pair| pair == ["--label", "openhuman.managed=memory"]));
-    assert_eq!(args.last().map(String::as_str), Some("cortexdb/cortexdb:v0.10.2"));
+    assert_eq!(args.last().map(String::as_str), Some("cortexdb/cortexdb:v0.10.1"));
     assert!(!args.iter().any(|value| value == "--network=host" || value == "0.0.0.0:3141:3141"));
 }
 
