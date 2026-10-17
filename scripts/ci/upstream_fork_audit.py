@@ -11,6 +11,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import time
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -34,8 +35,6 @@ class GitHubApi:
     def get(self, path: str) -> Any:
         if not path.startswith("/repos/") or "/../" in path or path.endswith("/.."):
             raise ValueError(f"invalid GitHub API path: {path}")
-        if self.max_requests and self.requests >= self.max_requests:
-            raise RequestBudgetExhausted(f"request budget ({self.max_requests}) exceeded")
         request = Request(
             "https://api.github.com" + path,
             headers={
@@ -45,21 +44,39 @@ class GitHubApi:
                 "User-Agent": "openhuman-upstream-fork-audit/1.0",
             },
         )
-        self.requests += 1
-        try:
-            with urlopen(request, timeout=35) as response:
-                return json.load(response)
-        except HTTPError as exc:
-            if exc.code in {403, 429} and (
-                exc.headers.get("x-ratelimit-remaining") == "0"
-                or exc.headers.get("retry-after")
-            ):
+        # GitHub occasionally disconnects a long-running fork comparison
+        # before it returns headers. Bound retries and count every attempt
+        # against the scan budget; if still unavailable, the caller saves an
+        # INCOMPLETE checkpoint and the next run resumes from it.
+        for attempt in range(3):
+            if self.max_requests and self.requests >= self.max_requests:
                 raise RequestBudgetExhausted(
-                    f"GitHub API rate limit after {self.requests} requests"
-                ) from exc
-            raise RuntimeError(f"GitHub HTTP {exc.code}: {path}") from exc
-        except URLError as exc:
-            raise RuntimeError(f"GitHub API transport failure for {path}: {exc.reason}") from exc
+                    f"request budget ({self.max_requests}) exceeded"
+                )
+            self.requests += 1
+            try:
+                with urlopen(request, timeout=35) as response:
+                    return json.load(response)
+            except HTTPError as exc:
+                if exc.code in {403, 429} and (
+                    exc.headers.get("x-ratelimit-remaining") == "0"
+                    or exc.headers.get("retry-after")
+                ):
+                    raise RequestBudgetExhausted(
+                        f"GitHub API rate limit after {self.requests} requests"
+                    ) from exc
+                if exc.code not in {500, 502, 503, 504}:
+                    raise RuntimeError(f"GitHub HTTP {exc.code}: {path}") from exc
+                problem = f"GitHub HTTP {exc.code}: {path}"
+            except (URLError, OSError) as exc:
+                # http.client.RemoteDisconnected is a ConnectionResetError,
+                # not a URLError, and was escaping as an uncaught traceback.
+                problem = f"GitHub API transport failure for {path}: {exc}"
+            if attempt == 2:
+                raise RequestBudgetExhausted(
+                    f"GitHub temporarily unavailable after {self.requests} requests: {problem}"
+                )
+            time.sleep(2 ** attempt)
 
 
 def enumerate_forks(api: Any, upstream: str) -> dict[str, dict[str, Any]]:
