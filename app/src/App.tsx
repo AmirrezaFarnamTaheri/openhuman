@@ -2,7 +2,8 @@ import * as Sentry from '@sentry/react';
 import { useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
 import {
-  HashRouter as Router,
+  createHashRouter,
+  RouterProvider,
   useLocation,
   useNavigate,
   useNavigationType,
@@ -140,20 +141,7 @@ function App() {
                   <CoreStateProvider>
                     {socketWrapped(
                       <ChatRuntimeProvider>
-                        <Router>
-                          <CommandProvider>
-                            <ServiceBlockingGate>
-                              <AnalyticsPageTracker />
-                              <AppShell />
-                              <SecurityBanner />
-                              {!onMobile && <DictationHotkeyManager />}
-                              {!onMobile && <PttHotkeyManager />}
-                              {!onMobile && <AppUpdatePrompt />}
-                              <KeyringConsentOverlay />
-                              <AnnouncementGate />
-                            </ServiceBlockingGate>
-                          </CommandProvider>
-                        </Router>
+                        <AppDataRouter />
                       </ChatRuntimeProvider>
                     )}
                   </CoreStateProvider>
@@ -165,6 +153,41 @@ function App() {
       </Sentry.ErrorBoundary>
     </div>
   );
+}
+
+/**
+ * Use a hash-based data router so edited workflows can block any client-side
+ * navigation, including sidebar actions, shortcuts, the command palette and
+ * history navigation. A plain HashRouter does not expose useBlocker.
+ *
+ * Lazily create the singleton after the app's hash-bootstrap logic has run.
+ * The router remains outside React state, as required by React Router.
+ */
+let dataRouter: ReturnType<typeof createHashRouter> | null = null;
+
+function AppDataRoutes() {
+  const onMobile = getIsMobile();
+  return (
+    <CommandProvider>
+      <ServiceBlockingGate>
+        <AnalyticsPageTracker />
+        <AppShell />
+        <SecurityBanner />
+        {!onMobile && <DictationHotkeyManager />}
+        {!onMobile && <PttHotkeyManager />}
+        {!onMobile && <AppUpdatePrompt />}
+        <KeyringConsentOverlay />
+        <AnnouncementGate />
+      </ServiceBlockingGate>
+    </CommandProvider>
+  );
+}
+
+function AppDataRouter() {
+  if (dataRouter === null) {
+    dataRouter = createHashRouter([{ path: '/*', element: <AppDataRoutes /> }]);
+  }
+  return <RouterProvider router={dataRouter} />;
 }
 
 /** Minimal mobile shell — renders routes only, no desktop chrome. */
