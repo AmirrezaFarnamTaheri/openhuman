@@ -11,6 +11,7 @@ import MemoryEngineTab, {
 
 const hoisted = vi.hoisted(() => ({
   engineSet: vi.fn(),
+  localStart: vi.fn(),
   openUrl: vi.fn(),
   signedIn: true,
   token: 'header.payload.sig',
@@ -23,6 +24,7 @@ vi.mock('../ui/Toast', () => ({ toast: { add: (...a: unknown[]) => hoisted.toast
 vi.mock('../../services/api/memoryApi', async importOriginal => ({
   ...(await importOriginal<typeof import('../../services/api/memoryApi')>()),
   memoryEngineSet: (...a: unknown[]) => hoisted.engineSet(...a),
+  memoryLocalStart: (...a: unknown[]) => hoisted.localStart(...a),
 }));
 
 vi.mock('./MemoryCortexAnnouncement', () => ({
@@ -76,6 +78,7 @@ const type = (testId: string, value: string) =>
 
 beforeEach(() => {
   hoisted.engineSet.mockReset();
+  hoisted.localStart.mockReset();
   hoisted.openUrl.mockReset().mockResolvedValue(undefined);
   hoisted.signedIn = true;
   hoisted.token = 'header.payload.sig';
@@ -161,6 +164,32 @@ describe('MemoryEngineTab', () => {
     renderWithProviders(<MemoryEngineTab state={OFF} onStateChange={vi.fn()} embedded />);
     expect(screen.getByTestId('memory-engines')).toBeInTheDocument();
     expect(screen.queryByTestId('memory-engines-soon')).not.toBeInTheDocument();
+  });
+
+  describe('automatic local memory', () => {
+    it('offers one-click local memory to people using the app without sign-in', async () => {
+      hoisted.signedIn = false;
+      hoisted.token = createLocalSessionToken();
+      hoisted.localStart.mockResolvedValue(LOCAL_ON);
+      const { onStateChange } = renderTab(OFF);
+
+      fireEvent.click(screen.getByTestId('memory-engine-auto-local'));
+
+      await waitFor(() => expect(hoisted.localStart).toHaveBeenCalledOnce());
+      expect(onStateChange).toHaveBeenCalledWith(LOCAL_ON);
+      expect(screen.queryByTestId('memory-engine-selfhost-endpoint')).not.toBeInTheDocument();
+    });
+
+    it('reports when the local runtime is unavailable instead of asking for an address', async () => {
+      hoisted.signedIn = false;
+      hoisted.token = createLocalSessionToken();
+      hoisted.localStart.mockRejectedValue(new Error('Docker Desktop or Docker Engine is required'));
+      renderTab(OFF);
+
+      fireEvent.click(screen.getByTestId('memory-engine-auto-local'));
+
+      expect(await screen.findByTestId('memory-engine-auto-local-error')).toHaveTextContent('Docker');
+    });
   });
 
   describe('via TinyHumans', () => {
