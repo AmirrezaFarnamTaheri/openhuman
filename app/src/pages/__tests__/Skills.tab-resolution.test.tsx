@@ -59,6 +59,9 @@ vi.mock('../../components/skills/SkillsExplorerTab', () => ({
 vi.mock('../../components/channels/mcp/McpServersPage', () => ({
   default: () => <div data-testid="tab-body-mcp-servers" />,
 }));
+vi.mock('../Memory', () => ({
+  default: () => <div data-testid="tab-body-memory" />,
+}));
 vi.mock('../../components/settings/panels/ComputerPanel', () => ({
   default: () => <div data-testid="tab-body-computer" />,
 }));
@@ -195,6 +198,17 @@ describe('Connections ?tab= resolution — default and fallback', () => {
 });
 
 describe('Connections progressive navigation', () => {
+  it('does not render Memory on ordinary Apps visits and opens it on demand', async () => {
+    renderAt('?tab=composio');
+    expect(screen.queryByTestId('tab-body-memory')).not.toBeInTheDocument();
+  });
+
+  it('renders the Memory feature when its destination is selected', async () => {
+    renderAt('?tab=brain');
+    expect(await selectedTab()).toBe('brain');
+    expect(await screen.findByTestId('tab-body-memory')).toBeInTheDocument();
+  });
+
   it('keeps advanced destinations available without showing them all by default', async () => {
     renderAt('?tab=composio');
     expect(screen.queryByTestId('two-pane-nav-wallet')).not.toBeInTheDocument();
