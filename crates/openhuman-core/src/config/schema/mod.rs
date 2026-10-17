@@ -99,7 +99,7 @@ pub use memes::MemesConfig;
 pub use memory::{
     migrate_legacy_source, MemoryAgentConfig, MemoryConfig, MemoryConversationsConfig,
     MemoryEngineSettings, MemoryLayoutMode, MemoryRecallConfig, MemorySourceConfig,
-    MemorySourceKind, MEMORY_CORTEXDB_KEY_NAME,
+    MemorySourceKind, MEMORY_CORTEXDB_KEY_NAME, MEMORY_CORTEXDB_LOCAL_KEY_NAME,
 };
 pub use modules::{
     module_source_env_for, ModuleOverride, ModuleSourceMode, ModulesConfig, MODULE_SOURCE_ENV,

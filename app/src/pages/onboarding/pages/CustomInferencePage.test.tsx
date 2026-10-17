@@ -111,10 +111,15 @@ describe('CustomInferencePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 
     await waitFor(() => expect(clearSessionMock).toHaveBeenCalledTimes(1));
-    // Give the rejected promise a chance to settle, then confirm we did not
-    // navigate to "/" with a still-active session.
-    await Promise.resolve();
     expect(navigateMock).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('onboarding-back-error')).toHaveTextContent(
+      'Could not go back'
+    );
+
+    // Back stays usable: retry after the transient session failure succeeds.
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/'));
+    expect(screen.queryByTestId('onboarding-back-error')).not.toBeInTheDocument();
   });
 
   it('blocks Continue and shows the hint while the AI panel reports unsaved edits', () => {

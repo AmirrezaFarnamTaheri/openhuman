@@ -1,10 +1,10 @@
 import { Brain, Check, ChevronRight, Info, MessageSquare } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { renderChannelIcon } from '../components/channels/channelIcon';
 import ChannelSetupModal from '../components/channels/ChannelSetupModal';
-import McpServersPage from '../components/channels/mcp/McpServersPage';
+
 import ComposioConnectModal from '../components/composio/ComposioConnectModal';
 import {
   composioToolkitMeta,
@@ -19,16 +19,16 @@ import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
 import { SettingsLayoutProvider } from '../components/settings/layout/SettingsLayoutContext';
 import SettingsTabbedPage from '../components/settings/layout/SettingsTabbedPage';
-import ComposioPanel from '../components/settings/panels/ComposioPanel';
-import ComputerPanel, { type ComputerSection } from '../components/settings/panels/ComputerPanel';
-import EmbeddingsPanel from '../components/settings/panels/EmbeddingsPanel';
-import LiveVoicePanel from '../components/settings/panels/LiveVoicePanel';
-import LlmConnectionsPanel from '../components/settings/panels/LlmConnectionsPanel';
-import SearchPanel from '../components/settings/panels/SearchPanel';
-import ToolsPanel from '../components/settings/panels/ToolsPanel';
-import UsagePanel from '../components/settings/panels/UsagePanel';
-import VoiceConnectionsPanel from '../components/settings/panels/VoiceConnectionsPanel';
-import WalletPanel from '../components/settings/panels/WalletPanel';
+
+import type { ComputerSection } from '../components/settings/panels/ComputerPanel';
+
+
+
+
+
+
+
+
 import UnifiedSkillCard from '../components/skills/SkillCard';
 import {
   SKILL_CATEGORY_LABEL_KEYS,
@@ -42,7 +42,7 @@ import {
   SkillCategoryIcon,
 } from '../components/skills/skillIcons';
 import SkillSearchBar from '../components/skills/SkillSearchBar';
-import SkillsPage from '../components/skills/SkillsPage';
+
 import VoiceSetupModal from '../components/skills/VoiceSetupModal';
 import { Alert, AlertDescription } from '../components/ui/Alert';
 import Badge, { type BadgeVariant } from '../components/ui/Badge';
@@ -65,7 +65,21 @@ import type { ToastNotification } from '../types/intelligence';
 import { IS_DEV } from '../utils/config';
 import { isLocalSessionToken } from '../utils/localSession';
 import { openhumanComposioGetMode } from '../utils/tauriCommands';
-import Memory from './Memory';
+// The Memory workspace imports nine powerful editor/explorer views. Do not
+// force every Connections/Apps visit to parse it or its sub-feature tree.
+const Memory = lazy(() => import('./Memory'));
+const McpServersPage = lazy(() => import('../components/channels/mcp/McpServersPage'));
+const SkillsPage = lazy(() => import('../components/skills/SkillsPage'));
+const ComposioPanel = lazy(() => import('../components/settings/panels/ComposioPanel'));
+const ComputerPanel = lazy(() => import('../components/settings/panels/ComputerPanel'));
+const EmbeddingsPanel = lazy(() => import('../components/settings/panels/EmbeddingsPanel'));
+const LiveVoicePanel = lazy(() => import('../components/settings/panels/LiveVoicePanel'));
+const LlmConnectionsPanel = lazy(() => import('../components/settings/panels/LlmConnectionsPanel'));
+const SearchPanel = lazy(() => import('../components/settings/panels/SearchPanel'));
+const ToolsPanel = lazy(() => import('../components/settings/panels/ToolsPanel'));
+const UsagePanel = lazy(() => import('../components/settings/panels/UsagePanel'));
+const VoiceConnectionsPanel = lazy(() => import('../components/settings/panels/VoiceConnectionsPanel'));
+const WalletPanel = lazy(() => import('../components/settings/panels/WalletPanel'));
 
 /** Small inline icon helper for the Connections sidebar nav. */
 const navIcon = (d: string) => (
@@ -591,8 +605,8 @@ export default function Skills() {
     if (raw === 'voice-agent' || raw === 'live-voice') return 'voice-agents';
     // Browser and Desktop are sub-tabs of Computer now.
     if (raw === 'browser' || raw === 'desktop') return 'computer';
-    // Default landing is the Welcome overview for the Connections page.
-    return 'welcome';
+    // Put the main integrations list first; Welcome remains accessible explicitly.
+    return 'composio';
   }, [location.search]);
 
   // `?section=` picks Computer's sub-tab; the legacy `?tab=browser|desktop`
@@ -682,6 +696,10 @@ export default function Skills() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  const [showAllConnections, setShowAllConnections] = useState(false);
+  const primaryConnections = new Set<ConnectionsTab>([
+    'composio', 'channels', 'mcp', 'skills', 'brain', 'llm', 'voice',
+  ]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<SkillCategory>('All');
   const [hasComposioApiKey, setHasComposioApiKey] = useState<boolean | null>(null);
@@ -1010,6 +1028,15 @@ export default function Skills() {
             ariaLabel={t('nav.connections')}
             selected={activeTab}
             onSelect={value => handleTabChange(value as ConnectionsTab)}
+            header={
+              <button type="button" aria-expanded={showAllConnections}
+                onClick={() => setShowAllConnections(value => !value)}
+                className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-content-muted hover:text-content">
+                {showAllConnections
+                  ? t('connections.navigation.showFewer', 'Show fewer connections')
+                  : t('connections.navigation.showAll', 'Show all connections')}
+              </button>
+            }
             groups={[
               {
                 label: t('connections.groups.integrations'),
@@ -1125,7 +1152,16 @@ export default function Skills() {
                   },
                 ],
               },
-            ]}
+            ]
+              .map(group => ({
+                ...group,
+                items: group.items.filter(item =>
+                  showAllConnections ||
+                  primaryConnections.has(item.value as ConnectionsTab) ||
+                  item.value === activeTab
+                ),
+              }))
+              .filter(group => group.items.length > 0)}
           />
         </div>
       </SidebarContent>
@@ -1190,11 +1226,21 @@ export default function Skills() {
           // the LLM page does, so they take the pane whole.
           <div className="h-full p-4">
             {activeTab === 'mcp' ? (
-              <McpServersPage />
+              <Suspense fallback={<div role="status" className="text-sm text-content-muted">{t('common.loading')}</div>}>
+                <McpServersPage />
+              </Suspense>
             ) : activeTab === 'brain' ? (
-              <Memory />
+              <Suspense fallback={
+                <div role="status" className="text-sm text-content-muted" data-testid="connections-memory-loading">
+                  {t('memoryPage.loading')}
+                </div>
+              }>
+                <Memory />
+              </Suspense>
             ) : (
-              <SkillsPage onToast={addToast} />
+              <Suspense fallback={<div role="status" className="text-sm text-content-muted">{t('common.loading')}</div>}>
+                <SkillsPage onToast={addToast} />
+              </Suspense>
             )}
           </div>
         ) : INTELLIGENCE_TABS.has(activeTab) ? (
@@ -1208,41 +1254,47 @@ export default function Skills() {
                 it), so they skip the Connections-level header + card wrapper. */}
             {SELF_HEADER_TABS.has(activeTab) ? (
               <SettingsLayoutProvider value={{ inTwoPaneShell: true, headerless: true }}>
-                {activeTab === 'llm' && <LlmConnectionsPanel />}
-                {activeTab === 'voice' && <VoiceConnectionsPanel />}
-                {activeTab === 'voice-agents' && <LiveVoicePanel />}
-                {activeTab === 'embeddings' && (
-                  <SettingsTabbedPage
-                    title={t('pages.settings.ai.embeddings')}
-                    description={t('connections.header.embeddings')}>
-                    <EmbeddingsPanel embedded />
-                  </SettingsTabbedPage>
-                )}
-                {activeTab === 'agent-tools' && (
-                  <SettingsTabbedPage
-                    title={t('pages.settings.features.tools')}
-                    description={t('pages.settings.features.toolsDesc')}>
-                    <ToolsPanel bare />
-                  </SettingsTabbedPage>
-                )}
-                {activeTab === 'computer' && (
-                  <ComputerPanel
-                    section={computerSection}
-                    onSectionChange={handleComputerSection}
-                  />
-                )}
-                {/* Search owns its page shell (header switch + chip tabs), like LLM. */}
-                {activeTab === 'search' && <SearchPanel />}
-                {activeTab === 'composio-key' && (
-                  <SettingsTabbedPage
-                    title={t('connections.tabs.composioKey')}
-                    description={t('connections.header.composioKey')}>
-                    <ComposioPanel embedded />
-                  </SettingsTabbedPage>
-                )}
-                {/* Usage owns its page shell (header chip tabs), like LLM. */}
-                {activeTab === 'usage' && <UsagePanel />}
-                {activeTab === 'wallet' && <WalletPanel />}
+                <Suspense fallback={
+                  <div role="status" className="text-sm text-content-muted">
+                    {t('common.loading')}
+                  </div>
+                }>
+                  {activeTab === 'llm' && <LlmConnectionsPanel />}
+                  {activeTab === 'voice' && <VoiceConnectionsPanel />}
+                  {activeTab === 'voice-agents' && <LiveVoicePanel />}
+                  {activeTab === 'embeddings' && (
+                    <SettingsTabbedPage
+                      title={t('pages.settings.ai.embeddings')}
+                      description={t('connections.header.embeddings')}>
+                      <EmbeddingsPanel embedded />
+                    </SettingsTabbedPage>
+                  )}
+                  {activeTab === 'agent-tools' && (
+                    <SettingsTabbedPage
+                      title={t('pages.settings.features.tools')}
+                      description={t('pages.settings.features.toolsDesc')}>
+                      <ToolsPanel bare />
+                    </SettingsTabbedPage>
+                  )}
+                  {activeTab === 'computer' && (
+                    <ComputerPanel
+                      section={computerSection}
+                      onSectionChange={handleComputerSection}
+                    />
+                  )}
+                  {/* Search owns its page shell (header switch + chip tabs), like LLM. */}
+                  {activeTab === 'search' && <SearchPanel />}
+                  {activeTab === 'composio-key' && (
+                    <SettingsTabbedPage
+                      title={t('connections.tabs.composioKey')}
+                      description={t('connections.header.composioKey')}>
+                      <ComposioPanel embedded />
+                    </SettingsTabbedPage>
+                  )}
+                  {/* Usage owns its page shell (header chip tabs), like LLM. */}
+                  {activeTab === 'usage' && <UsagePanel />}
+                  {activeTab === 'wallet' && <WalletPanel />}
+                </Suspense>
               </SettingsLayoutProvider>
             ) : (
               <>

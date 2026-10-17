@@ -137,6 +137,27 @@ describe('PairScreen', () => {
     });
   });
 
+  it('pairs from a pasted pairing link when scanning is not available', async () => {
+    const pairUrl = buildPairUrl();
+    mockIsHealthy.mockResolvedValue(true);
+    mockGetTransport.mockResolvedValue({
+      kind: 'tunnel',
+      isHealthy: mockIsHealthy,
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+
+    renderPairScreen();
+    await userEvent.click(screen.getByRole('button', { name: /paste pairing link/i }));
+    await userEvent.type(screen.getByRole('textbox', { name: /pairing link/i }), pairUrl);
+    await userEvent.click(screen.getByRole('button', { name: /connect to desktop/i }));
+
+    await waitFor(() => {
+      expect(mockSaveProfile).toHaveBeenCalledOnce();
+      expect(mockNavigate).toHaveBeenCalledWith('/human', { replace: true });
+    });
+    expect(mockScan).not.toHaveBeenCalled();
+  });
+
   it('expired QR -> shows expired message, no navigation', async () => {
     const expiredUrl = buildPairUrl({ exp: Math.floor(Date.now() / 1000) - 10 });
     mockScan.mockResolvedValueOnce({ content: expiredUrl });
@@ -204,6 +225,27 @@ describe('PairScreen', () => {
     await waitFor(() => {
       expect(screen.getByText(/camera scan failed/i)).toBeInTheDocument();
     });
+  });
+
+  it('offers manual pairing directly after camera permission failure', async () => {
+    mockScan.mockRejectedValueOnce(new Error('Camera denied'));
+    mockIsHealthy.mockResolvedValue(true);
+    mockGetTransport.mockResolvedValue({
+      kind: 'tunnel',
+      isHealthy: mockIsHealthy,
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+
+    renderPairScreen();
+    await userEvent.click(screen.getByRole('button', { name: /scan qr code/i }));
+    expect(await screen.findByText(/camera scan failed/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /paste pairing link/i }));
+    await userEvent.type(screen.getByRole('textbox', { name: /pairing link/i }), buildPairUrl());
+    await userEvent.click(screen.getByRole('button', { name: /connect to desktop/i }));
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/human', { replace: true }));
+    expect(mockScan).toHaveBeenCalledTimes(1);
   });
 
   it('retry button resets to idle and allows another scan', async () => {

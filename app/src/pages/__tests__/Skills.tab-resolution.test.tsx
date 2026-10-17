@@ -59,6 +59,12 @@ vi.mock('../../components/skills/SkillsExplorerTab', () => ({
 vi.mock('../../components/channels/mcp/McpServersPage', () => ({
   default: () => <div data-testid="tab-body-mcp-servers" />,
 }));
+vi.mock('../../components/skills/SkillsPage', () => ({
+  default: () => <div data-testid="tab-body-installed-skills" />,
+}));
+vi.mock('../Memory', () => ({
+  default: () => <div data-testid="tab-body-memory" />,
+}));
 vi.mock('../../components/settings/panels/ComputerPanel', () => ({
   default: () => <div data-testid="tab-body-computer" />,
 }));
@@ -165,10 +171,10 @@ describe('Connections ?tab= resolution — canonical values', () => {
     }
   );
 
-  it('?tab=desktop resolves to the Computer tab', async () => {
+  it('?tab=desktop resolves to the lazy-loaded Computer tab', async () => {
     renderAt('?tab=desktop');
     expect(await selectedTab()).toBe('computer');
-    expect(screen.getByTestId('tab-body-computer')).toBeInTheDocument();
+    expect(await screen.findByTestId('tab-body-computer')).toBeInTheDocument();
   });
 
   it('?tab=welcome renders the landing overview', async () => {
@@ -187,13 +193,49 @@ describe('Connections ?tab= resolution — default and fallback', () => {
     ['?tab=definitely-not-a-tab', 'an unrecognised value'],
     ['?tab=', 'an empty value'],
     ['?tab=Composio', 'a value with the wrong case'],
-  ])('%s lands on Welcome', async search => {
+  ])('%s opens Apps rather than a Welcome detour', async search => {
     renderAt(search);
-    await waitFor(() => {
-      expect(screen.getByTestId('connections-welcome')).toBeInTheDocument();
-    });
-    // ...and specifically NOT on some other tab that happened to also render.
-    const current = document.querySelector('[data-testid^="two-pane-nav-"][aria-current="page"]');
-    expect(current).toBeNull();
+    expect(await selectedTab()).toBe('composio');
+    expect(screen.queryByTestId('connections-welcome')).not.toBeInTheDocument();
+  });
+});
+
+describe('Connections progressive navigation', () => {
+  it('loads the full MCP manager only when the MCP tab is opened', async () => {
+    renderAt('?tab=mcp');
+    expect(await selectedTab()).toBe('mcp');
+    expect(await screen.findByTestId('tab-body-mcp-servers')).toBeInTheDocument();
+  });
+
+  it('loads the installed Skills manager only when the Skills tab is opened', async () => {
+    renderAt('?tab=skills');
+    expect(await selectedTab()).toBe('skills');
+    expect(await screen.findByTestId('tab-body-installed-skills')).toBeInTheDocument();
+  });
+
+
+  it('does not render Memory on ordinary Apps visits and opens it on demand', async () => {
+    renderAt('?tab=composio');
+    expect(screen.queryByTestId('tab-body-memory')).not.toBeInTheDocument();
+  });
+
+  it('renders the Memory feature when its destination is selected', async () => {
+    renderAt('?tab=brain');
+    expect(await selectedTab()).toBe('brain');
+    expect(await screen.findByTestId('tab-body-memory')).toBeInTheDocument();
+  });
+
+  it('keeps advanced destinations available without showing them all by default', async () => {
+    renderAt('?tab=composio');
+    expect(screen.queryByTestId('two-pane-nav-wallet')).not.toBeInTheDocument();
+    const showAll = screen.getByRole('button', { name: /show all connections/i });
+    showAll.click();
+    expect(screen.getByTestId('two-pane-nav-wallet')).toBeInTheDocument();
+  });
+
+  it('keeps an advanced tab visible when opened through a direct link', async () => {
+    renderAt('?tab=wallet');
+    expect(await selectedTab()).toBe('wallet');
+    expect(screen.getByTestId('two-pane-nav-wallet')).toBeInTheDocument();
   });
 });

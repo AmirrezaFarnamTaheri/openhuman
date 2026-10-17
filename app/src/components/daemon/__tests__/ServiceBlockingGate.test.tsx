@@ -66,7 +66,10 @@ describe('ServiceBlockingGate', () => {
       </ServiceBlockingGate>
     );
 
-    expect(screen.getByText('OpenHuman core is unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'OpenHuman core is unavailable' })).toHaveAttribute(
+      'aria-modal',
+      'true'
+    );
     expect(screen.getByRole('button', { name: 'Download Latest Version' })).toBeInTheDocument();
   });
 

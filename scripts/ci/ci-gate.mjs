@@ -3,8 +3,7 @@
 // soon as ANY of the PR CI flows passes, and then cancels the GitHub-hosted
 // runs still working on that commit.
 //
-// Run by .github/workflows/ci-gate.yml on each `workflow_run` (requested and
-// completed) of the active flows below. That workflow runs from the default branch
+// Run by .github/workflows/ci-gate.yml on completion of either active flow. That workflow runs from the default branch
 // and never checks out PR code; this script only reads run and job state
 // through the API and writes a commit status.
 //
@@ -32,11 +31,23 @@ export const SOURCES = [
     workflow: "ci-fast-hosted.yml",
     name: "CI Fast (hosted)",
     job: "Lanes / CI Fast (hosted) Gate",
+    alternateJobs: ["Fork PR lanes (hosted) / CI Fast (hosted) Gate"],
     hosted: true,
   },
 ];
 
 const PR_EVENTS = new Set(["pull_request", "pull_request_target"]);
+
+/**
+ * Reusable workflows inherit a caller-job prefix in the Checks API. The
+ * upstream "Lanes" caller and the fork's "Fork PR lanes (hosted)" caller
+ * both require the same gate; neither a successful routing job nor an
+ * unrelated job may stand in for it.
+ */
+export function findDecisiveJob(source, jobs) {
+  const names = new Set([source.job, ...(source.alternateJobs ?? [])]);
+  return jobs.find(job => names.has(job.name)) ?? null;
+}
 
 function log(msg) {
   console.log(`[ci-gate] ${msg}`);
@@ -75,6 +86,23 @@ export function decide(entries) {
       cancel,
     };
   }
+  // On a personal fork the pull_request_target workflow completes with its
+  // routing job skipped. That does not mean hosted CI failed: its separate
+  // pull_request run may not have been queued yet. Keep the gate pending until
+  // the hosted run reports a decisive result instead of flashing false red.
+  const onlyRoutingFinished =
+    entries.length > 0 &&
+    !entries.some((e) => e.source.hosted) &&
+    entries.every((e) => !e.job || e.job.conclusion === "skipped");
+  if (onlyRoutingFinished) {
+    return {
+      state: "pending",
+      description: "Waiting for hosted CI to start",
+      targetUrl: entries[0].run.html_url ?? null,
+      cancel: [],
+    };
+  }
+
   const running = entries.filter((e) => e.run.status !== "completed");
   if (running.length > 0 || entries.length === 0) {
     const names = running.map((e) => e.source.name).join(", ");
@@ -107,20 +135,53 @@ export function decide(entries) {
   };
 }
 
-async function api(path, { method = "GET", body } = {}) {
+export async function api(path, { method = "GET", body } = {}) {
   const base = process.env.GITHUB_API_URL || "https://api.github.com";
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${process.env.GH_TOKEN}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  return { status: res.status, data: text ? JSON.parse(text) : null };
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${process.env.GH_TOKEN}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    ...(body ? { "Content-Type": "application/json" } : {}),
+  };
+  const payload = body ? JSON.stringify(body) : undefined;
+
+  // GitHub's statuses API can occasionally answer HTTP 500 even after
+  // both CI lanes have completed. Retry only transient responses; permission
+  // and contract failures must remain visible. Duplicate status POSTs are
+  // safe because GitHub uses the latest state for a commit/context pair.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    let res;
+    try {
+      res = await fetch(`${base}${path}`, {
+        method,
+        headers,
+        body: payload,
+      });
+    } catch (error) {
+      if (attempt === 2) throw error;
+      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      continue;
+    }
+
+    const responseText = await res.text();
+    if (
+      [429, 500, 502, 503, 504].includes(res.status) &&
+      attempt < 2
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      continue;
+    }
+    let data = null;
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { message: responseText.slice(0, 200) };
+      }
+    }
+    return { status: res.status, data };
+  }
+  throw new Error("GitHub API retry budget exhausted");
 }
 
 async function collect(repo, sha) {
@@ -141,11 +202,10 @@ async function collect(repo, sha) {
     );
     if (jobs.status !== 200)
       throw new Error(`list jobs of run ${run.id}: HTTP ${jobs.status}`);
-    const job =
-      (jobs.data.jobs ?? []).find((j) => j.name === source.job) ?? null;
+    const job = findDecisiveJob(source, jobs.data.jobs ?? []);
     log(
       `${source.name}: run=${run.id} status=${run.status} conclusion=${run.conclusion} ` +
-        `job="${source.job}" ${job ? `${job.status}/${job.conclusion}` : "absent"}`,
+        `job="${job?.name ?? source.job}" ${job ? `${job.status}/${job.conclusion}` : "absent"}`,
     );
     entries.push({ source, run, job });
   }

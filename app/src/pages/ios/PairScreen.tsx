@@ -93,6 +93,8 @@ export const PairScreen: FC = () => {
   const navigate = useNavigate();
   const { t } = useT();
   const [state, setState] = useState<ScreenState>({ kind: 'idle' });
+  const [showManualPairing, setShowManualPairing] = useState(false);
+  const [manualPairingLink, setManualPairingLink] = useState('');
 
   async function startScan(): Promise<void> {
     log('[ios] starting QR scan');
@@ -213,6 +215,31 @@ export const PairScreen: FC = () => {
           </button>
         )}
 
+        {(state.kind === 'idle' || state.kind === 'error' || state.kind === 'expired') && (
+          <div className="w-full">
+            <button type="button" onClick={() => setShowManualPairing(open => !open)}
+              aria-expanded={showManualPairing}
+              className="w-full py-2 text-sm text-content-inverted underline underline-offset-4">
+              {t('iosPair.manualEntry', 'Paste pairing link instead')}
+            </button>
+            {showManualPairing && (
+              <form className="mt-3 flex flex-col gap-3" onSubmit={event => {
+                event.preventDefault();
+                void handleScanResult(manualPairingLink.trim());
+              }}>
+                <label htmlFor="manual-pairing-link" className="text-sm">{t('iosPair.manualLink', 'Pairing link')}</label>
+                <input id="manual-pairing-link" type="text" autoComplete="off"
+                  value={manualPairingLink} onChange={event => setManualPairingLink(event.target.value)}
+                  placeholder="openhuman://pair?..." required
+                  className="w-full rounded-lg border border-content-inverted/30 bg-transparent px-3 py-2 text-content-inverted" />
+                <button type="submit" disabled={!manualPairingLink.trim()}
+                  className="w-full rounded-xl bg-[#4A83DD] py-3 font-medium disabled:opacity-50">
+                  {t('iosPair.connectToDesktop', 'Connect to desktop')}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
         {state.kind === 'scanning' && (
           <p className="text-content-inverted/60 text-sm text-center animate-pulse">
             {t('iosPair.scannerOpening')}

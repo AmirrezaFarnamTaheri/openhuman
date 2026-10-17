@@ -4,6 +4,37 @@ use crate::memory::test_fixtures::{bind_reference, config_in, stored};
 use crate::memory::types::EngineStatus;
 use tinymemory_api::{FetchMode, ItemKind, MetaFilter, SourceKind, SourceRef, ToolCallRef};
 
+#[test]
+fn managed_local_credentials_do_not_replace_the_cloud_cortex_key() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = config_in(&tmp);
+    engine::store_cortexdb_key(&config, "cloud-account-key").unwrap();
+
+    apply_engine_set(
+        &mut config,
+        &EngineSetParams {
+            engine: CORTEXDB_ENGINE.to_string(),
+            endpoint: Some("http://127.0.0.1:3141".to_string()),
+            api_key: Some("app-managed-local-key".to_string()),
+        },
+    ).unwrap();
+
+    assert_eq!(
+        engine::read_cortexdb_key(&config).unwrap().as_deref(),
+        Some("app-managed-local-key")
+    );
+    assert_eq!(
+        engine::read_managed_cortexdb_key(&config).unwrap().as_deref(),
+        Some("app-managed-local-key")
+    );
+
+    config.memory.engines.get_mut(CORTEXDB_ENGINE).unwrap().endpoint = None;
+    assert_eq!(
+        engine::read_cortexdb_key(&config).unwrap().as_deref(),
+        Some("cloud-account-key")
+    );
+}
+
 fn learn_params(text: &str) -> LearnParams {
     LearnParams {
         text: text.to_string(),

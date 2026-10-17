@@ -64,6 +64,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 /// Keychain entry name of the CortexDB API key.
 pub const MEMORY_CORTEXDB_KEY_NAME: &str = "memory-cortexdb";
+/// Separate key for the Docker-managed local engine. Switching to a cloud
+/// CortexDB account must never discard either credential.
+pub const MEMORY_CORTEXDB_LOCAL_KEY_NAME: &str = "memory-cortexdb-local";
 
 /// Engine a fresh config selects.
 pub const DEFAULT_MEMORY_ENGINE: &str = "tinyhumans";

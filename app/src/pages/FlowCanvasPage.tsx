@@ -10,12 +10,12 @@
  *  - **Save persistence** — `onSave` runs `flows_update(id, { graph })`. NO
  *    autosave: a saved+enabled flow is live, so an accidental save would fire
  *    real schedules. Save is only ever the explicit button in the canvas.
- *  - **Unsaved-changes guard** — the canvas reports its dirty state up via
- *    `onDirtyChange`; while dirty we (a) warn on a hard tab close/reload via
- *    `beforeunload`, and (b) intercept the in-page Back button with a confirm
- *    dialog. (App-wide route interception would need a data router; this app
- *    mounts a `HashRouter`, so full `useBlocker` interception isn't available —
- *    the Back button is this page's only in-app navigation affordance.)
+ *  - **Unsaved-changes guard** — the canvas reports its dirty state via
+ *    `onDirtyChange`. While dirty, `beforeunload` protects hard reloads,
+ *    `FlowNavigationBlocker` intercepts in-app route changes through the
+ *    app's hash-based data router, and the local Back button uses the same
+ *    discard confirmation. Saving a new draft deliberately bypasses blocking
+ *    only after persistence succeeds.
  */
 import type { Viewport } from '@xyflow/react';
 import createDebug from 'debug';
@@ -40,6 +40,9 @@ import {
   setCopilotThreadId as setCopilotThreadIdCache,
 } from '../components/flows/workflowCopilotThreads';
 import { ToastContainer } from '../components/intelligence/Toast';
+import FlowNavigationBlocker, {
+  type BlockedFlowNavigation,
+} from '../components/flows/canvas/FlowNavigationBlocker';
 import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import SettingsTabbedPage from '../components/settings/layout/SettingsTabbedPage';
 import {
@@ -362,6 +365,10 @@ function FlowEditor({
   const { t } = useT();
   const navigate = useNavigate();
   const [dirty, setDirty] = useState(false);
+  // A saved draft may intentionally navigate after persistence. Other route
+  // changes (sidebar, command palette, history) must stop before unmounting.
+  const bypassRouteBlockRef = useRef(false);
+  const blockedRouteRef = useRef<BlockedFlowNavigation | null>(null);
   // Save/Discard now live in the page header; the canvas reports its Save state
   // up and exposes save()/discard() via this handle.
   const canvasRef = useRef<EditableFlowCanvasHandle>(null);
@@ -387,6 +394,7 @@ function FlowEditor({
     saving: false,
   });
   const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const openLeaveConfirm = useCallback(() => setLeaveConfirm(true), []);
   // Which header action (run/save) is awaiting confirmation, if any —
   // every icon click opens a confirm popup before it fires.
   const [confirmAction, setConfirmAction] = useState<'run' | 'save' | null>(null);
@@ -601,6 +609,7 @@ function FlowEditor({
         const created = await createFlow(effectiveName, next, effectiveRequireApproval);
         log('save: draft persisted as flow id=%s enabled=%s', created.id, created.enabled);
         if (!deferDraftNavigation) {
+          bypassRouteBlockRef.current = true;
           navigate(`/flows/${created.id}`, { replace: true });
         }
         // Navigating replaces this whole page (new `flowId` route param), so
@@ -694,6 +703,7 @@ function FlowEditor({
             outcome,
             settledFlowId
           );
+          bypassRouteBlockRef.current = true;
           navigate(`/flows/${settledFlowId}`, { replace: true });
         } else {
           log('preauth settled outcome=%s id=%s — no deferred navigation', outcome, settledFlowId);
@@ -732,6 +742,7 @@ function FlowEditor({
           preauthNavRef.current = result.flowId;
         } else {
           log('save: no preauth card id=%s — navigating to flow route', result.flowId);
+          bypassRouteBlockRef.current = true;
           navigate(`/flows/${result.flowId}`, { replace: true });
         }
       } else {
@@ -918,6 +929,7 @@ function FlowEditor({
           if (preauthCardShown) {
             preauthNavRef.current = savedFlowId;
           } else {
+            bypassRouteBlockRef.current = true;
             navigate(`/flows/${savedFlowId}`, { replace: true });
           }
         }
@@ -1225,6 +1237,12 @@ function FlowEditor({
     // and there was no reason for the builder to be the exception once it was
     // back in the shell.
     <div className="h-full p-4" data-testid="flow-canvas-page">
+      <FlowNavigationBlocker
+        dirty={dirty}
+        bypassRef={bypassRouteBlockRef}
+        blockedRef={blockedRouteRef}
+        onBlocked={openLeaveConfirm}
+      />
       {/* Run history + "Fix with agent" go through the shell's dynamic sidebar
           region, like every other page's rail. This used to be an in-page
           `hidden lg:flex w-60 border-r` column because the route was chromeless
@@ -1449,11 +1467,22 @@ function FlowEditor({
               cancelTestId="flow-leave-stay"
               confirmLabel={t('flows.editor.leaveDiscard')}
               confirmTestId="flow-leave-discard"
-              onCancel={() => setLeaveConfirm(false)}
-              onConfirm={() => {
-                log('back: confirmed leave — discarding unsaved edits');
-                goBack();
+              onCancel={() => {
+                blockedRouteRef.current?.reset();
+                setLeaveConfirm(false);
               }}
+              onConfirm={() => {
+                log('leave: confirmed — discarding unsaved edits');
+                if (blockedRouteRef.current) {
+                  blockedRouteRef.current.proceed();
+                } else {
+                  // The editor's own Back button opens this confirmation
+                  // without initiating a blocked router transition.
+                  bypassRouteBlockRef.current = true;
+                  goBack();
+                }
+                setLeaveConfirm(false);
+              }
             />
           )}
 
@@ -1500,8 +1529,9 @@ export default function FlowCanvasPage() {
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
-  // The app sidebar is hidden entirely on this route via App's `chromeless`
-  // check, so the builder owns the full viewport — nothing to do here.
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  // The editor stays inside the regular app shell; its dynamic sidebar
+  // projects the run history without duplicating the application's navigation.
   // "Fix with agent" (Phase 5c) navigates here with a repair seed in
   // `location.state` so the copilot opens preloaded with the failed run.
   const copilotSeed = useMemo(() => asCopilotRepairSeed(location.state), [location.state]);
@@ -1594,7 +1624,7 @@ export default function FlowCanvasPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, loadAttempt]);
 
   if (state.status === 'ready') {
     // Keyed by flow id so switching flows cleanly re-seeds the editable canvas's
@@ -1628,8 +1658,16 @@ export default function FlowCanvasPage() {
       )}
 
       {state.status === 'error' && (
-        <div className="p-4" data-testid="flow-canvas-error">
+        <div className="space-y-3 p-4" data-testid="flow-canvas-error">
           <ErrorBanner message={state.message || t('flows.canvas.loadError')} />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-testid="flow-canvas-retry"
+            onClick={() => setLoadAttempt(attempt => attempt + 1)}>
+            {t('common.retry')}
+          </Button>
         </div>
       )}
 

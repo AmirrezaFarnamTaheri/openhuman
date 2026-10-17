@@ -97,6 +97,7 @@ export default function CommandProvider({ children }: Props) {
         onOpenChange={setPaletteOpen}
         threads={threads}
         onOpenThread={threadId => navigate(chatThreadPath(threadId))}
+        onOpenSettingsRoute={route => navigate(`/settings/${route}`)}
       />
       <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </ScopeContext.Provider>

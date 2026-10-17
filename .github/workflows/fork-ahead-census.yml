@@ -3,8 +3,9 @@ name: Upstream fork-ahead census
 on:
   workflow_dispatch:
   schedule:
-    # Continues incomplete default-branch inventories after this workflow lands on main.
-    - cron: '19 */2 * * *'
+    # Daily continuation for incomplete inventories. Manual dispatch remains available
+    # for a faster one-off audit without scheduling twelve paid jobs per day.
+    - cron: '19 3 * * *'
   push:
     branches:
       - sync/upstream-2026-10-14

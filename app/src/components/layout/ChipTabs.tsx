@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 
 import { cn } from '../../lib/cn';
 import { IS_DEV } from '../../utils/config';
@@ -108,6 +108,7 @@ export default function ChipTabs<T extends string>({
   compact = false,
 }: ChipTabsProps<T>) {
   const spacingClass = compact ? compactChipSpacingClass : defaultChipSpacingClass;
+  const lastRadixSelection = useRef<T | null>(null);
 
   if (as === 'nav') {
     return (
@@ -145,6 +146,7 @@ export default function ChipTabs<T extends string>({
     <TabsRoot
       value={value}
       onValueChange={v => {
+        lastRadixSelection.current = v as T;
         debug('select', { id: v });
         onChange(v as T);
       }}
@@ -161,16 +163,14 @@ export default function ChipTabs<T extends string>({
               data-testid={chipTestId}
               id={item.labelledBy}
               aria-controls={item.controls}
-              // Radix selects on `onMouseDown` (real pointer interaction), not
-              // `onClick` — `fireEvent.click()` in RTL fires only a `click`
-              // event with no preceding `mousedown`, so relying on Radix's
-              // built-in activation alone leaves every `fireEvent.click(chip)`
-              // test across the app selecting nothing. Firing `onChange`
-              // directly here covers both: real pointer users hit
-              // `onMouseDown` (redundant, same value) and `click`-only
-              // dispatchers hit this.
+              // Radix dispatches during pointer/key activation. Keep a click-only
+              // fallback for synthetic consumers but never dispatch twice.
               onClick={() => {
-                debug('select', { id: item.id });
+                if (lastRadixSelection.current === item.id) {
+                  lastRadixSelection.current = null;
+                  return;
+                }
+                lastRadixSelection.current = null;
                 onChange(item.id);
               }}
               className={cn(baseChipClass, spacingClass, inactiveChipClass, activeChipClass)}>

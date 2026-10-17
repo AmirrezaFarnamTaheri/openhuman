@@ -111,7 +111,7 @@ function buildGlobalActions(h: GlobalActionHandlers): GlobalActionDef[] {
       labelKey: 'shortcuts.action.knowledge',
       group: 'Navigation',
       shortcut: `${NAV_MOD}+3`,
-      handler: nav('/settings/intelligence'),
+      handler: nav('/connections?tab=brain'),
       keywords: ['memory', 'knowledge', 'intelligence'],
     },
     {
@@ -129,7 +129,7 @@ function buildGlobalActions(h: GlobalActionHandlers): GlobalActionDef[] {
       labelKey: 'shortcuts.action.activity',
       group: 'Navigation',
       shortcut: `${NAV_MOD}+5`,
-      handler: nav('/activity'),
+      handler: nav('/flows?view=runs'),
       keywords: ['tasks', 'automations', 'alerts', 'background'],
     },
     {

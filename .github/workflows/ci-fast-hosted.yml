@@ -26,6 +26,9 @@ concurrency:
 jobs:
   route:
     name: Route (outsiders → GitHub-hosted)
+    # Only upstream requires an org-membership decision. Fork PRs can
+    # launch the same shared hosted lanes immediately, saving a runner job.
+    if: github.repository == 'tinyhumansai/openhuman'
     runs-on: ubuntu-latest
     timeout-minutes: 6
     outputs:
@@ -52,7 +55,16 @@ jobs:
   lanes:
     name: Lanes
     needs: route
-    if: needs.route.outputs.outsider == 'true'
+    if: github.repository == 'tinyhumansai/openhuman' && needs.route.outputs.outsider == 'true'
+    uses: ./.github/workflows/ci-lanes.yml
+    with:
+      profile: hosted
+      pr-number: ${{ github.event.pull_request.number }}
+      base-ref: ${{ github.base_ref }}
+
+  fork-lanes:
+    name: Fork PR lanes (hosted)
+    if: github.repository != 'tinyhumansai/openhuman'
     uses: ./.github/workflows/ci-lanes.yml
     with:
       profile: hosted

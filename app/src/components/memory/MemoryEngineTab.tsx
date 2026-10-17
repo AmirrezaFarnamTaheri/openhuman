@@ -39,9 +39,11 @@ import {
   isMemoryOn,
   MEMORY_DISABLED_ENGINE,
   memoryEngineSet,
+  memoryLocalStart,
   memoryErrorMessage,
 } from '../../services/api/memoryApi';
 import { isLocalSessionToken } from '../../utils/localSession';
+import { openUrl } from '../../utils/openUrl';
 import { Alert, AlertDescription, AlertTitle, Button } from '../ui';
 import { CenteredLoadingState } from '../ui/LoadingState';
 import { ModalShell } from '../ui/ModalShell';
@@ -116,6 +118,8 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
   // after the first render when a host loads the state itself.
   const [typedEndpoint, setTypedEndpoint] = useState<string | null>(null);
   const [localKey, setLocalKey] = useState('');
+  const [autoLocalBusy, setAutoLocalBusy] = useState(false);
+  const [autoLocalError, setAutoLocalError] = useState<string | null>(null);
 
   const titles: Record<EngineOption, string> = {
     builtin: t('memoryPage.engine.builtin.title'),
@@ -236,6 +240,34 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
     return { variant: 'primary' as const, label: t('memoryPage.engine.inUse') };
   })();
 
+  // An optional, app-managed local server: the user never handles an API key
+  // or endpoint. Docker downloads CortexDB only when this is selected.
+  const startLocalMemory = async () => {
+    if (autoLocalBusy || saving !== null) return;
+    setAutoLocalBusy(true);
+    setAutoLocalError(null);
+    try {
+      const next = await memoryLocalStart();
+      onStateChange(next);
+      setPicked(null);
+      setDialog(null);
+      toast.add({
+        type: 'success',
+        title: t('memoryPage.engine.toastSwitched'),
+        description: t('memoryPage.engine.selfHost.title'),
+      });
+    } catch (err) {
+      setAutoLocalError(
+        `${memoryErrorMessage(err, t)} ${t(
+          'memoryPage.engine.autoLocalTroubleshoot',
+          'Start Docker Desktop (or Docker Engine) and make sure port 3141 is available.'
+        )}`
+      );
+    } finally {
+      setAutoLocalBusy(false);
+    }
+  };
+
   // TinyHumans: one click when signed in.
   const useBuiltin = () => void select('builtin', { engine: 'tinyhumans' });
 
@@ -326,7 +358,9 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
       <p className="min-w-0 truncate text-xs text-content-secondary">
         {option === 'apikey'
           ? t('memoryPage.engine.apiKeyOption.connected')
-          : t('memoryPage.engine.selfHost.connected').replace('{endpoint}', state.endpoint ?? '')}
+          : state.endpoint === 'http://127.0.0.1:3141'
+            ? t('memoryPage.engine.autoLocalTitle', 'Memory on this computer')
+            : t('memoryPage.engine.selfHost.connected').replace('{endpoint}', state.endpoint ?? '')}
       </p>
       <Button
         size="xs"
@@ -347,6 +381,49 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
           Keyed by user so the per-user dismissal is re-read on an account switch. */}
       {!embedded && <MemoryCortexAnnouncement key={snapshot.auth.userId ?? 'signed-out'} />}
       {statusBanner}
+      {/* Local sessions should not have to know a server URL or credential.
+          Keep manual self-hosting for advanced configurations. */}
+      {!signedIn && (!on || (active === 'selfhost' && state.status !== 'ok')) && (
+        <div className="space-y-2 rounded-xl border border-line bg-surface-muted p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-content">
+                {t('memoryPage.engine.autoLocalTitle', 'Memory on this computer')}
+              </p>
+              <p className="text-xs text-content-muted">
+                {t('memoryPage.engine.autoLocalHint',
+                  'OpenHuman sets up and connects local memory for you. Docker is required.')}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              data-testid="memory-engine-auto-local"
+              disabled={autoLocalBusy || saving !== null}
+              onClick={() => void startLocalMemory()}>
+              {autoLocalBusy
+                ? t('memoryPage.engine.autoLocalStarting', 'Starting local memory…')
+                : t('memoryPage.engine.autoLocal', 'Start local memory')}
+            </Button>
+          </div>
+          {autoLocalError && (
+            <Alert variant="destructive" data-testid="memory-engine-auto-local-error">
+              <AlertDescription>
+                <span>{autoLocalError}</span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="tertiary"
+                  data-testid="memory-auto-local-help"
+                  onClick={() => void openUrl('https://docs.docker.com/get-docker/')}>
+                  {t('memoryPage.engine.autoLocalHelp', 'Install or start Docker')}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
 
       {/* Sized like one cell of the coming-soon grid below, not the full width.
           Onboarding embeds this tab in a narrow column, where it fills it. */}
@@ -379,6 +456,33 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
             saving === dialog ? { escape: false, backdrop: false, button: false } : undefined
           }
           onClose={() => setDialog(null)}>
+          {dialog === 'selfhost' && (
+            <div className="mb-4 space-y-2 rounded-lg border border-line bg-surface-muted p-3">
+              <p className="text-sm font-medium text-content">
+                {t('memoryPage.engine.autoLocalTitle', 'Memory on this computer')}
+              </p>
+              <p className="text-xs text-content-muted">
+                {t('memoryPage.engine.autoLocalHint',
+                  'OpenHuman sets up and connects local memory for you. Docker is required.')}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                data-testid="memory-engine-dialog-auto-local"
+                disabled={autoLocalBusy || saving !== null}
+                onClick={() => void startLocalMemory()}>
+                {autoLocalBusy
+                  ? t('memoryPage.engine.autoLocalStarting', 'Starting local memory…')
+                  : t('memoryPage.engine.autoLocal', 'Start local memory')}
+              </Button>
+              {autoLocalError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{autoLocalError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
           {panel(dialog)}
         </ModalShell>
       )}

@@ -7,10 +7,11 @@ use crate::memory::test_fixtures::{bind_reference, config_in};
 use serde_json::{json, Map, Value};
 
 /// Every method of the spec's RPC table (`docs/specs/memory-v2.md`), exactly.
-const SPEC_METHODS: [&str; 35] = [
+const SPEC_METHODS: [&str; 36] = [
     "openhuman.memory_engines_list",
     "openhuman.memory_engine_get",
     "openhuman.memory_engine_set",
+    "openhuman.memory_local_start",
     "openhuman.memory_policy_get",
     "openhuman.memory_policy_set",
     "openhuman.memory_pack_preview",
@@ -102,6 +103,7 @@ fn required_inputs_match_the_spec() {
             .collect()
     };
     assert_eq!(required("engine_set"), ["engine"]);
+    assert!(schema("local_start").inputs.is_empty());
     assert_eq!(optional("engine_set"), ["endpoint", "api_key"]);
     assert_eq!(required("recall"), ["question"]);
     assert_eq!(required("fetch"), ["query"]);

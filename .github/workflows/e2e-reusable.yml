@@ -62,6 +62,18 @@ on:
         description: Log label for the selected spec when full is false.
         type: string
         default: mega-flow
+      run_rust_e2e:
+        description: Also run the independent Rust mock-backend integration suite.
+        type: boolean
+        default: true
+      upload_artifacts_always:
+        description: Keep selected-spec artifacts even after a successful run.
+        type: boolean
+        default: false
+      artifact_name:
+        description: Optional artifact name for selected-spec diagnostics.
+        type: string
+        default: ""
 
 permissions:
   # `actions: read` lets scripts/ci-cancel-aware.sh poll the run status so
@@ -174,11 +186,11 @@ jobs:
             xvfb-run -a --server-args="-screen 0 1280x960x24" \
             bash app/scripts/e2e-run-session.sh "${{ inputs.spec_path }}" "${{ inputs.spec_label }}"
 
-      - name: Upload E2E failure artifacts
-        if: failure()
+      - name: Upload selected-spec E2E artifacts
+        if: failure() || inputs.upload_artifacts_always
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-failure-logs-${{ runner.os }}-${{ github.run_id }}
+          name: ${{ inputs.artifact_name || format('e2e-failure-logs-{0}-{1}', runner.os, github.run_id) }}
           path: |
             ${{ runner.temp }}/openhuman-e2e-app-*.log
             /tmp/openhuman-e2e-app-*.log
@@ -400,7 +412,7 @@ jobs:
   # `scripts/mock-api-server.mjs` the Tauri specs hit, then runs every
   # `tests/*_e2e.rs` suite against it.
   rust-e2e-linux:
-    if: inputs.run_linux
+    if: inputs.run_linux && inputs.run_rust_e2e
     name: E2E (Linux / Rust integration suite)
     runs-on: ubuntu-22.04
     container:

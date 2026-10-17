@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-import { SOURCES, decide, latestPrRun } from "../ci/ci-gate.mjs";
+import { SOURCES, api, decide, findDecisiveJob, latestPrRun } from "../ci/ci-gate.mjs";
 
 const [EX63, HOSTED] = SOURCES;
 
@@ -61,6 +61,14 @@ test("a skipped decisive job is not a pass: an outsider's CI Fast run is pending
   ]);
   assert.equal(verdict.state, "pending");
   assert.equal(verdict.description, "Waiting on CI Fast (hosted)");
+});
+
+test("an upstream routing-only completion remains pending until fork hosted CI starts", () => {
+  const verdict = decide([
+    entry(EX63, 1, "completed", "success", null),
+  ]);
+  assert.equal(verdict.state, "pending");
+  assert.match(verdict.description, /hosted CI/);
 });
 
 test("an EX63 failure waits for hosted CI instead of failing early", () => {
@@ -122,5 +130,78 @@ test("every CI Gate source references a tracked workflow", () => {
       new URL(`../../.github/workflows/${source.workflow}`, import.meta.url),
     );
     assert.ok(existsSync(path), `CI Gate references a missing workflow: ${source.workflow}`);
+  }
+});
+
+test("fork hosted lane passes through the decisive job under its own caller name", () => {
+  const job = findDecisiveJob(HOSTED, [
+    { name: "Route (outsiders → GitHub-hosted)", conclusion: "skipped" },
+    { name: "Fork PR lanes (hosted) / CI Fast (hosted) Gate", conclusion: "success" },
+  ]);
+  assert.equal(job?.conclusion, "success");
+  assert.equal(job?.name, "Fork PR lanes (hosted) / CI Fast (hosted) Gate");
+  assert.equal(
+    decide([entry(HOSTED, 3, "completed", "success", job)]).state,
+    "success",
+  );
+});
+
+test("CI Gate does not mistake unrelated success jobs for required lanes", () => {
+  assert.equal(findDecisiveJob(HOSTED, [
+    { name: "Route (outsiders → GitHub-hosted)", conclusion: "success" },
+    { name: "Other / CI Fast (hosted) Gate", conclusion: "success" },
+  ]), null);
+  assert.equal(findDecisiveJob(EX63, [
+    { name: "Fork PR lanes (hosted) / CI Fast (hosted) Gate", conclusion: "success" },
+  ]), null);
+});
+
+test("gate evaluation runs only on completed upstream jobs, not on every requested run", () => {
+  const source = readFileSync(
+    new URL("../../.github/workflows/ci-gate.yml", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /types: \[completed\]/);
+  assert.doesNotMatch(source, /types: \[requested, completed\]/);
+});
+
+test("a transient HTTP 500 when posting CI Gate status is retried", async () => {
+  const original = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts += 1;
+    return {
+      status: attempts === 1 ? 500 : 201,
+      text: async () => JSON.stringify({ ok: true }),
+    };
+  };
+  try {
+    const result = await api("/repos/example/project/statuses/deadbeef", {
+      method: "POST",
+      body: { state: "success", context: "CI Gate" },
+    });
+    assert.equal(result.status, 201);
+    assert.equal(attempts, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("CI Gate never retries permanent permission errors", async () => {
+  const original = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts += 1;
+    return { status: 403, text: async () => JSON.stringify({ message: "forbidden" }) };
+  };
+  try {
+    const result = await api("/repos/example/project/statuses/deadbeef", {
+      method: "POST",
+      body: { state: "success", context: "CI Gate" },
+    });
+    assert.equal(result.status, 403);
+    assert.equal(attempts, 1);
+  } finally {
+    globalThis.fetch = original;
   }
 });

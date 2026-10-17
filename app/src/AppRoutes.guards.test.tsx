@@ -110,10 +110,10 @@ const OWNED: Array<{ path: string; page: string; guard: Guard }> = [
 
 describe('AppRoutes — each route renders its page behind the right guard', () => {
   for (const { path, page, guard } of OWNED) {
-    it(`${path} renders ${page} with guard=${guard}`, () => {
+    it(`${path} renders ${page} with guard=${guard}`, async () => {
       visit(path);
 
-      expect(screen.getByTestId(page)).toBeInTheDocument();
+      expect(await screen.findByTestId(page)).toBeInTheDocument();
       // The catch-all must not have swallowed the route.
       expect(screen.queryByTestId('default-redirect')).not.toBeInTheDocument();
 

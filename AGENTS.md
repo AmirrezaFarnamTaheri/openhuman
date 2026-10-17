@@ -314,7 +314,13 @@ UI rules:
 - Preserve interpolation placeholders across translations.
 - Run `pnpm i18n:check`, `pnpm i18n:english:check`, and the i18n coverage
   test.
-- Do not use dynamic imports in production `app/src`.
+- Do not use arbitrary dynamic imports in production `app/src`. A narrow
+  exception permits literal-path `React.lazy(() => import(...))` calls for
+  top-level route entrypoints in `AppRoutes.tsx`, always under a Suspense
+  loading boundary. Never build import paths from runtime values. Before
+  shipping a split route, exercise its deep links and compiled chunks in
+  Windows WebView2, macOS WKWebView and Linux WebKitGTK; a Vitest pass alone
+  cannot validate the desktop asset protocol.
 - Use `isTauri()` or catch `invoke` failures. Do not inspect
   `window.__TAURI__` directly.
 - Canonical visual tokens live in `app/src/styles/tokens.css`.

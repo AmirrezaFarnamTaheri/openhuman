@@ -95,6 +95,20 @@ export default function NoticeCenter() {
   const notices = useAppNotices();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const wasOpenRef = useRef(false);
+
+  // This is a non-modal notice panel, but focus must enter it on open and
+  // return to the invoking bell when the user closes it.
+  useEffect(() => {
+    if (open) {
+      closeRef.current?.focus();
+    } else if (wasOpenRef.current) {
+      triggerRef.current?.focus();
+    }
+    wasOpenRef.current = open;
+  }, [open]);
 
   // Close on Escape while the panel is open. A fixed overlay with no dismissal
   // affordance beyond its own toggle is a trap for keyboard users.
@@ -135,6 +149,7 @@ export default function NoticeCenter() {
               iconOnly
               size="xs"
               variant="tertiary"
+              ref={closeRef}
               data-testid="notice-close"
               analyticsId="notice-center-close"
               aria-label={t('common.close')}
@@ -157,6 +172,7 @@ export default function NoticeCenter() {
       <Button
         iconOnly
         variant="secondary"
+        ref={triggerRef}
         data-testid="notice-trigger"
         analyticsId="notice-center-toggle"
         aria-label={t('notices.title')}
