@@ -682,6 +682,10 @@ export default function Skills() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  const [showAllConnections, setShowAllConnections] = useState(false);
+  const primaryConnections = new Set<ConnectionsTab>([
+    'composio', 'channels', 'mcp', 'skills', 'brain', 'llm', 'voice',
+  ]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<SkillCategory>('All');
   const [hasComposioApiKey, setHasComposioApiKey] = useState<boolean | null>(null);
@@ -1010,6 +1014,15 @@ export default function Skills() {
             ariaLabel={t('nav.connections')}
             selected={activeTab}
             onSelect={value => handleTabChange(value as ConnectionsTab)}
+            header={
+              <button type="button" aria-expanded={showAllConnections}
+                onClick={() => setShowAllConnections(value => !value)}
+                className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-content-muted hover:text-content">
+                {showAllConnections
+                  ? t('connections.navigation.showFewer', 'Show fewer connections')
+                  : t('connections.navigation.showAll', 'Show all connections')}
+              </button>
+            }
             groups={[
               {
                 label: t('connections.groups.integrations'),
@@ -1125,7 +1138,16 @@ export default function Skills() {
                   },
                 ],
               },
-            ]}
+            ]
+              .map(group => ({
+                ...group,
+                items: group.items.filter(item =>
+                  showAllConnections ||
+                  primaryConnections.has(item.value as ConnectionsTab) ||
+                  item.value === activeTab
+                ),
+              }))
+              .filter(group => group.items.length > 0)}
           />
         </div>
       </SidebarContent>
