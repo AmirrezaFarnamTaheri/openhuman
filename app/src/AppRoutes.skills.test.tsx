@@ -51,13 +51,13 @@ function LocationSpy({
 const AppRoutes = (await import('./AppRoutes')).default;
 
 describe('/skills back-compat redirect', () => {
-  it('redirects /skills to /connections (Skills page renders)', () => {
+  it('redirects /skills to /connections (Skills page renders)', async () => {
     render(
       <MemoryRouter initialEntries={['/skills']}>
         <AppRoutes />
       </MemoryRouter>
     );
-    expect(screen.getByTestId('skills-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('skills-page')).toBeInTheDocument();
   });
 
   it('forwards ?tab= query params from /skills to /connections', () => {
