@@ -187,13 +187,9 @@ describe('Connections ?tab= resolution — default and fallback', () => {
     ['?tab=definitely-not-a-tab', 'an unrecognised value'],
     ['?tab=', 'an empty value'],
     ['?tab=Composio', 'a value with the wrong case'],
-  ])('%s lands on Welcome', async search => {
+  ])('%s opens Apps rather than a Welcome detour', async search => {
     renderAt(search);
-    await waitFor(() => {
-      expect(screen.getByTestId('connections-welcome')).toBeInTheDocument();
-    });
-    // ...and specifically NOT on some other tab that happened to also render.
-    const current = document.querySelector('[data-testid^="two-pane-nav-"][aria-current="page"]');
-    expect(current).toBeNull();
+    expect(await selectedTab()).toBe('composio');
+    expect(screen.queryByTestId('connections-welcome')).not.toBeInTheDocument();
   });
 });
