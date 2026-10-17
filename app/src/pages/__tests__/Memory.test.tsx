@@ -190,11 +190,11 @@ describe('Memory page', () => {
     expect(screen.getByTestId('where').textContent).not.toContain('view=');
   });
 
-  it('rewrites an unknown ?brain= value to the Engine chip', async () => {
+  it('rewrites an unknown ?brain= value to Explorer when memory works', async () => {
     renderAt('?tab=brain&brain=bogus');
-    expect(await screen.findByTestId('stub-engine')).toBeInTheDocument();
+    expect(await screen.findByTestId('stub-explorer')).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByTestId('where')).toHaveTextContent('?tab=brain&brain=engine')
+      expect(screen.getByTestId('where')).toHaveTextContent('?tab=brain&brain=explorer')
     );
     expect(screen.getByTestId('where').textContent).not.toContain('bogus');
   });
