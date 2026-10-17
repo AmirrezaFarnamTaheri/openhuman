@@ -72,6 +72,40 @@ class ForkAuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             api.get("/repos/acme/openhuman/../../secrets")
 
+    def test_api_recovers_from_a_remote_disconnect_without_abandoning_progress(self):
+        from http.client import RemoteDisconnected
+        from io import BytesIO
+        from unittest.mock import patch
+        api = audit.GitHubApi("test-token", 5)
+        with patch.object(audit, "urlopen", side_effect=[
+            RemoteDisconnected("remote closed"), BytesIO(b'{"ahead_by":1}')
+        ]) as fetch, patch.object(audit.time, "sleep") as sleep:
+            response = api.get("/repos/acme/openhuman/compare/deadbeef...alice:main")
+        self.assertEqual(response["ahead_by"], 1)
+        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual(api.requests, 2)
+        sleep.assert_called_once()
+
+    def test_api_defers_after_bounded_transport_retries_instead_of_crashing(self):
+        from http.client import RemoteDisconnected
+        from unittest.mock import patch
+        api = audit.GitHubApi("test-token", 8)
+        with patch.object(audit, "urlopen", side_effect=RemoteDisconnected("remote closed")), \
+                patch.object(audit.time, "sleep"):
+            with self.assertRaises(audit.RequestBudgetExhausted):
+                api.get("/repos/acme/openhuman/compare/deadbeef...alice:main")
+        self.assertEqual(api.requests, 3)
+
+    def test_api_respects_the_request_budget_during_retries(self):
+        from http.client import RemoteDisconnected
+        from unittest.mock import patch
+        api = audit.GitHubApi("test-token", 2)
+        with patch.object(audit, "urlopen", side_effect=RemoteDisconnected("remote closed")), \
+                patch.object(audit.time, "sleep"):
+            with self.assertRaises(audit.RequestBudgetExhausted):
+                api.get("/repos/acme/openhuman/compare/deadbeef...alice:main")
+        self.assertEqual(api.requests, 2)
+
     def test_atomic_checkpoint_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = pathlib.Path(tmp) / "state.json"
