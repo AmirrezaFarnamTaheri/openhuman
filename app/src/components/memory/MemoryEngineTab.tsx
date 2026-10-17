@@ -352,7 +352,9 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
       <p className="min-w-0 truncate text-xs text-content-secondary">
         {option === 'apikey'
           ? t('memoryPage.engine.apiKeyOption.connected')
-          : t('memoryPage.engine.selfHost.connected').replace('{endpoint}', state.endpoint ?? '')}
+          : state.endpoint === 'http://127.0.0.1:3141'
+            ? t('memoryPage.engine.autoLocalTitle', 'Memory on this computer')
+            : t('memoryPage.engine.selfHost.connected').replace('{endpoint}', state.endpoint ?? '')}
       </p>
       <Button
         size="xs"
