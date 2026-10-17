@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-import { SOURCES, decide, findDecisiveJob, latestPrRun } from "../ci/ci-gate.mjs";
+import { SOURCES, api, decide, findDecisiveJob, latestPrRun } from "../ci/ci-gate.mjs";
 
 const [EX63, HOSTED] = SOURCES;
 
@@ -155,4 +155,45 @@ test("gate evaluation runs only on completed upstream jobs, not on every request
   );
   assert.match(source, /types: \[completed\]/);
   assert.doesNotMatch(source, /types: \[requested, completed\]/);
+});
+
+test("a transient HTTP 500 when posting CI Gate status is retried", async () => {
+  const original = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts += 1;
+    return {
+      status: attempts === 1 ? 500 : 201,
+      text: async () => JSON.stringify({ ok: true }),
+    };
+  };
+  try {
+    const result = await api("/repos/example/project/statuses/deadbeef", {
+      method: "POST",
+      body: { state: "success", context: "CI Gate" },
+    });
+    assert.equal(result.status, 201);
+    assert.equal(attempts, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("CI Gate never retries permanent permission errors", async () => {
+  const original = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts += 1;
+    return { status: 403, text: async () => JSON.stringify({ message: "forbidden" }) };
+  };
+  try {
+    const result = await api("/repos/example/project/statuses/deadbeef", {
+      method: "POST",
+      body: { state: "success", context: "CI Gate" },
+    });
+    assert.equal(result.status, 403);
+    assert.equal(attempts, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
 });
