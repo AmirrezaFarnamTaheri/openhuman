@@ -4,6 +4,5 @@
  * local diagnostic maps. The production default is a smaller dist directory.
  */
 export function shouldGenerateSourcemaps(env = process.env) {
-  return Boolean(env.SENTRY_AUTH_TOKEN?.trim()) ||
-    env.OPENHUMAN_BUILD_SOURCEMAPS === "1";
+  return Boolean(env.SENTRY_AUTH_TOKEN?.trim()) || env.OPENHUMAN_BUILD_SOURCEMAPS === '1';
 }

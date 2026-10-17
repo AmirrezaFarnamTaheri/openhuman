@@ -139,7 +139,15 @@ rust-tauri:
 # self-test job on any mock/script change.
 scripts:
   - '.github/workflows/ci-*.yml'
+  - '.github/workflows/ui-preview.yml'
   - '.github/ci-paths-filter.yml'
+  - '.husky/pre-push'
+  - 'package.json'
+  - 'pnpm-lock.yaml'
+  - 'pnpm-workspace.yaml'
+  # CI helpers and their Node/Python tests must test themselves, including
+  # routing, link retries and the resumable fork census.
+  - 'scripts/ci/**'
   - 'scripts/ci/self-hosted/**'
   - 'scripts/ci/check-module-boundaries.mjs'
   - 'scripts/ci/module-boundaries.json'
@@ -181,10 +189,7 @@ scripts:
   # pin its clauses, or the counter's anchoring and its
   # cfg_attr guard can be loosened with nothing watching.
   - 'scripts/ci/check-ignored-tests.mjs'
-  # The web E2E build/session contract has script-level regression
-  # tests; run them when either participant or Vite changes.
-  - 'app/scripts/e2e-web-build.sh'
-  - 'app/scripts/e2e-web-session.sh'
+  # Vite is the other participant in the web E2E build/session contract.
   - 'app/vite.config.*'
   # The storage-target parity test in self-hosted-lanes.test.mjs checks that
   # every registered `tests/storage_*_e2e.rs` target is in the storage lane

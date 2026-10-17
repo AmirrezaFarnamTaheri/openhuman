@@ -104,6 +104,27 @@ push_touches_rust() {
     '(^|/)[^/]+\.rs$|(^|/)Cargo\.(toml|lock)$|(^|/)rust-toolchain\.toml$|^\.cargo/|^\.gitmodules$|^crates/|^vendor/|^UNRESOLVED$'
 }
 
+push_touches_frontend() {
+  if [ "${PRE_PUSH_FORCE_FRONTEND:-}" = "1" ] || [ -z "$PUSH_REFS" ]; then
+    return 0
+  fi
+  # Preserve whole-app lint/typechecking whenever a frontend input changes.
+  # Workspace packages and dependency settings may affect the app indirectly.
+  printf '%s\n' "$PUSHED_PATHS" | grep -Eq \
+    '^app/|^packages/|^package\.json$|^pnpm-(lock|workspace)\.yaml$|^\.npmrc$|^\.husky/pre-push$|^UNRESOLVED$'
+}
+
+CHECK_FRONTEND=0
+CHECK_RUST=0
+if push_touches_frontend; then CHECK_FRONTEND=1; fi
+if push_touches_rust; then CHECK_RUST=1; fi
+
+if [ "$CHECK_FRONTEND" = "0" ] && [ "$CHECK_RUST" = "0" ]; then
+  echo "No app or Rust changes in this push — skipping app checks and rust:clippy."
+  echo "(PRE_PUSH_FORCE_FRONTEND=1 or PRE_PUSH_FORCE_CLIPPY=1 runs them anyway.)"
+  exit 0
+fi
+
 # Windows Git Bash can miss Node/Pnpm in PATH when hooks run.
 # Recover from common PATH drift by hydrating from where.exe.
 has_node() {
@@ -155,41 +176,40 @@ if ! has_pnpm; then
   exit 1
 fi
 
-# Run format check first (capture exit code without breaking script)
-set +e
-run_check pnpm format:check
-FORMAT_EXIT=$?
-set -e
-
-# If format check failed, run format to auto-fix
-if [ $FORMAT_EXIT -ne 0 ]; then
-  echo "Formatting issues detected. Running format to auto-fix..."
-  pnpm format
+# Checks never rewrite the working tree during a push. Formatting or lint
+# failures identify the explicit repair command below so unrelated local
+# work cannot be silently changed by a hook.
+FORMAT_EXIT=0
+RUST_FORMAT_EXIT=0
+LINT_EXIT=0
+COMPILE_EXIT=0
+CMD_TOKENS_EXIT=0
+UI_TOKENS_EXIT=0
+if [ "$CHECK_FRONTEND" = "1" ]; then
+  set +e
+  run_check pnpm --dir app run format:check:prettier
+  FORMAT_EXIT=$?
+  run_check pnpm lint
+  LINT_EXIT=$?
+  run_check pnpm compile
+  COMPILE_EXIT=$?
+  # Capture each token lint separately so a later success cannot hide failure.
+  run_check pnpm --dir app run lint:commands-tokens
+  CMD_TOKENS_EXIT=$?
+  run_check pnpm --dir app run lint:ui-tokens
+  UI_TOKENS_EXIT=$?
+  set -e
+else
+  echo "No app changes in this push — skipping frontend format, lint and TypeScript checks."
 fi
-
-# Run lint check (capture exit code without breaking script)
-set +e
-run_check pnpm lint
-LINT_EXIT=$?
-set -e
-
-# If lint check failed, run lint:fix to auto-fix
-if [ $LINT_EXIT -ne 0 ]; then
-  echo "Linting issues detected. Running lint:fix to auto-fix..."
-  pnpm lint:fix
-fi
-
-# Run TypeScript compile check (capture exit code without breaking script)
-set +e
-run_check pnpm compile
-COMPILE_EXIT=$?
-set -e
 
 # Run Clippy for both Rust codebases; Clippy also performs compile checks.
 # Only when the push carries Rust — see `push_touches_rust`.
 RUST_CLIPPY_EXIT=0
-if push_touches_rust; then
+if [ "$CHECK_RUST" = "1" ]; then
   set +e
+  run_check pnpm --dir app run rust:format:check
+  RUST_FORMAT_EXIT=$?
   run_check pnpm rust:clippy
   RUST_CLIPPY_EXIT=$?
   set -e
@@ -198,27 +218,17 @@ else
   echo "(PRE_PUSH_FORCE_CLIPPY=1 runs it anyway.)"
 fi
 
-# Enforce scoped cmd-* tokens in components/commands/.
-# Capture each exit separately: reading `$?` after the second one discarded the
-# first, so a lint:commands-tokens failure passed silently whenever
-# lint:ui-tokens succeeded.
-set +e
-run_check pnpm --dir app run lint:commands-tokens
-CMD_TOKENS_EXIT=$?
-run_check pnpm --dir app run lint:ui-tokens
-UI_TOKENS_EXIT=$?
-set -e
-
-# Exit with error if any command still fails after fixes
-if [ $FORMAT_EXIT -ne 0 ] || [ $LINT_EXIT -ne 0 ] || [ $COMPILE_EXIT -ne 0 ] || [ $RUST_CLIPPY_EXIT -ne 0 ] || [ $CMD_TOKENS_EXIT -ne 0 ] || [ $UI_TOKENS_EXIT -ne 0 ]; then
+# Exit with error if any applicable check fails.
+if [ $FORMAT_EXIT -ne 0 ] || [ $RUST_FORMAT_EXIT -ne 0 ] || [ $LINT_EXIT -ne 0 ] || [ $COMPILE_EXIT -ne 0 ] || [ $RUST_CLIPPY_EXIT -ne 0 ] || [ $CMD_TOKENS_EXIT -ne 0 ] || [ $UI_TOKENS_EXIT -ne 0 ]; then
   echo
   echo "============================================================"
   echo "Pre-push checks failed."
   if [ $FORMAT_EXIT -ne 0 ] || [ $LINT_EXIT -ne 0 ]; then
-    echo "Formatting and/or lint auto-fixes have been applied to your"
-    echo "working tree. Please re-commit and push again:"
-    echo "    git add -A && git commit -m 'chore: apply auto-fixes'"
-    echo "    git push"
+    echo "Run pnpm --dir app exec prettier --write . and/or pnpm lint:fix,"
+    echo "review the changes, commit them, then push again."
+  fi
+  if [ $RUST_FORMAT_EXIT -ne 0 ]; then
+    echo "Run pnpm --dir app run rust:format, review and commit the changes."
   fi
   if [ $COMPILE_EXIT -ne 0 ] || [ $RUST_CLIPPY_EXIT -ne 0 ] || [ $CMD_TOKENS_EXIT -ne 0 ] || [ $UI_TOKENS_EXIT -ne 0 ]; then
     echo "Fix the remaining errors above (TypeScript / Rust / cmd-tokens)"

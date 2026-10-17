@@ -121,7 +121,10 @@ fn only_explicit_known_responses_providers_advertise_the_endpoint() {
 #[test]
 fn responses_api_capability_is_coupled_to_the_preset_list() {
     for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
-        let expected = matches!(provider.slug, "openai" | "prodex" | "nebius" | "openrouter" | "xai");
+        let expected = matches!(
+            provider.slug,
+            "openai" | "prodex" | "nebius" | "openrouter" | "xai"
+        );
         assert_eq!(
             builtin_cloud_supports_responses_api(provider.slug),
             expected,
@@ -341,11 +344,13 @@ fn per_model_protocol_override_round_trips_without_changing_legacy_defaults() {
         .unwrap()
         .get("model_transports")
         .is_none());
-    assert!(serde_json::from_value::<CloudProviderCreds>(serde_json::json!({
-        "slug": "invalid", "endpoint": "https://example/v1",
-        "model_transports": {"model": "unsupported_protocol"}
-    }))
-    .is_err());
+    assert!(
+        serde_json::from_value::<CloudProviderCreds>(serde_json::json!({
+            "slug": "invalid", "endpoint": "https://example/v1",
+            "model_transports": {"model": "unsupported_protocol"}
+        }))
+        .is_err()
+    );
 }
 
 #[test]
@@ -354,7 +359,10 @@ fn model_transport_overrides_reject_ambiguous_ids_and_unbounded_maps() {
     use std::collections::HashMap;
     for name in ["", " padded", "padded ", "line\nbreak", "x\tbad"] {
         let overrides = HashMap::from([(name.to_owned(), ModelTransport::Responses)]);
-        assert!(normalize_model_transports(overrides).is_err(), "invalid model id: {name:?}");
+        assert!(
+            normalize_model_transports(overrides).is_err(),
+            "invalid model id: {name:?}"
+        );
     }
     let too_many: HashMap<String, ModelTransport> = (0..513)
         .map(|n| (format!("model-{n}"), ModelTransport::ChatCompletions))
@@ -364,7 +372,10 @@ fn model_transport_overrides_reject_ambiguous_ids_and_unbounded_maps() {
         ("vendor/response".to_owned(), ModelTransport::Responses),
         ("vendor/chat".to_owned(), ModelTransport::ChatCompletions),
     ]);
-    assert_eq!(normalize_model_transports(approved.clone()).unwrap(), approved);
+    assert_eq!(
+        normalize_model_transports(approved.clone()).unwrap(),
+        approved
+    );
 }
 
 #[test]
@@ -565,14 +576,21 @@ fn verified_peer_compatible_presets_have_expected_bearer_routes() {
     for (slug, endpoint) in [
         ("aionlabs", "https://api.aionlabs.ai/v1"),
         ("sambanova", "https://api.sambanova.ai/v1"),
-        ("ovhcloud", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"),
+        (
+            "ovhcloud",
+            "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+        ),
         ("nebius", "https://api.tokenfactory.nebius.com/v1"),
         ("llm7", "https://api.llm7.io/v1"),
         ("synthetic", "https://api.synthetic.new/openai/v1"),
     ] {
         let preset = super::builtin_cloud_provider(slug).expect("verified peer preset");
         assert_eq!(preset.endpoint, endpoint, "{slug} endpoint");
-        assert_eq!(preset.auth_style, AuthStyle::Bearer, "{slug} authentication");
+        assert_eq!(
+            preset.auth_style,
+            AuthStyle::Bearer,
+            "{slug} authentication"
+        );
         let supports_responses = slug == "nebius";
         assert_eq!(
             builtin_cloud_supports_responses_api(slug),
@@ -620,19 +638,32 @@ fn prodex_gateway_is_a_builtin_responses_capable_bearer_provider() {
 fn peer_router_key_only_provider_presets_keep_transport_parity() {
     for (slug, label, endpoint) in [
         ("cohere", "Cohere", "https://api.cohere.ai/compatibility/v1"),
-        ("tokenrouter", "TokenRouter", "https://api.tokenrouter.io/v1"),
-        ("byteplus-modelark-ap", "BytePlus ModelArk (Asia Pacific)", "https://ark.ap-southeast.bytepluses.com/api/v3"),
-        ("byteplus-modelark-eu", "BytePlus ModelArk (Europe)", "https://ark.eu-west.bytepluses.com/api/v3"),
+        (
+            "tokenrouter",
+            "TokenRouter",
+            "https://api.tokenrouter.io/v1",
+        ),
+        (
+            "byteplus-modelark-ap",
+            "BytePlus ModelArk (Asia Pacific)",
+            "https://ark.ap-southeast.bytepluses.com/api/v3",
+        ),
+        (
+            "byteplus-modelark-eu",
+            "BytePlus ModelArk (Europe)",
+            "https://ark.eu-west.bytepluses.com/api/v3",
+        ),
     ] {
         let provider = super::builtin_cloud_provider(slug).expect("key-based peer preset");
         assert_eq!(provider.label, label);
         assert_eq!(provider.endpoint, endpoint);
         assert_eq!(provider.auth_style, AuthStyle::Bearer);
-        assert!(!builtin_cloud_supports_responses_api(slug),
-            "unverified Responses API support must not enable that transport");
+        assert!(
+            !builtin_cloud_supports_responses_api(slug),
+            "unverified Responses API support must not enable that transport"
+        );
     }
 }
-
 
 #[test]
 fn image_routes_reject_embedded_control_characters_before_url_normalization() {
@@ -656,9 +687,15 @@ fn image_routes_reject_embedded_control_characters_before_url_normalization() {
         );
     }
     assert!(super::normalize_fleet_config(
-        Some("https://images.example/v1".to_owned()), HashMap::new(), None
-    ).is_ok());
+        Some("https://images.example/v1".to_owned()),
+        HashMap::new(),
+        None
+    )
+    .is_ok());
     assert!(super::normalize_fleet_config(
-        Some("http://[::1]:8080/v1".to_owned()), HashMap::new(), None
-    ).is_ok());
+        Some("http://[::1]:8080/v1".to_owned()),
+        HashMap::new(),
+        None
+    )
+    .is_ok());
 }

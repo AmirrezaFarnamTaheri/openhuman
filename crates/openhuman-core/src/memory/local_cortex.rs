@@ -1,4 +1,3 @@
-
 /*!
  * Opt-in managed CortexDB for local desktop sessions.
  *
@@ -26,6 +25,33 @@ use super::error::{MemoryError, MemoryResult};
 const IMAGE: &str = "cortexdb/cortexdb:v0.10.1";
 const CONTAINER: &str = "openhuman-cortexdb";
 pub const MANAGED_ENDPOINT: &str = "http://127.0.0.1:3141";
+
+#[derive(Clone, Copy)]
+enum DockerStep {
+    Readiness,
+    Inspect,
+    Credential,
+    Start,
+    Create,
+}
+
+impl DockerStep {
+    fn failure_message(self) -> &'static str {
+        match self {
+            Self::Readiness => "Docker is not ready. Start Docker Desktop or Docker Engine and retry.",
+            Self::Inspect => "Could not inspect the local memory container. Check that Docker is running and accessible.",
+            Self::Credential => "Could not read the existing local memory credential. Check Docker access and retry.",
+            Self::Start => "Could not start the existing local memory container. Check Docker and make sure port 3141 is free.",
+            Self::Create => "Could not download or create the local memory container. Check your network connection, Docker access, free disk space and port 3141.",
+        }
+    }
+
+    fn failure(self) -> MemoryError {
+        // Do not include the command, stdout or stderr. `run --env` and
+        // `inspect .Config.Env` contain credentials, and Docker may echo them.
+        MemoryError::Unavailable(self.failure_message().to_string())
+    }
+}
 
 fn launch_args(key: &str) -> Vec<String> {
     [
@@ -79,32 +105,41 @@ fn docker_executable() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("docker"))
 }
 
-async fn docker(docker: &Path, args: &[&str], seconds: u64) -> MemoryResult<Output> {
+async fn docker(
+    docker: &Path,
+    args: &[&str],
+    seconds: u64,
+    step: DockerStep,
+) -> MemoryResult<Output> {
     timeout(
         Duration::from_secs(seconds),
-        Command::new(docker)
-            .args(args)
-            .kill_on_drop(true)
-            .output(),
+        Command::new(docker).args(args).kill_on_drop(true).output(),
     )
     .await
-    .map_err(|_| MemoryError::Unavailable("Docker took too long to respond".to_string()))?
-    .map_err(|_| {
-        MemoryError::Unavailable(
-            "Docker Desktop or Docker Engine is required for automatic local memory".to_string(),
-        )
+    .map_err(|_| MemoryError::Unavailable(format!("{} Docker timed out.", step.failure_message())))?
+    .map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            MemoryError::Unavailable(
+                "Docker Desktop or Docker Engine is required for automatic local memory"
+                    .to_string(),
+            )
+        } else {
+            step.failure()
+        }
     })
 }
 
-async fn checked(docker_bin: &Path, args: &[&str], seconds: u64) -> MemoryResult<Output> {
-    let output = docker(docker_bin, args, seconds).await?;
+async fn checked(
+    docker_bin: &Path,
+    args: &[&str],
+    seconds: u64,
+    step: DockerStep,
+) -> MemoryResult<Output> {
+    let output = docker(docker_bin, args, seconds, step).await?;
     if output.status.success() {
         Ok(output)
     } else {
-        Err(MemoryError::Unavailable(
-            "Local memory could not start. Check Docker and make sure port 3141 is free."
-                .to_string(),
-        ))
+        Err(step.failure())
     }
 }
 
@@ -144,11 +179,24 @@ pub async fn ensure_running(config: &Config) -> MemoryResult<String> {
     }
 
     let docker_bin = docker_executable();
-    checked(&docker_bin, &["info", "--format", "{{.ServerVersion}}"], 15).await?;
+    checked(
+        &docker_bin,
+        &["info", "--format", "{{.ServerVersion}}"],
+        15,
+        DockerStep::Readiness,
+    )
+    .await?;
     let inspect = docker(
         &docker_bin,
-        &["container", "inspect", "--format", "{{.State.Running}}", CONTAINER],
+        &[
+            "container",
+            "inspect",
+            "--format",
+            "{{.State.Running}}",
+            CONTAINER,
+        ],
         15,
+        DockerStep::Inspect,
     )
     .await?;
 
@@ -156,17 +204,33 @@ pub async fn ensure_running(config: &Config) -> MemoryResult<String> {
         // Refuse unrelated containers with this name; never replace/delete one.
         let image = checked(
             &docker_bin,
-            &["container", "inspect", "--format", "{{.Config.Image}}", CONTAINER],
+            &[
+                "container",
+                "inspect",
+                "--format",
+                "{{.Config.Image}}",
+                CONTAINER,
+            ],
             15,
+            DockerStep::Inspect,
         )
         .await?;
         let label = checked(
             &docker_bin,
-            &["container", "inspect", "--format", "{{index .Config.Labels \"openhuman.managed\"}}", CONTAINER],
+            &[
+                "container",
+                "inspect",
+                "--format",
+                "{{index .Config.Labels \"openhuman.managed\"}}",
+                CONTAINER,
+            ],
             15,
+            DockerStep::Inspect,
         )
         .await?;
-        if !String::from_utf8_lossy(&image.stdout).trim().starts_with("cortexdb/cortexdb:")
+        if !String::from_utf8_lossy(&image.stdout)
+            .trim()
+            .starts_with("cortexdb/cortexdb:")
             || String::from_utf8_lossy(&label.stdout).trim() != "memory"
         {
             return Err(MemoryError::Unavailable(
@@ -175,8 +239,15 @@ pub async fn ensure_running(config: &Config) -> MemoryResult<String> {
         }
         let env = checked(
             &docker_bin,
-            &["container", "inspect", "--format", "{{json .Config.Env}}", CONTAINER],
+            &[
+                "container",
+                "inspect",
+                "--format",
+                "{{json .Config.Env}}",
+                CONTAINER,
+            ],
             15,
+            DockerStep::Credential,
         )
         .await?;
         let key = recover_key(&String::from_utf8_lossy(&env.stdout)).ok_or_else(|| {
@@ -185,18 +256,20 @@ pub async fn ensure_running(config: &Config) -> MemoryResult<String> {
             )
         })?;
         if String::from_utf8_lossy(&inspect.stdout).trim() != "true" {
-            checked(&docker_bin, &["start", CONTAINER], 60).await?;
+            checked(&docker_bin, &["start", CONTAINER], 60, DockerStep::Start).await?;
         }
         key
     } else {
-        // Preserve a credential already configured for CortexDB. Using a new
-        // password here would silently break switching back to a cloud endpoint.
+        // Reuse only the app-owned local credential. Manual/cloud connections
+        // have a separate identity and are never sent to this container.
         let key = engine::read_managed_cortexdb_key(config)
-            .map_err(|_| MemoryError::Unavailable("Could not read the memory credential".to_string()))?
+            .map_err(|_| {
+                MemoryError::Unavailable("Could not read the memory credential".to_string())
+            })?
             .unwrap_or_else(|| format!("oh-{}", uuid::Uuid::new_v4().simple()));
         let args = launch_args(&key);
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        checked(&docker_bin, &refs, 300).await?;
+        checked(&docker_bin, &refs, 300, DockerStep::Create).await?;
         key
     };
 

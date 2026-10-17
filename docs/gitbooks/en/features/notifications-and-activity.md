@@ -63,7 +63,7 @@ These per-provider settings have no UI today. Set them through the RPC or by han
 
 A quiet tray in the bottom-right corner collects things you can act on: a rejected provider key, a reached plan limit, a keyring consent prompt. Repeats of the same problem bump a count instead of stacking. The tray lives in memory, so it clears on restart.
 
-Product announcements arrive separately, as a modal shown once per signed-in session. OpenHuman remembers the ids you have already seen.
+Product announcements appear in the same tray without opening a dialog or interrupting your current task. They retain their severity and optional link. Dismissed announcements are remembered for each signed-in user across restarts.
 
 ## Where background work shows up
 

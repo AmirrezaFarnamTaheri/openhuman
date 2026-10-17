@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // Bengali (বাংলা) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': 'সেটিংস খুঁজুন',
+  'settings.search.noResults': 'কোনো মিলযুক্ত সেটিংস পাওয়া যায়নি',
+  'settings.ai.advancedModelManagement': 'মডেল ও API কী-এর উন্নত ব্যবস্থাপনা',
+  'settings.ai.providerConnectedRoutingHint':
+    'প্রদানকারী সংযুক্ত হয়েছে। আপনার চ্যাটে কোন মডেল ব্যবহার করবেন তা বেছে নিন।',
+  'settings.ai.chooseChatModel': 'চ্যাট মডেল বেছে নিন',
+  'walkthrough.takeTour': 'অ্যাপ পরিচিতি দেখুন',
+  'connections.navigation.showAll': 'সব সংযোগ দেখান',
+  'connections.navigation.showFewer': 'কম সংযোগ দেখান',
+  'memoryPage.advanced.fewer': 'কম বিকল্প',
+  'memoryPage.advanced.show': 'উন্নত',
+  'memoryPage.engine.autoLocalTitle': 'এই কম্পিউটারে মেমরি',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman আপনার জন্য স্থানীয় মেমরি সেট আপ ও সংযুক্ত করে। Docker প্রয়োজন।',
+  'memoryPage.engine.autoLocalStarting': 'স্থানীয় মেমরি চালু হচ্ছে…',
+  'memoryPage.engine.autoLocal': 'স্থানীয় মেমরি চালু করুন',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Docker Desktop বা Docker Engine চালু করুন এবং পোর্ট 3141 উপলব্ধ আছে কিনা নিশ্চিত করুন।',
+  'memoryPage.engine.autoLocalHelp': 'Docker ইনস্টল বা চালু করুন',
+
   // Share cards (#5006).
   'share.copyImage': 'ছবি কপি করুন',
   'feedback.header.desc': 'ধারণা শেয়ার করুন এবং আমরা পরবর্তীতে কী তৈরি করব তা ভোট দিন।',

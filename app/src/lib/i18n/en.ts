@@ -1,6 +1,27 @@
 import type { TranslationMap } from './types';
 
 const en: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': 'Search settings',
+  'settings.search.noResults': 'No matching settings',
+  'settings.ai.advancedModelManagement': 'Advanced model and API key management',
+  'settings.ai.providerConnectedRoutingHint':
+    'Provider connected. Choose which model your chats should use.',
+  'settings.ai.chooseChatModel': 'Choose chat model',
+  'walkthrough.takeTour': 'Take a tour',
+  'connections.navigation.showAll': 'Show all connections',
+  'connections.navigation.showFewer': 'Show fewer connections',
+  'memoryPage.advanced.fewer': 'Fewer options',
+  'memoryPage.advanced.show': 'Advanced',
+  'memoryPage.engine.autoLocalTitle': 'Memory on this computer',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman sets up and connects local memory for you. Docker is required.',
+  'memoryPage.engine.autoLocalStarting': 'Starting local memory…',
+  'memoryPage.engine.autoLocal': 'Start local memory',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Start Docker Desktop (or Docker Engine) and make sure port 3141 is available.',
+  'memoryPage.engine.autoLocalHelp': 'Install or start Docker',
+
   // Navigation
   'nav.home': 'Home',
   'nav.chat': 'Chat',

@@ -300,6 +300,8 @@ export default function RootShellLayout({
         <ContentSurface unframed={unframed}>
           <div
             data-testid="root-shell-routed-content"
+            data-app-focus-fallback
+            tabIndex={-1}
             className="flex min-h-0 min-w-0 flex-1 flex-col"
             style={{ paddingInlineStart: routedContentInset }}>
             {children}

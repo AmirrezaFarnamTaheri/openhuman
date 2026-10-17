@@ -2,8 +2,8 @@ import createDebug from 'debug';
 import { type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useT } from '../../../lib/i18n/I18nContext';
 import { Alert, AlertDescription } from '../../../components/ui';
+import { useT } from '../../../lib/i18n/I18nContext';
 import { useCoreState } from '../../../providers/CoreStateProvider';
 import { trackEvent } from '../../../services/analytics';
 import { CUSTOM_WIZARD_ROUTES, CUSTOM_WIZARD_STEPS } from '../customWizardSteps';
@@ -66,38 +66,38 @@ export default function CustomWizardConfigPage({
 
   return (
     <>
-    <CustomWizardStep
-      testId={`onboarding-custom-${stepKey}-step`}
-      stepIndex={stepIndex}
-      stepCount={CUSTOM_WIZARD_STEPS.length}
-      title={t(`${namespace}.title`)}
-      subtitle={t(`${namespace}.subtitle`)}
-      configureContent={configureContent}
-      continueDisabled={continueDisabled}
-      continueHint={continueHint}
-      secondaryAction={secondaryAction}
-      onBack={() => void handleBack()}
-      onContinue={async () => {
-        trackEvent('onboarding_step_complete', { step_name: `custom_${stepKey}` });
-        if (isLast) {
-          try {
-            await completeAndExit();
-          } catch (err) {
-            log('[onboarding:custom-%s] completeAndExit failed: %s', stepKey, describeError(err));
+      <CustomWizardStep
+        testId={`onboarding-custom-${stepKey}-step`}
+        stepIndex={stepIndex}
+        stepCount={CUSTOM_WIZARD_STEPS.length}
+        title={t(`${namespace}.title`)}
+        subtitle={t(`${namespace}.subtitle`)}
+        configureContent={configureContent}
+        continueDisabled={continueDisabled}
+        continueHint={continueHint}
+        secondaryAction={secondaryAction}
+        onBack={() => void handleBack()}
+        onContinue={async () => {
+          trackEvent('onboarding_step_complete', { step_name: `custom_${stepKey}` });
+          if (isLast) {
+            try {
+              await completeAndExit();
+            } catch (err) {
+              log('[onboarding:custom-%s] completeAndExit failed: %s', stepKey, describeError(err));
+            }
+            return;
           }
-          return;
-        }
-        navigate(CUSTOM_WIZARD_ROUTES[CUSTOM_WIZARD_STEPS[stepIndex + 1]]);
-      }}
-      continueLabel={isLast ? t('onboarding.custom.finish') : undefined}
-    />
-    {backError && (
-      <Alert variant="destructive" data-testid="onboarding-back-error" role="alert">
-        <AlertDescription>
-          {t('onboarding.custom.backFailed', 'Could not go back. Please retry.')}
-        </AlertDescription>
-      </Alert>
-    )}
+          navigate(CUSTOM_WIZARD_ROUTES[CUSTOM_WIZARD_STEPS[stepIndex + 1]]);
+        }}
+        continueLabel={isLast ? t('onboarding.custom.finish') : undefined}
+      />
+      {backError && (
+        <Alert variant="destructive" data-testid="onboarding-back-error" role="alert">
+          <AlertDescription>
+            {t('onboarding.custom.backFailed', 'Could not go back. Please retry.')}
+          </AlertDescription>
+        </Alert>
+      )}
     </>
   );
 }

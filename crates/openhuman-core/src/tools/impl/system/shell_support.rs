@@ -54,6 +54,50 @@ pub(super) fn exec_result(
     }
 }
 
+/// Maximum output size in bytes (1MB).
+#[cfg(feature = "modules")]
+const MAX_OUTPUT_BYTES: usize = 1_048_576;
+#[cfg(feature = "modules")]
+pub(super) fn docker_module_result(
+    output: crate::modules::tinybox::contract::DockerRunOutput,
+    explicit_timeout: Option<Duration>,
+) -> ToolResult {
+    let mut stdout = output.stdout;
+    let mut stderr = output.stderr;
+    if stdout.len() > MAX_OUTPUT_BYTES {
+        stdout.truncate(crate::util::floor_char_boundary(&stdout, MAX_OUTPUT_BYTES));
+        stdout.push_str("\n... [output truncated at 1MB]");
+    }
+    if stderr.len() > MAX_OUTPUT_BYTES {
+        stderr.truncate(crate::util::floor_char_boundary(&stderr, MAX_OUTPUT_BYTES));
+        stderr.push_str("\n... [stderr truncated at 1MB]");
+    }
+
+    if output.timed_out {
+        let secs = explicit_timeout
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        let mut message = tool_timeout_message(secs);
+        if !stdout.is_empty() {
+            message.push_str("\n[stdout]\n");
+            message.push_str(&stdout);
+        }
+        if !stderr.is_empty() {
+            message.push_str("\n[stderr]\n");
+            message.push_str(&stderr);
+        }
+        ToolResult::error(message)
+    } else if output.exit_code == 0 {
+        if stderr.is_empty() {
+            ToolResult::success(stdout)
+        } else {
+            ToolResult::success(format!("{stdout}\n[stderr]\n{stderr}"))
+        }
+    } else {
+        command_failure(Some(output.exit_code), &stdout, &stderr)
+    }
+}
+
 /// Python's text-encoding defaults for a child, unless the parent sets its own.
 /// Under `cmd.exe` the console code page is a legacy one (cp1252, cp437), so a
 /// script printing anything outside it dies with `UnicodeEncodeError`. Both are
@@ -131,7 +175,6 @@ pub(super) fn extend_explicit_environment(
     }
 }
 
-
 /// Recognize only a simple top-level test/build/lint invocation whose OS
 /// process exit is propagated by the shell tool. Deliberately conservative:
 /// pipes, redirections, quoting, shell expansion and chained commands are
@@ -144,7 +187,10 @@ fn verification_kind(command: &str) -> Option<&'static str> {
     let source = command.trim();
     if source.is_empty()
         || source.chars().any(|c| {
-            matches!(c, '|' | '&' | ';' | '<' | '>' | '$' | '\x60' | '\\' | '\'' | '"' | '#' | '\n' | '\r')
+            matches!(
+                c,
+                '|' | '&' | ';' | '<' | '>' | '$' | '\x60' | '\\' | '\'' | '"' | '#' | '\n' | '\r'
+            )
         })
     {
         return None;
@@ -153,9 +199,16 @@ fn verification_kind(command: &str) -> Option<&'static str> {
     if args.iter().any(|arg| {
         matches!(
             *arg,
-            "-h" | "-V" | "--help" | "--version" | "--list" |
-            "-list" | "--collect-only" | "--no-run" | "--dry-run" |
-            "--if-present" | "--passWithNoTests"
+            "-h" | "-V"
+                | "--help"
+                | "--version"
+                | "--list"
+                | "-list"
+                | "--collect-only"
+                | "--no-run"
+                | "--dry-run"
+                | "--if-present"
+                | "--passWithNoTests"
         )
     }) {
         return None;

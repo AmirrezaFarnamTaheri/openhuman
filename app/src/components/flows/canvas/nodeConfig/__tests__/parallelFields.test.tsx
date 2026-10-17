@@ -8,9 +8,7 @@ describe('native scatter/gather configuration', () => {
     const onChange = vi.fn();
     render(<ScatterForm config={{ lanes: 8 }} onChange={onChange} />);
     expect(screen.getByTestId('node-config-scatter-lanes')).toHaveAttribute('max', '256');
-    fireEvent.change(screen.getByTestId('node-config-scatter-lanes'), {
-      target: { value: '12' },
-    });
+    fireEvent.change(screen.getByTestId('node-config-scatter-lanes'), { target: { value: '12' } });
     expect(onChange).toHaveBeenCalledWith({ lanes: 12 });
     fireEvent.change(screen.getByTestId('node-config-scatter-path'), {
       target: { value: 'records' },

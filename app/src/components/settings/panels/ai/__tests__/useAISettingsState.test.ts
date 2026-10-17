@@ -51,15 +51,17 @@ async function mountLoaded() {
 describe('useAISettings().save — save-time provider re-probe', () => {
   it('retains saved per-model routing through the panel client config round-trip', async () => {
     api.loadAISettings.mockResolvedValueOnce({
-      cloudProviders: [{
-        id: 'p_mixed',
-        slug: 'mixed',
-        label: 'Mixed gateway',
-        endpoint: 'https://router.example/v1',
-        auth_style: 'bearer',
-        model_transports: { 'response-model': 'responses' },
-        has_api_key: true,
-      }],
+      cloudProviders: [
+        {
+          id: 'p_mixed',
+          slug: 'mixed',
+          label: 'Mixed gateway',
+          endpoint: 'https://router.example/v1',
+          auth_style: 'bearer',
+          model_transports: { 'response-model': 'responses' },
+          has_api_key: true,
+        },
+      ],
       routing: EMPTY_SETTINGS.routing,
       modelRegistry: [],
       defaultModel: '',

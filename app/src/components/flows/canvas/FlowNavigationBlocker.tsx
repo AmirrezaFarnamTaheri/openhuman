@@ -1,9 +1,5 @@
-import { useCallback, useContext, useEffect, type RefObject } from 'react';
-import {
-  UNSAFE_DataRouterContext,
-  useBlocker,
-  type BlockerFunction,
-} from 'react-router-dom';
+import { type RefObject, useCallback, useContext, useEffect } from 'react';
+import { type BlockerFunction, UNSAFE_DataRouterContext, useBlocker } from 'react-router-dom';
 
 export interface BlockedFlowNavigation {
   proceed: () => void;
@@ -12,7 +8,7 @@ export interface BlockedFlowNavigation {
 
 interface FlowNavigationBlockerProps {
   dirty: boolean;
-  /** Set only after a successful persistence action that deliberately changes routes. */
+  /** Permit one deliberate navigation after save or confirmed discard. */
   bypassRef: RefObject<boolean>;
   blockedRef: RefObject<BlockedFlowNavigation | null>;
   onBlocked: () => void;
@@ -36,10 +32,15 @@ function ActiveFlowNavigationBlocker({
   onBlocked,
 }: FlowNavigationBlockerProps) {
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) =>
-      dirty &&
-      !bypassRef.current &&
-      currentLocation.pathname !== nextLocation.pathname,
+    ({ currentLocation, nextLocation }) => {
+      // A bypass belongs to one attempted navigation. Never let it disable
+      // future guards if a replace stays on this editor or a route is aborted.
+      if (bypassRef.current) {
+        bypassRef.current = false;
+        return false;
+      }
+      return dirty && currentLocation.pathname !== nextLocation.pathname;
+    },
     [dirty, bypassRef]
   );
   const blocker = useBlocker(shouldBlock);

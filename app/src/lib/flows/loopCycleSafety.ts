@@ -30,12 +30,13 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
   // Pinned TinyFlows validation requires exactly one trigger, whose run-level
   // recursion/visit budget applies to the entire run, even across distinct
   // SCCs. Trigger cardinality is validated authoritatively by tinyflows.
-  const hasRunLevelBound = graph.nodes.some(node =>
-    node.kind === 'trigger' &&
-    ['recursion_limit', 'max_node_visits'].some(field => {
-      const value = node.config?.[field];
-      return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
-    })
+  const hasRunLevelBound = graph.nodes.some(
+    node =>
+      node.kind === 'trigger' &&
+      ['recursion_limit', 'max_node_visits'].some(field => {
+        const value = node.config?.[field];
+        return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+      })
   );
   const outgoing = new Map<string, string[]>();
   const reverse = new Map<string, string[]>();
@@ -71,7 +72,12 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
       issues.push({
         code: 'unbounded_loop',
         nodeIds: [node.id],
-        message: 'Loop ' + node.id + ' must have max_iterations between 1 and ' + MAX_LOOP_ITERATIONS + '.',
+        message:
+          'Loop ' +
+          node.id +
+          ' must have max_iterations between 1 and ' +
+          MAX_LOOP_ITERATIONS +
+          '.',
       });
     }
   }
@@ -126,7 +132,9 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
       issues.push({
         code: 'cycle_without_bound',
         nodeIds: members,
-        message: 'Cyclic component [' + members.join(', ') +
+        message:
+          'Cyclic component [' +
+          members.join(', ') +
           '] needs a loop controller or a trigger recursion/visit bound.',
       });
       continue;
@@ -140,22 +148,17 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
     for (const index of incident) {
       const edge = graph.edges[index];
       const member = edge.to_node;
-      if (
-        loopNodes.length > 0 &&
-        !memberSet.has(edge.from_node) &&
-        !loopNodeIds.has(member)
-      ) {
+      if (loopNodes.length > 0 && !memberSet.has(edge.from_node) && !loopNodeIds.has(member)) {
         issues.push({
           code: 'loop_side_entry',
           nodeIds: [edge.from_node, member],
-          message: 'External flow must enter a cyclic component through a loop controller, not ' +
-            member + '.',
+          message:
+            'External flow must enter a cyclic component through a loop controller, not ' +
+            member +
+            '.',
         });
       }
-      if (
-        loopNodeIds.has(edge.from_node) &&
-        edge.from_port === 'done'
-      ) {
+      if (loopNodeIds.has(edge.from_node) && edge.from_port === 'done') {
         issues.push({
           code: 'loop_done_reenters',
           nodeIds: [edge.from_node, member],
@@ -193,8 +196,10 @@ export function validateLoopCycleSafety(graph: LoopSafetyGraph): LoopSafetyIssue
       issues.push({
         code: 'loop_bypass_cycle',
         nodeIds: offenders,
-        message: 'Cyclic component contains a cycle bypassing every loop controller: [' +
-          offenders.join(', ') + '].',
+        message:
+          'Cyclic component contains a cycle bypassing every loop controller: [' +
+          offenders.join(', ') +
+          '].',
       });
     }
   }

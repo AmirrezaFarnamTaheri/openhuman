@@ -2,12 +2,13 @@ import { useState } from 'react';
 
 import { useT } from '../../../lib/i18n/I18nContext';
 import TwoPaneNav from '../../layout/TwoPaneNav';
+import { TextField } from '../../ui';
 import { useSettingsNavigation } from '../hooks/useSettingsNavigation';
 import {
   entryRoute,
   NAV_GROUP_LABEL_KEY,
-  SETTINGS_ROUTE_REGISTRY,
   resolveSidebarId,
+  SETTINGS_ROUTE_REGISTRY,
   sidebarGroups,
 } from '../settingsRouteRegistry';
 import { SETTINGS_NAV_ICONS } from './settingsNavIcons';
@@ -55,20 +56,27 @@ const SettingsSidebar = () => {
 
   const term = search.trim().toLocaleLowerCase();
   const matchingRoutes = term
-    ? SETTINGS_ROUTE_REGISTRY.filter(entry => !entry.hiddenDeepLink && !entry.devOnly && (
-        t(entry.titleKey).toLocaleLowerCase().includes(term) ||
-        entry.id.toLocaleLowerCase().includes(term) ||
-        entry.searchKeywords?.some(keyword => keyword.toLocaleLowerCase().includes(term))
-      ))
+    ? SETTINGS_ROUTE_REGISTRY.filter(
+        entry =>
+          !entry.hiddenDeepLink &&
+          !entry.devOnly &&
+          (t(entry.titleKey).toLocaleLowerCase().includes(term) ||
+            entry.id.toLocaleLowerCase().includes(term) ||
+            entry.searchKeywords?.some(keyword => keyword.toLocaleLowerCase().includes(term)))
+      )
     : [];
-  const searchGroups = term ? [{
-    label: t('nav.settings'),
-    items: matchingRoutes.map(entry => ({
-      value: entry.id,
-      label: t(entry.titleKey),
-      testId: `settings-search-${entry.id}`,
-    })),
-  }] : groups;
+  const searchGroups = term
+    ? [
+        {
+          label: t('nav.settings'),
+          items: matchingRoutes.map(entry => ({
+            value: entry.id,
+            label: t(entry.titleKey),
+            testId: `settings-search-${entry.id}`,
+          })),
+        },
+      ]
+    : groups;
   for (const entry of matchingRoutes) routeById.set(entry.id, entryRoute(entry));
 
   return (
@@ -77,8 +85,11 @@ const SettingsSidebar = () => {
       walkthroughId="settings-menu"
       header={
         <label className="block">
-          <span className="sr-only">Search settings</span>
-          <input type="search" value={search} onChange={event => setSearch(event.target.value)}
+          <span className="sr-only">{t('settings.navigation.search')}</span>
+          <TextField
+            type="search"
+            value={search}
+            onChange={event => setSearch(event.target.value)}
             onKeyDown={event => {
               if (event.key === 'Enter' && matchingRoutes.length > 0) {
                 event.preventDefault();
@@ -86,18 +97,21 @@ const SettingsSidebar = () => {
                 setSearch('');
               }
             }}
-            placeholder="Search settings" aria-label="Search settings"
-            className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm text-content placeholder:text-content-muted"
+            placeholder={t('settings.navigation.search')}
           />
         </label>
       }
       groups={searchGroups}
-      footer={term && matchingRoutes.length === 0 ? (
-        <p data-testid="settings-search-empty" role="status"
-          className="px-2 py-4 text-sm text-content-muted">
-          {t('settings.search.noResults', 'No matching settings')}
-        </p>
-      ) : undefined}
+      footer={
+        term && matchingRoutes.length === 0 ? (
+          <p
+            data-testid="settings-search-empty"
+            role="status"
+            className="px-2 py-4 text-sm text-content-muted">
+            {t('settings.search.noResults', 'No matching settings')}
+          </p>
+        ) : undefined
+      }
       selected={activeSidebarId ?? ''}
       onSelect={id => {
         const route = routeById.get(id);

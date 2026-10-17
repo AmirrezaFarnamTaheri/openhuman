@@ -4,6 +4,8 @@ import { REASONING_EFFORTS } from '../../../features/conversations/aui/Reasoning
 import { NODE_KIND_ICON } from '../../../lib/flows/nodeKindIcons';
 import { NODE_GROUP_ORDER } from '../../../lib/flows/nodeKindMeta';
 import enAggregate from '../en';
+import { parallelFlowTranslations } from '../parallelFlowTranslations';
+import type { Locale } from '../types';
 
 const LOCALES = [
   'zh-CN',
@@ -61,6 +63,7 @@ describe('i18n coverage', () => {
 
   it.each(['en', ...LOCALES])('%s translates finite dynamic UI options', locale => {
     const flat = locale === 'en' ? enFlat : loadLocale(locale);
+    const effective = { ...flat, ...parallelFlowTranslations[locale as Locale] };
     const dynamicKeys = [
       ...REASONING_EFFORTS.map(effort => `composer.reasoning.${effort}`),
       ...Object.keys(NODE_KIND_ICON).map(kind => `flows.nodeKind.${kind}`),
@@ -68,7 +71,7 @@ describe('i18n coverage', () => {
       ...['none', 'subtle', 'default', 'round'].map(corner => `settings.layout.corners.${corner}`),
       ...['subtle', 'default', 'strong'].map(contrast => `settings.layout.contrast.${contrast}`),
     ];
-    const missing = dynamicKeys.filter(key => !(key in flat));
+    const missing = dynamicKeys.filter(key => !(key in effective));
     expect(missing).toEqual([]);
   });
   it.each(['en', ...LOCALES])('%s translates the multi-token connection controls', locale => {
@@ -94,6 +97,33 @@ describe('i18n coverage', () => {
     }
     for (const name of ['keyIndex', 'removeKeyIndex']) {
       expect(flat[`settings.ai.fleet.${name}`]).toContain('{index}');
+    }
+  });
+
+  it.each(['en', ...LOCALES])('%s translates navigation and local setup controls', locale => {
+    const flat = locale === 'en' ? enFlat : loadLocale(locale);
+    const keys = [
+      'settings.navigation.search',
+      'settings.search.noResults',
+      'settings.ai.advancedModelManagement',
+      'settings.ai.providerConnectedRoutingHint',
+      'settings.ai.chooseChatModel',
+      'walkthrough.takeTour',
+      'connections.navigation.showAll',
+      'connections.navigation.showFewer',
+      'memoryPage.advanced.fewer',
+      'memoryPage.advanced.show',
+      'memoryPage.engine.autoLocalTitle',
+      'memoryPage.engine.autoLocalHint',
+      'memoryPage.engine.autoLocalStarting',
+      'memoryPage.engine.autoLocal',
+      'memoryPage.engine.autoLocalTroubleshoot',
+      'memoryPage.engine.autoLocalHelp',
+    ];
+    for (const key of keys) {
+      expect(flat[key], `missing ${key} in ${locale}`).toBeTruthy();
+      if (locale !== 'en')
+        expect(flat[key], `${key} is untranslated in ${locale}`).not.toBe(enFlat[key]);
     }
   });
 

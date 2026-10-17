@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { parse as parseYaml } from "yaml";
 
 import { SOURCES, api, decide, findDecisiveJob, latestPrRun } from "../ci/ci-gate.mjs";
 
@@ -11,7 +12,7 @@ function entry(source, id, status, conclusion, job) {
   return {
     source,
     run: { id, status, conclusion, html_url: `https://runs/${id}` },
-    job: job === undefined ? null : { ...job, html_url: `https://jobs/${id}` },
+    job: job == null ? null : { ...job, html_url: `https://jobs/${id}` },
   };
 }
 
@@ -69,6 +70,21 @@ test("an upstream routing-only completion remains pending until fork hosted CI s
   ]);
   assert.equal(verdict.state, "pending");
   assert.match(verdict.description, /hosted CI/);
+});
+
+test("failed or cancelled routing never leaves a completed CI gate pending", () => {
+  for (const conclusion of ["failure", "cancelled", "timed_out", "action_required", "startup_failure"]) {
+    for (const job of [null, { status: "completed", conclusion: "skipped" }]) {
+      const verdict = decide([entry(EX63, 1, "completed", conclusion, job)]);
+      assert.equal(verdict.state, "failure", `${conclusion}: ${JSON.stringify(job)}`);
+    }
+  }
+});
+
+test("unfinished routing waits for its own result", () => {
+  const verdict = decide([entry(EX63, 1, "in_progress", null, null)]);
+  assert.equal(verdict.state, "pending");
+  assert.equal(verdict.description, "Waiting on CI Fast");
 });
 
 test("an EX63 failure waits for hosted CI instead of failing early", () => {
@@ -144,6 +160,32 @@ test("fork hosted lane passes through the decisive job under its own caller name
     decide([entry(HOSTED, 3, "completed", "success", job)]).state,
     "success",
   );
+});
+
+test("the active hosted caller wins over the inactive caller's skipped gate", () => {
+  const job = findDecisiveJob(HOSTED, [
+    { name: "Lanes / CI Fast (hosted) Gate", conclusion: "skipped" },
+    { name: "Fork PR lanes (hosted) / CI Fast (hosted) Gate", conclusion: "success" },
+  ]);
+  assert.equal(job?.conclusion, "success");
+});
+
+test("decisive job names follow the actual workflow callers and reusable gates", () => {
+  const workflow = name => parseYaml(readFileSync(
+    new URL(`../../.github/workflows/${name}`, import.meta.url), "utf8",
+  ));
+  const shared = workflow("ci-lanes.yml");
+  const cases = [
+    [EX63, "lanes", "ex63"],
+    [HOSTED, "lanes", "gate"],
+    [HOSTED, "fork-lanes", "gate"],
+  ];
+  for (const [source, callerId, gateId] of cases) {
+    const caller = workflow(source.workflow).jobs[callerId];
+    assert.equal(caller.uses, "./.github/workflows/ci-lanes.yml");
+    const name = `${caller.name} / ${shared.jobs[gateId].name}`;
+    assert.equal(findDecisiveJob(source, [{ name, conclusion: "success" }])?.name, name);
+  }
 });
 
 test("CI Gate does not mistake unrelated success jobs for required lanes", () => {

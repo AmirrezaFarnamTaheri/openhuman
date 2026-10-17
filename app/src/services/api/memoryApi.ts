@@ -93,6 +93,8 @@ export interface EnginesList {
 export interface EngineState {
   engine: string | null;
   endpoint?: string;
+  /** True only for memory started and owned by this app. Older cores omit it. */
+  managed_local?: boolean;
   has_key: boolean;
   status: EngineStatus;
   reason?: string;

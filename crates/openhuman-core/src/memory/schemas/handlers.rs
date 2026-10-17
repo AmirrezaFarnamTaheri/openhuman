@@ -19,7 +19,9 @@ use crate::memory::types::{
     SourceRemovedView, SourcesAddParams, SourcesListView, SourcesRemoveParams, SourcesSyncParams,
     SourcesSyncView,
 };
-use crate::memory::{backfill, brain, confine, engine, import, layout_migration, local_cortex, ops, sources};
+use crate::memory::{
+    backfill, brain, confine, engine, import, layout_migration, local_cortex, ops, sources,
+};
 
 fn parse<T: DeserializeOwned>(params: Map<String, Value>) -> Result<T, String> {
     serde_json::from_value(Value::Object(params))
@@ -75,23 +77,28 @@ pub(super) fn engine_set(ctx: DispatchCtx, params: Map<String, Value>) -> Contro
 }
 
 /// Explicit opt-in: prepare the locally owned CortexDB container, then
-/// persist its endpoint and credential using the same engine setter as the UI.
+/// persist its endpoint and credential with explicit managed ownership.
 pub(super) fn local_start(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     Box::pin(async move {
         parse::<EmptyParams>(params)?;
-        let mut config = load(&ctx).await?;
-        let key = local_cortex::ensure_running(&config).await.map_err(String::from)?;
-        let params = EngineSetParams {
-            engine: engine::CORTEXDB_ENGINE.to_string(),
-            endpoint: Some(local_cortex::MANAGED_ENDPOINT.to_string()),
-            api_key: Some(key),
-        };
-        ops::apply_engine_set(&mut config, &params).map_err(String::from)?;
-        config.components.memory = true;
-        save(&config).await.map_err(String::from)?;
-        engine::invalidate();
+        let config = load(&ctx).await?;
+        let key = local_cortex::ensure_running(&config)
+            .await
+            .map_err(String::from)?;
+        let config = save_ready_local_engine(&config, &key).await?;
         to_json(ops::engine_get(&config).await)
     })
+}
+
+async fn save_ready_local_engine(snapshot: &Config, key: &str) -> Result<Config, String> {
+    // Pulling the image can take minutes. Reload before applying the
+    // memory-only change, anchored to the original workspace even if the
+    // active account changes meanwhile.
+    let mut config = crate::config::ops::reload_config_snapshot_with_timeout(snapshot).await?;
+    ops::apply_managed_local_engine(&mut config, key).map_err(String::from)?;
+    save(&config).await.map_err(String::from)?;
+    engine::invalidate();
+    Ok(config)
 }
 
 pub(super) fn recall(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
@@ -374,3 +381,7 @@ pub(super) fn migration_retry(ctx: DispatchCtx, params: Map<String, Value>) -> C
         finish(layout_migration::retry(&load(&ctx).await?))
     })
 }
+
+#[cfg(test)]
+#[path = "handlers_tests.rs"]
+mod tests;

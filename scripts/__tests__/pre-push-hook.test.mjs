@@ -86,6 +86,7 @@ function runHook(ws, refLines, { fail = '', env = {} } = {}) {
       PNPM_LOG: ws.log,
       PNPM_FAIL: fail,
       PRE_PUSH_FORCE_CLIPPY: '',
+      PRE_PUSH_FORCE_FRONTEND: '',
       ...env,
     },
   });
@@ -120,15 +121,61 @@ test('a push with no Rust changes does not run rust:clippy', () => {
   const run = runHook(ws, [line]);
   assert.equal(run.status, 0, run.stdout);
   assert.equal(ranClippy(run), false, `clippy ran for a docs-only push: ${run.calls}`);
-  assert.match(run.stdout, /skipping rust:clippy/);
-  // The rest of the hook is untouched by the gate.
+  assert.match(run.stdout, /skipping .*rust:clippy/);
+  assert.deepEqual(run.calls, []);
+});
+
+test('an app-only push runs all app checks without Rust formatting or compilation', () => {
+  const { ws, line } = pushOf('app/src/View.tsx', 'export const View = () => null;\n');
+  const run = runHook(ws, [line]);
+  assert.equal(run.status, 0, run.stdout);
   assert.deepEqual(run.calls, [
-    'format:check',
+    '--dir app run format:check:prettier',
     'lint',
     'compile',
     '--dir app run lint:commands-tokens',
     '--dir app run lint:ui-tokens',
   ]);
+});
+
+test('a Rust-only push preserves format and clippy without compiling the app', () => {
+  const { ws, line } = pushOf('crates/openhuman-core/src/lib.rs', 'pub fn a() {}\n');
+  const run = runHook(ws, [line]);
+  assert.equal(run.status, 0, run.stdout);
+  assert.deepEqual(run.calls, ['--dir app run rust:format:check', 'rust:clippy']);
+});
+
+test('frontend dependency inputs and shared packages run app checks', () => {
+  for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', 'packages/shared/index.ts']) {
+    const { ws, line } = pushOf(path, 'changed\n');
+    const run = runHook(ws, [line]);
+    assert.ok(run.calls.includes('compile'), `${path}: ${run.calls}`);
+  }
+});
+
+test('PRE_PUSH_FORCE_FRONTEND also checks a docs-only push', () => {
+  const { ws, line } = pushOf('docs/guide.md', 'docs only\n');
+  const run = runHook(ws, [line], { env: { PRE_PUSH_FORCE_FRONTEND: '1' } });
+  assert.ok(run.calls.includes('compile'));
+  assert.equal(ranClippy(run), false);
+});
+
+test('format and lint failures report repair commands without rewriting work', () => {
+  for (const fail of ['format:check:prettier', 'lint']) {
+    const { ws, line } = pushOf('app/src/View.tsx', 'export const View = () => null;\n');
+    const run = runHook(ws, [line], { fail });
+    assert.equal(run.status, 1, run.stdout);
+    assert.ok(!run.calls.includes('format'));
+    assert.ok(!run.calls.includes('lint:fix'));
+    assert.match(run.stdout, /review the changes/);
+  }
+});
+
+test('Rust format failure still blocks a Rust-only push', () => {
+  const { ws, line } = pushOf('crates/openhuman-core/src/lib.rs', 'pub fn a() {}\n');
+  const run = runHook(ws, [line], { fail: 'rust:format:check' });
+  assert.equal(run.status, 1);
+  assert.match(run.stdout, /rust:format/);
 });
 
 test('a push that touches a .rs file still runs rust:clippy', () => {
@@ -240,20 +287,20 @@ test('one Rust ref among several decides for the whole push', () => {
 test('a lint:commands-tokens failure fails the hook', () => {
   // Regression for the defect: `$?` was read after `lint:ui-tokens`, so the
   // commands-tokens exit was discarded and this push passed.
-  const { ws, line } = pushOf('docs/guide.md', 'docs only\n');
+  const { ws, line } = pushOf('app/src/View.tsx', 'export const View = () => null;\n');
   const run = runHook(ws, [line], { fail: 'lint:commands-tokens' });
   assert.equal(run.status, 1, 'a failing lint:commands-tokens must fail the hook');
   assert.match(run.stdout, /cmd-tokens/);
 });
 
 test('a lint:ui-tokens failure still fails the hook', () => {
-  const { ws, line } = pushOf('docs/guide.md', 'docs only\n');
+  const { ws, line } = pushOf('app/src/View.tsx', 'export const View = () => null;\n');
   assert.equal(runHook(ws, [line], { fail: 'lint:ui-tokens' }).status, 1);
 });
 
 test('both token lints run even when the first one fails', () => {
   // Each has to report on its own; stopping at the first would hide the other.
-  const { ws, line } = pushOf('docs/guide.md', 'docs only\n');
+  const { ws, line } = pushOf('app/src/View.tsx', 'export const View = () => null;\n');
   const run = runHook(ws, [line], { fail: 'lint:commands-tokens' });
   assert.ok(run.calls.includes('--dir app run lint:commands-tokens'));
   assert.ok(run.calls.includes('--dir app run lint:ui-tokens'));

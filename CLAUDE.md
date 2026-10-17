@@ -35,7 +35,7 @@ The Rust crates form a strict chain; each one's normal dependencies name only
 the layer directly below it:
 
 ```text
-openhuman-core -> openhuman-embed -> openhuman-tinyhumans -> openhuman-rpc -> { app, cli, tui }
+{ app, cli, tui } -> openhuman-rpc -> openhuman-tinyhumans -> openhuman-embed -> openhuman-core
 ```
 
 Hosts (app, CLI, TUI) depend on `openhuman-rpc` alone and reach the core
@@ -785,12 +785,15 @@ serialization.
   `tinyhumansai/openhuman`.
 - Use the issue and PR templates.
 - Fix hook failures caused by your changes.
-- `.husky/pre-push` runs `rust:clippy` only when the push carries Rust
-  (`*.rs`, a manifest, `.cargo/`, `.gitmodules`, `crates/`, `vendor/`,
-  `rust-toolchain.toml`); it runs
-  anyway when the range cannot be resolved, or with
-  `PRE_PUSH_FORCE_CLIPPY=1`. `scripts/__tests__/pre-push-hook.test.mjs`
-  covers the hook.
+- `.husky/pre-push` scopes application checks to `app/`, `packages/`,
+  workspace dependency inputs and the hook itself. Rust formatting and Clippy
+  run when the push carries Rust (`*.rs`, Cargo manifests/lockfiles, `.cargo/`,
+  `.gitmodules`, `crates/`, `vendor/`, or `rust-toolchain.toml`). Unresolved
+  ranges run all applicable checks conservatively. Use
+  `PRE_PUSH_FORCE_FRONTEND=1` or `PRE_PUSH_FORCE_CLIPPY=1` to force a lane.
+  The hook reports failures without rewriting working files; run the suggested
+  repair command explicitly, review it, and commit the result before retrying.
+  `scripts/__tests__/pre-push-hook.test.mjs` covers the routing and failure paths.
 - macOS deep links require a built app bundle.
 - Windows registers `openhuman://` through `tauri-plugin-deep-link`.
 - Standalone debugging uses `./target/debug/openhuman-core serve`. Public

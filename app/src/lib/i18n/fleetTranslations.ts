@@ -1,4 +1,5 @@
 /** Feature-scoped provider-fleet messages. Keep every supported locale in sync. */
+import { modelManagementTranslations } from './modelManagement';
 import type { Locale } from './types';
 
 const keys = [
@@ -328,116 +329,22 @@ const messages = {
   ],
 } satisfies Record<Locale, readonly string[]>;
 
-// New Model Fleet controls and read-only suitability widget.
-// Locale overrides are expanded below; the English baseline covers missing
-// translations without rendering raw keys in the product.
-const maturationEnglish = {
-  "feasibility.contextTooSmall": "Context smaller than input + output tokens",
-  "feasibility.visionUnavailable": "Vision unsupported in saved metadata",
-  "feasibility.overBudget": "Estimated cost exceeds budget",
-  "feasibility.unknownContext": "Context size unknown",
-  "feasibility.unknownVision": "Vision capability unknown",
-  "feasibility.unknownPrice": "Price missing, zero or invalid",
-  "feasibility.aria": "Model suitability preview",
-  "feasibility.title": "Model suitability and cost preview",
-  "feasibility.advisory": "Based on saved metadata, not verified live prices, quotas, keys or availability. This is advisory only and does not change any workload route.",
-  "feasibility.input": "Estimated input tokens",
-  "feasibility.cached": "Cached input tokens (within input)",
-  "feasibility.output": "Estimated output tokens",
-  "feasibility.budget": "Cost limit (USD, optional)",
-  "feasibility.budgetAria": "Estimated cost limit in USD",
-  "feasibility.noLimit": "No limit",
-  "feasibility.requireVision": "Require vision",
-  "feasibility.invalidCached": "Cached input must be within total input tokens.",
-  "feasibility.invalidCounts": "Enter non-negative whole token counts (cached input is a subset) and an optional non-negative cost limit.",
-  "feasibility.fitCount": "Saved-metadata fit",
-  "feasibility.unknownCount": "unknown",
-  "feasibility.excludedCount": "excluded by supplied constraints",
-  "feasibility.search": "Search suitability results",
-  "feasibility.filter": "Filter suitability status",
-  "feasibility.all": "All statuses",
-  "feasibility.fits": "Metadata fit",
-  "feasibility.unknown": "Unknown eligibility",
-  "feasibility.excluded": "Excluded",
-  "feasibility.fitDescription": "Matches saved metadata; availability unverified",
-  "feasibility.excludedDescription": "Excluded by constraints",
-  "feasibility.costUnknown": "Cost unknown",
-  "feasibility.empty": "No saved models to evaluate.",
-  "feasibility.noMatch": "No models match these filters.",
-  "feasibility.showing": "Showing",
-  "feasibility.of": "of",
-  "feasibility.matching": "matching model entries",
-  "feasibility.more": "Show more models",
-  "fleet.reauthRequired": "Re-enter the API key in the provider editor before changing its endpoint or authentication.",
-  "fleet.groupSyncHintSafe": "Saved provider endpoints are preserved by default. Review and explicitly approve changes; credentialed providers must be updated through the editor with a new key.",
-  "fleet.approveProviderSync": "Approve replacing official endpoints and authentication styles for configured providers",
-  "fleet.previewProviderChanges": "Preview provider changes",
-  "fleet.providerNeedsKey": "Requires key re-entry in editor",
-  "fleet.presetHintSafe": "Import missing model presets without changing saved model metadata. Updating existing vision, context and prices is optional and may replace manual edits. Routes and credentials are never changed.",
-  "fleet.approveMetadataRefresh": "Approve replacing saved model metadata",
-  "fleet.previewModelChanges": "Preview model changes",
-  "fleet.refreshLabel": "refresh saved metadata",
-  "fleet.addLabel": "add missing preset",
-  "fleet.healthUnavailable": "Fleet health is unavailable.",
-  "fleet.selectProvidersError": "Select one or more providers.",
-  "fleet.imageEndpointError": "Image endpoints require HTTPS or loopback HTTP.",
-  "fleet.chooseGroupError": "Choose a provider group.",
-  "fleet.modelImageEndpointError": "Enter an image endpoint using HTTPS or loopback HTTP.",
-  "fleet.selectModelsError": "Select one or more models.",
-  "fleet.contextError": "Context window must be an integer between 0 and 100,000,000.",
-  "fleet.selectPatchError": "Choose at least one field to update.",
-  "fleet.noKeyUsage": "No inference key usage recorded in this session.",
-  "fleet.selectProvider": "Select provider",
-  "fleet.selected": "selected",
-  "fleet.groupImageAria": "Group image API base URL",
-  "fleet.rotationAria": "Multi-token selection strategy",
-  "fleet.imageGroupAria": "Image endpoint provider group",
-  "fleet.imageModelIdAria": "Image endpoint model id",
-  "fleet.modelImageAria": "Model image API base URL",
-  "fleet.searchAria": "Filter model presets",
-  "fleet.selectModel": "Select model",
-  "fleet.visionLabel": "vision",
-  "fleet.keepUnchanged": "Keep unchanged",
-  "fleet.enabled": "Enabled",
-  "fleet.disabled": "Disabled",
-  "fleet.leaveBlank": "Leave blank to keep",
-  "fleet.bulkContextAria": "Bulk context tokens",
-  "fleet.prodexImageError": "Prodex image endpoints require HTTPS or loopback HTTP without URL credentials.",
-  "fleet.prodexModelImageError": "Prodex model image endpoints require HTTPS or loopback HTTP without URL credentials."
-} as const;
-
-const maturationLocales: Record<Locale, Partial<Record<keyof typeof maturationEnglish, string>>> = {
-  "en": {},
-  "es": {"feasibility.title":"Vista previa de idoneidad y costo del modelo","feasibility.input":"Tokens de entrada estimados","feasibility.cached":"Tokens de entrada en caché (incluidos en entrada)","feasibility.output":"Tokens de salida estimados","feasibility.budget":"Límite de costo (USD, opcional)","feasibility.requireVision":"Requerir visión","feasibility.search":"Buscar resultados de idoneidad","feasibility.filter":"Filtrar por estado de idoneidad","feasibility.all":"Todos los estados","feasibility.fits":"Compatible según metadatos","feasibility.unknown":"Elegibilidad desconocida","feasibility.excluded":"Excluido","feasibility.more":"Mostrar más modelos","feasibility.noMatch":"Ningún modelo coincide con estos filtros.","feasibility.empty":"No hay modelos guardados para evaluar.","feasibility.costUnknown":"Costo desconocido","fleet.approveProviderSync":"Autorizar la sustitución de endpoints y autenticación de proveedores","fleet.previewProviderChanges":"Vista previa de cambios de proveedores","fleet.providerNeedsKey":"Requiere volver a introducir la clave","fleet.approveMetadataRefresh":"Autorizar la sustitución de metadatos guardados","fleet.previewModelChanges":"Vista previa de cambios de modelos"},
-  "fr": {"feasibility.title":"Aperçu de l'adéquation et du coût des modèles","feasibility.input":"Jetons d'entrée estimés","feasibility.cached":"Jetons d'entrée en cache (inclus dans l'entrée)","feasibility.output":"Jetons de sortie estimés","feasibility.budget":"Plafond de coût (USD, facultatif)","feasibility.requireVision":"Vision requise","feasibility.search":"Rechercher parmi les résultats","feasibility.filter":"Filtrer par statut d'adéquation","feasibility.all":"Tous les statuts","feasibility.fits":"Compatible selon les métadonnées","feasibility.unknown":"Éligibilité inconnue","feasibility.excluded":"Exclu","feasibility.more":"Afficher plus de modèles","feasibility.noMatch":"Aucun modèle ne correspond à ces filtres.","feasibility.empty":"Aucun modèle enregistré à évaluer.","feasibility.costUnknown":"Coût inconnu","fleet.approveProviderSync":"Autoriser le remplacement des adresses et méthodes d'authentification","fleet.previewProviderChanges":"Aperçu des modifications des fournisseurs","fleet.providerNeedsKey":"Saisie de la clé à nouveau requise","fleet.approveMetadataRefresh":"Autoriser le remplacement des métadonnées enregistrées","fleet.previewModelChanges":"Aperçu des modifications des modèles"},
-  "de": {"feasibility.title":"Vorschau der Modelleignung und Kosten","feasibility.input":"Geschätzte Eingabetokens","feasibility.cached":"Zwischengespeicherte Eingabetokens (Teil der Eingabe)","feasibility.output":"Geschätzte Ausgabetokens","feasibility.budget":"Kostenlimit (USD, optional)","feasibility.requireVision":"Bildverarbeitung erforderlich","feasibility.search":"Eignungsergebnisse durchsuchen","feasibility.filter":"Nach Eignungsstatus filtern","feasibility.all":"Alle Status","feasibility.fits":"Laut Metadaten geeignet","feasibility.unknown":"Eignung unbekannt","feasibility.excluded":"Ausgeschlossen","feasibility.more":"Weitere Modelle anzeigen","feasibility.noMatch":"Keine Modelle entsprechen diesen Filtern.","feasibility.empty":"Keine gespeicherten Modelle zur Bewertung.","feasibility.costUnknown":"Kosten unbekannt","fleet.approveProviderSync":"Änderungen von Anbieter-Endpunkten und Authentifizierung genehmigen","fleet.previewProviderChanges":"Anbieteränderungen in der Vorschau","fleet.providerNeedsKey":"Schlüssel muss erneut eingegeben werden","fleet.approveMetadataRefresh":"Ersetzen gespeicherter Modellmetadaten genehmigen","fleet.previewModelChanges":"Modelländerungen in der Vorschau"},
-  "pt": {"feasibility.title":"Prévia de adequação e custo dos modelos","feasibility.input":"Tokens de entrada estimados","feasibility.cached":"Tokens de entrada em cache (dentro da entrada)","feasibility.output":"Tokens de saída estimados","feasibility.budget":"Limite de custo (USD, opcional)","feasibility.requireVision":"Exigir visão","feasibility.search":"Pesquisar resultados de adequação","feasibility.filter":"Filtrar por status de adequação","feasibility.all":"Todos os status","feasibility.fits":"Compatível segundo os metadados","feasibility.unknown":"Elegibilidade desconhecida","feasibility.excluded":"Excluído","feasibility.more":"Mostrar mais modelos","feasibility.noMatch":"Nenhum modelo corresponde a esses filtros.","feasibility.empty":"Não há modelos salvos para avaliar.","feasibility.costUnknown":"Custo desconhecido","fleet.approveProviderSync":"Autorizar substituição de endpoints e autenticação de provedores","fleet.previewProviderChanges":"Prévia das alterações de provedores","fleet.providerNeedsKey":"É necessário inserir a chave novamente","fleet.approveMetadataRefresh":"Autorizar substituição dos metadados salvos","fleet.previewModelChanges":"Prévia das alterações de modelos"},
-  "it": {"feasibility.title":"Anteprima di idoneità e costi dei modelli","feasibility.input":"Token di input stimati","feasibility.cached":"Token di input memorizzati (inclusi nell'input)","feasibility.output":"Token di output stimati","feasibility.budget":"Limite di costo (USD, facoltativo)","feasibility.requireVision":"Richiedi visione","feasibility.search":"Cerca tra i risultati di idoneità","feasibility.filter":"Filtra per stato di idoneità","feasibility.all":"Tutti gli stati","feasibility.fits":"Idoneo secondo i metadati","feasibility.unknown":"Idoneità sconosciuta","feasibility.excluded":"Escluso","feasibility.more":"Mostra altri modelli","feasibility.noMatch":"Nessun modello corrisponde ai filtri.","feasibility.empty":"Nessun modello salvato da valutare.","feasibility.costUnknown":"Costo sconosciuto","fleet.approveProviderSync":"Approva la sostituzione di endpoint e autenticazione dei provider","fleet.previewProviderChanges":"Anteprima modifiche ai provider","fleet.providerNeedsKey":"Richiede il reinserimento della chiave","fleet.approveMetadataRefresh":"Approva la sostituzione dei metadati salvati","fleet.previewModelChanges":"Anteprima modifiche ai modelli"},
-  "tr": {"feasibility.title":"Model uygunluğu ve maliyet önizlemesi","feasibility.input":"Tahmini giriş tokenları","feasibility.cached":"Önbellekteki giriş tokenları (girişe dahil)","feasibility.output":"Tahmini çıkış tokenları","feasibility.budget":"Maliyet sınırı (USD, isteğe bağlı)","feasibility.requireVision":"Görsel desteği gerekli","feasibility.search":"Uygunluk sonuçlarında ara","feasibility.filter":"Uygunluk durumuna göre filtrele","feasibility.all":"Tüm durumlar","feasibility.fits":"Üst verilere göre uygun","feasibility.unknown":"Uygunluk bilinmiyor","feasibility.excluded":"Hariç tutuldu","feasibility.more":"Daha fazla model göster","feasibility.noMatch":"Bu filtrelerle eşleşen model yok.","feasibility.empty":"Değerlendirilecek kayıtlı model yok.","feasibility.costUnknown":"Maliyet bilinmiyor","fleet.approveProviderSync":"Sağlayıcı adresi ve kimlik doğrulama değişikliklerini onayla","fleet.previewProviderChanges":"Sağlayıcı değişikliklerini önizle","fleet.providerNeedsKey":"Anahtarın yeniden girilmesi gerekiyor","fleet.approveMetadataRefresh":"Kayıtlı model üst verilerinin değiştirilmesini onayla","fleet.previewModelChanges":"Model değişikliklerini önizle"},
-  "ru": {"feasibility.title":"Предпросмотр пригодности и стоимости моделей","feasibility.input":"Ожидаемые входные токены","feasibility.cached":"Кэшированные входные токены (часть входных)","feasibility.output":"Ожидаемые выходные токены","feasibility.budget":"Лимит стоимости (USD, необязательно)","feasibility.requireVision":"Требуется зрение","feasibility.search":"Поиск по результатам пригодности","feasibility.filter":"Фильтр по статусу пригодности","feasibility.all":"Все статусы","feasibility.fits":"Подходит по метаданным","feasibility.unknown":"Пригодность неизвестна","feasibility.excluded":"Исключено","feasibility.more":"Показать ещё модели","feasibility.noMatch":"Нет моделей, соответствующих фильтрам.","feasibility.empty":"Нет сохранённых моделей для оценки.","feasibility.costUnknown":"Стоимость неизвестна","fleet.approveProviderSync":"Подтвердить замену адресов и способов авторизации провайдеров","fleet.previewProviderChanges":"Предпросмотр изменений провайдеров","fleet.providerNeedsKey":"Требуется повторно ввести ключ","fleet.approveMetadataRefresh":"Подтвердить замену сохранённых метаданных","fleet.previewModelChanges":"Предпросмотр изменений моделей"},
-  "pl": {"feasibility.title":"Podgląd zgodności i kosztów modeli","feasibility.input":"Szacowane tokeny wejściowe","feasibility.cached":"Tokeny wejściowe z pamięci podręcznej (część wejścia)","feasibility.output":"Szacowane tokeny wyjściowe","feasibility.budget":"Limit kosztów (USD, opcjonalnie)","feasibility.requireVision":"Wymagaj obsługi obrazów","feasibility.search":"Szukaj w wynikach zgodności","feasibility.filter":"Filtruj według stanu zgodności","feasibility.all":"Wszystkie stany","feasibility.fits":"Zgodny według metadanych","feasibility.unknown":"Nieznana zgodność","feasibility.excluded":"Wykluczony","feasibility.more":"Pokaż więcej modeli","feasibility.noMatch":"Brak modeli pasujących do filtrów.","feasibility.empty":"Brak zapisanych modeli do oceny.","feasibility.costUnknown":"Koszt nieznany","fleet.approveProviderSync":"Zatwierdź zmianę adresów i uwierzytelniania dostawców","fleet.previewProviderChanges":"Podgląd zmian dostawców","fleet.providerNeedsKey":"Wymagane ponowne podanie klucza","fleet.approveMetadataRefresh":"Zatwierdź zastąpienie zapisanych metadanych","fleet.previewModelChanges":"Podgląd zmian modeli"},
-  "id": {"feasibility.title":"Pratinjau kecocokan dan biaya model","feasibility.input":"Perkiraan token masukan","feasibility.cached":"Token masukan cache (bagian dari masukan)","feasibility.output":"Perkiraan token keluaran","feasibility.budget":"Batas biaya (USD, opsional)","feasibility.requireVision":"Wajib mendukung gambar","feasibility.search":"Cari hasil kecocokan","feasibility.filter":"Filter berdasarkan status kecocokan","feasibility.all":"Semua status","feasibility.fits":"Cocok menurut metadata","feasibility.unknown":"Kelayakan tidak diketahui","feasibility.excluded":"Dikecualikan","feasibility.more":"Tampilkan model lainnya","feasibility.noMatch":"Tidak ada model yang cocok dengan filter ini.","feasibility.empty":"Tidak ada model tersimpan untuk dinilai.","feasibility.costUnknown":"Biaya tidak diketahui","fleet.approveProviderSync":"Setujui penggantian endpoint dan autentikasi penyedia","fleet.previewProviderChanges":"Pratinjau perubahan penyedia","fleet.providerNeedsKey":"Harus memasukkan ulang kunci","fleet.approveMetadataRefresh":"Setujui penggantian metadata model tersimpan","fleet.previewModelChanges":"Pratinjau perubahan model"},
-  "ja": {"feasibility.title":"モデルの適合性と費用のプレビュー","feasibility.input":"推定入力トークン数","feasibility.cached":"キャッシュ済み入力トークン数（入力の内数）","feasibility.output":"推定出力トークン数","feasibility.budget":"費用上限（USD・任意）","feasibility.requireVision":"画像対応を必須にする","feasibility.search":"適合性結果を検索","feasibility.filter":"適合性ステータスで絞り込む","feasibility.all":"すべてのステータス","feasibility.fits":"保存済み情報では適合","feasibility.unknown":"適合性不明","feasibility.excluded":"対象外","feasibility.more":"さらにモデルを表示","feasibility.noMatch":"条件に一致するモデルはありません。","feasibility.empty":"評価する保存済みモデルがありません。","feasibility.costUnknown":"費用不明","fleet.approveProviderSync":"プロバイダーの接続先と認証方式の変更を承認","fleet.previewProviderChanges":"プロバイダー変更をプレビュー","fleet.providerNeedsKey":"キーの再入力が必要","fleet.approveMetadataRefresh":"保存済みモデル情報の置換を承認","fleet.previewModelChanges":"モデル変更をプレビュー"},
-  "ko": {"feasibility.title":"모델 적합성 및 비용 미리보기","feasibility.input":"예상 입력 토큰","feasibility.cached":"캐시된 입력 토큰(입력에 포함)","feasibility.output":"예상 출력 토큰","feasibility.budget":"비용 한도(USD, 선택 사항)","feasibility.requireVision":"이미지 지원 필요","feasibility.search":"적합성 결과 검색","feasibility.filter":"적합성 상태 필터","feasibility.all":"모든 상태","feasibility.fits":"저장된 메타데이터 기준 적합","feasibility.unknown":"적합 여부 알 수 없음","feasibility.excluded":"제외됨","feasibility.more":"모델 더 보기","feasibility.noMatch":"필터에 맞는 모델이 없습니다.","feasibility.empty":"평가할 저장된 모델이 없습니다.","feasibility.costUnknown":"비용 정보 없음","fleet.approveProviderSync":"공급자 엔드포인트 및 인증 방식 변경 승인","fleet.previewProviderChanges":"공급자 변경 사항 미리보기","fleet.providerNeedsKey":"키를 다시 입력해야 함","fleet.approveMetadataRefresh":"저장된 모델 메타데이터 교체 승인","fleet.previewModelChanges":"모델 변경 사항 미리보기"},
-  "zh-CN": {"feasibility.title":"模型适用性与成本预览","feasibility.input":"预计输入令牌数","feasibility.cached":"缓存输入令牌数（包含在输入中）","feasibility.output":"预计输出令牌数","feasibility.budget":"成本上限（美元，可选）","feasibility.requireVision":"需要视觉能力","feasibility.search":"搜索适用性结果","feasibility.filter":"按适用性状态筛选","feasibility.all":"全部状态","feasibility.fits":"依据已存元数据符合要求","feasibility.unknown":"适用性未知","feasibility.excluded":"已排除","feasibility.more":"显示更多模型","feasibility.noMatch":"没有模型符合这些筛选条件。","feasibility.empty":"没有可评估的已存模型。","feasibility.costUnknown":"成本未知","fleet.approveProviderSync":"确认替换提供商端点和认证方式","fleet.previewProviderChanges":"预览提供商变更","fleet.providerNeedsKey":"需要在编辑器中重新输入密钥","fleet.approveMetadataRefresh":"确认替换已保存的模型元数据","fleet.previewModelChanges":"预览模型变更"},
-  "ar": {"feasibility.title":"معاينة ملاءمة النماذج وتكلفتها","feasibility.input":"الرموز المدخلة المقدرة","feasibility.cached":"الرموز المدخلة المخزنة مؤقتًا (ضمن المدخلات)","feasibility.output":"الرموز المخرجة المقدرة","feasibility.budget":"حد التكلفة (دولار أمريكي، اختياري)","feasibility.requireVision":"اشتراط دعم الصور","feasibility.search":"البحث في نتائج الملاءمة","feasibility.filter":"التصفية حسب حالة الملاءمة","feasibility.all":"جميع الحالات","feasibility.fits":"ملائم وفق البيانات الوصفية","feasibility.unknown":"الملاءمة غير معروفة","feasibility.excluded":"مستبعد","feasibility.more":"عرض المزيد من النماذج","feasibility.noMatch":"لا توجد نماذج تطابق عوامل التصفية.","feasibility.empty":"لا توجد نماذج محفوظة لتقييمها.","feasibility.costUnknown":"التكلفة غير معروفة","fleet.approveProviderSync":"الموافقة على استبدال عناوين المزودين وطرق المصادقة","fleet.previewProviderChanges":"معاينة تغييرات المزودين","fleet.providerNeedsKey":"يلزم إعادة إدخال المفتاح","fleet.approveMetadataRefresh":"الموافقة على استبدال بيانات النماذج المحفوظة","fleet.previewModelChanges":"معاينة تغييرات النماذج"},
-  "hi": {"feasibility.title":"मॉडल उपयुक्तता और लागत का पूर्वावलोकन","feasibility.input":"अनुमानित इनपुट टोकन","feasibility.cached":"कैश किए गए इनपुट टोकन (इनपुट में शामिल)","feasibility.output":"अनुमानित आउटपुट टोकन","feasibility.budget":"लागत सीमा (USD, वैकल्पिक)","feasibility.requireVision":"विज़न आवश्यक","feasibility.search":"उपयुक्तता परिणाम खोजें","feasibility.filter":"उपयुक्तता स्थिति से फ़िल्टर करें","feasibility.all":"सभी स्थितियाँ","feasibility.fits":"सहेजे गए मेटाडेटा के अनुसार उपयुक्त","feasibility.unknown":"उपयुक्तता अज्ञात","feasibility.excluded":"बाहर रखा गया","feasibility.more":"और मॉडल दिखाएँ","feasibility.noMatch":"इन फ़िल्टर से कोई मॉडल मेल नहीं खाता।","feasibility.empty":"मूल्यांकन के लिए कोई सहेजा गया मॉडल नहीं है।","feasibility.costUnknown":"लागत अज्ञात","fleet.approveProviderSync":"प्रदाता एंडपॉइंट और प्रमाणीकरण बदलने की स्वीकृति दें","fleet.previewProviderChanges":"प्रदाता परिवर्तनों का पूर्वावलोकन","fleet.providerNeedsKey":"कुंजी फिर से दर्ज करनी होगी","fleet.approveMetadataRefresh":"सहेजे गए मॉडल मेटाडेटा को बदलने की स्वीकृति दें","fleet.previewModelChanges":"मॉडल परिवर्तनों का पूर्वावलोकन"},
-  "bn": {"feasibility.title":"মডেলের উপযুক্ততা ও খরচের পূর্বরূপ","feasibility.input":"আনুমানিক ইনপুট টোকেন","feasibility.cached":"ক্যাশে রাখা ইনপুট টোকেন (ইনপুটের অংশ)","feasibility.output":"আনুমানিক আউটপুট টোকেন","feasibility.budget":"খরচের সীমা (USD, ঐচ্ছিক)","feasibility.requireVision":"ছবি বোঝার সক্ষমতা আবশ্যক","feasibility.search":"উপযুক্ততার ফলাফলে খুঁজুন","feasibility.filter":"উপযুক্ততার অবস্থা অনুযায়ী ফিল্টার","feasibility.all":"সব অবস্থা","feasibility.fits":"সংরক্ষিত তথ্য অনুযায়ী উপযুক্ত","feasibility.unknown":"উপযুক্ততা অজানা","feasibility.excluded":"বাদ দেওয়া হয়েছে","feasibility.more":"আরও মডেল দেখান","feasibility.noMatch":"এই ফিল্টারের সাথে কোনো মডেল মেলেনি।","feasibility.empty":"মূল্যায়নের জন্য সংরক্ষিত মডেল নেই।","feasibility.costUnknown":"খরচ অজানা","fleet.approveProviderSync":"প্রোভাইডারের এন্ডপয়েন্ট ও প্রমাণীকরণ বদল অনুমোদন করুন","fleet.previewProviderChanges":"প্রোভাইডার পরিবর্তনের পূর্বরূপ","fleet.providerNeedsKey":"কী আবার লিখতে হবে","fleet.approveMetadataRefresh":"সংরক্ষিত মডেল তথ্য প্রতিস্থাপন অনুমোদন করুন","fleet.previewModelChanges":"মডেল পরিবর্তনের পূর্বরূপ"},
-};
-
 export const fleetTranslations = Object.fromEntries(
   Object.entries(messages).map(([locale, values]) => [
     locale,
     {
       ...Object.fromEntries(keys.map((key, index) => ['settings.ai.' + key, values[index]])),
-      ...Object.fromEntries(Object.entries(maturationEnglish).map(([key, value]) =>
-        ['settings.ai.' + key, maturationLocales[locale as Locale][key as keyof typeof maturationEnglish] ?? value]
-      )),
+      ...Object.fromEntries(
+        Object.entries(modelManagementTranslations[locale as Locale]).map(([key, value]) => [
+          'settings.ai.' + key,
+          value,
+        ])
+      ),
     },
   ])
 ) as Record<Locale, Record<string, string>>;
 
 export const fleetTranslationKeys = [
   ...keys.map(key => 'settings.ai.' + key),
-  ...Object.keys(maturationEnglish).map(key => 'settings.ai.' + key),
+  ...Object.keys(modelManagementTranslations.en).map(key => 'settings.ai.' + key),
 ];

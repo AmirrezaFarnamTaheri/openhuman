@@ -4,7 +4,7 @@ import { type AssistantState, useAui, useAuiState } from '@assistant-ui/react';
 import { PlusIcon } from 'lucide-react';
 import { type ReactNode, startTransition, useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { COMPOSER_HUMAN_MASCOT_DATA_URL } from '../../../assets/composerHumanMascot';
+import { COMPOSER_HUMAN_MASCOT_URL } from '../../../assets/composerHumanMascot';
 import AttachmentPreview from '../../../components/chat/AttachmentPreview';
 import { Button } from '../../../components/ui';
 import type { Attachment } from '../../../lib/attachments';
@@ -33,7 +33,7 @@ function ComposerHumanMascotIcon() {
       data-testid="composer-human-mascot-icon"
       width="24"
       height="24"
-      src={COMPOSER_HUMAN_MASCOT_DATA_URL}
+      src={COMPOSER_HUMAN_MASCOT_URL}
       alt=""
       className="rounded-full object-cover"
       aria-hidden="true"

@@ -105,17 +105,13 @@ export const CloudProviderEditor = ({
         throw new Error(slugError);
       }
       if (!validModelFleetEndpoint(endpoint)) {
-        throw new Error(
-          t('settings.ai.providerEndpointInvalid')
-        );
+        throw new Error(t('settings.ai.providerEndpointInvalid'));
       }
       if ((Boolean(apiKey.trim()) || hasExistingKey) && !validModelFleetImageEndpoint(endpoint)) {
         throw new Error(t('settings.ai.keyedEndpointInvalid'));
       }
       if (!validModelFleetImageEndpoint(imageEndpoint)) {
-        throw new Error(
-          t('settings.ai.imageEndpointInvalid')
-        );
+        throw new Error(t('settings.ai.imageEndpointInvalid'));
       }
       const imageMap = parseModelImageEndpoints(modelImageMappingText);
       const modelTransports = parseModelTransportOverrides(modelTransportText);
@@ -278,9 +274,7 @@ export const CloudProviderEditor = ({
           onChange={event => setImageEndpoint(event.target.value)}
           placeholder="https://images.example.com/v1"
         />
-        <p className="text-xs text-content-muted">
-          {t('settings.ai.imageEndpointHelp')}
-        </p>
+        <p className="text-xs text-content-muted">{t('settings.ai.imageEndpointHelp')}</p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-image-models" className="text-xs text-content-secondary">
@@ -309,9 +303,7 @@ export const CloudProviderEditor = ({
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-content"
           placeholder="response-model = responses"
         />
-        <p className="text-xs text-content-muted">
-          {t('settings.ai.modelTransportOverridesHelp')}
-        </p>
+        <p className="text-xs text-content-muted">{t('settings.ai.modelTransportOverridesHelp')}</p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="cloud-provider-rotation" className="text-xs text-content-secondary">
@@ -334,15 +326,15 @@ export const CloudProviderEditor = ({
         <select
           id="cloud-provider-tool-codec"
           value={toolCallCodec}
-          onChange={event => setToolCallCodec(event.target.value as 'native' | 'qnml' | 'tagged_json')}
+          onChange={event =>
+            setToolCallCodec(event.target.value as 'native' | 'qnml' | 'tagged_json')
+          }
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content">
           <option value="native">{t('settings.ai.toolCodecNative')}</option>
           <option value="qnml">{t('settings.ai.toolCodecQnml')}</option>
           <option value="tagged_json">{t('settings.ai.toolCodecTaggedJson')}</option>
         </select>
-        <p className="text-xs text-content-muted">
-          {t('settings.ai.toolCodecHelp')}
-        </p>
+        <p className="text-xs text-content-muted">{t('settings.ai.toolCodecHelp')}</p>
       </div>
       <div>
         <Label htmlFor="cloud-provider-ca-cert" className="text-xs text-content-secondary">

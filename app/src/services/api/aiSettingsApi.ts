@@ -373,8 +373,7 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
         n.image_endpoint !== p.image_endpoint ||
         JSON.stringify(n.model_image_endpoints ?? {}) !==
           JSON.stringify(p.model_image_endpoints ?? {}) ||
-        JSON.stringify(n.model_transports ?? {}) !==
-          JSON.stringify(p.model_transports ?? {}) ||
+        JSON.stringify(n.model_transports ?? {}) !== JSON.stringify(p.model_transports ?? {}) ||
         n.rotation_strategy !== p.rotation_strategy ||
         n.tool_call_codec !== p.tool_call_codec ||
         n.ca_cert_pem !== p.ca_cert_pem ||

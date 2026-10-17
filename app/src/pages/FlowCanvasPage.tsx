@@ -28,6 +28,9 @@ import type {
   EditorSaveMeta,
 } from '../components/flows/canvas/EditableFlowCanvas';
 import FlowCanvas from '../components/flows/canvas/FlowCanvas';
+import FlowNavigationBlocker, {
+  type BlockedFlowNavigation,
+} from '../components/flows/canvas/FlowNavigationBlocker';
 import NodePalette from '../components/flows/canvas/NodePalette';
 import { FlowPreauthorizationOverlay } from '../components/flows/FlowPreauthorizationCard';
 import { FlowRunInspectorDrawer } from '../components/flows/FlowRunInspectorDrawer';
@@ -40,9 +43,6 @@ import {
   setCopilotThreadId as setCopilotThreadIdCache,
 } from '../components/flows/workflowCopilotThreads';
 import { ToastContainer } from '../components/intelligence/Toast';
-import FlowNavigationBlocker, {
-  type BlockedFlowNavigation,
-} from '../components/flows/canvas/FlowNavigationBlocker';
 import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import SettingsTabbedPage from '../components/settings/layout/SettingsTabbedPage';
 import {
@@ -1068,19 +1068,18 @@ function FlowEditor({
     return () => clearTimeout(timer);
   }, [runError]);
 
-  // Return to wherever the user came from rather than always the list. React
-  // Router stamps the initial history entry with key 'default', so when this
-  // page was the first thing loaded (deep link / fresh load) there's nothing to
-  // go back to — fall back to the workflows list so Back never dead-ends.
+  // HashRouter's history index survives replace navigations, unlike its
+  // location key. A deep link whose copilot seed was cleared still has no
+  // previous page, even though replacing the entry gave it a fresh key.
   const goBack = useCallback(() => {
-    if (locationKey === 'default') {
+    if (!(typeof window.history.state?.idx === 'number' && window.history.state.idx > 0)) {
       log('back: no prior history — falling back to /flows');
       navigate('/flows');
     } else {
       log('back: navigating to previous page');
       navigate(-1);
     }
-  }, [locationKey, navigate]);
+  }, [navigate]);
 
   const handleBack = useCallback(() => {
     if (dirty) {
@@ -1482,7 +1481,7 @@ function FlowEditor({
                   goBack();
                 }
                 setLeaveConfirm(false);
-              }
+              }}
             />
           )}
 

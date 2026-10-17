@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // Turkish (Türkçe) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': 'Ayarlarda ara',
+  'settings.search.noResults': 'Eşleşen ayar bulunamadı',
+  'settings.ai.advancedModelManagement': 'Gelişmiş model ve API anahtarı yönetimi',
+  'settings.ai.providerConnectedRoutingHint':
+    'Sağlayıcı bağlandı. Sohbetlerinizde kullanılacak modeli seçin.',
+  'settings.ai.chooseChatModel': 'Sohbet modelini seç',
+  'walkthrough.takeTour': 'Tanıtım turuna katıl',
+  'connections.navigation.showAll': 'Tüm bağlantıları göster',
+  'connections.navigation.showFewer': 'Daha az bağlantı göster',
+  'memoryPage.advanced.fewer': 'Daha az seçenek',
+  'memoryPage.advanced.show': 'Gelişmiş',
+  'memoryPage.engine.autoLocalTitle': 'Bu bilgisayardaki bellek',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman yerel belleği sizin için kurar ve bağlar. Docker gereklidir.',
+  'memoryPage.engine.autoLocalStarting': 'Yerel bellek başlatılıyor…',
+  'memoryPage.engine.autoLocal': 'Yerel belleği başlat',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Docker Desktop veya Docker Engine uygulamasını başlatın ve 3141 numaralı bağlantı noktasının kullanılabilir olduğundan emin olun.',
+  'memoryPage.engine.autoLocalHelp': 'Docker uygulamasını kur veya başlat',
+
   'nav.home': 'Ana sayfa',
   'nav.chat': 'Sohbet',
   'nav.connections': 'Bağlantılar',

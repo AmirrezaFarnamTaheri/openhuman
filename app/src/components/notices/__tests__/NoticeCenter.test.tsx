@@ -1,11 +1,15 @@
 import { configureStore } from '@reduxjs/toolkit';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import userErrorsReducer, { reportUserError } from '../../../store/userErrorsSlice';
+import announcementReducer from '../../../store/announcementSlice';
+import userErrorsReducer, {
+  dismissUserError,
+  reportUserError,
+} from '../../../store/userErrorsSlice';
 import type { UserErrorDescriptor } from '../../../types/userError';
 import NoticeCenter from '../NoticeCenter';
 
@@ -19,10 +23,20 @@ const usageState = vi.hoisted(() => ({
   shouldShowBudgetCompletedMessage: false,
 }));
 const applyOpenRouterFreeModels = vi.hoisted(() => vi.fn());
+const announcementState = vi.hoisted(() => ({
+  auth: { isAuthenticated: false, userId: null as string | null },
+  fetch: vi.fn(),
+}));
 
 vi.mock('../../../hooks/useUsageState', () => ({ useUsageState: () => usageState }));
 vi.mock('../../../utils/openUrl', () => ({ openUrl: vi.fn() }));
 vi.mock('../../../services/api/openrouterFreeModels', () => ({ applyOpenRouterFreeModels }));
+vi.mock('../../../providers/CoreStateProvider', () => ({
+  useCoreState: () => ({ snapshot: { auth: announcementState.auth } }),
+}));
+vi.mock('../../../services/announcementService', () => ({
+  fetchLatestAnnouncement: () => announcementState.fetch(),
+}));
 
 const keyError: UserErrorDescriptor = {
   id: 'api_key_missing:provider:openrouter',
@@ -50,7 +64,9 @@ function LocationProbe() {
 }
 
 function renderCenter(descriptors: UserErrorDescriptor[] = []) {
-  const store = configureStore({ reducer: { userErrors: userErrorsReducer } });
+  const store = configureStore({
+    reducer: { userErrors: userErrorsReducer, announcement: announcementReducer },
+  });
   descriptors.forEach((d, i) => store.dispatch(reportUserError({ descriptor: d, at: 1000 + i })));
   // A FRESH element each time: React bails out of re-rendering when handed a
   // referentially identical one, so reusing a single `tree` constant would make
@@ -58,6 +74,9 @@ function renderCenter(descriptors: UserErrorDescriptor[] = []) {
   const tree = () => (
     <Provider store={store}>
       <MemoryRouter initialEntries={['/chat']}>
+        <div data-app-focus-fallback tabIndex={-1} data-testid="notice-fallback">
+          <button type="button">Resume work</button>
+        </div>
         <NoticeCenter />
         <LocationProbe />
       </MemoryRouter>
@@ -77,11 +96,47 @@ describe('NoticeCenter', () => {
     usageState.shouldShowBudgetCompletedMessage = false;
     applyOpenRouterFreeModels.mockReset();
     applyOpenRouterFreeModels.mockResolvedValue(undefined);
+    announcementState.auth.isAuthenticated = false;
+    announcementState.auth.userId = null;
+    announcementState.fetch.mockReset().mockResolvedValue(null);
   });
 
   it('renders no chrome at all when there is nothing to say', () => {
     renderCenter([]);
     expect(screen.queryByTestId('notice-center')).toBeNull();
+  });
+
+  it('receives an announcement without opening a dialog or stealing focus', async () => {
+    announcementState.auth.isAuthenticated = true;
+    announcementState.auth.userId = 'u1';
+    let deliver!: (value: unknown) => void;
+    announcementState.fetch.mockReturnValue(
+      new Promise(resolve => {
+        deliver = resolve;
+      })
+    );
+    renderCenter();
+    const work = screen.getByRole('button', { name: 'Resume work' });
+    work.focus();
+
+    await act(async () => {
+      deliver({
+        id: 'news',
+        title: 'New features',
+        body: 'Available when you need them.',
+        severity: 'INFO',
+        cta: null,
+      });
+    });
+
+    expect(screen.getByTestId('notice-badge')).toHaveTextContent('1');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(work).toHaveFocus();
+    await userEvent.click(screen.getByTestId('notice-trigger'));
+    expect(screen.getByText('New features')).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId('notice-dismiss'));
+    expect(screen.queryByTestId('notice-center')).not.toBeInTheDocument();
+    expect(work).toHaveFocus();
   });
 
   it('anchors to the bottom-right corner', () => {
@@ -238,6 +293,35 @@ describe('NoticeCenter', () => {
     await userEvent.click(screen.getByTestId('notice-dismiss'));
 
     expect(screen.queryByTestId('notice-center')).toBeNull();
+  });
+
+  it('restores the previous app control when the final dismissal removes the bell', async () => {
+    renderCenter([keyError]);
+    const previous = screen.getByRole('button', { name: 'Resume work' });
+    previous.focus();
+    await userEvent.click(screen.getByTestId('notice-trigger'));
+    await userEvent.click(screen.getByTestId('notice-dismiss'));
+    expect(screen.queryByTestId('notice-center')).toBeNull();
+    expect(previous).toHaveFocus();
+  });
+
+  it('returns focus to app content if the previous control is no longer mounted', async () => {
+    renderCenter([keyError]);
+    const previous = screen.getByRole('button', { name: 'Resume work' });
+    previous.focus();
+    await userEvent.click(screen.getByTestId('notice-trigger'));
+    previous.remove();
+    await userEvent.click(screen.getByTestId('notice-dismiss'));
+    expect(screen.getByTestId('notice-fallback')).toHaveFocus();
+  });
+
+  it('does not steal focus when a notice disappears while the user works outside the panel', async () => {
+    const { store } = renderCenter([keyError]);
+    await userEvent.click(screen.getByTestId('notice-trigger'));
+    const previous = screen.getByRole('button', { name: 'Resume work' });
+    previous.focus();
+    act(() => store.dispatch(dismissUserError({ id: keyError.id })));
+    expect(previous).toHaveFocus();
   });
 
   it('closes on Escape', async () => {

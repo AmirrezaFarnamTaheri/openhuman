@@ -122,7 +122,9 @@ describe('pcm-capture-processor asset', () => {
       (_, index) => Math.sin((2 * Math.PI * 1000 * index) / 44_100) * 0.5
     );
     const capture = (quantum: number) => {
-      const proc = new Ctor({ processorOptions: { targetSampleRate: 16_000, frameSamples: 1_600 } });
+      const proc = new Ctor({
+        processorOptions: { targetSampleRate: 16_000, frameSamples: 1_600 },
+      });
       for (let i = 0; i < input.length; i += quantum) {
         proc.process([[input.subarray(i, i + quantum)]]);
       }

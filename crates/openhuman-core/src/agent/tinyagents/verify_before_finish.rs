@@ -35,10 +35,18 @@ pub(super) const TODO_TOOL: &str = "todo";
 /// The completion middleware only sees tool names, not command contents;
 /// do not treat generic shell/read-only calls as proof of mutation.
 const VERIFY_AFTER_TOOL: &[&str] = &[
-    "file_write", "edit_file", "apply_patch",
-    "spawn_subagent", "spawn_parallel_agents", "spawn_async_subagent",
-    "spawn_worker_thread", "continue_subagent", "steer_subagent",
-    "delegate", "git_operations", "run_workflow",
+    "file_write",
+    "edit_file",
+    "apply_patch",
+    "spawn_subagent",
+    "spawn_parallel_agents",
+    "spawn_async_subagent",
+    "spawn_worker_thread",
+    "continue_subagent",
+    "steer_subagent",
+    "delegate",
+    "git_operations",
+    "run_workflow",
 ];
 
 /// Opening words of the check, also how tests recognise it on a transcript.
@@ -104,7 +112,10 @@ pub(super) fn should_check(activity: &FinishActivity) -> bool {
     activity.tool_rounds >= MIN_TOOL_ROUNDS
         || activity.called(TODO_TOOL)
         || VERIFY_AFTER_TOOL.iter().any(|tool| activity.called(tool))
-        || activity.tools_called.iter().any(|tool| tool.starts_with("delegate_"))
+        || activity
+            .tools_called
+            .iter()
+            .any(|tool| tool.starts_with("delegate_"))
 }
 
 /// The check, framed as harness text rather than a user message.

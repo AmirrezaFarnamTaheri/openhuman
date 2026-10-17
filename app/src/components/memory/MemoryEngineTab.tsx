@@ -39,8 +39,8 @@ import {
   isMemoryOn,
   MEMORY_DISABLED_ENGINE,
   memoryEngineSet,
-  memoryLocalStart,
   memoryErrorMessage,
+  memoryLocalStart,
 } from '../../services/api/memoryApi';
 import { isLocalSessionToken } from '../../utils/localSession';
 import { openUrl } from '../../utils/openUrl';
@@ -120,6 +120,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
   const [localKey, setLocalKey] = useState('');
   const [autoLocalBusy, setAutoLocalBusy] = useState(false);
   const [autoLocalError, setAutoLocalError] = useState<string | null>(null);
+  const busy = saving !== null || autoLocalBusy;
 
   const titles: Record<EngineOption, string> = {
     builtin: t('memoryPage.engine.builtin.title'),
@@ -129,6 +130,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
 
   const select = useCallback(
     async (option: EngineOption, req: EngineSetRequest): Promise<boolean> => {
+      if (busy) return false;
       const wasActive = optionOf(state) === option;
       setSaving(option);
       setErrors(prev => ({ ...prev, [option]: undefined }));
@@ -160,7 +162,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
     },
     // `titles` is rebuilt from `t` every render; `t` is the real dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onStateChange, state, t]
+    [busy, onStateChange, state, t]
   );
 
   if (!state) {
@@ -172,6 +174,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
   // Disabled: memory off on purpose. Every connection's settings are kept,
   // so picking a provider again turns it back on.
   const disable = async () => {
+    if (busy) return;
     setSaving('disabled');
     try {
       const next = await memoryEngineSet({ engine: MEMORY_DISABLED_ENGINE });
@@ -257,8 +260,11 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
         description: t('memoryPage.engine.selfHost.title'),
       });
     } catch (err) {
+      log('managed local memory start failed: %o', err);
       setAutoLocalError(
-        `${memoryErrorMessage(err, t)} ${t(
+        // UNAVAILABLE here describes local setup (Docker, occupied port,
+        // image download), not the hosted account's availability.
+        `${memoryErrorMessage(err)} ${t(
           'memoryPage.engine.autoLocalTroubleshoot',
           'Start Docker Desktop (or Docker Engine) and make sure port 3141 is available.'
         )}`
@@ -274,7 +280,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
   // Cloud: the endpoint is CortexDB's managed API. Sending a blank endpoint
   // clears any custom (local) endpoint, so the engine falls back to it.
   const cloudKeyRequired = !(active === 'apikey' && state.has_key);
-  const canSubmitCloud = saving === null && (!cloudKeyRequired || cloudKey.trim().length > 0);
+  const canSubmitCloud = !busy && (!cloudKeyRequired || cloudKey.trim().length > 0);
   const submitCloud = async () => {
     if (!canSubmitCloud) return;
     const req: EngineSetRequest = { engine: 'cortexdb', endpoint: '' };
@@ -290,9 +296,11 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
   const localEndpoint = typedEndpoint ?? (active === 'selfhost' ? (state.endpoint ?? '') : '');
   const endpointTyped = localEndpoint.trim().length > 0;
   const endpointLocal = isLoopbackEndpoint(localEndpoint);
-  const localKeyRequired = !(active === 'selfhost' && state.has_key);
+  // Managed credentials belong to the app's container. A manual save changes
+  // ownership, so it must not treat that separate credential as a reusable key.
+  const localKeyRequired = !(active === 'selfhost' && state.has_key && !state.managed_local);
   const canSubmitLocal =
-    saving === null && endpointLocal && (!localKeyRequired || localKey.trim().length > 0);
+    !busy && endpointLocal && (!localKeyRequired || localKey.trim().length > 0);
   const submitLocal = async () => {
     if (!canSubmitLocal) return;
     const req: EngineSetRequest = { engine: 'cortexdb', endpoint: localEndpoint.trim() };
@@ -334,7 +342,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
       onLocalKey={setLocalKey}
       canSubmit={
         option === 'builtin'
-          ? saving === null && signedIn
+          ? !busy && signedIn
           : option === 'apikey'
             ? canSubmitCloud
             : canSubmitLocal
@@ -358,7 +366,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
       <p className="min-w-0 truncate text-xs text-content-secondary">
         {option === 'apikey'
           ? t('memoryPage.engine.apiKeyOption.connected')
-          : state.endpoint === 'http://127.0.0.1:3141'
+          : state.managed_local
             ? t('memoryPage.engine.autoLocalTitle', 'Memory on this computer')
             : t('memoryPage.engine.selfHost.connected').replace('{endpoint}', state.endpoint ?? '')}
       </p>
@@ -391,8 +399,10 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
                 {t('memoryPage.engine.autoLocalTitle', 'Memory on this computer')}
               </p>
               <p className="text-xs text-content-muted">
-                {t('memoryPage.engine.autoLocalHint',
-                  'OpenHuman sets up and connects local memory for you. Docker is required.')}
+                {t(
+                  'memoryPage.engine.autoLocalHint',
+                  'OpenHuman sets up and connects local memory for you. Docker is required.'
+                )}
               </p>
             </div>
             <Button
@@ -437,11 +447,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
         </MemoryCortexCard>
         {/* Onboarding embeds this tab to pick a provider, not to opt out. */}
         {!embedded && (
-          <MemoryDisabledCard
-            active={disabled}
-            saving={saving !== null}
-            onDisable={() => void disable()}
-          />
+          <MemoryDisabledCard active={disabled} saving={busy} onDisable={() => void disable()} />
         )}
       </div>
 
@@ -452,9 +458,7 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
           icon={<MemoryProviderLogo option={dialog} className="h-5 w-5" />}
           maxWidthClassName="max-w-md"
           testId={`memory-engine-${dialog}-dialog`}
-          closePolicy={
-            saving === dialog ? { escape: false, backdrop: false, button: false } : undefined
-          }
+          closePolicy={busy ? { escape: false, backdrop: false, button: false } : undefined}
           onClose={() => setDialog(null)}>
           {dialog === 'selfhost' && (
             <div className="mb-4 space-y-2 rounded-lg border border-line bg-surface-muted p-3">
@@ -462,8 +466,10 @@ export default function MemoryEngineTab({ state, onStateChange, embedded }: Memo
                 {t('memoryPage.engine.autoLocalTitle', 'Memory on this computer')}
               </p>
               <p className="text-xs text-content-muted">
-                {t('memoryPage.engine.autoLocalHint',
-                  'OpenHuman sets up and connects local memory for you. Docker is required.')}
+                {t(
+                  'memoryPage.engine.autoLocalHint',
+                  'OpenHuman sets up and connects local memory for you. Docker is required.'
+                )}
               </p>
               <Button
                 type="button"

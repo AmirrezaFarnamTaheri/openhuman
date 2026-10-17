@@ -361,6 +361,11 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           needs: ["pnpm-install"],
           run: "pnpm test:scripts",
         },
+        {
+          name: "python-script-tests",
+          when: areas.scripts,
+          run: "python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py'",
+        },
       ],
     },
     {

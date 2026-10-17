@@ -432,7 +432,10 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     // still execute: it proves refusing an unsafe migration preserves data.
     let local = case.backend().for_scope(&Scope::local()).unwrap();
     if case.driver != Driver::File
-        && !local.documents().capabilities().contains(Capability::ValidatedBatch)
+        && !local
+            .documents()
+            .capabilities()
+            .contains(Capability::ValidatedBatch)
     {
         use std::io::Write;
         let _ = writeln!(
@@ -496,10 +499,10 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
         // A partial attempt leaves its import marker absent, allowing a
         // later retry on a backend that supports atomic validation.
         let again = import::run(
-        &openhuman_core::core::runtime::DispatchCtx::process_default(),
-        &config,
-    )
-    .await;
+            &openhuman_core::core::runtime::DispatchCtx::process_default(),
+            &config,
+        )
+        .await;
         let sessions = again
             .iter()
             .find(|report| report.domain == "sessions")
@@ -617,7 +620,11 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     let _ = fixture.ccr_originals;
 
     // Second boot: nothing runs again, so nothing deleted comes back.
-    let again = import::run(&openhuman_core::core::runtime::DispatchCtx::process_default(), &config).await;
+    let again = import::run(
+        &openhuman_core::core::runtime::DispatchCtx::process_default(),
+        &config,
+    )
+    .await;
     assert_eq!(again.len(), reports.len());
     for report in &again {
         assert_eq!(

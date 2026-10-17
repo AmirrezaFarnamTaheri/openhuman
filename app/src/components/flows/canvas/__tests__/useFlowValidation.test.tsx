@@ -31,16 +31,22 @@ describe('useFlowValidation draft revision isolation', () => {
 
   it('does not let a previous draft RPC validate a newly edited draft before its debounce', async () => {
     let resolveOld!: (value: FlowValidation) => void;
-    validateFlow.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    validateFlow.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveOld = resolve;
+        })
+    );
     validateFlow.mockResolvedValueOnce(valid);
 
-    const { result, rerender } = renderHook(
-      ({ draft, key }) => useFlowValidation(draft, key),
-      { initialProps: { draft: graph('old'), key: 'old' } }
-    );
+    const { result, rerender } = renderHook(({ draft, key }) => useFlowValidation(draft, key), {
+      initialProps: { draft: graph('old'), key: 'old' },
+    });
 
     let oldRequest!: Promise<FlowValidation | null>;
-    act(() => { oldRequest = result.current.validateNow(); });
+    act(() => {
+      oldRequest = result.current.validateNow();
+    });
     expect(result.current.validating).toBe(true);
 
     rerender({ draft: graph('new'), key: 'new' });
@@ -53,18 +59,21 @@ describe('useFlowValidation draft revision isolation', () => {
     });
     expect(result.current.validation).toBeNull();
 
-    await act(async () => { await result.current.validateNow(); });
+    await act(async () => {
+      await result.current.validateNow();
+    });
     expect(result.current.validation).toEqual(valid);
     expect(result.current.validating).toBe(false);
   });
 
   it('clears already displayed validation synchronously when the draft key changes', async () => {
     validateFlow.mockResolvedValueOnce(invalid);
-    const { result, rerender } = renderHook(
-      ({ draft, key }) => useFlowValidation(draft, key),
-      { initialProps: { draft: graph('A'), key: 'A' } }
-    );
-    await act(async () => { await result.current.validateNow(); });
+    const { result, rerender } = renderHook(({ draft, key }) => useFlowValidation(draft, key), {
+      initialProps: { draft: graph('A'), key: 'A' },
+    });
+    await act(async () => {
+      await result.current.validateNow();
+    });
     expect(result.current.validation).toEqual(invalid);
     rerender({ draft: graph('B'), key: 'B' });
     expect(result.current.validation).toBeNull();
@@ -74,8 +83,18 @@ describe('useFlowValidation draft revision isolation', () => {
   it('retains the newest result on the same draft when two manual validations resolve backwards', async () => {
     let resolveFirst!: (value: FlowValidation) => void;
     let resolveSecond!: (value: FlowValidation) => void;
-    validateFlow.mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }));
-    validateFlow.mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve; }));
+    validateFlow.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveFirst = resolve;
+        })
+    );
+    validateFlow.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveSecond = resolve;
+        })
+    );
 
     const { result } = renderHook(() => useFlowValidation(graph('A'), 'A'));
     let first!: Promise<FlowValidation | null>;

@@ -148,15 +148,15 @@ fn rejects_mismatched_and_unrelated_target_agent_ids() {
 
 #[test]
 fn action_specific_target_agent_ids_remain_valid() {
-    for (action, target) in [
-        ("react", "trigger_reactor"),
-        ("escalate", "orchestrator"),
-    ] {
+    for (action, target) in [("react", "trigger_reactor"), ("escalate", "orchestrator")] {
         let reply = format!(
             r#"{{"action":"{action}","target_agent":"{target}","prompt":"handle event","reason":"test"}}"#
         );
         assert_eq!(
-            parse_triage_decision(&reply).unwrap().target_agent.as_deref(),
+            parse_triage_decision(&reply)
+                .unwrap()
+                .target_agent
+                .as_deref(),
             Some(target),
         );
     }

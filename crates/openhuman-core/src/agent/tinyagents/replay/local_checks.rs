@@ -11,7 +11,10 @@ use tinyagents_harness::observability::AgentObservation;
 /// Facts used for unit testing and by the typed AgentEvent adapter.
 pub(super) enum LocalToolEvent<'a> {
     Started,
-    Completed { metadata: Option<&'a Value>, error: bool },
+    Completed {
+        metadata: Option<&'a Value>,
+        error: bool,
+    },
     Failed,
 }
 
@@ -58,20 +61,41 @@ fn may_change_source(tool: &str) -> bool {
     // deliberately small set of native, explicitly read-only tool names.
     !matches!(
         tool,
-        "file_read" | "file_list" | "file_search" |
-        "grep" | "glob" | "source_evidence" | "current_time" |
-        "run_status" | "run_events" | "run_local_checks"
+        "file_read"
+            | "file_list"
+            | "file_search"
+            | "grep"
+            | "glob"
+            | "source_evidence"
+            | "current_time"
+            | "run_status"
+            | "run_events"
+            | "run_local_checks"
     )
 }
 
 fn supported_check_kind(kind: &str) -> bool {
     matches!(
         kind,
-        "cargo_test" | "cargo_check" | "cargo_clippy" | "cargo_build" | "cargo_fmt" |
-        "pytest" | "python_unittest" |
-        "go_test" | "go_vet" | "go_build" | "node_test" |
-        "pnpm_test" | "pnpm_lint" | "pnpm_build" | "vitest" |
-        "npm_test" | "npm_build" | "npm_lint" | "npm_typecheck"
+        "cargo_test"
+            | "cargo_check"
+            | "cargo_clippy"
+            | "cargo_build"
+            | "cargo_fmt"
+            | "pytest"
+            | "python_unittest"
+            | "go_test"
+            | "go_vet"
+            | "go_build"
+            | "node_test"
+            | "pnpm_test"
+            | "pnpm_lint"
+            | "pnpm_build"
+            | "vitest"
+            | "npm_test"
+            | "npm_build"
+            | "npm_lint"
+            | "npm_typecheck"
     )
 }
 
@@ -89,7 +113,7 @@ fn trusted_local_fact(meta: Option<&Value>) -> Option<(bool, Option<&str>)> {
     let kind = match fact.get("check_kind") {
         Some(Value::String(name)) if supported_check_kind(name) => Some(name.as_str()),
         Some(_) => return None, // an invented check category is not trusted
-        None => None, // backward compatibility: no basis to clear old failures
+        None => None,           // backward compatibility: no basis to clear old failures
     };
     let passed = fact.get("passed")?.as_bool()?;
     let status = fact.get("status")?.as_str()?;
@@ -120,7 +144,10 @@ impl LocalCheckAccumulator {
                 self.record(observation.offset, tool_name, LocalToolEvent::Started);
             }
             AgentEvent::ToolCompleted {
-                tool_name, metadata, error, ..
+                tool_name,
+                metadata,
+                error,
+                ..
             } => self.record(
                 observation.offset,
                 tool_name,
@@ -136,18 +163,11 @@ impl LocalCheckAccumulator {
         }
     }
 
-    pub(super) fn record(
-        &mut self,
-        offset: u64,
-        tool_name: &str,
-        event: LocalToolEvent<'_>,
-    ) {
+    pub(super) fn record(&mut self, offset: u64, tool_name: &str, event: LocalToolEvent<'_>) {
         if may_change_source(tool_name) {
             // A tool can modify a file even when its final outcome was failure.
             // Only a later trusted check can be newer than this observation.
-            if !matches!(&event, LocalToolEvent::Completed { .. })
-                || tool_name != "shell"
-            {
+            if !matches!(&event, LocalToolEvent::Completed { .. }) || tool_name != "shell" {
                 self.last_possible_mutation = Some(offset);
             }
         }
@@ -173,7 +193,7 @@ impl LocalCheckAccumulator {
                             // cleared by an unrelated later green command.
                             self.unattributed_failures += 1;
                         }
-                    },
+                    }
                     None => {
                         // No proven read-only classification: the command might
                         // have written files even when the process exited zero.
@@ -191,16 +211,19 @@ impl LocalCheckAccumulator {
         // can represent a different package, script or test selector. Without
         // command identity evidence, require a separate clean run rather
         // than creating an apparently green proof from the same journal.
-        let unresolved_check_kinds: Vec<String> = self.checks_by_kind.iter()
+        let unresolved_check_kinds: Vec<String> = self
+            .checks_by_kind
+            .iter()
             .filter(|(_, passed)| !**passed)
             .map(|(kind, _)| kind.clone())
             .collect();
-        let unresolved_failures = self.unattributed_failures > 0
-            || !unresolved_check_kinds.is_empty();
-        let fresh = complete && !unresolved_failures
-            && self.latest_pass.is_some_and(|offset| {
-                self.last_possible_mutation.is_none_or(|last| offset > last)
-            });
+        let unresolved_failures =
+            self.unattributed_failures > 0 || !unresolved_check_kinds.is_empty();
+        let fresh = complete
+            && !unresolved_failures
+            && self
+                .latest_pass
+                .is_some_and(|offset| self.last_possible_mutation.is_none_or(|last| offset > last));
         let status = if !complete {
             "partial_journal"
         } else if unresolved_failures {

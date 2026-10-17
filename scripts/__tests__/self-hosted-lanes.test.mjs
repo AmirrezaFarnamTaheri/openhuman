@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 import {
   AREA_ENV,
@@ -265,6 +266,7 @@ test("the lane plan retains the shared CI checks", () => {
     "pnpm docs:test",
     "pnpm docs:check",
     "pnpm test:scripts",
+    "python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py'",
     "cargo clippy -p openhuman-embed --all-targets -- -D warnings",
     "cargo check -p openhuman-embed --no-default-features",
     "cargo clippy -p openhuman-tinyhumans --all-targets -- -D warnings",
@@ -288,6 +290,7 @@ test("untouched areas leave only the always-on gates", () => {
     "static:orch-ip-gate",
     "static:feature-forwarding",
     "static:crate-chain",
+    "static:cloud-provider-catalog-parity",
     "static:process-statics",
     "static:module-source",
     "static:module-pins",
@@ -328,6 +331,7 @@ test("the storage area arms only the storage-drivers lane, with the sqlite and f
         "static:orch-ip-gate",
         "static:feature-forwarding",
         "static:crate-chain",
+        "static:cloud-provider-catalog-parity",
         "static:process-statics",
         "static:module-source",
         "static:module-pins",
@@ -749,6 +753,35 @@ test("module boundary policy and checker changes arm their own scripts lane", ()
       scripts.includes(`'${file}'`),
       `${file} must arm the scripts area`,
     );
+  }
+});
+
+test("CI helpers, hook and script dependencies run their whole regression suites", () => {
+  const filters = parseYaml(fs.readFileSync(
+    path.join(repoRoot, ".github/ci-paths-filter.yml"), "utf8",
+  ));
+  for (const file of [
+    ".husky/pre-push",
+    ".github/workflows/ui-preview.yml",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "scripts/ci/ci-gate.mjs",
+    "scripts/ci/upstream_fork_audit.py",
+    "scripts/ci/tests/test_upstream_fork_audit.py",
+  ]) {
+    assert.ok(filters.scripts.some(pattern => path.matchesGlob(file, pattern)), file);
+  }
+  for (const profile of ["hosted", "ex63"]) {
+    const plan = buildPlan({
+      profile,
+      areas: { ...NONE, scripts: true },
+      env: profile === "ex63" ? EX63_ENV : {},
+    });
+    const check = plan.lanes.flatMap(lane => lane.checks)
+      .find(check => check.name === "python-script-tests");
+    assert.equal(check.when, true);
+    assert.equal(check.run, "python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py'");
   }
 });
 

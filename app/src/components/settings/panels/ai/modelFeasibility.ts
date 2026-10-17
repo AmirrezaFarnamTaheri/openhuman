@@ -56,10 +56,11 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
   requirements: ModelRequirements
 ): ModelFeasibilityReport<T> {
   const { inputTokens, outputTokens, requiresVision, maxEstimatedCostUSD } = requirements;
-  const cachedInputTokens = requirements.cachedInputTokens === undefined
-    ? 0 : requirements.cachedInputTokens;
+  const cachedInputTokens =
+    requirements.cachedInputTokens === undefined ? 0 : requirements.cachedInputTokens;
   if (
-    !Number.isSafeInteger(cachedInputTokens) || cachedInputTokens < 0 ||
+    !Number.isSafeInteger(cachedInputTokens) ||
+    cachedInputTokens < 0 ||
     cachedInputTokens > inputTokens ||
     !Number.isSafeInteger(inputTokens) ||
     inputTokens < 0 ||
@@ -97,29 +98,30 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
     const uncachedInputTokens = inputTokens - cachedInputTokens;
     // Each consumed component needs a positive saved price; zero-price
     // metadata with actual usage remains unknown, not verified free.
-    const uncachedKnown = uncachedInputTokens === 0 ||
-      (knownNonnegative(inputPrice) && inputPrice > 0);
-    const cachedKnown = cachedInputTokens === 0 ||
-      (knownNonnegative(cachedInputPrice) && cachedInputPrice > 0);
-    const outputKnown = outputTokens === 0 ||
-      (knownNonnegative(outputPrice) && outputPrice > 0);
-    const estimated = uncachedKnown && cachedKnown && outputKnown
-      ? ((uncachedInputTokens === 0 ? 0 : uncachedInputTokens * (inputPrice as number)) +
-         (cachedInputTokens === 0 ? 0 : cachedInputTokens * (cachedInputPrice as number)) +
-         (outputTokens === 0 ? 0 : outputTokens * (outputPrice as number))) / 1_000_000
-      : null;
-    const estimatedCostUSD =
-      estimated !== null && Number.isFinite(estimated) ? estimated : null;
+    const uncachedKnown =
+      uncachedInputTokens === 0 || (knownNonnegative(inputPrice) && inputPrice > 0);
+    const cachedKnown =
+      cachedInputTokens === 0 || (knownNonnegative(cachedInputPrice) && cachedInputPrice > 0);
+    const outputKnown = outputTokens === 0 || (knownNonnegative(outputPrice) && outputPrice > 0);
+    const estimated =
+      uncachedKnown && cachedKnown && outputKnown
+        ? ((uncachedInputTokens === 0 ? 0 : uncachedInputTokens * (inputPrice as number)) +
+            (cachedInputTokens === 0 ? 0 : cachedInputTokens * (cachedInputPrice as number)) +
+            (outputTokens === 0 ? 0 : outputTokens * (outputPrice as number))) /
+          1_000_000
+        : null;
+    const estimatedCostUSD = estimated !== null && Number.isFinite(estimated) ? estimated : null;
     if (estimatedCostUSD === null) {
       reasons.push('unknown_price');
     } else if (maxEstimatedCostUSD !== null && estimatedCostUSD > maxEstimatedCostUSD) {
       reasons.push('estimated_cost_exceeds_budget');
     }
 
-    const excluded = reasons.some(reason =>
-      reason === 'context_too_small' ||
-      reason === 'vision_unavailable' ||
-      reason === 'estimated_cost_exceeds_budget'
+    const excluded = reasons.some(
+      reason =>
+        reason === 'context_too_small' ||
+        reason === 'vision_unavailable' ||
+        reason === 'estimated_cost_exceeds_budget'
     );
     const status: ModelFitStatus = excluded
       ? 'excluded'
@@ -129,11 +131,7 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
     return { model, status, reasons, estimatedCostUSD };
   });
 
-  const rank: Record<ModelFitStatus, number> = {
-    metadata_fit: 0,
-    unknown: 1,
-    excluded: 2,
-  };
+  const rank: Record<ModelFitStatus, number> = { metadata_fit: 0, unknown: 1, excluded: 2 };
   rows.sort((a, b) => {
     const statusDiff = rank[a.status] - rank[b.status];
     if (statusDiff !== 0) return statusDiff;
@@ -143,17 +141,10 @@ export function assessModelFeasibility<T extends FeasibilityModel>(
     } else if (a.estimatedCostUSD !== null || b.estimatedCostUSD !== null) {
       return a.estimatedCostUSD === null ? 1 : -1;
     }
-    return (
-      a.model.provider.localeCompare(b.model.provider) ||
-      a.model.id.localeCompare(b.model.id)
-    );
+    return a.model.provider.localeCompare(b.model.provider) || a.model.id.localeCompare(b.model.id);
   });
 
-  const counts: Record<ModelFitStatus, number> = {
-    metadata_fit: 0,
-    unknown: 0,
-    excluded: 0,
-  };
+  const counts: Record<ModelFitStatus, number> = { metadata_fit: 0, unknown: 0, excluded: 0 };
   for (const row of rows) counts[row.status]++;
 
   return {

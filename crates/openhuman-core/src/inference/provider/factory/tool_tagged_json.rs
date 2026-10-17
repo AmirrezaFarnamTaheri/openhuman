@@ -86,7 +86,8 @@ fn decode_calls(
         }
         if serde_json::to_vec(arguments)
             .map_err(|_| invalid("cannot serialize tool arguments"))?
-            .len() > MAX_VALUE_BYTES
+            .len()
+            > MAX_VALUE_BYTES
         {
             return Err(invalid("tool arguments exceed size limit"));
         }
@@ -146,7 +147,9 @@ pub(super) fn parse_tagged_json_output(
         return Err(invalid("missing terminal tool or final-answer block"));
     };
     if !tail.trim().is_empty() {
-        return Err(invalid("unexpected trailing text or additional terminal block"));
+        return Err(invalid(
+            "unexpected trailing text or additional terminal block",
+        ));
     }
     Ok(Some(TaggedJsonOutput {
         thinking,
@@ -195,7 +198,10 @@ pub(super) fn rewrite_tagged_json_response(
         insert += 1;
     }
     if let Some(answer) = decoded.answer {
-        response.message.content.insert(insert, ContentBlock::Text(answer));
+        response
+            .message
+            .content
+            .insert(insert, ContentBlock::Text(answer));
         response.finish_reason = Some("stop".into());
     } else {
         response.message.tool_calls = decoded.calls;

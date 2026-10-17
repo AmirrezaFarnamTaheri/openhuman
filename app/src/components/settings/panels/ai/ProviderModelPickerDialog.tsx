@@ -246,11 +246,12 @@ export function ProviderModelPickerDialog({
     normalizedQuery === '' ||
     candidate.id.toLocaleLowerCase().includes(normalizedQuery) ||
     (candidate.display_name ?? '').toLocaleLowerCase().includes(normalizedQuery);
-  const visibleSources = sources.filter(candidate =>
-    normalizedQuery === '' ||
-    (source !== null && sourceKey(candidate) === sourceKey(source)) ||
-    sourceLabel(candidate, cloudProviders, t).toLocaleLowerCase().includes(normalizedQuery) ||
-    sourceSlug(candidate).toLocaleLowerCase().includes(normalizedQuery)
+  const visibleSources = sources.filter(
+    candidate =>
+      normalizedQuery === '' ||
+      (source !== null && sourceKey(candidate) === sourceKey(source)) ||
+      sourceLabel(candidate, cloudProviders, t).toLocaleLowerCase().includes(normalizedQuery) ||
+      sourceSlug(candidate).toLocaleLowerCase().includes(normalizedQuery)
   );
   const modelTitle = (candidate: ModelInfo) => candidate.display_name?.trim() || candidate.id;
   const visibleCatalog = catalog

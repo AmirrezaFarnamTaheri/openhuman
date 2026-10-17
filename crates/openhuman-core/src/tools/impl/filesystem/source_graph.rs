@@ -23,7 +23,11 @@ fn pattern(cache: &'static OnceLock<Regex>, expression: &'static str) -> &'stati
 }
 
 #[derive(Clone, Copy)]
-enum SourceSyntax { Rust, JavaScript, Python }
+enum SourceSyntax {
+    Rust,
+    JavaScript,
+    Python,
+}
 
 #[derive(Default)]
 struct LexicalState {
@@ -53,7 +57,8 @@ fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) ->
         // number of raw-string hashes until a matching closing delimiter.
         if let Some(hashes) = state.rust_raw_hashes {
             if current == b'"'
-                && bytes.get(index + 1..index + 1 + hashes)
+                && bytes
+                    .get(index + 1..index + 1 + hashes)
                     .is_some_and(|tail| tail.iter().all(|byte| *byte == b'#'))
             {
                 state.rust_raw_hashes = None;
@@ -99,7 +104,9 @@ fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) ->
             if current == b'\\' {
                 index += 2;
             } else {
-                if current == delimiter { quote = None; }
+                if current == delimiter {
+                    quote = None;
+                }
                 index += 1;
             }
             continue;
@@ -108,9 +115,13 @@ fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) ->
         // r###"..."###, br#"..."#. Only run this in Rust, before
         // treating '#', '/', quotes and braces as ordinary code.
         if matches!(syntax, SourceSyntax::Rust) {
-            let prefix = if current == b'r' { Some(1) }
-                else if current == b'b' && next == Some(b'r') { Some(2) }
-                else { None };
+            let prefix = if current == b'r' {
+                Some(1)
+            } else if current == b'b' && next == Some(b'r') {
+                Some(2)
+            } else {
+                None
+            };
             if let Some(prefix_len) = prefix {
                 let mut cursor = index + prefix_len;
                 while bytes.get(cursor) == Some(&b'#') {
@@ -131,8 +142,12 @@ fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) ->
             index += 3;
             continue;
         }
-        if matches!(syntax, SourceSyntax::Python) && current == b'#' { break; }
-        if !matches!(syntax, SourceSyntax::Python) && current == b'/' && next == Some(b'/') { break; }
+        if matches!(syntax, SourceSyntax::Python) && current == b'#' {
+            break;
+        }
+        if !matches!(syntax, SourceSyntax::Python) && current == b'/' && next == Some(b'/') {
+            break;
+        }
         if !matches!(syntax, SourceSyntax::Python) && current == b'/' && next == Some(b'*') {
             state.block_depth += 1;
             index += 2;
@@ -160,7 +175,8 @@ fn code_positions(line: &str, syntax: SourceSyntax, state: &mut LexicalState) ->
 }
 
 fn is_code(captures: &regex::Captures<'_>, group: usize, mask: &[bool]) -> bool {
-    captures.get(group)
+    captures
+        .get(group)
         .and_then(|matched| mask.get(matched.start()))
         .copied()
         .unwrap_or(false)
@@ -168,11 +184,17 @@ fn is_code(captures: &regex::Captures<'_>, group: usize, mask: &[bool]) -> bool 
 
 fn rust_mod_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
-    pattern(&PATTERN, r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z_0-9]*)\s*;")
+    pattern(
+        &PATTERN,
+        r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z_0-9]*)\s*;",
+    )
 }
 fn js_from_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
-    pattern(&PATTERN, r#"^\s*(?:import|export)\b.*?\b(from)\s*['"](\.[^'"]+)['"]"#)
+    pattern(
+        &PATTERN,
+        r#"^\s*(?:import|export)\b.*?\b(from)\s*['"](\.[^'"]+)['"]"#,
+    )
 }
 fn js_side_effect_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
@@ -193,17 +215,27 @@ fn python_from_pattern() -> &'static Regex {
 }
 fn python_relative_target(source: &str, spec: &str) -> Option<String> {
     let dots = spec.bytes().take_while(|byte| *byte == b'.').count();
-    if dots == 0 { return None; }
+    if dots == 0 {
+        return None;
+    }
     let module = spec.get(dots..)?;
     let mut parts: Vec<&str> = source.split('/').collect();
     parts.pop();
-    for _ in 1..dots { parts.pop()?; }
-    if parts.is_empty() { return None; }
+    for _ in 1..dots {
+        parts.pop()?;
+    }
+    if parts.is_empty() {
+        return None;
+    }
     if !module.is_empty() {
         for piece in module.split('.') {
-            let valid = !piece.is_empty() &&
-                piece.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
-            if !valid { return None; }
+            let valid = !piece.is_empty()
+                && piece
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
+            if !valid {
+                return None;
+            }
             parts.push(piece);
         }
     }
@@ -220,31 +252,54 @@ fn relative_target(source: &str, spec: &str) -> Option<String> {
     for segment in spec.split('/') {
         match segment {
             "" | "." => {}
-            ".." => { parts.pop()?; }
+            ".." => {
+                parts.pop()?;
+            }
             part => parts.push(part),
         }
     }
-    if parts.is_empty() { return None; }
+    if parts.is_empty() {
+        return None;
+    }
     Some(parts.join("/"))
 }
 
 fn candidate_paths(source: &str, spec: &str, kind: &str) -> Vec<String> {
     if kind == "module" {
         // foo.rs nested-module directory convention differs from lib/main/mod.
-        let mut parent = source.rsplit_once('/').map_or("", |(dir, _)| dir).to_string();
-        let name = Path::new(source).file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let mut parent = source
+            .rsplit_once('/')
+            .map_or("", |(dir, _)| dir)
+            .to_string();
+        let name = Path::new(source)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
         if !matches!(name, "lib" | "main" | "mod") {
-            if !parent.is_empty() { parent.push('/'); }
+            if !parent.is_empty() {
+                parent.push('/');
+            }
             parent.push_str(name);
         }
-        let prefix = if parent.is_empty() { String::new() } else { format!("{parent}/") };
-        return vec![format!("{prefix}{spec}.rs"), format!("{prefix}{spec}/mod.rs")];
+        let prefix = if parent.is_empty() {
+            String::new()
+        } else {
+            format!("{parent}/")
+        };
+        return vec![
+            format!("{prefix}{spec}.rs"),
+            format!("{prefix}{spec}/mod.rs"),
+        ];
     }
     if kind == "python_import" {
-        let Some(stem) = python_relative_target(source, spec) else { return Vec::new(); };
+        let Some(stem) = python_relative_target(source, spec) else {
+            return Vec::new();
+        };
         return vec![format!("{stem}.py"), format!("{stem}/__init__.py")];
     }
-    let Some(stem) = relative_target(source, spec) else { return Vec::new(); };
+    let Some(stem) = relative_target(source, spec) else {
+        return Vec::new();
+    };
     if matches!(
         Path::new(&stem).extension().and_then(|ext| ext.to_str()),
         Some("ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts")
@@ -261,13 +316,21 @@ fn candidate_paths(source: &str, spec: &str, kind: &str) -> Vec<String> {
                     .iter()
                     .map(|ext| format!("{stem}.{ext}")),
             )
-            .chain(["ts", "tsx", "js", "jsx"].iter().map(|ext| format!("{stem}/index.{ext}")))
+            .chain(
+                ["ts", "tsx", "js", "jsx"]
+                    .iter()
+                    .map(|ext| format!("{stem}/index.{ext}")),
+            )
             .collect()
     }
 }
 
-fn resolve(present: &BTreeMap<&str, &str>, candidates: Vec<String>) -> (&'static str, Option<String>, usize) {
-    let matches: Vec<String> = candidates.into_iter()
+fn resolve(
+    present: &BTreeMap<&str, &str>,
+    candidates: Vec<String>,
+) -> (&'static str, Option<String>, usize) {
+    let matches: Vec<String> = candidates
+        .into_iter()
         .filter(|name| present.contains_key(name.as_str()))
         .collect();
     match matches.len() {
@@ -282,10 +345,14 @@ fn resolve(present: &BTreeMap<&str, &str>, candidates: Vec<String>) -> (&'static
 pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Option<&str>) -> Value {
     let mut ordered: Vec<&SourceDocument> = docs.iter().collect();
     ordered.sort_by(|a, b| a.path.cmp(&b.path));
-    let present: BTreeMap<&str, &str> = ordered.iter()
-        .map(|doc| (doc.path.as_str(), doc.source_hash.as_str())).collect();
-    let nodes: Vec<Value> = ordered.iter()
-        .map(|doc| json!({"path":doc.path,"source_hash":doc.source_hash})).collect();
+    let present: BTreeMap<&str, &str> = ordered
+        .iter()
+        .map(|doc| (doc.path.as_str(), doc.source_hash.as_str()))
+        .collect();
+    let nodes: Vec<Value> = ordered
+        .iter()
+        .map(|doc| json!({"path":doc.path,"source_hash":doc.source_hash}))
+        .collect();
 
     let mut edges = Vec::<Value>::new();
     let mut reverse = BTreeMap::<String, BTreeSet<String>>::new();
@@ -293,15 +360,25 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
     let max_edges = max_edges.min(64);
     'documents: for doc in ordered {
         let ext = Path::new(&doc.path).extension().and_then(|e| e.to_str());
-        let js = matches!(ext, Some("ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts"));
+        let js = matches!(
+            ext,
+            Some("ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts")
+        );
         let rust = ext == Some("rs");
         let python = ext == Some("py");
-        if !js && !rust && !python { continue; }
+        if !js && !rust && !python {
+            continue;
+        }
         let mut pending_custom_path = false;
         let mut rust_nesting = 0usize;
         let mut lexical = LexicalState::default();
-        let syntax = if rust { SourceSyntax::Rust }
-            else if js { SourceSyntax::JavaScript } else { SourceSyntax::Python };
+        let syntax = if rust {
+            SourceSyntax::Rust
+        } else if js {
+            SourceSyntax::JavaScript
+        } else {
+            SourceSyntax::Python
+        };
         for (index, line) in doc.content.lines().enumerate() {
             let code_mask = code_positions(line, syntax, &mut lexical);
             let was_nested = rust && rust_nesting > 0;
@@ -310,7 +387,9 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
                 // relative paths using the containing file's root directory.
                 // This graph intentionally does not parse Rust module scopes.
                 for (byte, code) in line.bytes().zip(code_mask.iter().copied()) {
-                    if !code { continue; }
+                    if !code {
+                        continue;
+                    }
                     if byte == b'{' {
                         rust_nesting += 1;
                     } else if byte == b'}' {
@@ -321,15 +400,17 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
             let imports: Vec<(&str, String)> = if rust {
                 let trimmed = line.trim_start();
                 if trimmed.starts_with("#[path")
-                    && line.find("#[path").is_some_and(|byte| {
-                        code_mask.get(byte).copied().unwrap_or(false)
-                    })
+                    && line
+                        .find("#[path")
+                        .is_some_and(|byte| code_mask.get(byte).copied().unwrap_or(false))
                 {
                     pending_custom_path = true;
                     continue;
                 }
                 if pending_custom_path {
-                    let no_code = !line.bytes().zip(code_mask.iter().copied())
+                    let no_code = !line
+                        .bytes()
+                        .zip(code_mask.iter().copied())
                         .any(|(byte, visible)| visible && !byte.is_ascii_whitespace());
                     if trimmed.starts_with("#[") || no_code {
                         continue;
@@ -341,44 +422,60 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
                         continue;
                     }
                 }
-                if was_nested { continue; }
-                rust_mod_pattern().captures(line)
+                if was_nested {
+                    continue;
+                }
+                rust_mod_pattern()
+                    .captures(line)
                     .filter(|captures| is_code(captures, 1, &code_mask))
                     .map(|captures| ("module", captures[1].to_string()))
-                    .into_iter().collect()
+                    .into_iter()
+                    .collect()
             } else if js {
                 // Conservative: ignore explicit comment-only lines.
-                if line.trim_start().starts_with("//") { continue; }
+                if line.trim_start().starts_with("//") {
+                    continue;
+                }
                 let mut found = Vec::new();
                 // The keyword at the start and the from-clause itself must
                 // both be visible code. Without the second check, an ordinary
                 // "export { x }; // from './fake'" creates a phantom edge.
-                if let Some(captures) = js_from_pattern().captures(line)
-                    .filter(|captures| is_code(captures, 0, &code_mask)
-                        && is_code(captures, 1, &code_mask)) {
+                if let Some(captures) = js_from_pattern().captures(line).filter(|captures| {
+                    is_code(captures, 0, &code_mask) && is_code(captures, 1, &code_mask)
+                }) {
                     found.push(("import", captures[2].to_string()));
                 }
-                if let Some(captures) = js_side_effect_pattern().captures(line)
+                if let Some(captures) = js_side_effect_pattern()
+                    .captures(line)
                     .or_else(|| js_require_pattern().captures(line))
-                    .filter(|captures| is_code(captures, 0, &code_mask)) {
+                    .filter(|captures| is_code(captures, 0, &code_mask))
+                {
                     found.push(("import", captures[1].to_string()));
                 }
-                if let Some(captures) = js_dynamic_pattern().captures(line)
-                    .filter(|captures| is_code(captures, 0, &code_mask)) {
+                if let Some(captures) = js_dynamic_pattern()
+                    .captures(line)
+                    .filter(|captures| is_code(captures, 0, &code_mask))
+                {
                     found.push(("dynamic_import", captures[1].to_string()));
                 }
                 found
             } else {
                 let mut found = Vec::new();
-                if let Some(captures) = python_from_pattern().captures(line)
-                    .filter(|captures| is_code(captures, 1, &code_mask)) {
+                if let Some(captures) = python_from_pattern()
+                    .captures(line)
+                    .filter(|captures| is_code(captures, 1, &code_mask))
+                {
                     let module = &captures[1];
                     if module.bytes().all(|byte| byte == b'.') {
                         for name in captures[2].split(',') {
                             let name = name.split_whitespace().next().unwrap_or("");
-                            let valid = name.bytes().next().is_some_and(|byte| {
-                                byte.is_ascii_alphabetic() || byte == b'_'
-                            }) && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
+                            let valid = name
+                                .bytes()
+                                .next()
+                                .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+                                && name
+                                    .bytes()
+                                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
                             if valid {
                                 found.push(("python_import", format!("{module}{name}")));
                             }
@@ -397,7 +494,10 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
                     break 'documents;
                 }
                 if let Some(to) = target.as_ref() {
-                    reverse.entry(to.clone()).or_default().insert(doc.path.clone());
+                    reverse
+                        .entry(to.clone())
+                        .or_default()
+                        .insert(doc.path.clone());
                 }
                 edges.push(json!({
                     "from":doc.path,
@@ -447,7 +547,9 @@ pub(super) fn build_graph(docs: &[SourceDocument], max_edges: usize, focus: Opti
     // truncation, which would corrupt it and drop completeness metadata.
     const MAX_GRAPH_JSON_BYTES: usize = 26_000;
     while graph.to_string().len() > MAX_GRAPH_JSON_BYTES {
-        let Some(edges) = graph["edges"].as_array_mut() else { break; };
+        let Some(edges) = graph["edges"].as_array_mut() else {
+            break;
+        };
         if edges.pop().is_none() {
             break;
         }

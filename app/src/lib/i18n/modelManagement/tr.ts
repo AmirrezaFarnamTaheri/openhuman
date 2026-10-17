@@ -1,0 +1,88 @@
+import type { ModelManagementMessages } from './en';
+
+const messages = {
+  'feasibility.contextTooSmall': 'Bağlam, giriş ve çıkış belirteçlerinin toplamından küçük',
+  'feasibility.visionUnavailable': 'Kaydedilmiş meta verilere göre görsel işleme desteklenmiyor',
+  'feasibility.overBudget': 'Tahmini maliyet bütçeyi aşıyor',
+  'feasibility.unknownContext': 'Bağlam boyutu bilinmiyor',
+  'feasibility.unknownVision': 'Görsel işleme yeteneği bilinmiyor',
+  'feasibility.unknownPrice': 'Fiyat eksik, sıfır veya geçersiz',
+  'feasibility.aria': 'Model uygunluğu önizlemesi',
+  'feasibility.title': 'Model uygunluğu ve maliyet önizlemesi',
+  'feasibility.advisory':
+    'Kaydedilmiş meta verilere dayanır; güncel fiyatlar, kotalar, anahtarlar veya kullanılabilirlik doğrulanmaz. Yalnızca bilgi amaçlıdır ve hiçbir görevin yönlendirmesini değiştirmez.',
+  'feasibility.input': 'Tahmini giriş tokenları',
+  'feasibility.cached': 'Önbellekteki giriş tokenları (girişe dahil)',
+  'feasibility.output': 'Tahmini çıkış tokenları',
+  'feasibility.budget': 'Maliyet sınırı (USD, isteğe bağlı)',
+  'feasibility.budgetAria': 'USD cinsinden tahmini maliyet sınırı',
+  'feasibility.noLimit': 'Sınır yok',
+  'feasibility.requireVision': 'Görsel desteği gerekli',
+  'feasibility.invalidCached':
+    'Önbellekteki giriş belirteçleri toplam giriş belirteci sayısını aşamaz.',
+  'feasibility.invalidCounts':
+    'Negatif olmayan tam sayı belirteç miktarları (önbellek girişin bir parçasıdır) ve isteğe bağlı olarak negatif olmayan bir maliyet sınırı girin.',
+  'feasibility.fitCount': 'Kaydedilmiş meta verilere göre uygunluk',
+  'feasibility.unknownCount': 'bilinmiyor',
+  'feasibility.excludedCount': 'belirtilen kısıtlamalar nedeniyle dışlanan',
+  'feasibility.search': 'Uygunluk sonuçlarında ara',
+  'feasibility.filter': 'Uygunluk durumuna göre filtrele',
+  'feasibility.all': 'Tüm durumlar',
+  'feasibility.fits': 'Üst verilere göre uygun',
+  'feasibility.unknown': 'Uygunluk bilinmiyor',
+  'feasibility.excluded': 'Hariç tutuldu',
+  'feasibility.fitDescription': 'Kaydedilmiş meta verilerle uyumlu; kullanılabilirlik doğrulanmadı',
+  'feasibility.excludedDescription': 'Kısıtlamalar nedeniyle dışlandı',
+  'feasibility.costUnknown': 'Maliyet bilinmiyor',
+  'feasibility.empty': 'Değerlendirilecek kayıtlı model yok.',
+  'feasibility.noMatch': 'Bu filtrelerle eşleşen model yok.',
+  'feasibility.showing': 'Gösterilen',
+  'feasibility.of': 'toplam',
+  'feasibility.matching': 'eşleşen model kaydı',
+  'feasibility.more': 'Daha fazla model göster',
+  'fleet.reauthRequired':
+    'Sağlayıcının uç noktasını veya kimlik doğrulamasını değiştirmeden önce düzenleyicide API anahtarını yeniden girin.',
+  'fleet.groupSyncHintSafe':
+    'Kaydedilmiş sağlayıcı uç noktaları varsayılan olarak korunur. Değişiklikleri inceleyip açıkça onaylayın; kimlik bilgisi bulunan sağlayıcılar düzenleyicide yeni bir anahtarla güncellenmelidir.',
+  'fleet.approveProviderSync': 'Sağlayıcı adresi ve kimlik doğrulama değişikliklerini onayla',
+  'fleet.previewProviderChanges': 'Sağlayıcı değişikliklerini önizle',
+  'fleet.providerNeedsKey': 'Anahtarın yeniden girilmesi gerekiyor',
+  'fleet.presetHintSafe':
+    'Eksik model hazır ayarlarını kaydedilmiş meta verileri değiştirmeden içe aktarın. Mevcut görsel desteğini, bağlamı ve fiyatları güncellemek isteğe bağlıdır ve elle yapılan düzenlemelerin yerini alabilir. Yönlendirmeler ve kimlik bilgileri değiştirilmez.',
+  'fleet.approveMetadataRefresh': 'Kayıtlı model üst verilerinin değiştirilmesini onayla',
+  'fleet.previewModelChanges': 'Model değişikliklerini önizle',
+  'fleet.refreshLabel': 'kaydedilmiş meta verileri yenile',
+  'fleet.addLabel': 'eksik hazır ayarı ekle',
+  'fleet.healthUnavailable': 'Sağlayıcı grubunun sağlık durumu alınamıyor.',
+  'fleet.selectProvidersError': 'Bir veya daha fazla sağlayıcı seçin.',
+  'fleet.imageEndpointError':
+    'Görsel uç noktaları HTTPS veya geri döngü adresinde HTTP gerektirir.',
+  'fleet.chooseGroupError': 'Bir sağlayıcı grubu seçin.',
+  'fleet.modelImageEndpointError':
+    'HTTPS veya geri döngü adresinde HTTP kullanan bir görsel uç noktası girin.',
+  'fleet.selectModelsError': 'Bir veya daha fazla model seçin.',
+  'fleet.contextError': 'Bağlam penceresi 0 ile 100.000.000 arasında bir tam sayı olmalıdır.',
+  'fleet.selectPatchError': 'Güncellenecek en az bir alan seçin.',
+  'fleet.noKeyUsage': 'Bu oturumda çıkarım anahtarı kullanımı kaydedilmedi.',
+  'fleet.selectProvider': 'Sağlayıcı seç',
+  'fleet.selected': 'seçili',
+  'fleet.groupImageAria': 'Grup için görsel API temel URL’si',
+  'fleet.rotationAria': 'Birden fazla anahtar arasından seçim stratejisi',
+  'fleet.imageGroupAria': 'Görsel uç noktası sağlayıcı grubu',
+  'fleet.imageModelIdAria': 'Görsel uç noktası model kimliği',
+  'fleet.modelImageAria': 'Model için görsel API temel URL’si',
+  'fleet.searchAria': 'Model hazır ayarlarını filtrele',
+  'fleet.selectModel': 'Model seç',
+  'fleet.visionLabel': 'görsel işleme',
+  'fleet.keepUnchanged': 'Değiştirmeden koru',
+  'fleet.enabled': 'Etkin',
+  'fleet.disabled': 'Devre dışı',
+  'fleet.leaveBlank': 'Korumak için boş bırakın',
+  'fleet.bulkContextAria': 'Toplu güncelleme için bağlam belirteçleri',
+  'fleet.prodexImageError':
+    'Prodex görsel uç noktaları, URL’de kimlik bilgisi olmadan HTTPS veya geri döngü adresinde HTTP gerektirir.',
+  'fleet.prodexModelImageError':
+    'Prodex model görsel uç noktaları, URL’de kimlik bilgisi olmadan HTTPS veya geri döngü adresinde HTTP gerektirir.',
+} satisfies ModelManagementMessages;
+
+export default messages;

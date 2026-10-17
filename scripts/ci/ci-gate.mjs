@@ -46,7 +46,10 @@ const PR_EVENTS = new Set(["pull_request", "pull_request_target"]);
  */
 export function findDecisiveJob(source, jobs) {
   const names = new Set([source.job, ...(source.alternateJobs ?? [])]);
-  return jobs.find(job => names.has(job.name)) ?? null;
+  const matches = jobs.filter(job => names.has(job.name));
+  // The fork and upstream callers are mutually exclusive. If GitHub includes
+  // the inactive caller's skipped gate, it must not hide the one that ran.
+  return matches.find(job => job.conclusion !== "skipped") ?? matches[0] ?? null;
 }
 
 function log(msg) {
@@ -93,7 +96,11 @@ export function decide(entries) {
   const onlyRoutingFinished =
     entries.length > 0 &&
     !entries.some((e) => e.source.hosted) &&
-    entries.every((e) => !e.job || e.job.conclusion === "skipped");
+    entries.every((e) =>
+      e.run.status === "completed" &&
+      e.run.conclusion === "success" &&
+      (!e.job || e.job.conclusion === "skipped"),
+    );
   if (onlyRoutingFinished) {
     return {
       state: "pending",

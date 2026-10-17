@@ -1,3 +1,1 @@
-export function shouldGenerateSourcemaps(
-  env?: Record<string, string | undefined>
-): boolean;
+export function shouldGenerateSourcemaps(env?: Record<string, string | undefined>): boolean;

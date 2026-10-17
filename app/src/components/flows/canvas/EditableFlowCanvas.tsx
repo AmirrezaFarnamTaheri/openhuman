@@ -46,7 +46,6 @@ import {
 
 import { FLOW_RUN_NODE_STATUS_CLASS, useFlowRunProgress } from '../../../hooks/useFlowRunProgress';
 import { erroredNodeIds } from '../../../lib/flows/flowValidation';
-import { validateLoopCycleSafety } from '../../../lib/flows/loopCycleSafety';
 import {
   connectionEdgeId,
   createFlowNode,
@@ -58,6 +57,7 @@ import {
   type WorkflowGraphMeta,
   xyflowToWorkflowGraph,
 } from '../../../lib/flows/graphAdapter';
+import { validateLoopCycleSafety } from '../../../lib/flows/loopCycleSafety';
 import { PALETTE_ENTRIES, type PaletteEntry } from '../../../lib/flows/nodeKindMeta';
 import type { NodeKind, WorkflowGraph } from '../../../lib/flows/types';
 import { useT } from '../../../lib/i18n/I18nContext';

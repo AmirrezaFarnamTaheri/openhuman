@@ -650,6 +650,36 @@ describe('FlowCanvasPage', () => {
     expect(screen.queryByTestId('flow-leave-confirm')).not.toBeInTheDocument();
   });
 
+  it('leaves a dirty deep link after its initial history entry was replaced', async () => {
+    getFlow.mockResolvedValue(makeFlow());
+    const previousHistory = window.history.state;
+    window.history.replaceState({ ...previousHistory, idx: 0 }, '');
+    const router = createMemoryRouter(
+      [
+        { path: '/flows/:id', element: <FlowCanvasPage /> },
+        { path: '/flows', element: <div data-testid="flows-list">Flows list</div> },
+      ],
+      { initialEntries: [{ pathname: '/flows/test-id', key: 'replaced-deep-link' }] }
+    );
+    try {
+      render(
+        <SidebarSlotProvider>
+          <SidebarSlotOutlet />
+          <RouterProvider router={router} />
+        </SidebarSlotProvider>
+      );
+      await screen.findByTestId('flow-canvas');
+      fireEvent.click(screen.getByTestId('flow-canvas-legend-toggle'));
+      fireEvent.click(screen.getByTestId('flow-palette-item-agent'));
+      fireEvent.click(screen.getByTestId('flow-canvas-back'));
+      fireEvent.click(await screen.findByTestId('flow-leave-discard'));
+      await waitFor(() => expect(router.state.location.pathname).toBe('/flows'));
+      expect(screen.queryByTestId('flow-leave-confirm')).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState(previousHistory, '');
+    }
+  });
+
   it('prompts before leaving when dirty, and discards to navigate away', async () => {
     getFlow.mockResolvedValue(makeFlow());
     renderEditor();

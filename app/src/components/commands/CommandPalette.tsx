@@ -7,8 +7,8 @@ import { hotkeyManager } from '../../lib/commands/hotkeyManager';
 import { registry } from '../../lib/commands/registry';
 import type { RegisteredAction } from '../../lib/commands/types';
 import { useT } from '../../lib/i18n/I18nContext';
-import { entryRoute, SETTINGS_ROUTE_REGISTRY } from '../settings/settingsRouteRegistry';
 import type { Thread } from '../../types/thread';
+import { entryRoute, SETTINGS_ROUTE_REGISTRY } from '../settings/settingsRouteRegistry';
 import { resetWalkthrough } from '../walkthrough/AppWalkthrough';
 import Kbd from './Kbd';
 import ThreadSearchGroups from './ThreadSearchGroups';
@@ -81,18 +81,18 @@ export default function CommandPalette({
   const matchingSettings = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     if (!onOpenSettingsRoute || query.length < 2) return [];
-    return SETTINGS_ROUTE_REGISTRY.filter(entry =>
-      !entry.hiddenDeepLink &&
-      !entry.devOnly &&
-      (
-        t(entry.titleKey).toLocaleLowerCase().includes(query) ||
-        entry.id.toLocaleLowerCase().includes(query) ||
-        entry.searchKeywords?.some(word => word.toLocaleLowerCase().includes(query))
-      )
+    return SETTINGS_ROUTE_REGISTRY.filter(
+      entry =>
+        !entry.hiddenDeepLink &&
+        !entry.devOnly &&
+        (t(entry.titleKey).toLocaleLowerCase().includes(query) ||
+          entry.id.toLocaleLowerCase().includes(query) ||
+          entry.searchKeywords?.some(word => word.toLocaleLowerCase().includes(query)))
     )
-      .sort((a, b) =>
-        Number(!t(a.titleKey).toLocaleLowerCase().startsWith(query)) -
-        Number(!t(b.titleKey).toLocaleLowerCase().startsWith(query))
+      .sort(
+        (a, b) =>
+          Number(!t(a.titleKey).toLocaleLowerCase().startsWith(query)) -
+          Number(!t(b.titleKey).toLocaleLowerCase().startsWith(query))
       )
       .slice(0, 15);
   }, [onOpenSettingsRoute, search, t]);
@@ -196,13 +196,21 @@ export default function CommandPalette({
                 heading={t('shortcuts.group.help', 'Help')}
                 className="**:[[cmdk-group-heading]]:px-4 **:[[cmdk-group-heading]]:py-1 **:[[cmdk-group-heading]]:text-xs **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:text-cmd-foreground-muted">
                 <Command.Item
-                  value="take a tour"
-                  keywords={['onboarding', 'guide', 'walkthrough', 'help']}
+                  value="help.take-tour"
+                  keywords={[
+                    t('walkthrough.takeTour'),
+                    t('shortcuts.group.help'),
+                    'take a tour',
+                    'onboarding',
+                    'guide',
+                    'walkthrough',
+                    'help',
+                  ]}
                   data-testid="command-start-tour"
                   onSelect={startTour}
                   className="flex items-center gap-3 px-4 py-2 cursor-pointer aria-selected:bg-cmd-surface-elevated">
                   <span className="w-4" aria-hidden />
-                  {t('walkthrough.takeTour', 'Take a tour')}
+                  {t('walkthrough.takeTour')}
                 </Command.Item>
               </Command.Group>
               {onOpenThread && (

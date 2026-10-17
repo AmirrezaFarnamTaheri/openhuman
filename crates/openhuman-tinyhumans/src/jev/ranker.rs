@@ -7,7 +7,12 @@ use std::{
     sync::Mutex,
 };
 
-use std::{future::Future, pin::Pin, sync::Arc, time::{Duration, Instant}};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use openhuman_embed::__host::agent::tinyagents::discovery::{
     embedding_provider_is_usable, embedding_tool_ranker_in,
@@ -85,15 +90,21 @@ impl JevCircuit {
             self.open_until = None;
         }
         if let Some(until) = self.open_until {
-            if now < until { return false; }
+            if now < until {
+                return false;
+            }
             self.open_until = None;
             self.failures = 0;
         }
         true
     }
     fn record_failure(&mut self, route: u64, now: Instant) {
-        if self.route.is_none() { self.route = Some(route); }
-        if self.route != Some(route) { return; }
+        if self.route.is_none() {
+            self.route = Some(route);
+        }
+        if self.route != Some(route) {
+            return;
+        }
         self.failures = self.failures.saturating_add(1);
         if self.failures >= JEV_FAILURE_LIMIT {
             self.open_until = Some(now + JEV_CIRCUIT_COOLDOWN);
@@ -192,7 +203,10 @@ impl TinyHumansJevRanker {
     /// load, which a `tool_search` (one model round trip plus a network call)
     /// dwarfs, and the benefit is that sign-in, sign-out and a backend URL
     /// change are all honoured by the next search.
-    async fn current(&self, chat: Option<ApprovalChatContext>) -> Result<(JevRanker, u64), RankError> {
+    async fn current(
+        &self,
+        chat: Option<ApprovalChatContext>,
+    ) -> Result<(JevRanker, u64), RankError> {
         let config = (self.load_config)()
             .await
             .map_err(|error| RankError::Backend {
@@ -345,7 +359,9 @@ impl ToolRanker for TinyHumansJevRanker {
         // consulting the breaker, so approval/egress routing is never skipped.
         let (ranker, route_fingerprint) = self.current(chat).await?;
         {
-            let mut circuit = self.circuit.lock()
+            let mut circuit = self
+                .circuit
+                .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if !circuit.can_attempt(route_fingerprint, Instant::now()) {
                 return Err(RankError::backend(
@@ -353,16 +369,21 @@ impl ToolRanker for TinyHumansJevRanker {
                 ));
             }
         }
-        let ranking = match ranker.rank_detailed(intent, context, candidates, limit).await {
+        let ranking = match ranker
+            .rank_detailed(intent, context, candidates, limit)
+            .await
+        {
             Ok(ranking) => {
-                self.circuit.lock()
+                self.circuit
+                    .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .record_success(route_fingerprint);
                 ranking
             }
             Err(error) => {
                 if matches!(&error, RankError::Timeout | RankError::Backend { .. }) {
-                    self.circuit.lock()
+                    self.circuit
+                        .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .record_failure(route_fingerprint, Instant::now());
                 }

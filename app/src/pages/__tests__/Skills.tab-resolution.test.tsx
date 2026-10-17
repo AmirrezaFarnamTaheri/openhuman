@@ -20,7 +20,7 @@
  * `/connections?tab=apps`, which is what this file exercises, so the branches
  * are live code and not dead weight.
  */
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import '../../test/mockDefaultSkillStatusHooks';
@@ -62,9 +62,7 @@ vi.mock('../../components/channels/mcp/McpServersPage', () => ({
 vi.mock('../../components/skills/SkillsPage', () => ({
   default: () => <div data-testid="tab-body-installed-skills" />,
 }));
-vi.mock('../Memory', () => ({
-  default: () => <div data-testid="tab-body-memory" />,
-}));
+vi.mock('../Memory', () => ({ default: () => <div data-testid="tab-body-memory" /> }));
 vi.mock('../../components/settings/panels/ComputerPanel', () => ({
   default: () => <div data-testid="tab-body-computer" />,
 }));
@@ -171,7 +169,7 @@ describe('Connections ?tab= resolution — canonical values', () => {
     }
   );
 
-  it('?tab=desktop resolves to the lazy-loaded Computer tab', async () => {
+  it('?tab=desktop resolves to the Computer tab', async () => {
     renderAt('?tab=desktop');
     expect(await selectedTab()).toBe('computer');
     expect(await screen.findByTestId('tab-body-computer')).toBeInTheDocument();
@@ -213,7 +211,6 @@ describe('Connections progressive navigation', () => {
     expect(await screen.findByTestId('tab-body-installed-skills')).toBeInTheDocument();
   });
 
-
   it('does not render Memory on ordinary Apps visits and opens it on demand', async () => {
     renderAt('?tab=composio');
     expect(screen.queryByTestId('tab-body-memory')).not.toBeInTheDocument();
@@ -229,7 +226,7 @@ describe('Connections progressive navigation', () => {
     renderAt('?tab=composio');
     expect(screen.queryByTestId('two-pane-nav-wallet')).not.toBeInTheDocument();
     const showAll = screen.getByRole('button', { name: /show all connections/i });
-    showAll.click();
+    fireEvent.click(showAll);
     expect(screen.getByTestId('two-pane-nav-wallet')).toBeInTheDocument();
   });
 

@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // Arabic (العربية) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': 'البحث في الإعدادات',
+  'settings.search.noResults': 'لا توجد إعدادات مطابقة',
+  'settings.ai.advancedModelManagement': 'إدارة متقدمة للنماذج ومفاتيح API',
+  'settings.ai.providerConnectedRoutingHint':
+    'تم الاتصال بالمزوّد. اختر النموذج الذي تريد استخدامه في محادثاتك.',
+  'settings.ai.chooseChatModel': 'اختيار نموذج المحادثة',
+  'walkthrough.takeTour': 'بدء جولة تعريفية',
+  'connections.navigation.showAll': 'عرض جميع الاتصالات',
+  'connections.navigation.showFewer': 'عرض اتصالات أقل',
+  'memoryPage.advanced.fewer': 'خيارات أقل',
+  'memoryPage.advanced.show': 'متقدم',
+  'memoryPage.engine.autoLocalTitle': 'الذاكرة على هذا الكمبيوتر',
+  'memoryPage.engine.autoLocalHint':
+    'يُعدّ OpenHuman الذاكرة المحلية ويوصلها لك. يتطلب ذلك Docker.',
+  'memoryPage.engine.autoLocalStarting': 'جارٍ تشغيل الذاكرة المحلية…',
+  'memoryPage.engine.autoLocal': 'تشغيل الذاكرة المحلية',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'شغّل Docker Desktop أو Docker Engine وتأكد من توفر المنفذ 3141.',
+  'memoryPage.engine.autoLocalHelp': 'تثبيت Docker أو تشغيله',
+
   // Share cards (#5006).
   'share.copyImage': 'نسخ الصورة',
   'feedback.header.desc': 'شارك الأفكار وصوّت على ما نبنيه لاحقًا.',

@@ -1,7 +1,7 @@
 use super::shell_description::{command_param_description, shell_description};
+use super::shell_support::{append_verification_receipt, exec_result, python_utf8_env};
 #[cfg(feature = "modules")]
-use super::shell_support::container_environment;
-use super::shell_support::{append_verification_receipt, command_failure, exec_result, python_utf8_env, tool_timeout_message};
+use super::shell_support::{container_environment, docker_module_result};
 use crate::agent::host_runtime::RuntimeAdapter;
 use crate::agent::tinyagents::host::run_context::{
     command_environment_for_tool, dispatch_ctx_for_tool,
@@ -16,49 +16,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tinytools::ToolRunContext;
 use tinytools::{PermissionLevel, Tool, ToolCallOptions, ToolResult, ToolTimeout};
-
-/// Maximum output size in bytes (1MB).
-const MAX_OUTPUT_BYTES: usize = 1_048_576;
-#[cfg(feature = "modules")]
-fn docker_module_result(
-    output: crate::modules::tinybox::contract::DockerRunOutput,
-    explicit_timeout: Option<Duration>,
-) -> ToolResult {
-    let mut stdout = output.stdout;
-    let mut stderr = output.stderr;
-    if stdout.len() > MAX_OUTPUT_BYTES {
-        stdout.truncate(crate::util::floor_char_boundary(&stdout, MAX_OUTPUT_BYTES));
-        stdout.push_str("\n... [output truncated at 1MB]");
-    }
-    if stderr.len() > MAX_OUTPUT_BYTES {
-        stderr.truncate(crate::util::floor_char_boundary(&stderr, MAX_OUTPUT_BYTES));
-        stderr.push_str("\n... [stderr truncated at 1MB]");
-    }
-
-    if output.timed_out {
-        let secs = explicit_timeout
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0);
-        let mut message = tool_timeout_message(secs);
-        if !stdout.is_empty() {
-            message.push_str("\n[stdout]\n");
-            message.push_str(&stdout);
-        }
-        if !stderr.is_empty() {
-            message.push_str("\n[stderr]\n");
-            message.push_str(&stderr);
-        }
-        ToolResult::error(message)
-    } else if output.exit_code == 0 {
-        if stderr.is_empty() {
-            ToolResult::success(stdout)
-        } else {
-            ToolResult::success(format!("{stdout}\n[stderr]\n{stderr}"))
-        }
-    } else {
-        command_failure(Some(output.exit_code), &stdout, &stderr)
-    }
-}
 
 /// Shell command execution tool with sandboxing
 pub struct ShellTool {

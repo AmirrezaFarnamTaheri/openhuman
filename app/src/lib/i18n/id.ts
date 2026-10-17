@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // Indonesian (Bahasa Indonesia) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': 'Cari pengaturan',
+  'settings.search.noResults': 'Tidak ada pengaturan yang cocok',
+  'settings.ai.advancedModelManagement': 'Pengelolaan lanjutan model dan kunci API',
+  'settings.ai.providerConnectedRoutingHint':
+    'Penyedia terhubung. Pilih model yang akan digunakan untuk obrolan Anda.',
+  'settings.ai.chooseChatModel': 'Pilih model obrolan',
+  'walkthrough.takeTour': 'Ikuti tur aplikasi',
+  'connections.navigation.showAll': 'Tampilkan semua koneksi',
+  'connections.navigation.showFewer': 'Tampilkan lebih sedikit koneksi',
+  'memoryPage.advanced.fewer': 'Lebih sedikit opsi',
+  'memoryPage.advanced.show': 'Lanjutan',
+  'memoryPage.engine.autoLocalTitle': 'Memori di komputer ini',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman menyiapkan dan menghubungkan memori lokal untuk Anda. Docker diperlukan.',
+  'memoryPage.engine.autoLocalStarting': 'Memulai memori lokal…',
+  'memoryPage.engine.autoLocal': 'Mulai memori lokal',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Jalankan Docker Desktop atau Docker Engine dan pastikan port 3141 tersedia.',
+  'memoryPage.engine.autoLocalHelp': 'Instal atau jalankan Docker',
+
   // Share cards (#5006).
   'share.copyImage': 'Salin gambar',
   'feedback.header.desc': 'Bagikan ide dan beri suara untuk apa yang kami bangun berikutnya.',

@@ -3,6 +3,25 @@ import type { TranslationMap } from './types';
 // Simplified Chinese (简体中文) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': '搜索设置',
+  'settings.search.noResults': '没有匹配的设置',
+  'settings.ai.advancedModelManagement': '模型和 API 密钥高级管理',
+  'settings.ai.providerConnectedRoutingHint': '提供商已连接。请选择聊天使用的模型。',
+  'settings.ai.chooseChatModel': '选择聊天模型',
+  'walkthrough.takeTour': '查看使用导览',
+  'connections.navigation.showAll': '显示所有连接',
+  'connections.navigation.showFewer': '显示更少连接',
+  'memoryPage.advanced.fewer': '收起选项',
+  'memoryPage.advanced.show': '高级',
+  'memoryPage.engine.autoLocalTitle': '此计算机上的记忆',
+  'memoryPage.engine.autoLocalHint': 'OpenHuman 会为你设置并连接本地记忆。需要安装 Docker。',
+  'memoryPage.engine.autoLocalStarting': '正在启动本地记忆…',
+  'memoryPage.engine.autoLocal': '启动本地记忆',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    '请启动 Docker Desktop 或 Docker Engine，并确保端口 3141 可用。',
+  'memoryPage.engine.autoLocalHelp': '安装或启动 Docker',
+
   // Share cards (#5006).
   'share.copyImage': '复制图片',
   'feedback.header.desc': '分享想法，并为我们接下来要开发的内容投票。',

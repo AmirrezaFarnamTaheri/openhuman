@@ -6,7 +6,7 @@
 //! | Engine | Endpoint | Credential | Off when |
 //! | --- | --- | --- | --- |
 //! | `tinyhumans` | `[memory.engines.tinyhumans] endpoint`, else [`crate::backend::base_url`] | the host's backend credential, resolved per request through [`resolve_backend_credential`] | signed out, or no backend transport |
-//! | `cortexdb` | `[memory.engines.cortexdb] endpoint`, else CortexDB's managed API | the API key stored as [`MEMORY_CORTEXDB_KEY_NAME`] | no key stored |
+//! | `cortexdb` | `[memory.engines.cortexdb] endpoint`, else CortexDB's managed API | [`MEMORY_CORTEXDB_KEY_NAME`] for manual connections, [`MEMORY_CORTEXDB_LOCAL_KEY_NAME`] for the app-owned local container | no key stored |
 //!
 //! Built engines are cached per config fingerprint (engine id, endpoint,
 //! credential identity, layout), so a config change, a sign-in or a new key
@@ -621,12 +621,23 @@ pub fn invalidate() {
     super::lifecycle::prefetch::invalidate_all();
 }
 
-/// A managed local endpoint is a separate credential identity from the cloud.
-/// Explicit manual endpoints retain the existing shared key for compatibility.
+/// Whether the current CortexDB connection was provisioned by this app.
+/// Also check its destination so an endpoint edited directly in config never
+/// receives the managed container's key.
+pub fn is_managed_cortexdb(config: &Config) -> bool {
+    config
+        .memory
+        .engines
+        .get(CORTEXDB_ENGINE)
+        .is_some_and(|settings| settings.managed_local)
+        && config.memory.endpoint_for(CORTEXDB_ENGINE).as_deref()
+            == Some(super::local_cortex::MANAGED_ENDPOINT)
+}
+
+/// Managed and manual connections keep distinct credential identities even
+/// when a manually configured server uses the managed server's default port.
 fn cortex_key_name(config: &Config) -> &'static str {
-    if config.memory.endpoint_for(CORTEXDB_ENGINE).as_deref()
-        == Some(super::local_cortex::MANAGED_ENDPOINT)
-    {
+    if is_managed_cortexdb(config) {
         MEMORY_CORTEXDB_LOCAL_KEY_NAME
     } else {
         MEMORY_CORTEXDB_KEY_NAME
@@ -634,9 +645,7 @@ fn cortex_key_name(config: &Config) -> &'static str {
 }
 
 pub fn read_managed_cortexdb_key(config: &Config) -> anyhow::Result<Option<String>> {
-    AuthService::from_config(config).get_provider_bearer_token(
-        MEMORY_CORTEXDB_LOCAL_KEY_NAME, None,
-    )
+    AuthService::from_config(config).get_provider_bearer_token(MEMORY_CORTEXDB_LOCAL_KEY_NAME, None)
 }
 
 /// The current endpoint's CortexDB API key, if any.
@@ -646,18 +655,21 @@ pub fn read_cortexdb_key(config: &Config) -> anyhow::Result<Option<String>> {
 
 /// Stores the CortexDB API key in the credential store (never in config).
 pub fn store_cortexdb_key(config: &Config, key: &str) -> MemoryResult<()> {
+    store_cortexdb_key_as(config, cortex_key_name(config), key)
+}
+
+/// Stores the app-owned server's key without replacing a manual connection's.
+pub fn store_managed_cortexdb_key(config: &Config, key: &str) -> MemoryResult<()> {
+    store_cortexdb_key_as(config, MEMORY_CORTEXDB_LOCAL_KEY_NAME, key)
+}
+
+fn store_cortexdb_key_as(config: &Config, name: &str, key: &str) -> MemoryResult<()> {
     let key = key.trim();
     if key.is_empty() {
         return Err(MemoryError::invalid("the API key is blank"));
     }
     AuthService::from_config(config)
-        .store_provider_token(
-            cortex_key_name(config),
-            DEFAULT_AUTH_PROFILE_NAME,
-            key,
-            HashMap::new(),
-            true,
-        )
+        .store_provider_token(name, DEFAULT_AUTH_PROFILE_NAME, key, HashMap::new(), true)
         .map_err(|error| MemoryError::Engine(format!("storing the API key failed: {error}")))?;
     tracing::debug!("[memory:engine] cortexdb key stored");
     Ok(())

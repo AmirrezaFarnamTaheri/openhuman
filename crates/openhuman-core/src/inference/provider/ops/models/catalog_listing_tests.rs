@@ -72,7 +72,9 @@ async fn candidate_probe_uses_new_key_without_overwriting_existing_profile() {
     .unwrap();
 
     let result = list_configured_models_with_candidate_key_from_config(
-        "probe-candidate", &config, "replacement-key",
+        "probe-candidate",
+        &config,
+        "replacement-key",
     )
     .await
     .unwrap();
@@ -123,13 +125,13 @@ async fn failed_candidate_probe_preserves_existing_secret() {
     )
     .unwrap();
 
-    assert!(
-        list_configured_models_with_candidate_key_from_config(
-            "probe-candidate", &config, "invalid-replacement",
-        )
-        .await
-        .is_err()
-    );
+    assert!(list_configured_models_with_candidate_key_from_config(
+        "probe-candidate",
+        &config,
+        "invalid-replacement",
+    )
+    .await
+    .is_err());
     assert_eq!(
         auth.get_provider_bearer_token("provider:probe-candidate", None)
             .unwrap()
@@ -149,7 +151,9 @@ async fn candidate_keys_must_not_be_forwarded_over_plaintext_remote_http() {
         ..Default::default()
     });
     let result = list_configured_models_with_candidate_key_from_config(
-        "unsafe-candidate", &config, "secret-that-must-not-leak",
+        "unsafe-candidate",
+        &config,
+        "secret-that-must-not-leak",
     )
     .await;
     assert!(result.unwrap_err().contains("HTTPS or loopback"));
@@ -206,11 +210,20 @@ async fn catalog_probe_refuses_redirects_with_anthropic_keys() {
     });
 
     let result = list_configured_models_with_candidate_key_from_config(
-        "redirecting-anthropic", &config, "candidate-secret",
-    ).await;
-    assert!(result.is_err(), "the catalogue must reject a redirect instead of following it");
+        "redirecting-anthropic",
+        &config,
+        "candidate-secret",
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "the catalogue must reject a redirect instead of following it"
+    );
     let requests = receiver.received_requests().await.unwrap();
-    assert!(requests.is_empty(), "the redirected endpoint must never receive a request");
+    assert!(
+        requests.is_empty(),
+        "the redirected endpoint must never receive a request"
+    );
 }
 
 #[test]
@@ -231,7 +244,10 @@ fn provider_preview_changes_only_the_supplied_snapshot() {
     };
     apply_candidate_provider_preview(&mut config, "previewed", new, None).unwrap();
     assert_eq!(config.cloud_providers.len(), 1);
-    assert_eq!(config.cloud_providers[0].endpoint, "https://replacement.example/v1");
+    assert_eq!(
+        config.cloud_providers[0].endpoint,
+        "https://replacement.example/v1"
+    );
     assert_eq!(original.endpoint, "https://original.example/v1");
 }
 
@@ -267,13 +283,17 @@ fn preview_rejects_invalid_ca_without_touching_saved_provider() {
         endpoint: "https://replacement.example/v1".into(),
         ..old
     };
-    assert!(
-        apply_candidate_provider_preview(
-            &mut config, "previewed", candidate, Some("invalid PEM".into())
-        )
-        .is_err()
+    assert!(apply_candidate_provider_preview(
+        &mut config,
+        "previewed",
+        candidate,
+        Some("invalid PEM".into())
+    )
+    .is_err());
+    assert_eq!(
+        config.cloud_providers[0].endpoint,
+        "https://original.example/v1"
     );
-    assert_eq!(config.cloud_providers[0].endpoint, "https://original.example/v1");
 }
 
 #[tokio::test]
@@ -300,11 +320,10 @@ async fn candidate_preview_can_probe_anonymous_provider_without_loading_a_key() 
         auth_style: AuthStyle::None,
         ..Default::default()
     });
-    let outcome = list_configured_models_with_candidate_key_from_config(
-        "anonymous-model-host", &config, "",
-    )
-    .await
-    .expect("anonymous /models listing should work without a credential");
+    let outcome =
+        list_configured_models_with_candidate_key_from_config("anonymous-model-host", &config, "")
+            .await
+            .expect("anonymous /models listing should work without a credential");
     assert_eq!(outcome.value["models"][0]["id"], "local-model");
 
     let requests = server.received_requests().await.unwrap();
@@ -323,11 +342,12 @@ async fn anonymous_candidate_cannot_be_used_as_managed_jwt_preview() {
         auth_style: AuthStyle::OpenhumanJwt,
         ..Default::default()
     });
-    let result = list_configured_models_with_candidate_key_from_config(
-        "managed-like", &config, "",
-    )
-    .await;
-    assert!(result.is_err(), "JWT provider previews must never use this BYOK probe");
+    let result =
+        list_configured_models_with_candidate_key_from_config("managed-like", &config, "").await;
+    assert!(
+        result.is_err(),
+        "JWT provider previews must never use this BYOK probe"
+    );
 }
 
 #[tokio::test]
@@ -353,14 +373,20 @@ async fn public_model_catalogue_does_not_verify_api_key() {
         ..Default::default()
     });
     let response = list_configured_models_with_candidate_key_from_config(
-        "public-models", &config, "invalid-but-present-key",
-    ).await.expect("public catalogue remains browseable");
+        "public-models",
+        &config,
+        "invalid-but-present-key",
+    )
+    .await
+    .expect("public catalogue remains browseable");
     assert_eq!(response.value["models"][0]["id"], "free-listing");
     assert_eq!(response.value["fleet_probe"]["authenticated"], false);
     assert_eq!(response.value["fleet_probe"]["checked_keys"], 1);
     let requests = server.received_requests().await.unwrap();
     assert_eq!(requests.len(), 2);
-    assert!(requests.iter().any(|request| request.headers.get("authorization").is_none()));
+    assert!(requests
+        .iter()
+        .any(|request| request.headers.get("authorization").is_none()));
 }
 
 #[tokio::test]
@@ -395,8 +421,12 @@ async fn private_catalogue_proves_key_only_when_anonymous_control_is_rejected() 
         ..Default::default()
     });
     let response = list_configured_models_with_candidate_key_from_config(
-        "protected-models", &config, "good-key",
-    ).await.unwrap();
+        "protected-models",
+        &config,
+        "good-key",
+    )
+    .await
+    .unwrap();
     assert_eq!(response.value["fleet_probe"]["authenticated"], true);
     assert_eq!(response.value["fleet_probe"]["checked_keys"], 1);
     assert_eq!(response.value["fleet_probe"]["rejected_keys"], 0);

@@ -1,4 +1,4 @@
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 
 import { cn } from '../../lib/cn';
 import { IS_DEV } from '../../utils/config';
@@ -109,6 +109,9 @@ export default function ChipTabs<T extends string>({
 }: ChipTabsProps<T>) {
   const spacingClass = compact ? compactChipSpacingClass : defaultChipSpacingClass;
   const lastRadixSelection = useRef<T | null>(null);
+  useEffect(() => {
+    lastRadixSelection.current = null;
+  }, [value]);
 
   if (as === 'nav') {
     return (
@@ -146,6 +149,9 @@ export default function ChipTabs<T extends string>({
     <TabsRoot
       value={value}
       onValueChange={v => {
+        // A pointer activation can notify from both mousedown and focus before
+        // a controlled parent commits its new value. Dispatch it only once.
+        if (lastRadixSelection.current === v) return;
         lastRadixSelection.current = v as T;
         debug('select', { id: v });
         onChange(v as T);
@@ -171,7 +177,7 @@ export default function ChipTabs<T extends string>({
                   return;
                 }
                 lastRadixSelection.current = null;
-                onChange(item.id);
+                if (item.id !== value) onChange(item.id);
               }}
               className={cn(baseChipClass, spacingClass, inactiveChipClass, activeChipClass)}>
               {item.label}

@@ -1,0 +1,88 @@
+import type { ModelManagementMessages } from './en';
+
+const messages = {
+  'feasibility.contextTooSmall': 'Il contesto è inferiore alla somma dei token di input e output',
+  'feasibility.visionUnavailable': 'Visione non supportata secondo i metadati salvati',
+  'feasibility.overBudget': 'Il costo stimato supera il budget',
+  'feasibility.unknownContext': 'Dimensione del contesto sconosciuta',
+  'feasibility.unknownVision': 'Capacità di visione sconosciuta',
+  'feasibility.unknownPrice': 'Prezzo mancante, nullo o non valido',
+  'feasibility.aria': 'Anteprima dell’idoneità del modello',
+  'feasibility.title': 'Anteprima di idoneità e costi dei modelli',
+  'feasibility.advisory':
+    'Si basa sui metadati salvati, senza verificare in tempo reale prezzi, quote, chiavi o disponibilità. È solo indicativo e non modifica l’instradamento di alcuna attività.',
+  'feasibility.input': 'Token di input stimati',
+  'feasibility.cached': "Token di input memorizzati (inclusi nell'input)",
+  'feasibility.output': 'Token di output stimati',
+  'feasibility.budget': 'Limite di costo (USD, facoltativo)',
+  'feasibility.budgetAria': 'Limite di costo stimato in USD',
+  'feasibility.noLimit': 'Nessun limite',
+  'feasibility.requireVision': 'Richiedi visione',
+  'feasibility.invalidCached':
+    'I token di input nella cache non possono superare il totale dei token di input.',
+  'feasibility.invalidCounts':
+    'Inserisci quantità intere non negative di token (la cache è inclusa nell’input) e, facoltativamente, un limite di costo non negativo.',
+  'feasibility.fitCount': 'Idoneità secondo i metadati salvati',
+  'feasibility.unknownCount': 'sconosciuti',
+  'feasibility.excludedCount': 'esclusi dai vincoli indicati',
+  'feasibility.search': 'Cerca tra i risultati di idoneità',
+  'feasibility.filter': 'Filtra per stato di idoneità',
+  'feasibility.all': 'Tutti gli stati',
+  'feasibility.fits': 'Idoneo secondo i metadati',
+  'feasibility.unknown': 'Idoneità sconosciuta',
+  'feasibility.excluded': 'Escluso',
+  'feasibility.fitDescription': 'Corrisponde ai metadati salvati; disponibilità non verificata',
+  'feasibility.excludedDescription': 'Escluso dai vincoli',
+  'feasibility.costUnknown': 'Costo sconosciuto',
+  'feasibility.empty': 'Nessun modello salvato da valutare.',
+  'feasibility.noMatch': 'Nessun modello corrisponde ai filtri.',
+  'feasibility.showing': 'Visualizzati',
+  'feasibility.of': 'su',
+  'feasibility.matching': 'voci di modelli corrispondenti',
+  'feasibility.more': 'Mostra altri modelli',
+  'fleet.reauthRequired':
+    'Inserisci di nuovo la chiave API nell’editor del provider prima di modificarne l’endpoint o l’autenticazione.',
+  'fleet.groupSyncHintSafe':
+    'Gli endpoint salvati vengono mantenuti per impostazione predefinita. Esamina e approva esplicitamente le modifiche; i provider con credenziali devono essere aggiornati nell’editor con una nuova chiave.',
+  'fleet.approveProviderSync': 'Approva la sostituzione di endpoint e autenticazione dei provider',
+  'fleet.previewProviderChanges': 'Anteprima modifiche ai provider',
+  'fleet.providerNeedsKey': 'Richiede il reinserimento della chiave',
+  'fleet.presetHintSafe':
+    'Importa le preimpostazioni mancanti senza modificare i metadati salvati. L’aggiornamento di visione, contesto e prezzi esistenti è facoltativo e può sostituire le modifiche manuali. Instradamenti e credenziali rimangono invariati.',
+  'fleet.approveMetadataRefresh': 'Approva la sostituzione dei metadati salvati',
+  'fleet.previewModelChanges': 'Anteprima modifiche ai modelli',
+  'fleet.refreshLabel': 'aggiorna i metadati salvati',
+  'fleet.addLabel': 'aggiungi la preimpostazione mancante',
+  'fleet.healthUnavailable': 'Lo stato dell’insieme dei provider non è disponibile.',
+  'fleet.selectProvidersError': 'Seleziona uno o più provider.',
+  'fleet.imageEndpointError': 'Gli endpoint delle immagini richiedono HTTPS o HTTP di loopback.',
+  'fleet.chooseGroupError': 'Scegli un gruppo di provider.',
+  'fleet.modelImageEndpointError':
+    'Inserisci un endpoint di immagini con HTTPS o HTTP di loopback.',
+  'fleet.selectModelsError': 'Seleziona uno o più modelli.',
+  'fleet.contextError':
+    'La finestra di contesto deve essere un numero intero compreso tra 0 e 100.000.000.',
+  'fleet.selectPatchError': 'Scegli almeno un campo da aggiornare.',
+  'fleet.noKeyUsage': 'Nessun utilizzo di chiavi di inferenza registrato in questa sessione.',
+  'fleet.selectProvider': 'Seleziona provider',
+  'fleet.selected': 'selezionati',
+  'fleet.groupImageAria': 'URL di base dell’API di immagini del gruppo',
+  'fleet.rotationAria': 'Strategia di selezione tra più chiavi',
+  'fleet.imageGroupAria': 'Gruppo di provider dell’endpoint di immagini',
+  'fleet.imageModelIdAria': 'ID del modello dell’endpoint di immagini',
+  'fleet.modelImageAria': 'URL di base dell’API di immagini del modello',
+  'fleet.searchAria': 'Filtra le preimpostazioni dei modelli',
+  'fleet.selectModel': 'Seleziona modello',
+  'fleet.visionLabel': 'visione',
+  'fleet.keepUnchanged': 'Mantieni invariato',
+  'fleet.enabled': 'Abilitato',
+  'fleet.disabled': 'Disabilitato',
+  'fleet.leaveBlank': 'Lascia vuoto per mantenere',
+  'fleet.bulkContextAria': 'Token di contesto per modifica in blocco',
+  'fleet.prodexImageError':
+    'Gli endpoint di immagini Prodex richiedono HTTPS o HTTP di loopback, senza credenziali nell’URL.',
+  'fleet.prodexModelImageError':
+    'Gli endpoint di immagini dei modelli Prodex richiedono HTTPS o HTTP di loopback, senza credenziali nell’URL.',
+} satisfies ModelManagementMessages;
+
+export default messages;

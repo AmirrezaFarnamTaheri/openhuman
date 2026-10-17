@@ -722,10 +722,9 @@ describe('saveAISettings', () => {
   it('persists per-model protocol overrides and removes them on explicit reset', async () => {
     const prev = makeSettings();
     const mixed = makeSettings({
-      cloudProviders: [{
-        ...prev.cloudProviders[0],
-        model_transports: { 'response-model': 'responses' },
-      }],
+      cloudProviders: [
+        { ...prev.cloudProviders[0], model_transports: { 'response-model': 'responses' } },
+      ],
     });
     await saveAISettings(prev, mixed);
     expect(mockOpenhumanUpdateModelSettings.mock.calls[0][0].cloud_providers?.[0]).toMatchObject({
@@ -738,8 +737,9 @@ describe('saveAISettings', () => {
       cloudProviders: [{ ...mixed.cloudProviders[0], model_transports: {} }],
     });
     await saveAISettings(mixed, reset);
-    expect(mockOpenhumanUpdateModelSettings.mock.calls[0][0].cloud_providers?.[0]
-      .model_transports).toEqual({});
+    expect(
+      mockOpenhumanUpdateModelSettings.mock.calls[0][0].cloud_providers?.[0].model_transports
+    ).toEqual({});
   });
 
   it('sends both providers and routing when both change', async () => {
@@ -1439,21 +1439,31 @@ describe('public model catalog cannot authenticate a provider-editor credential'
 
   it('rejects public listings when a bearer key is being configured', async () => {
     mockCallCoreRpc.mockResolvedValue({
-      result: { models: [{ id: 'public' }],
-        fleet_probe: { authenticated: false, checked_keys: 1, rejected_keys: 0 } },
+      result: {
+        models: [{ id: 'public' }],
+        fleet_probe: { authenticated: false, checked_keys: 1, rejected_keys: 0 },
+      },
     });
-    await expect(listProviderModels('chutes', 'wrong-key', {
-      slug: 'chutes', auth_style: 'bearer', endpoint: 'https://llm.chutes.ai/v1',
-    } as Parameters<typeof listProviderModels>[2])).rejects.toThrow(/publicly accessible/i);
+    await expect(
+      listProviderModels('chutes', 'wrong-key', {
+        slug: 'chutes',
+        auth_style: 'bearer',
+        endpoint: 'https://llm.chutes.ai/v1',
+      } as Parameters<typeof listProviderModels>[2])
+    ).rejects.toThrow(/publicly accessible/i);
   });
 
   it('accepts evidence of authenticated catalogue access', async () => {
     mockCallCoreRpc.mockResolvedValue({
-      result: { models: [{ id: 'private' }],
-        fleet_probe: { authenticated: true, checked_keys: 1, rejected_keys: 0 } },
+      result: {
+        models: [{ id: 'private' }],
+        fleet_probe: { authenticated: true, checked_keys: 1, rejected_keys: 0 },
+      },
     });
     const models = await listProviderModels('private', 'good-key', {
-      slug: 'private', auth_style: 'bearer', endpoint: 'https://example.com/v1',
+      slug: 'private',
+      auth_style: 'bearer',
+      endpoint: 'https://example.com/v1',
     } as Parameters<typeof listProviderModels>[2]);
     expect(models).toHaveLength(1);
   });

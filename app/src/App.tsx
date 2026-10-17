@@ -12,7 +12,6 @@ import { PersistGate } from 'redux-persist/integration/react';
 
 import AppRoutes from './AppRoutes';
 import { AnalyticsPageTracker } from './components/analytics';
-import AnnouncementGate from './components/Announcement/AnnouncementGate';
 import AppBackground from './components/AppBackground';
 import AppUpdatePrompt from './components/AppUpdatePrompt';
 import BootCheckGate from './components/BootCheckGate/BootCheckGate';
@@ -73,7 +72,9 @@ if (import.meta.hot) {
   import.meta.hot.dispose(stopBootServicesForHmr);
 }
 
-function App() {
+type AppDataRouterInstance = ReturnType<typeof createHashRouter>;
+
+function App({ router }: { router: AppDataRouterInstance }) {
   const onMobile = getIsMobile();
 
   // The desktop shell is one webview with no back button, so a link that
@@ -141,7 +142,7 @@ function App() {
                   <CoreStateProvider>
                     {socketWrapped(
                       <ChatRuntimeProvider>
-                        <AppDataRouter />
+                        <AppDataRouter router={router} />
                       </ChatRuntimeProvider>
                     )}
                   </CoreStateProvider>
@@ -160,10 +161,13 @@ function App() {
  * navigation, including sidebar actions, shortcuts, the command palette and
  * history navigation. A plain HashRouter does not expose useBlocker.
  *
- * Lazily create the singleton after the app's hash-bootstrap logic has run.
- * The router remains outside React state, as required by React Router.
+ * main.tsx creates this once after hash and user bootstrap, before rendering
+ * React. Keeping creation outside render avoids duplicate history listeners
+ * during StrictMode replay and preserves direct-entry hashes.
  */
-let dataRouter: ReturnType<typeof createHashRouter> | null = null;
+export function createAppDataRouter(): AppDataRouterInstance {
+  return createHashRouter([{ path: '/*', element: <AppDataRoutes /> }]);
+}
 
 function AppDataRoutes() {
   const onMobile = getIsMobile();
@@ -177,23 +181,25 @@ function AppDataRoutes() {
         {!onMobile && <PttHotkeyManager />}
         {!onMobile && <AppUpdatePrompt />}
         <KeyringConsentOverlay />
-        <AnnouncementGate />
+        {/* Runtime notices and announcements remain available across routes on
+            desktop and mobile without interrupting the current task. */}
+        <NoticeCenter />
       </ServiceBlockingGate>
     </CommandProvider>
   );
 }
 
-function AppDataRouter() {
-  if (dataRouter === null) {
-    dataRouter = createHashRouter([{ path: '/*', element: <AppDataRoutes /> }]);
-  }
-  return <RouterProvider router={dataRouter} />;
+function AppDataRouter({ router }: { router: AppDataRouterInstance }) {
+  return <RouterProvider router={router} />;
 }
 
 /** Minimal mobile shell — renders routes only, no desktop chrome. */
 function AppShellMobile() {
   return (
-    <div className="relative h-screen flex flex-col overflow-hidden bg-[#0f1117]">
+    <div
+      className="relative h-screen flex flex-col overflow-hidden bg-[#0f1117]"
+      data-app-focus-fallback
+      tabIndex={-1}>
       <AppRoutes />
     </div>
   );
@@ -308,11 +314,6 @@ export function AppShellDesktop() {
           )}
         </div>
         <OpenhumanLinkModal />
-        {/* Every notice the app raises, in one bottom-left FAB: classified
-            runtime errors (#3931), the memory-embedding budget (#5324), plan
-            usage limits. Mounted outside the routes so entries survive route
-            changes and background-job completion. */}
-        <NoticeCenter />
         {/* Post-onboarding Joyride walkthrough — mounted here (outside routes) so
             it persists across tab navigations. Joyride targets span Home + the
             sidebar nav so it must stay mounted while the user moves between routes. */}

@@ -18,20 +18,20 @@
  * debug logging: DEBUG=openhuman:memory
  */
 import debug from 'debug';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import MemoryAskTab from '../components/memory/MemoryAskTab';
-
+import MemoryBackgroundTab from '../components/memory/MemoryBackgroundTab';
 import MemoryBrainTab from '../components/memory/MemoryBrainTab';
 import { type MemoryChip, resolveMemoryChip } from '../components/memory/memoryChips';
 import MemoryConversationsTab from '../components/memory/MemoryConversationsTab';
 import MemoryEngineTab from '../components/memory/MemoryEngineTab';
 import MemoryExplorerTab from '../components/memory/MemoryExplorerTab';
 import MemoryLearningsTab from '../components/memory/MemoryLearningsTab';
-
+import MemoryMigrationTab from '../components/memory/MemoryMigrationTab';
 import MemoryOffState from '../components/memory/MemoryOffState';
-
+import MemorySettingsTab from '../components/memory/MemorySettingsTab';
 import SettingsTabbedPage from '../components/settings/layout/SettingsTabbedPage';
 import { Alert, AlertDescription, Button } from '../components/ui';
 import { CenteredLoadingState } from '../components/ui/LoadingState';
@@ -47,19 +47,20 @@ import {
   memoryErrorMessage,
 } from '../services/api/memoryApi';
 
-// Rare administration views should not be parsed on the initial Explorer,
-// on onboarding or while a user asks a question.
-const MemoryBackgroundTab = lazy(() => import('../components/memory/MemoryBackgroundTab'));
-const MemoryMigrationTab = lazy(() => import('../components/memory/MemoryMigrationTab'));
-const MemorySettingsTab = lazy(() => import('../components/memory/MemorySettingsTab'));
-
 const log = debug('openhuman:memory');
 
 // The navigation favors tasks a user can perform. Engine, migration and
 // background tuning remain one click away and always show when deep-linked.
 const MEMORY_NAV_ORDER: readonly MemoryChip[] = [
-  'explorer', 'ask', 'learnings', 'conversations', 'brain',
-  'engine', 'migration', 'background', 'settings',
+  'explorer',
+  'ask',
+  'learnings',
+  'conversations',
+  'brain',
+  'engine',
+  'migration',
+  'background',
+  'settings',
 ];
 
 export default function Memory() {
@@ -259,9 +260,8 @@ export default function Memory() {
               </AlertDescription>
             </Alert>
           )}
-          <Suspense fallback={<CenteredLoadingState label={t('memoryPage.loading')} />}>
-            {body}
-          </Suspense>
+
+          {body}
         </div>
       </SettingsTabbedPage>
     </div>

@@ -167,24 +167,19 @@ describe('MemoryEngineTab', () => {
   });
 
   it('allows managed local setup directly from the Local tab even with a signed-in account', async () => {
-    hoisted.localStart.mockResolvedValue({
-      ...LOCAL_ON,
-      endpoint: 'http://127.0.0.1:3141',
-    });
+    hoisted.localStart.mockResolvedValue({ ...LOCAL_ON, endpoint: 'http://127.0.0.1:3141' });
     const { onStateChange } = renderTab(BUILTIN_ON);
 
     pick('selfhost');
     fireEvent.click(screen.getByTestId('memory-engine-dialog-auto-local'));
 
     await waitFor(() => expect(hoisted.localStart).toHaveBeenCalledOnce());
-    expect(onStateChange).toHaveBeenCalledWith({
-      ...LOCAL_ON,
-      endpoint: 'http://127.0.0.1:3141',
-    });
+    expect(onStateChange).toHaveBeenCalledWith({ ...LOCAL_ON, endpoint: 'http://127.0.0.1:3141' });
   });
 
   it('presents managed localhost memory without an endpoint to copy', () => {
     renderTab({
+      managed_local: true,
       engine: 'cortexdb',
       endpoint: 'http://127.0.0.1:3141',
       has_key: true,
@@ -199,7 +194,95 @@ describe('MemoryEngineTab', () => {
     );
   });
 
+  it('keeps a manual local endpoint visible even on the app-managed default port', () => {
+    renderTab({ ...LOCAL_ON, endpoint: 'http://127.0.0.1:3141' });
+    expect(screen.getByTestId('memory-engine-connected-selfhost')).toHaveTextContent(
+      '127.0.0.1:3141'
+    );
+    expect(screen.getByTestId('memory-engine-connected-selfhost')).not.toHaveTextContent(
+      'Memory on this computer'
+    );
+  });
+
+  it('requires a manual key before replacing an app-managed local connection', async () => {
+    const endpoint = 'http://127.0.0.1:3141';
+    const manualState = { ...LOCAL_ON, endpoint };
+    hoisted.engineSet.mockResolvedValue(manualState);
+    const { onStateChange } = renderTab({ ...manualState, managed_local: true });
+    fireEvent.click(screen.getByTestId('memory-engine-selfhost-edit'));
+
+    const submit = screen.getByTestId('memory-engine-selfhost-submit');
+    expect(screen.getByTestId('memory-engine-selfhost-key')).toHaveAttribute('placeholder', '');
+    expect(submit).toBeDisabled();
+    fireEvent.click(submit);
+    expect(hoisted.engineSet).not.toHaveBeenCalled();
+
+    type('memory-engine-selfhost-key', 'manual-key');
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(hoisted.engineSet).toHaveBeenCalledWith({
+        engine: 'cortexdb',
+        endpoint,
+        api_key: 'manual-key',
+      })
+    );
+    expect(onStateChange).toHaveBeenCalledWith(manualState);
+  });
+
+  it('preserves managed local memory when its edit dialog is canceled', () => {
+    const { onStateChange } = renderTab({
+      ...LOCAL_ON,
+      endpoint: 'http://127.0.0.1:3141',
+      managed_local: true,
+    });
+    fireEvent.click(screen.getByTestId('memory-engine-selfhost-edit'));
+    type('memory-engine-selfhost-endpoint', 'http://localhost:9999');
+    type('memory-engine-selfhost-key', 'unsaved-manual-key');
+    fireEvent.keyDown(screen.getByTestId('memory-engine-selfhost-dialog'), { key: 'Escape' });
+
+    expect(screen.queryByTestId('memory-engine-selfhost-dialog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('memory-engine-connected-selfhost')).toHaveTextContent(
+      'Memory on this computer'
+    );
+    expect(hoisted.engineSet).not.toHaveBeenCalled();
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
   describe('automatic local memory', () => {
+    it('prevents competing provider changes while local setup is in flight', () => {
+      hoisted.localStart.mockReturnValue(new Promise(() => undefined));
+      renderTab(OFF);
+      pick('selfhost');
+      type('memory-engine-selfhost-endpoint', 'http://localhost:3141');
+      type('memory-engine-selfhost-key', 'local-key');
+      const manualSubmit = screen.getByTestId('memory-engine-selfhost-submit');
+      expect(manualSubmit).toBeEnabled();
+
+      fireEvent.click(screen.getByTestId('memory-engine-dialog-auto-local'));
+
+      expect(manualSubmit).toBeDisabled();
+      const disable = screen.getByTestId('memory-engine-disable');
+      expect(disable).toBeDisabled();
+      fireEvent.click(manualSubmit);
+      fireEvent.click(disable);
+      expect(hoisted.localStart).toHaveBeenCalledOnce();
+      expect(hoisted.engineSet).not.toHaveBeenCalled();
+    });
+
+    it('keeps the actionable local UNAVAILABLE reason instead of a hosted outage message', async () => {
+      hoisted.signedIn = false;
+      hoisted.localStart.mockRejectedValue({
+        message: 'Port 3141 is already in use by another service.',
+        data: { code: 'UNAVAILABLE' },
+      });
+      renderTab(OFF);
+      fireEvent.click(screen.getByTestId('memory-engine-auto-local'));
+      expect(await screen.findByTestId('memory-engine-auto-local-error')).toHaveTextContent(
+        'Port 3141 is already in use by another service.'
+      );
+    });
+
     it('offers one-click local memory to people using the app without sign-in', async () => {
       hoisted.signedIn = false;
       hoisted.token = createLocalSessionToken();
@@ -216,12 +299,16 @@ describe('MemoryEngineTab', () => {
     it('reports when the local runtime is unavailable instead of asking for an address', async () => {
       hoisted.signedIn = false;
       hoisted.token = createLocalSessionToken();
-      hoisted.localStart.mockRejectedValue(new Error('Docker Desktop or Docker Engine is required'));
+      hoisted.localStart.mockRejectedValue(
+        new Error('Docker Desktop or Docker Engine is required')
+      );
       renderTab(OFF);
 
       fireEvent.click(screen.getByTestId('memory-engine-auto-local'));
 
-      expect(await screen.findByTestId('memory-engine-auto-local-error')).toHaveTextContent('Docker');
+      expect(await screen.findByTestId('memory-engine-auto-local-error')).toHaveTextContent(
+        'Docker'
+      );
       fireEvent.click(screen.getByTestId('memory-auto-local-help'));
       expect(hoisted.openUrl).toHaveBeenCalledWith('https://docs.docker.com/get-docker/');
     });
@@ -415,6 +502,22 @@ describe('MemoryEngineTab', () => {
   });
 
   describe('Local', () => {
+    it('reuses the saved manual key when editing an existing manual connection', async () => {
+      hoisted.engineSet.mockResolvedValue(LOCAL_ON);
+      renderTab(LOCAL_ON);
+      fireEvent.click(screen.getByTestId('memory-engine-selfhost-edit'));
+      expect(screen.getByText(/A key is already saved/)).toBeInTheDocument();
+      const submit = screen.getByTestId('memory-engine-selfhost-submit');
+      expect(submit).toBeEnabled();
+      fireEvent.click(submit);
+      await waitFor(() =>
+        expect(hoisted.engineSet).toHaveBeenCalledWith({
+          engine: 'cortexdb',
+          endpoint: LOCAL_ON.endpoint,
+        })
+      );
+    });
+
     it('connects a loopback server with its key', async () => {
       hoisted.engineSet.mockResolvedValue(LOCAL_ON);
       const { onStateChange } = renderTab();

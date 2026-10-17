@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // Spanish (Español) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': 'Buscar ajustes',
+  'settings.search.noResults': 'No hay ajustes que coincidan',
+  'settings.ai.advancedModelManagement': 'Gestión avanzada de modelos y claves de API',
+  'settings.ai.providerConnectedRoutingHint':
+    'Proveedor conectado. Elige qué modelo usar en tus chats.',
+  'settings.ai.chooseChatModel': 'Elegir modelo de chat',
+  'walkthrough.takeTour': 'Hacer un recorrido',
+  'connections.navigation.showAll': 'Mostrar todas las conexiones',
+  'connections.navigation.showFewer': 'Mostrar menos conexiones',
+  'memoryPage.advanced.fewer': 'Menos opciones',
+  'memoryPage.advanced.show': 'Avanzado',
+  'memoryPage.engine.autoLocalTitle': 'Memoria en este equipo',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman configura y conecta la memoria local por ti. Se requiere Docker.',
+  'memoryPage.engine.autoLocalStarting': 'Iniciando la memoria local…',
+  'memoryPage.engine.autoLocal': 'Iniciar memoria local',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Inicia Docker Desktop o Docker Engine y comprueba que el puerto 3141 esté disponible.',
+  'memoryPage.engine.autoLocalHelp': 'Instalar o iniciar Docker',
+
   // Share cards (#5006).
   'share.copyImage': 'Copiar imagen',
   'feedback.header.desc': 'Comparte ideas y vota lo que construimos a continuación.',

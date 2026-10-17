@@ -37,9 +37,7 @@ async fn authenticated_http_client_never_forwards_x_api_key_to_a_redirect() {
     let redirected_to = format!("{}/capture", destination.uri());
     Mock::given(method("GET"))
         .and(path("/model"))
-        .respond_with(
-            ResponseTemplate::new(302).insert_header("Location", redirected_to.as_str()),
-        )
+        .respond_with(ResponseTemplate::new(302).insert_header("Location", redirected_to.as_str()))
         .expect(1)
         .mount(&origin)
         .await;
@@ -60,9 +58,8 @@ async fn authenticated_http_client_never_forwards_x_api_key_to_a_redirect() {
 
 #[test]
 fn authenticated_http_client_accepts_additional_certificate_roots() {
-    let builder = credentialed_client_builder(
-        "provider.compatible",
-        Some(include_str!("test-ca.pem")),
-    ).unwrap();
+    let builder =
+        credentialed_client_builder("provider.compatible", Some(include_str!("test-ca.pem")))
+            .unwrap();
     assert!(builder.build().is_ok());
 }

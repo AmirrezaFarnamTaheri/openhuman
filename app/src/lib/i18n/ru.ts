@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // Russian (Русский) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': 'Поиск настроек',
+  'settings.search.noResults': 'Подходящие настройки не найдены',
+  'settings.ai.advancedModelManagement': 'Расширенное управление моделями и ключами API',
+  'settings.ai.providerConnectedRoutingHint':
+    'Провайдер подключён. Выберите модель для ваших чатов.',
+  'settings.ai.chooseChatModel': 'Выбрать модель для чата',
+  'walkthrough.takeTour': 'Пройти обзор приложения',
+  'connections.navigation.showAll': 'Показать все подключения',
+  'connections.navigation.showFewer': 'Показать меньше подключений',
+  'memoryPage.advanced.fewer': 'Меньше параметров',
+  'memoryPage.advanced.show': 'Дополнительно',
+  'memoryPage.engine.autoLocalTitle': 'Память на этом компьютере',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman настроит и подключит локальную память. Для этого нужен Docker.',
+  'memoryPage.engine.autoLocalStarting': 'Запуск локальной памяти…',
+  'memoryPage.engine.autoLocal': 'Запустить локальную память',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Запустите Docker Desktop или Docker Engine и убедитесь, что порт 3141 доступен.',
+  'memoryPage.engine.autoLocalHelp': 'Установить или запустить Docker',
+
   // Share cards (#5006).
   'share.copyImage': 'Копировать изображение',
   'feedback.header.desc': 'Делитесь идеями и голосуйте за то, что мы создадим дальше.',

@@ -124,14 +124,14 @@ pub fn schema(function: &str) -> ControllerSchema {
             function: "engine_get",
             description: "The configured memory engine, its credential and health.",
             inputs: vec![],
-            outputs: out("{engine, endpoint?, has_key, status, reason?, fetch_modes}"),
+            outputs: out("{engine, endpoint?, has_key, managed_local?, status, reason?, fetch_modes}"),
         },
         "engine_set" => ControllerSchema {
             namespace: "memory",
             function: "engine_set",
             description: "Select a memory engine, optionally setting its endpoint and API key.",
             inputs: vec![
-                    req("engine", TypeSchema::String, "Engine id: tinyhumans or cortexdb."),
+                    req("engine", TypeSchema::String, "Engine id: tinyhumans, cortexdb or none (disabled)."),
                     opt("endpoint", TypeSchema::String, "Endpoint URL; empty clears it."),
                     opt("api_key", TypeSchema::String, "API key (cortexdb); empty removes it. Stored in the credential store, never in config."),
                 ],

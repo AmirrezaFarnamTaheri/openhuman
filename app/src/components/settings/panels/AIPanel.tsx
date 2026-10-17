@@ -20,6 +20,7 @@ import {
 } from '../../../services/api/aiSettingsApi';
 import { connectOpenRouterViaOAuth } from '../../../utils/openrouterOAuth';
 import PanelPage from '../../layout/PanelPage';
+import { Alert, AlertDescription, Button } from '../../ui';
 import SettingsBackButton from '../components/SettingsBackButton';
 import { useSettingsNavigation } from '../hooks/useSettingsNavigation';
 import {
@@ -251,24 +252,36 @@ const AIPanel = ({
                   onAddOpenChange={onAddProviderOpenChange}
                 />
                 {showChatActivationHint && (
-                  <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-subtle bg-surface-muted px-4 py-3 text-sm text-content">
-                    <span>{t('settings.ai.providerConnectedRoutingHint', 'Provider connected. Choose which model your chats should use.')}</span>
-                    <button type="button" className="rounded-md bg-content px-3 py-2 font-medium text-surface"
-                      onClick={() => {
-                        setShowChatActivationHint(false);
-                        handleTabChange('routing');
-                        setPickerFor('chat');
-                      }}>
-                      {t('settings.ai.chooseChatModel', 'Choose chat model')}
-                    </button>
-                  </div>
+                  <Alert role="status">
+                    <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        {t(
+                          'settings.ai.providerConnectedRoutingHint',
+                          'Provider connected. Choose which model your chats should use.'
+                        )}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        analyticsId="provider-choose-chat-model"
+                        onClick={() => {
+                          setShowChatActivationHint(false);
+                          handleTabChange('routing');
+                          setPickerFor('chat');
+                        }}>
+                        {t('settings.ai.chooseChatModel', 'Choose chat model')}
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
                 )}
                 {!loading && (
-                  <details className="mt-4 rounded-xl border border-border-subtle p-3">
+                  <details className="mt-4 rounded-xl border border-line-subtle p-3">
                     <summary className="cursor-pointer text-sm font-medium text-content">
-                      Advanced model and API key management
+                      {t('settings.ai.advancedModelManagement')}
                     </summary>
-                    <div className="mt-3"><ModelFleetPanel settings={draft} persist={persist} /></div>
+                    <div className="mt-3">
+                      <ModelFleetPanel settings={draft} persist={persist} />
+                    </div>
                   </details>
                 )}
                 {isDirty && (

@@ -21,7 +21,8 @@ describe('walkthrough navigation', () => {
     );
     expect(step?.before).toBeDefined();
 
-    await step?.before?.();
+    // These navigation hooks do not consume Joyride's TourData argument.
+    await (step?.before as (() => Promise<void>) | undefined)?.();
 
     expect(navigate).toHaveBeenCalledWith(route);
   });

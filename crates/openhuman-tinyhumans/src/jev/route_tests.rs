@@ -123,7 +123,6 @@ fn the_base_override_does_not_apply_to_the_tinyhumans_route() {
     assert!(err.contains("no TinyHumans credential"), "{err}");
 }
 
-
 #[test]
 fn typoed_explicit_jev_route_fails_closed_instead_of_spending_another_providers_key() {
     let (_tmp, mut config) = config();
@@ -134,7 +133,9 @@ fn typoed_explicit_jev_route_fails_closed_instead_of_spending_another_providers_
         (TYPESAFE_API_KEY_ENV, "ts-key"),
         (OPENROUTER_API_KEY_ENV, "or-key"),
     ]);
-    let error = resolve(&config, &env).err().expect("invalid route must fail");
+    let error = resolve(&config, &env)
+        .err()
+        .expect("invalid route must fail");
     let message = error.to_string();
     assert!(message.contains("unknown jev route"), "{message}");
     assert!(!message.contains("ts-key"));

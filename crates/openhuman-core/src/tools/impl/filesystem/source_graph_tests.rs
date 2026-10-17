@@ -115,7 +115,6 @@ fn no_claim_of_complete_language_or_semantic_coverage() {
     assert_eq!(graph["edges"].as_array().unwrap().len(), 0);
 }
 
-
 #[test]
 fn dotted_typescript_stem_is_not_mistaken_for_a_known_extension() {
     let docs = vec![
@@ -126,7 +125,6 @@ fn dotted_typescript_stem_is_not_mistaken_for_a_known_extension() {
     assert_eq!(edge(&graph)["status"], "resolved");
     assert_eq!(edge(&graph)["to"], "src/user.service.ts");
 }
-
 
 #[test]
 fn generated_graph_json_respects_output_budget_without_broken_json() {
@@ -143,13 +141,16 @@ fn generated_graph_json_respects_output_budget_without_broken_json() {
     }
     let graph = build_graph(&docs, 64, Some(&docs[0].path));
     let json_body = graph.to_string();
-    assert!(json_body.len() <= 26_000, "unbounded graph result: {}", json_body.len());
+    assert!(
+        json_body.len() <= 26_000,
+        "unbounded graph result: {}",
+        json_body.len()
+    );
     let roundtrip: Value = serde_json::from_str(&json_body).unwrap();
     assert_eq!(roundtrip["edges_complete"], false);
     assert!(roundtrip["edges"].is_array());
     assert!(roundtrip["nodes"].is_array());
 }
-
 
 #[test]
 fn truncated_graph_does_not_report_unprovable_reverse_impact() {
@@ -172,11 +173,13 @@ fn truncated_graph_does_not_report_unprovable_reverse_impact() {
     }
 }
 
-
 #[test]
 fn python_relative_imports_resolve_module_file_and_package() {
     let docs = vec![
-        source("src/pkg/main.py", "from .helpers import do_thing\nfrom .subpackage import api\n"),
+        source(
+            "src/pkg/main.py",
+            "from .helpers import do_thing\nfrom .subpackage import api\n",
+        ),
         source("src/pkg/helpers.py", "def do_thing(): pass\n"),
         source("src/pkg/subpackage/__init__.py", "def api(): pass\n"),
     ];
@@ -192,7 +195,10 @@ fn python_relative_imports_resolve_module_file_and_package() {
 #[test]
 fn python_parent_relative_import_does_not_escape_observed_root() {
     let docs = vec![
-        source("src/pkg/tasks/run.py", "from ..shared import helper\nfrom .....escape import secret\n"),
+        source(
+            "src/pkg/tasks/run.py",
+            "from ..shared import helper\nfrom .....escape import secret\n",
+        ),
         source("src/pkg/shared.py", "helper = 1\n"),
     ];
     let graph = build_graph(&docs, 64, None);
@@ -245,7 +251,10 @@ fn javascript_dynamic_literal_import_is_a_possible_dependency() {
 #[test]
 fn explicit_json_and_stylesheet_imports_resolve_exact_observed_assets() {
     let docs = vec![
-        source("app/index.ts", "import data from './settings.json';\nimport './theme.css';\n"),
+        source(
+            "app/index.ts",
+            "import data from './settings.json';\nimport './theme.css';\n",
+        ),
         source("app/settings.json", "{\\\"healthy\\\":true}"),
         source("app/theme.css", "body { color: inherit; }"),
     ];
@@ -257,11 +266,12 @@ fn explicit_json_and_stylesheet_imports_resolve_exact_observed_assets() {
     assert_eq!(edges[1]["to"], "app/theme.css");
 }
 
-
 #[test]
 fn graph_does_not_invent_edges_from_js_comments_or_string_literals() {
     let docs = vec![
-        source("src/main.ts", r#"
+        source(
+            "src/main.ts",
+            r#"
             const quoted = "require('./fake')";
             const inline = 1; // require('./fake')
             /* import('./fake') */
@@ -271,14 +281,19 @@ fn graph_does_not_invent_edges_from_js_comments_or_string_literals() {
             */
             const real = require('./actual'); /* require('./fake') */
             const deferred = import('./lazy');
-        "#),
+        "#,
+        ),
         source("src/fake.ts", "export const notImported = 1;\n"),
         source("src/actual.ts", "export const actual = true;\n"),
         source("src/lazy.ts", "export const lazy = true;\n"),
     ];
     let result = build_graph(&docs, 64, None);
     let edges = result["edges"].as_array().unwrap();
-    assert_eq!(edges.len(), 2, "comments and strings are not dependency syntax");
+    assert_eq!(
+        edges.len(),
+        2,
+        "comments and strings are not dependency syntax"
+    );
     assert_eq!(edges[0]["to"], "src/actual.ts");
     assert_eq!(edges[1]["to"], "src/lazy.ts");
     assert!(edges.iter().all(|e| e["specifier"] != "./fake"));
@@ -298,11 +313,13 @@ fn graph_does_not_parse_rust_mod_declarations_inside_block_comments() {
     assert_eq!(edges[0]["line"], 4);
 }
 
-
 #[test]
 fn graph_does_not_treat_python_docstring_examples_as_imports() {
     let docs = vec![
-        source("pkg/main.py", "\"\"\"\nfrom .fake import f\n\"\"\"\nfrom .actual import a\n"),
+        source(
+            "pkg/main.py",
+            "\"\"\"\nfrom .fake import f\n\"\"\"\nfrom .actual import a\n",
+        ),
         source("pkg/fake.py", "f = 1\n"),
         source("pkg/actual.py", "a = 2\n"),
     ];
@@ -316,7 +333,10 @@ fn graph_does_not_treat_python_docstring_examples_as_imports() {
 #[test]
 fn rust_path_attribute_remains_authoritative_across_intervening_comments() {
     let docs = vec![
-        source("src/lib.rs", "#[path = \"custom.rs\"]\n// documentation comment\nmod alternate;\nmod actual;\n"),
+        source(
+            "src/lib.rs",
+            "#[path = \"custom.rs\"]\n// documentation comment\nmod alternate;\nmod actual;\n",
+        ),
         source("src/alternate.rs", "pub const BAD: u8 = 1;\n"),
         source("src/custom.rs", "pub const REAL: u8 = 2;\n"),
         source("src/actual.rs", "pub const GOOD: u8 = 3;\n"),
@@ -340,31 +360,39 @@ fn nested_inline_rust_modules_are_not_resolved_against_root_files() {
     assert_eq!(edges[0]["to"], "src/actual.rs");
 }
 
-
 #[test]
 fn rust_raw_multiline_strings_never_create_source_module_edges() {
     let documents = vec![
-        source("src/lib.rs", r####"
+        source(
+            "src/lib.rs",
+            r####"
 const MESSAGE: &str = r###"
 mod fake_one;
 fn demonstration() { mod fake_two; }
 "###;
 mod genuine;
-"####),
+"####,
+        ),
         source("src/fake_one.rs", "pub const FALSE: u8 = 1;"),
         source("src/fake_two.rs", "pub const FALSE: u8 = 2;"),
         source("src/genuine.rs", "pub const TRUE: u8 = 3;"),
     ];
     let graph = build_graph(&documents, 64, None);
     let edges = graph["edges"].as_array().unwrap();
-    assert_eq!(edges.len(), 1, "module-looking raw string bytes must not become graph edges");
+    assert_eq!(
+        edges.len(),
+        1,
+        "module-looking raw string bytes must not become graph edges"
+    );
     assert_eq!(edges[0]["to"], "src/genuine.rs");
 }
 
 #[test]
 fn rust_multiline_ordinary_string_and_raw_byte_string_do_not_create_edges() {
     let documents = vec![
-        source("src/lib.rs", r####"
+        source(
+            "src/lib.rs",
+            r####"
 const NORMAL: &str = "one
 mod fake_one;
 three";
@@ -372,7 +400,8 @@ const BINARY: &[u8] = br##"
 mod fake_two;
 "##;
 mod genuine;
-"####),
+"####,
+        ),
         source("src/fake_one.rs", "pub const FALSE: u8 = 1;"),
         source("src/fake_two.rs", "pub const FALSE: u8 = 2;"),
         source("src/genuine.rs", "pub const TRUE: u8 = 3;"),
@@ -386,12 +415,15 @@ mod genuine;
 #[test]
 fn rust_module_path_attribute_inside_raw_string_is_not_a_real_attribute() {
     let documents = vec![
-        source("src/lib.rs", r####"
+        source(
+            "src/lib.rs",
+            r####"
 const EXAMPLE: &str = r##"
 #[path = "fake.rs"]
 "##;
 mod genuine;
-"####),
+"####,
+        ),
         source("src/genuine.rs", "pub const YES: u8 = 1;"),
         source("src/fake.rs", "pub const NO: u8 = 1;"),
     ];
@@ -401,25 +433,30 @@ mod genuine;
     assert_eq!(edges[0]["to"], "src/genuine.rs");
 }
 
-
 #[test]
 fn js_from_import_must_be_outside_trailing_comments() {
     let docs = vec![
-        source("src/main.ts", r#"
+        source(
+            "src/main.ts",
+            r#"
             const value = 1;
             export { value }; // from './phantom'
             export { value }; /* from './phantom' */
             export { value } from './real';
-        "#),
+        "#,
+        ),
         source("src/phantom.ts", "export const falseEdge = true;\n"),
         source("src/real.ts", "export const value = 2;\n"),
     ];
     let graph = build_graph(&docs, 64, None);
     let edges = graph["edges"].as_array().unwrap();
-    assert_eq!(edges.len(), 1, "commented from must not create a dependency");
+    assert_eq!(
+        edges.len(),
+        1,
+        "commented from must not create a dependency"
+    );
     assert_eq!(edges[0]["to"], "src/real.ts");
 }
-
 
 #[test]
 fn js_real_from_clause_accepts_module_paths_containing_the_word_from() {

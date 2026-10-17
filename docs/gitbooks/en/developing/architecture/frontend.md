@@ -163,7 +163,7 @@ Authoritative list = the `reducer` map in `store/index.ts`. One-line purposes:
 | Slice                 | Purpose                                                                          | Persisted?                                                      |
 | --------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `accounts`            | Connected web-app accounts + rail ordering                                        | `accounts`, `order`, `lastActiveAccountId` (not the active id)  |
-| `announcement`        | Harness-init announcement banner, seen ids                                        | `shownIds`                                                      |
+| `announcement`        | Dismissed announcement ids for the notice center                                  | `shownIds`                                                      |
 | `channelConnections`  | Messaging channel connections (WhatsApp, Slack, …)                                | connections + migration/default-channel fields                  |
 | `chatRuntime`         | Streaming buffers, tool timelines, inference status, artifacts                    | only `artifactsByThread` (ready snapshots)                       |
 | `connectivity`        | navigator.onLine, core health, renderer to core socket, core to hosted link       | no                                                               |

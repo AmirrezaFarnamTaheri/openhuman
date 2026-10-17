@@ -11,6 +11,9 @@ import WalkthroughTooltip from './WalkthroughTooltip';
 
 const WALKTHROUGH_KEY = 'openhuman:walkthrough_completed';
 const WALKTHROUGH_PENDING_KEY = 'openhuman:walkthrough_pending';
+// Older releases set pending automatically after onboarding. A distinct
+// explicit opt-in marker keeps an upgrade from launching that legacy tour.
+const WALKTHROUGH_REQUESTED_KEY = 'openhuman:walkthrough_requested';
 
 /**
  * Returns `true` when the walkthrough should be shown. This is true when:
@@ -28,7 +31,7 @@ export function isWalkthroughPending(_userIsOnboarded = false): boolean {
   if (DEV_SKIP_ONBOARDING) return false;
   try {
     if (localStorage.getItem(WALKTHROUGH_KEY) === 'true') return false;
-    return localStorage.getItem(WALKTHROUGH_PENDING_KEY) === 'true';
+    return localStorage.getItem(WALKTHROUGH_REQUESTED_KEY) === 'true';
   } catch (e) {
     console.warn('[walkthrough] localStorage unavailable — treating as not pending', e);
     return false;
@@ -44,7 +47,8 @@ export function isWalkthroughPending(_userIsOnboarded = false): boolean {
  */
 export function setWalkthroughPending(): void {
   try {
-    localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'true');
+    localStorage.setItem(WALKTHROUGH_REQUESTED_KEY, 'true');
+    localStorage.removeItem(WALKTHROUGH_PENDING_KEY);
     console.debug('[walkthrough] pending flag set');
   } catch (e) {
     console.warn('[walkthrough] could not set pending flag in localStorage', e);
@@ -62,6 +66,7 @@ export function markWalkthroughComplete(): void {
   try {
     localStorage.setItem(WALKTHROUGH_KEY, 'true');
     localStorage.removeItem(WALKTHROUGH_PENDING_KEY);
+    localStorage.removeItem(WALKTHROUGH_REQUESTED_KEY);
     console.debug('[walkthrough] marked as complete');
   } catch (e) {
     console.warn('[walkthrough] could not mark walkthrough complete in localStorage', e);
@@ -79,7 +84,8 @@ export function markWalkthroughComplete(): void {
 export function resetWalkthrough(): void {
   try {
     localStorage.removeItem(WALKTHROUGH_KEY);
-    localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'true');
+    localStorage.setItem(WALKTHROUGH_REQUESTED_KEY, 'true');
+    localStorage.removeItem(WALKTHROUGH_PENDING_KEY);
     console.debug('[walkthrough] reset — pending flag set, completed flag removed');
   } catch (e) {
     console.warn('[walkthrough] could not reset walkthrough in localStorage', e);

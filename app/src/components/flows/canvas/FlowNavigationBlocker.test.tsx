@@ -19,14 +19,49 @@ function GuardedEditor() {
         blockedRef={blockedRef}
         onBlocked={() => setConfirm(true)}
       />
-      <button type="button" onClick={() => navigate('/chat')}>Open chat</button>
-      <button type="button" onClick={() => navigate(-1)}>Browser back</button>
-      <button type="button" onClick={() => { bypassRef.current = true; navigate('/chat'); }}>Save and continue</button>
-      <button type="button" onClick={() => setDirty(false)}>Discard edits</button>
+      <button type="button" onClick={() => navigate('/chat')}>
+        Open chat
+      </button>
+      <button type="button" onClick={() => navigate(-1)}>
+        Browser back
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          bypassRef.current = true;
+          navigate('/chat');
+        }}>
+        Save and continue
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          bypassRef.current = true;
+          navigate('/flows/test-id?panel=history', { replace: true });
+        }}>
+        Save current route
+      </button>
+      <button type="button" onClick={() => setDirty(false)}>
+        Discard edits
+      </button>
       {confirm && (
         <div role="dialog" aria-label="Unsaved workflow">
-          <button type="button" onClick={() => { blockedRef.current?.reset(); setConfirm(false); }}>Stay</button>
-          <button type="button" onClick={() => { blockedRef.current?.proceed(); setConfirm(false); }}>Discard and leave</button>
+          <button
+            type="button"
+            onClick={() => {
+              blockedRef.current?.reset();
+              setConfirm(false);
+            }}>
+            Stay
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              blockedRef.current?.proceed();
+              setConfirm(false);
+            }}>
+            Discard and leave
+          </button>
         </div>
       )}
     </div>
@@ -34,11 +69,14 @@ function GuardedEditor() {
 }
 
 function setup(initialEntries = ['/flows/test-id']) {
-  const router = createMemoryRouter([
-    { path: '/flows/:id', element: <GuardedEditor /> },
-    { path: '/chat', element: <p data-testid="chat-page">Chat</p> },
-    { path: '/home', element: <p data-testid="home-page">Home</p> },
-  ], { initialEntries });
+  const router = createMemoryRouter(
+    [
+      { path: '/flows/:id', element: <GuardedEditor /> },
+      { path: '/chat', element: <p data-testid="chat-page">Chat</p> },
+      { path: '/home', element: <p data-testid="home-page">Home</p> },
+    ],
+    { initialEntries }
+  );
   render(<RouterProvider router={router} />);
   return router;
 }
@@ -65,6 +103,15 @@ describe('FlowNavigationBlocker', () => {
     expect(router.state.location.pathname).toBe('/flows/test-id');
     fireEvent.click(screen.getByRole('button', { name: 'Discard and leave' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/home'));
+  });
+
+  it('consumes a same-route bypass before a later unsaved navigation', async () => {
+    const router = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Save current route' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?panel=history'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+    await screen.findByRole('dialog', { name: 'Unsaved workflow' });
+    expect(router.state.location.pathname).toBe('/flows/test-id');
   });
 
   it('permits deliberate Save-and-navigate transitions without a discard prompt', async () => {

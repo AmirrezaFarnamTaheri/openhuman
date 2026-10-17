@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // Korean (한국어) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': '설정 검색',
+  'settings.search.noResults': '일치하는 설정이 없습니다',
+  'settings.ai.advancedModelManagement': '모델 및 API 키 고급 관리',
+  'settings.ai.providerConnectedRoutingHint':
+    '제공업체에 연결되었습니다. 채팅에 사용할 모델을 선택하세요.',
+  'settings.ai.chooseChatModel': '채팅 모델 선택',
+  'walkthrough.takeTour': '둘러보기',
+  'connections.navigation.showAll': '모든 연결 표시',
+  'connections.navigation.showFewer': '연결 간략히 표시',
+  'memoryPage.advanced.fewer': '옵션 간략히 표시',
+  'memoryPage.advanced.show': '고급',
+  'memoryPage.engine.autoLocalTitle': '이 컴퓨터의 메모리',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman이 로컬 메모리를 설정하고 연결합니다. Docker가 필요합니다.',
+  'memoryPage.engine.autoLocalStarting': '로컬 메모리 시작 중…',
+  'memoryPage.engine.autoLocal': '로컬 메모리 시작',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Docker Desktop 또는 Docker Engine을 시작하고 포트 3141을 사용할 수 있는지 확인하세요.',
+  'memoryPage.engine.autoLocalHelp': 'Docker 설치 또는 시작',
+
   // Share cards (#5006).
   'share.copyImage': '이미지 복사',
   'feedback.header.desc': '아이디어를 공유하고 다음에 만들 것에 투표하세요.',

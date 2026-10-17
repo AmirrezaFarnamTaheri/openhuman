@@ -10,29 +10,133 @@ fn managed_local_credentials_do_not_replace_the_cloud_cortex_key() {
     let mut config = config_in(&tmp);
     engine::store_cortexdb_key(&config, "cloud-account-key").unwrap();
 
-    apply_engine_set(
-        &mut config,
-        &EngineSetParams {
-            engine: CORTEXDB_ENGINE.to_string(),
-            endpoint: Some("http://127.0.0.1:3141".to_string()),
-            api_key: Some("app-managed-local-key".to_string()),
-        },
-    ).unwrap();
+    apply_managed_local_engine(&mut config, "app-managed-local-key").unwrap();
+    assert!(engine::is_managed_cortexdb(&config));
 
     assert_eq!(
         engine::read_cortexdb_key(&config).unwrap().as_deref(),
         Some("app-managed-local-key")
     );
     assert_eq!(
-        engine::read_managed_cortexdb_key(&config).unwrap().as_deref(),
+        engine::read_managed_cortexdb_key(&config)
+            .unwrap()
+            .as_deref(),
         Some("app-managed-local-key")
     );
 
-    config.memory.engines.get_mut(CORTEXDB_ENGINE).unwrap().endpoint = None;
+    config
+        .memory
+        .engines
+        .get_mut(CORTEXDB_ENGINE)
+        .unwrap()
+        .endpoint = None;
     assert_eq!(
         engine::read_cortexdb_key(&config).unwrap().as_deref(),
         Some("cloud-account-key")
     );
+}
+
+#[test]
+fn manual_loopback_endpoint_preserves_its_existing_credential() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = config_in(&tmp);
+    engine::store_cortexdb_key(&config, "manual-key").unwrap();
+    apply_engine_set(
+        &mut config,
+        &EngineSetParams {
+            engine: CORTEXDB_ENGINE.to_string(),
+            endpoint: Some(super::super::local_cortex::MANAGED_ENDPOINT.to_string()),
+            api_key: None,
+        },
+    )
+    .unwrap();
+    assert!(!engine::is_managed_cortexdb(&config));
+    assert_eq!(
+        engine::read_cortexdb_key(&config).unwrap().as_deref(),
+        Some("manual-key")
+    );
+    assert_eq!(engine::read_managed_cortexdb_key(&config).unwrap(), None);
+
+    engine::store_cortexdb_key(&config, "changed-manual-key").unwrap();
+    assert_eq!(
+        engine::read_cortexdb_key(&config).unwrap().as_deref(),
+        Some("changed-manual-key")
+    );
+    assert!(engine::clear_cortexdb_key(&config).unwrap());
+    assert_eq!(engine::read_cortexdb_key(&config).unwrap(), None);
+}
+
+#[test]
+fn manually_editing_a_managed_connection_uses_the_manual_key_store() {
+    for (endpoint, api_key) in [
+        (
+            Some(super::super::local_cortex::MANAGED_ENDPOINT.to_string()),
+            None,
+        ),
+        (None, Some("edited-key".to_string())),
+        (None, Some(String::new())),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut config = config_in(&tmp);
+        engine::store_cortexdb_key(&config, "manual-key").unwrap();
+        apply_managed_local_engine(&mut config, "managed-key").unwrap();
+        apply_engine_set(
+            &mut config,
+            &EngineSetParams {
+                engine: CORTEXDB_ENGINE.to_string(),
+                endpoint,
+                api_key: api_key.clone(),
+            },
+        )
+        .unwrap();
+        assert!(!engine::is_managed_cortexdb(&config));
+        assert_eq!(
+            engine::read_managed_cortexdb_key(&config)
+                .unwrap()
+                .as_deref(),
+            Some("managed-key")
+        );
+        assert_eq!(
+            engine::read_cortexdb_key(&config).unwrap().as_deref(),
+            match api_key.as_deref() {
+                Some("") => None,
+                Some(key) => Some(key),
+                None => Some("manual-key"),
+            },
+        );
+    }
+}
+
+#[test]
+fn reenabling_managed_memory_keeps_its_key_and_connection_kind() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = config_in(&tmp);
+    apply_managed_local_engine(&mut config, "managed-key").unwrap();
+    for engine in [DISABLED_ENGINE, CORTEXDB_ENGINE] {
+        apply_engine_set(
+            &mut config,
+            &EngineSetParams {
+                engine: engine.to_string(),
+                endpoint: None,
+                api_key: None,
+            },
+        )
+        .unwrap();
+    }
+    assert!(engine::is_managed_cortexdb(&config));
+    assert_eq!(
+        engine::read_cortexdb_key(&config).unwrap().as_deref(),
+        Some("managed-key")
+    );
+
+    config
+        .memory
+        .engines
+        .get_mut(CORTEXDB_ENGINE)
+        .unwrap()
+        .endpoint = Some("https://manual.example".into());
+    assert!(!engine::is_managed_cortexdb(&config));
+    assert_eq!(engine::read_cortexdb_key(&config).unwrap(), None);
 }
 
 fn learn_params(text: &str) -> LearnParams {

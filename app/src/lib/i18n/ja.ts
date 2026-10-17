@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // Japanese (日本語) translations. Keys mirror en.ts.
 // Missing keys fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': '設定を検索',
+  'settings.search.noResults': '一致する設定はありません',
+  'settings.ai.advancedModelManagement': 'モデルと API キーの詳細管理',
+  'settings.ai.providerConnectedRoutingHint':
+    'プロバイダーに接続しました。チャットで使用するモデルを選択してください。',
+  'settings.ai.chooseChatModel': 'チャットモデルを選択',
+  'walkthrough.takeTour': '使い方を見る',
+  'connections.navigation.showAll': 'すべての接続を表示',
+  'connections.navigation.showFewer': '接続の表示を減らす',
+  'memoryPage.advanced.fewer': 'オプションを減らす',
+  'memoryPage.advanced.show': '詳細設定',
+  'memoryPage.engine.autoLocalTitle': 'このコンピューターのメモリ',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman がローカルメモリの設定と接続を行います。Docker が必要です。',
+  'memoryPage.engine.autoLocalStarting': 'ローカルメモリを起動中…',
+  'memoryPage.engine.autoLocal': 'ローカルメモリを起動',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Docker Desktop または Docker Engine を起動し、ポート 3141 が利用可能なことを確認してください。',
+  'memoryPage.engine.autoLocalHelp': 'Docker をインストールまたは起動',
+
   // Navigation
   'nav.home': 'ホーム',
   'nav.chat': 'チャット',

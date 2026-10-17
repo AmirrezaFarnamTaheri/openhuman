@@ -44,10 +44,10 @@ describe('ModelFeasibilityPreview cached input controls', () => {
   });
 });
 
-
 describe('ModelFeasibilityPreview catalog browsing', () => {
   const manyModels: ModelRegistryEntry[] = Array.from({ length: 17 }, (_, index) => ({
-    ...cachedModel, id: 'candidate-' + index,
+    ...cachedModel,
+    id: 'candidate-' + index,
   }));
 
   it('reveals additional sorted results on demand, not only the first eight', () => {

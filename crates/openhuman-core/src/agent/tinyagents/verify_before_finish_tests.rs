@@ -308,7 +308,6 @@ async fn an_unlinked_wrap_up_does_not_silence_the_check() {
     );
 }
 
-
 /// Peer convergence: a one-round code edit or single child handoff still needs
 /// a final independent requirement/verification pass; five-round threshold
 /// alone misses short but consequential coding missions.
@@ -336,7 +335,10 @@ fn single_round_mutations_and_delegations_require_finish_verification() {
         );
     }
     for tool in ["file_read", "grep", "glob", "current_time"] {
-        assert!(!should_check(&activity(1, &[tool])), "read-only {tool} should not force a costly extra check");
+        assert!(
+            !should_check(&activity(1, &[tool])),
+            "read-only {tool} should not force a costly extra check"
+        );
     }
 }
 
@@ -348,18 +350,23 @@ fn finish_check_requires_verification_after_latest_write_or_commit() {
     assert!(check.contains("stale"));
 }
 
-
 #[tokio::test]
 async fn installed_middleware_checks_a_single_code_write_before_final_answer() {
     let (checks, text) = drive(1, "file_write", false, Some("orchestrator")).await;
-    assert_eq!(checks, 1, "the check must be dispatched by real harness middleware");
+    assert_eq!(
+        checks, 1,
+        "the check must be dispatched by real harness middleware"
+    );
     assert_eq!(text, "checked");
 }
 
 #[tokio::test]
 async fn installed_middleware_checks_a_single_delegate_handoff() {
     let (checks, text) = drive(1, "delegate_coding", false, Some("orchestrator")).await;
-    assert_eq!(checks, 1, "delegated work must be verified by its root orchestrator");
+    assert_eq!(
+        checks, 1,
+        "delegated work must be verified by its root orchestrator"
+    );
     assert_eq!(text, "checked");
 }
 
@@ -374,6 +381,9 @@ fn finish_evidence_rejects_hidden_exit_status_as_proof() {
         "skipped",
         "cancelled",
     ] {
-        assert!(check.contains(fragment), "verification instruction must mention {fragment}");
+        assert!(
+            check.contains(fragment),
+            "verification instruction must mention {fragment}"
+        );
     }
 }

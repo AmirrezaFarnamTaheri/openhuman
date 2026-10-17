@@ -64,7 +64,7 @@ vi.mock('react-joyride', () => ({
 // ── localStorage helpers ───────────────────────────────────────────────────
 
 const WALKTHROUGH_KEY = 'openhuman:walkthrough_completed';
-const WALKTHROUGH_PENDING_KEY = 'openhuman:walkthrough_pending';
+const WALKTHROUGH_REQUESTED_KEY = 'openhuman:walkthrough_requested';
 
 beforeEach(() => {
   localStorage.clear();
@@ -79,6 +79,14 @@ afterEach(() => {
 // ── Helper state tests ────────────────────────────────────────────────────
 
 describe('isWalkthroughPending', () => {
+  it('ignores a pending tour left by automatic onboarding in an older release', () => {
+    localStorage.setItem('openhuman:walkthrough_pending', 'true');
+    expect(isWalkthroughPending(true)).toBe(false);
+    setWalkthroughPending();
+    expect(isWalkthroughPending(true)).toBe(true);
+    expect(localStorage.getItem('openhuman:walkthrough_pending')).toBeNull();
+  });
+
   it('returns false when nothing is set', () => {
     expect(isWalkthroughPending()).toBe(false);
   });
@@ -88,12 +96,12 @@ describe('isWalkthroughPending', () => {
   });
 
   it('returns true when pending flag is set and completed flag is not', () => {
-    localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'true');
+    localStorage.setItem(WALKTHROUGH_REQUESTED_KEY, 'true');
     expect(isWalkthroughPending()).toBe(true);
   });
 
   it('returns false when both pending and completed are set', () => {
-    localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'true');
+    localStorage.setItem(WALKTHROUGH_REQUESTED_KEY, 'true');
     localStorage.setItem(WALKTHROUGH_KEY, 'true');
     expect(isWalkthroughPending()).toBe(false);
   });
@@ -107,7 +115,7 @@ describe('isWalkthroughPending', () => {
 describe('setWalkthroughPending', () => {
   it('sets the pending flag in localStorage', () => {
     setWalkthroughPending();
-    expect(localStorage.getItem(WALKTHROUGH_PENDING_KEY)).toBe('true');
+    expect(localStorage.getItem(WALKTHROUGH_REQUESTED_KEY)).toBe('true');
   });
 
   it('swallows error when localStorage.setItem throws (SecurityError / quota)', () => {
@@ -140,10 +148,10 @@ describe('setWalkthroughPending', () => {
 
 describe('markWalkthroughComplete', () => {
   it('sets the completed flag and removes the pending flag', () => {
-    localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'true');
+    localStorage.setItem(WALKTHROUGH_REQUESTED_KEY, 'true');
     markWalkthroughComplete();
     expect(localStorage.getItem(WALKTHROUGH_KEY)).toBe('true');
-    expect(localStorage.getItem(WALKTHROUGH_PENDING_KEY)).toBeNull();
+    expect(localStorage.getItem(WALKTHROUGH_REQUESTED_KEY)).toBeNull();
   });
 
   it('swallows error when localStorage.setItem throws (SecurityError / quota)', () => {
@@ -208,12 +216,12 @@ describe('isWalkthroughPending — localStorage unavailable', () => {
 describe('resetWalkthrough', () => {
   it('removes completed flag and sets pending flag in localStorage', () => {
     localStorage.setItem(WALKTHROUGH_KEY, 'true');
-    localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'false');
+    localStorage.setItem(WALKTHROUGH_REQUESTED_KEY, 'false');
 
     resetWalkthrough();
 
     expect(localStorage.getItem(WALKTHROUGH_KEY)).toBeNull();
-    expect(localStorage.getItem(WALKTHROUGH_PENDING_KEY)).toBe('true');
+    expect(localStorage.getItem(WALKTHROUGH_REQUESTED_KEY)).toBe('true');
   });
 
   it('dispatches walkthrough:restart CustomEvent on window', () => {
@@ -294,7 +302,7 @@ describe('AppWalkthrough component', () => {
 
   it('renders nothing when walkthrough is already completed', async () => {
     // Set pending but also completed — should not render
-    localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'true');
+    localStorage.setItem(WALKTHROUGH_REQUESTED_KEY, 'true');
     localStorage.setItem(WALKTHROUGH_KEY, 'true');
 
     const { default: AppWalkthrough } = await import('../AppWalkthrough');
@@ -327,7 +335,7 @@ describe('AppWalkthrough component', () => {
 
     // Walkthrough should be marked complete in localStorage
     expect(localStorage.getItem(WALKTHROUGH_KEY)).toBe('true');
-    expect(localStorage.getItem(WALKTHROUGH_PENDING_KEY)).toBeNull();
+    expect(localStorage.getItem(WALKTHROUGH_REQUESTED_KEY)).toBeNull();
   });
 
   it('calls markWalkthroughComplete and stops running when tour is skipped (SKIPPED)', async () => {
@@ -348,7 +356,7 @@ describe('AppWalkthrough component', () => {
     });
 
     expect(localStorage.getItem(WALKTHROUGH_KEY)).toBe('true');
-    expect(localStorage.getItem(WALKTHROUGH_PENDING_KEY)).toBeNull();
+    expect(localStorage.getItem(WALKTHROUGH_REQUESTED_KEY)).toBeNull();
   });
 
   it('does not call markWalkthroughComplete for non-TOUR_END events', async () => {
@@ -389,7 +397,7 @@ describe('AppWalkthrough component', () => {
     // Simulate resetWalkthrough() — clears completed, sets pending, fires event.
     await act(async () => {
       localStorage.removeItem(WALKTHROUGH_KEY);
-      localStorage.setItem(WALKTHROUGH_PENDING_KEY, 'true');
+      localStorage.setItem(WALKTHROUGH_REQUESTED_KEY, 'true');
       window.dispatchEvent(new CustomEvent('walkthrough:restart'));
     });
 
@@ -575,8 +583,8 @@ describe('createWalkthroughSteps', () => {
 
   it.each([
     { idx: 2, route: '/chat', target: 'chat-agent-panel' },
-    { idx: 3, route: '/connections', target: 'skills-grid' },
-    { idx: 4, route: null, target: 'skills-channels' },
+    { idx: 3, route: '/connections?tab=composio', target: 'skills-grid' },
+    { idx: 4, route: '/connections?tab=channels', target: 'skills-channels' },
     { idx: 5, route: '/settings', target: 'settings-menu' },
     { idx: 6, route: '/chat', target: 'tab-chat' },
     { idx: 8, route: '/chat', target: 'chat-agent-panel' },

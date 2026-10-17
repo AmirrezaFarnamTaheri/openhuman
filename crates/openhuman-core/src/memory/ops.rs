@@ -61,6 +61,7 @@ pub async fn engine_get(config: &Config) -> EngineView {
                 engine: Some(bound.id.clone()),
                 endpoint: Some(bound.endpoint.clone()),
                 has_key: engine::has_key(config, &bound.id),
+                managed_local: bound.id == CORTEXDB_ENGINE && engine::is_managed_cortexdb(config),
                 status,
                 reason,
                 fetch_modes: bound.engine.descriptor().fetch_modes.clone(),
@@ -74,6 +75,8 @@ pub async fn engine_get(config: &Config) -> EngineView {
             let id = id.or(configured);
             EngineView {
                 has_key: id.as_deref().is_some_and(|id| engine::has_key(config, id)),
+                managed_local: id.as_deref() == Some(CORTEXDB_ENGINE)
+                    && engine::is_managed_cortexdb(config),
                 engine: id,
                 endpoint,
                 status: EngineStatus::Off,
@@ -123,6 +126,13 @@ pub fn apply_engine_set(config: &mut Config, params: &EngineSetParams) -> Memory
                 .endpoint = Some(endpoint.to_string());
         }
     }
+    // `engine_set` configures manual connections. Reusing a local URL or
+    // editing its key must not silently select the app-owned credential.
+    if engine_id == CORTEXDB_ENGINE && (params.endpoint.is_some() || params.api_key.is_some()) {
+        if let Some(settings) = config.memory.engines.get_mut(engine_id) {
+            settings.managed_local = false;
+        }
+    }
     if let Some(key) = params.api_key.as_deref() {
         match engine_id {
             CORTEXDB_ENGINE if key.trim().is_empty() => {
@@ -140,6 +150,24 @@ pub fn apply_engine_set(config: &mut Config, params: &EngineSetParams) -> Memory
     config.memory.engine = engine_id.to_string();
     engine::invalidate();
     tracing::info!(engine = %engine_id, "[memory:ops] engine selected");
+    Ok(())
+}
+
+/// Select a container whose ownership and health were verified by the local
+/// provisioner. This is deliberately separate from the manual engine setter.
+pub fn apply_managed_local_engine(config: &mut Config, key: &str) -> MemoryResult<()> {
+    engine::store_managed_cortexdb_key(config, key)?;
+    let settings = config
+        .memory
+        .engines
+        .entry(CORTEXDB_ENGINE.to_string())
+        .or_default();
+    settings.endpoint = Some(super::local_cortex::MANAGED_ENDPOINT.to_string());
+    settings.managed_local = true;
+    config.memory.engine = CORTEXDB_ENGINE.to_string();
+    config.components.memory = true;
+    engine::invalidate();
+    tracing::info!("[memory:ops] managed local memory selected");
     Ok(())
 }
 

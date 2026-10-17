@@ -459,7 +459,6 @@ pub struct CloudProviderCreds {
     #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub model_transports: std::collections::HashMap<String, ModelTransport>,
 
-
     /// Default provider-native model used by BYOK routes without a model suffix.
     // keep until v0.66 (review after 2027-01-11): active BYOK routes and the
     // inference settings RPC depend on this field; replacement needs route migration.
@@ -489,7 +488,10 @@ impl CloudProviderCreds {
     /// The exact model's configured protocol, or registry behavior for
     /// unknown models. No provider-name or endpoint heuristics are applied.
     pub fn model_transport(&self, model: &str) -> ModelTransport {
-        self.model_transports.get(model).copied().unwrap_or_default()
+        self.model_transports
+            .get(model)
+            .copied()
+            .unwrap_or_default()
     }
 }
 
@@ -502,11 +504,7 @@ pub fn normalize_model_transports(
         return Err("too many model transport overrides (maximum 512)".into());
     }
     for id in overrides.keys() {
-        if id.is_empty()
-            || id.len() > 200
-            || id.trim() != id
-            || id.chars().any(char::is_control)
-        {
+        if id.is_empty() || id.len() > 200 || id.trim() != id || id.chars().any(char::is_control) {
             return Err("model transport id must be 1-200 printable, unpadded characters".into());
         }
     }
@@ -522,9 +520,13 @@ pub fn normalize_model_transports_for_auth(
 ) -> Result<std::collections::HashMap<String, ModelTransport>, String> {
     let normalized = normalize_model_transports(overrides)?;
     if !matches!(auth_style, AuthStyle::Bearer | AuthStyle::None)
-        && normalized.values().any(|mode| *mode != ModelTransport::Auto)
+        && normalized
+            .values()
+            .any(|mode| *mode != ModelTransport::Auto)
     {
-        return Err("explicit OpenAI model transports require bearer or none authentication".into());
+        return Err(
+            "explicit OpenAI model transports require bearer or none authentication".into(),
+        );
     }
     Ok(normalized)
 }
@@ -568,18 +570,13 @@ pub fn normalize_fleet_config(
         // the credential in transit. Explicit loopback development gateways
         // keep working, including IPv6 localhost.
         if url.scheme() == "http" {
-            let host = url
-                .host_str()
-                .unwrap_or_default()
-                .trim_matches(['[', ']']);
+            let host = url.host_str().unwrap_or_default().trim_matches(['[', ']']);
             let loopback = host.eq_ignore_ascii_case("localhost")
                 || host
                     .parse::<std::net::IpAddr>()
                     .is_ok_and(|address| address.is_loopback());
             if !loopback {
-                return Err(
-                    "image endpoints must use HTTPS outside loopback hosts".to_string(),
-                );
+                return Err("image endpoints must use HTTPS outside loopback hosts".to_string());
             }
         }
         Ok(value.to_owned())

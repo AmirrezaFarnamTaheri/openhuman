@@ -17,7 +17,10 @@ fn local_check_recognizes_explicit_test_build_and_lint_commands() {
         "npm run build",
         "npm run lint",
     ] {
-        assert!(is_verification_command(command), "expected check: {command}");
+        assert!(
+            is_verification_command(command),
+            "expected check: {command}"
+        );
     }
 }
 
@@ -50,34 +53,57 @@ fn local_check_rejects_commands_that_obscure_exit_status_or_execute_other_action
         "true",
         "",
     ] {
-        assert!(!is_verification_command(command), "untrustworthy check: {command}");
+        assert!(
+            !is_verification_command(command),
+            "untrustworthy check: {command}"
+        );
     }
 }
 
 #[test]
 fn local_check_receipt_contains_no_shell_text_and_marks_positive_evidence_only() {
     let mut passed = ToolResult::success("all tests passed, possibly containing secrets");
-    append_verification_receipt(
-        &mut passed,
-        "cargo test -p openhuman-core",
-        true,
-    );
+    append_verification_receipt(&mut passed, "cargo test -p openhuman-core", true);
     let record = &passed.metadata.as_ref().unwrap()["openhuman_local_check_v1"];
     assert_eq!(record["recognized"], true);
     assert_eq!(record["passed"], true);
     assert_eq!(record["exit_status"], "zero");
-    assert!(passed.metadata.as_ref().unwrap().to_string().find("cargo test").is_none());
-    assert!(passed.metadata.as_ref().unwrap().to_string().find("secrets").is_none());
+    assert!(passed
+        .metadata
+        .as_ref()
+        .unwrap()
+        .to_string()
+        .find("cargo test")
+        .is_none());
+    assert!(passed
+        .metadata
+        .as_ref()
+        .unwrap()
+        .to_string()
+        .find("secrets")
+        .is_none());
 
     let mut failed = ToolResult::error("command failed");
     append_verification_receipt(&mut failed, "cargo test", true);
-    assert_eq!(failed.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["passed"], false);
-    assert_eq!(failed.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["exit_status"], "unknown");
+    assert_eq!(
+        failed.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["passed"],
+        false
+    );
+    assert_eq!(
+        failed.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["exit_status"],
+        "unknown"
+    );
 
     let mut denied = ToolResult::error("permission denied");
     append_verification_receipt(&mut denied, "cargo test", false);
-    assert_eq!(denied.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["passed"], false);
-    assert_eq!(denied.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["status"], "not_executed");
+    assert_eq!(
+        denied.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["passed"],
+        false
+    );
+    assert_eq!(
+        denied.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["status"],
+        "not_executed"
+    );
 
     let mut unrecognized = ToolResult::success("ok");
     append_verification_receipt(&mut unrecognized, "echo cargo test", true);
@@ -100,7 +126,6 @@ fn local_check_host_metadata_does_not_change_model_facing_output() {
     assert!(!result.output().contains("openhuman_local_check_v1"));
 }
 
-
 #[test]
 fn local_receipts_record_safe_check_category_without_exposing_command_arguments() {
     for (command, expected) in [
@@ -114,7 +139,10 @@ fn local_receipts_record_safe_check_category_without_exposing_command_arguments(
         let mut result = ToolResult::success("pass");
         append_verification_receipt(&mut result, command, true);
         let serialized = result.metadata.as_ref().unwrap().to_string();
-        assert_eq!(result.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["check_kind"],expected);
+        assert_eq!(
+            result.metadata.as_ref().unwrap()["openhuman_local_check_v1"]["check_kind"],
+            expected
+        );
         assert!(!serialized.contains("private_customer_project"));
         assert!(!serialized.contains("private_team"));
         assert!(!serialized.contains("-p"));

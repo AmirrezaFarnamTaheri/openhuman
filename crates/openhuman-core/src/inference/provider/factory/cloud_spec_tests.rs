@@ -121,8 +121,12 @@ fn prodex_gateway_discovers_models_with_the_scoped_virtual_key() {
 fn explicit_responses_transport_is_model_scoped_and_changes_the_native_route() {
     use crate::config::schema::cloud_providers::ModelTransport;
     let mut creds = entry("mixed", "https://router.example/v1", AuthStyle::Bearer);
-    creds.model_transports.insert("response-model".into(), ModelTransport::Responses);
-    creds.model_transports.insert("chat-model".into(), ModelTransport::ChatCompletions);
+    creds
+        .model_transports
+        .insert("response-model".into(), ModelTransport::Responses);
+    creds
+        .model_transports
+        .insert("chat-model".into(), ModelTransport::ChatCompletions);
     let responses = build_cloud_model(build(&creds, "response-model", "scoped-key")).unwrap();
     let chat = build_cloud_model(build(&creds, "chat-model", "scoped-key")).unwrap();
     let fallback = build_cloud_model(build(&creds, "unconfigured-model", "scoped-key")).unwrap();
@@ -137,7 +141,11 @@ fn explicit_responses_transport_is_model_scoped_and_changes_the_native_route() {
 #[test]
 fn explicit_transport_fails_closed_for_noncompatible_auth_or_codex_oauth() {
     use crate::config::schema::cloud_providers::ModelTransport;
-    let anthropic = entry("anthropic", "https://api.anthropic.com/v1", AuthStyle::Anthropic);
+    let anthropic = entry(
+        "anthropic",
+        "https://api.anthropic.com/v1",
+        AuthStyle::Anthropic,
+    );
     let mut invalid = build(&anthropic, "claude", "sk-ant");
     invalid.transport = ModelTransport::Responses;
     assert!(build_cloud_model(invalid).is_err());
@@ -181,18 +189,27 @@ async fn explicit_model_transport_uses_the_selected_wire_path() {
     });
 
     let mut creds = entry("mixed-api", &endpoint, AuthStyle::Bearer);
-    creds.model_transports.insert("use-responses".into(), ModelTransport::Responses);
-    creds.model_transports.insert("use-chat".into(), ModelTransport::ChatCompletions);
+    creds
+        .model_transports
+        .insert("use-responses".into(), ModelTransport::Responses);
+    creds
+        .model_transports
+        .insert("use-chat".into(), ModelTransport::ChatCompletions);
     for (model_id, expected) in [
         ("use-responses", "/v1/responses"),
         ("use-chat", "/v1/chat/completions"),
         ("unconfigured", "/v1/chat/completions"),
     ] {
         let model = build_cloud_model(build(&creds, model_id, "sk-test")).unwrap();
-        let _ = model.invoke(&(), ModelRequest {
-            messages: vec![Message::user("ping")],
-            ..Default::default()
-        }).await;
+        let _ = model
+            .invoke(
+                &(),
+                ModelRequest {
+                    messages: vec![Message::user("ping")],
+                    ..Default::default()
+                },
+            )
+            .await;
         let actual = tokio::time::timeout(Duration::from_secs(5), receiver.recv())
             .await
             .expect("provider request did not reach local test listener")

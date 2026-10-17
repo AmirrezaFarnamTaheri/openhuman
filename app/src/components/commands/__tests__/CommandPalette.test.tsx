@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hotkeyManager } from '../../../lib/commands/hotkeyManager';
 import { registry } from '../../../lib/commands/registry';
 import { ScopeContext } from '../../../lib/commands/ScopeContext';
+import { I18nProvider } from '../../../lib/i18n/I18nContext';
+import { renderWithProviders } from '../../../test/test-utils';
 import CommandPalette from '../CommandPalette';
 
 let currentFrame: symbol;
@@ -33,7 +35,11 @@ function Harness({
 }) {
   return (
     <ScopeContext.Provider value={currentFrame}>
-      <CommandPalette open={open} onOpenChange={onOpenChange} onOpenSettingsRoute={onOpenSettingsRoute} />
+      <CommandPalette
+        open={open}
+        onOpenChange={onOpenChange}
+        onOpenSettingsRoute={onOpenSettingsRoute}
+      />
     </ScopeContext.Provider>
   );
 }
@@ -85,13 +91,7 @@ describe('CommandPalette', () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
     const onOpenSettingsRoute = vi.fn();
-    render(
-      <Harness
-        open
-        onOpenChange={onOpenChange}
-        onOpenSettingsRoute={onOpenSettingsRoute}
-      />
-    );
+    render(<Harness open onOpenChange={onOpenChange} onOpenSettingsRoute={onOpenSettingsRoute} />);
     // Do not flood the palette with settings on an empty search.
     expect(screen.queryByTestId('command-settings-privacy')).not.toBeInTheDocument();
 
@@ -108,11 +108,11 @@ describe('CommandPalette', () => {
 
   it('starts a guided tour only when the user selects Take a tour', async () => {
     const user = userEvent.setup();
-    localStorage.removeItem('openhuman:walkthrough_pending');
+    localStorage.removeItem('openhuman:walkthrough_requested');
     const onOpenChange = vi.fn();
     render(<Harness open={true} onOpenChange={onOpenChange} />);
 
-    expect(localStorage.getItem('openhuman:walkthrough_pending')).toBeNull();
+    expect(localStorage.getItem('openhuman:walkthrough_requested')).toBeNull();
     await user.type(screen.getByRole('combobox'), 'Take a tour');
     await user.click(screen.getByTestId('command-start-tour'));
     await act(async () => {
@@ -120,8 +120,20 @@ describe('CommandPalette', () => {
     });
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
-    expect(localStorage.getItem('openhuman:walkthrough_pending')).toBe('true');
-    localStorage.removeItem('openhuman:walkthrough_pending');
+    expect(localStorage.getItem('openhuman:walkthrough_requested')).toBe('true');
+    localStorage.removeItem('openhuman:walkthrough_requested');
+  });
+
+  it('finds the guided tour by its translated title', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <I18nProvider>
+        <Harness open onOpenChange={() => {}} />
+      </I18nProvider>,
+      { preloadedState: { locale: { current: 'de' } } }
+    );
+    await user.type(screen.getByRole('combobox'), 'Einführung');
+    expect(screen.getByTestId('command-start-tour')).toHaveTextContent('Einführung ansehen');
   });
 
   it('renders footer hint advertising the in-palette shortcuts key', () => {

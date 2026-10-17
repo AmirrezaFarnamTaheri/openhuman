@@ -68,7 +68,15 @@ interface PageWelcomeView {
  * to the Welcome landing.
  */
 export function usePageWelcomeView(opts: UsePageWelcomeViewOptions): PageWelcomeView {
-  const { ariaLabel, welcomeLabel, mainLabel, mainIconPath, header, extraItems, defaultView = 'welcome' } = opts;
+  const {
+    ariaLabel,
+    welcomeLabel,
+    mainLabel,
+    mainIconPath,
+    header,
+    extraItems,
+    defaultView = 'welcome',
+  } = opts;
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -103,7 +111,13 @@ export function usePageWelcomeView(opts: UsePageWelcomeViewOptions): PageWelcome
               {
                 items: [
                   ...(defaultView === 'main'
-                    ? [{ value: 'welcome', label: welcomeLabel, icon: navIcon('M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v4m0 4h.01') }]
+                    ? [
+                        {
+                          value: 'welcome',
+                          label: welcomeLabel,
+                          icon: navIcon('M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v4m0 4h.01'),
+                        },
+                      ]
                     : []),
                   { value: 'main', label: mainLabel, icon: navIcon(mainIconPath) },
                   ...(extraItems ?? []).map(item => ({
@@ -119,7 +133,17 @@ export function usePageWelcomeView(opts: UsePageWelcomeViewOptions): PageWelcome
         </div>
       </SidebarContent>
     ),
-    [ariaLabel, welcomeLabel, mainLabel, mainIconPath, header, extraItems, defaultView, view, setView]
+    [
+      ariaLabel,
+      welcomeLabel,
+      mainLabel,
+      mainIconPath,
+      header,
+      extraItems,
+      defaultView,
+      view,
+      setView,
+    ]
   );
 
   return { view, setView, nav };

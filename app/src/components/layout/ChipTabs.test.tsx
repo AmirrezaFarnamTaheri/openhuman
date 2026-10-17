@@ -158,6 +158,37 @@ describe('ChipTabs', () => {
     expect(onChange).toHaveBeenCalledWith('two');
   });
 
+  it('deduplicates mousedown and focus notifications before the parent updates', () => {
+    const onChange = vi.fn();
+    render(<ChipTabs items={items} value="one" onChange={onChange} />);
+    const tab = screen.getByRole('tab', { name: 'Two' });
+    fireEvent.mouseDown(tab, { button: 0, ctrlKey: false });
+    fireEvent.focus(tab);
+    fireEvent.click(tab);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('two');
+  });
+
+  it('supports click-only activation without selecting the active tab again', () => {
+    const onChange = vi.fn();
+    render(<ChipTabs items={items} value="one" onChange={onChange} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'One' }));
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Two' }));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('two');
+  });
+
+  it('does not suppress a selection after an external controlled value change', async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ChipTabs items={items} value="one" onChange={onChange} />);
+    screen.getByRole('tab', { name: 'One' }).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onChange).toHaveBeenLastCalledWith('two');
+    rerender(<ChipTabs items={items} value="three" onChange={onChange} />);
+    onChange.mockClear();
+    fireEvent.click(screen.getByRole('tab', { name: 'Two' }));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('two');
+  });
+
   it('uses an explicit per-item testId over the prefix', () => {
     render(
       <ChipTabs

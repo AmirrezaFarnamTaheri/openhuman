@@ -240,6 +240,7 @@ async fn the_engines_own_backend_is_asked_not_the_apps() {
         TINYHUMANS_ENGINE.to_string(),
         crate::config::schema::MemoryEngineSettings {
             endpoint: Some(server.uri()),
+            ..crate::config::schema::MemoryEngineSettings::default()
         },
     );
     assert!(free_period_active(&config).await);
