@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-import { SOURCES, decide, latestPrRun } from "../ci/ci-gate.mjs";
+import { SOURCES, decide, findDecisiveJob, latestPrRun } from "../ci/ci-gate.mjs";
 
 const [EX63, HOSTED] = SOURCES;
 
@@ -123,4 +123,36 @@ test("every CI Gate source references a tracked workflow", () => {
     );
     assert.ok(existsSync(path), `CI Gate references a missing workflow: ${source.workflow}`);
   }
+});
+
+test("fork hosted lane passes through the decisive job under its own caller name", () => {
+  const job = findDecisiveJob(HOSTED, [
+    { name: "Route (outsiders → GitHub-hosted)", conclusion: "skipped" },
+    { name: "Fork PR lanes (hosted) / CI Fast (hosted) Gate", conclusion: "success" },
+  ]);
+  assert.equal(job?.conclusion, "success");
+  assert.equal(job?.name, "Fork PR lanes (hosted) / CI Fast (hosted) Gate");
+  assert.equal(
+    decide([entry(HOSTED, 3, "completed", "success", job)]).state,
+    "success",
+  );
+});
+
+test("CI Gate does not mistake unrelated success jobs for required lanes", () => {
+  assert.equal(findDecisiveJob(HOSTED, [
+    { name: "Route (outsiders → GitHub-hosted)", conclusion: "success" },
+    { name: "Other / CI Fast (hosted) Gate", conclusion: "success" },
+  ]), null);
+  assert.equal(findDecisiveJob(EX63, [
+    { name: "Fork PR lanes (hosted) / CI Fast (hosted) Gate", conclusion: "success" },
+  ]), null);
+});
+
+test("gate evaluation runs only on completed upstream jobs, not on every requested run", () => {
+  const source = readFileSync(
+    new URL("../../.github/workflows/ci-gate.yml", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /types: \[completed\]/);
+  assert.doesNotMatch(source, /types: \[requested, completed\]/);
 });
