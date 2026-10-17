@@ -12,11 +12,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.head_ref || github.ref }}
   cancel-in-progress: true
 jobs:
-  # All three jobs are `continue-on-error: true` for the first ~2 weeks after
-  # this workflow lands, so we can tune the parsers + matrix gates without
-  # blocking merges. Flip to hard-fail once the false-positive rate is stable.
-  checklist-guard:
-    name: PR Submission Checklist
+  # Nonblocking quality checks retain their individual outcomes. The checklist
+  # and coverage checks share one container and checkout to reduce runner cost.
+  metadata-checks:
+    name: PR metadata checks
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     container:
@@ -29,24 +28,25 @@ jobs:
         with:
           fetch-depth: 1
       - name: Verify Submission Checklist
+        id: checklist
+        continue-on-error: true
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: node scripts/check-pr-checklist.mjs
-  coverage-matrix:
-    name: Coverage Matrix Sync
-    runs-on: ubuntu-22.04
-    timeout-minutes: 10
-    container:
-      image: ghcr.io/tinyhumansai/openhuman_ci:latest
-    continue-on-error: true
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'docs') && !contains(github.event.pull_request.labels.*.name, 'chore') }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 1
       - name: Verify Coverage Matrix
+        id: coverage
+        if: always()
+        continue-on-error: true
         run: node scripts/check-coverage-matrix.mjs
+      - name: Report metadata checks
+        if: always()
+        env:
+          CHECKLIST: ${{ steps.checklist.outcome }}
+          COVERAGE: ${{ steps.coverage.outcome }}
+        run: |
+          echo "Checklist: $CHECKLIST; coverage matrix: $COVERAGE" >> "$GITHUB_STEP_SUMMARY"
+          test "$CHECKLIST" = success
+          test "$COVERAGE" = success
   markdown-link-check:
     name: Markdown Link Check
     runs-on: ubuntu-latest
