@@ -7,6 +7,7 @@ import { hotkeyManager } from '../../lib/commands/hotkeyManager';
 import { registry } from '../../lib/commands/registry';
 import type { RegisteredAction } from '../../lib/commands/types';
 import { useT } from '../../lib/i18n/I18nContext';
+import { entryRoute, SETTINGS_ROUTE_REGISTRY } from '../settings/settingsRouteRegistry';
 import type { Thread } from '../../types/thread';
 import Kbd from './Kbd';
 import ThreadSearchGroups from './ThreadSearchGroups';
@@ -18,6 +19,8 @@ interface Props {
   threads?: Thread[];
   /** Open a conversation picked from the search. Thread search is off without it. */
   onOpenThread?: (threadId: string) => void;
+  /** Route selection stays owned by CommandProvider, which has the router. */
+  onOpenSettingsRoute?: (route: string) => void;
 }
 
 const NO_THREADS: Thread[] = [];
@@ -40,6 +43,7 @@ export default function CommandPalette({
   onOpenChange,
   threads = NO_THREADS,
   onOpenThread,
+  onOpenSettingsRoute,
 }: Props) {
   const { t } = useT();
   const actions = useSyncExternalStore(subscribe, getSnapshot);
@@ -70,6 +74,32 @@ export default function CommandPalette({
     });
     return keys.map(k => [k, byGroup.get(k)!] as const);
   }, [actions]);
+
+  // Keep the zero-query palette focused on a few global actions. Route search
+  // expands only as needed and follows the Settings registry's synonyms.
+  const matchingSettings = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    if (!onOpenSettingsRoute || query.length < 2) return [];
+    return SETTINGS_ROUTE_REGISTRY.filter(entry =>
+      !entry.hiddenDeepLink &&
+      !entry.devOnly &&
+      (
+        t(entry.titleKey).toLocaleLowerCase().includes(query) ||
+        entry.id.toLocaleLowerCase().includes(query) ||
+        entry.searchKeywords?.some(word => word.toLocaleLowerCase().includes(query))
+      )
+    )
+      .sort((a, b) =>
+        Number(!t(a.titleKey).toLocaleLowerCase().startsWith(query)) -
+        Number(!t(b.titleKey).toLocaleLowerCase().startsWith(query))
+      )
+      .slice(0, 15);
+  }, [onOpenSettingsRoute, search, t]);
+
+  function openSetting(route: string): void {
+    onOpenChange(false);
+    window.requestAnimationFrame(() => onOpenSettingsRoute?.(route));
+  }
 
   function runAction(action: RegisteredAction): void {
     onOpenChange(false);
@@ -138,6 +168,24 @@ export default function CommandPalette({
                   })}
                 </Command.Group>
               ))}
+              {matchingSettings.length > 0 && (
+                <Command.Group
+                  heading={t('nav.settings')}
+                  className="**:[[cmdk-group-heading]]:px-4 **:[[cmdk-group-heading]]:py-1 **:[[cmdk-group-heading]]:text-xs **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:text-cmd-foreground-muted">
+                  {matchingSettings.map(entry => (
+                    <Command.Item
+                      key={entry.id}
+                      data-testid={`command-settings-${entry.id}`}
+                      value={`settings ${t(entry.titleKey)} ${entry.id}`}
+                      keywords={entry.searchKeywords ?? []}
+                      onSelect={() => openSetting(entryRoute(entry))}
+                      className="flex items-center gap-3 px-4 py-2 cursor-pointer aria-selected:bg-cmd-surface-elevated">
+                      <span className="w-4" aria-hidden />
+                      <span className="flex-1 truncate">{t(entry.titleKey)}</span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              )}
               {onOpenThread && (
                 <ThreadSearchGroups query={search} threads={threads} onOpenThread={openThread} />
               )}
