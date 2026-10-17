@@ -89,7 +89,7 @@ _Generated from `app/src/App.tsx` by `scripts/generate-architecture-docs.mjs`. D
 | 7 | `CoreStateProvider` | Core app snapshot: auth, session, onboarding state |
 | 8 | `SocketProvider` | Core socket.io events; desktop only (mobile uses the TunnelTransport relay) |
 | 9 | `ChatRuntimeProvider` | Chat runtime events, tool timeline, and approvals |
-| 10 | `Router` | HashRouter navigation for all routes |
+| 10 | `AppDataRouter` | Hash-based data routing that supports navigation blockers |
 | 11 | `CommandProvider` | Command palette context |
 | 12 | `ServiceBlockingGate` | Blocks the shell until required services are configured |
 
@@ -101,7 +101,7 @@ Why this order
 2. `PersistGate` rehydrates persisted slices before children assume stable auth/session.
 3. `BootCheckGate` / `CoreStateProvider` resolve the core boot snapshot (auth, onboarding) before feature providers mount.
 4. `SocketProvider` (desktop only) and `ChatRuntimeProvider` depend on that core state for realtime events and approvals.
-5. `Router` supplies navigation to all routes.
+5. `AppDataRouter` supplies hash-based navigation and supports confirmation before leaving dirty workflow canvases.
 
 ### Module relationships (simplified)
 
@@ -465,7 +465,7 @@ the generic fallback, so a new core tool cannot reach the chat unlabelled.
 
 ## Pages and routing
 
-The application uses HashRouter with protected and public route guards. Desktop routes live in `app/src/AppRoutes.tsx`; on mobile (iOS/Android) `AppRoutesIOS.tsx` renders a reduced Human/Chat/Settings set instead.
+The application uses a hash-based React Router data router (`createHashRouter`) with protected and public route guards. Desktop routes live in `app/src/AppRoutes.tsx`; on mobile (iOS/Android) `AppRoutesIOS.tsx` renders a reduced Human/Chat/Settings set instead.
 
 ### Route map
 
@@ -497,7 +497,7 @@ The application uses HashRouter with protected and public route guards. Desktop 
 
 The four `/dev/*` routes are registered inside an `IS_DEV` branch (`utils/config`), so `import.meta.env.DEV` is substituted at build time, the branch folds away, and their component trees leave a production bundle entirely. They are previews, never part of the shipped product.
 
-Memory is a surface of `/connections`, not a route of its own: `?tab=brain&brain=<chip>` selects one of its eight chips, `engine`, `ask`, `explorer`, `learnings`, `conversations`, `brain`, `background` and `settings`. The list is `app/src/components/memory/memoryChips.ts` and the page is `app/src/pages/Memory.tsx`. `memoryChips.ts` also remaps the retired names (`graph`, `goals` and `context` to `ask`; `documents`, `sources`, `sync` and `history` to `brain`), and `/settings/memory-engine` redirects to the `engine` chip.
+Memory is a surface of `/connections`, not a route of its own: `?tab=brain&brain=<chip>` selects one of nine chips, `engine`, `migration`, `ask`, `explorer`, `learnings`, `conversations`, `brain`, `background` and `settings`. Advanced chips are disclosed on demand. The list is `app/src/components/memory/memoryChips.ts` and the page is `app/src/pages/Memory.tsx`. `memoryChips.ts` also remaps the retired names (`graph`, `goals` and `context` to `ask`; `documents`, `sources`, `sync` and `history` to `brain`), and `/settings/memory-engine` redirects to the `engine` chip.
 
 Back-compat redirects, all `Navigate replace`. The `ForwardSearch` ones copy the query string to the destination so old deep links still land on the right sub-tab:
 
@@ -530,13 +530,12 @@ A routed stepper (`Onboarding.tsx` mounts nested routes inside `OnboardingLayout
 
 ```text
 /onboarding/welcome         → WelcomePage
-/onboarding/runtime-choice  → RuntimeChoicePage
-  ├── cloud  → /chat
-  └── custom → /onboarding/custom/inference → voice → oauth → search
-               → embeddings → (activity) → vault → /chat
+  ├── managed account → /chat
+  └── local account   → /onboarding/custom/inference → custom/search
+                        → custom/vault → /chat
 ```
 
-Each custom step offers Default (let OpenHuman manage it) or Configure (inline controls, or a deep-link callout to Settings for domains not yet embedded). Pages live in `pages/onboarding/pages/`; the older Composio, skills and context-gathering steps (`pages/onboarding/steps/`) are not in the default flow. Completion is tracked by the core's `onboarding_completed` flag, enforced by the AppShell onboarding gate. After onboarding, `AppWalkthrough` (Joyride) runs the post-onboarding tour.
+The local path asks for a model provider, optional search setup, and memory storage. Advanced configuration remains in Settings. Completion is tracked by the core's `onboarding_completed` flag, enforced by the AppShell onboarding gate. A guided tour can be started on demand from the command palette instead of interrupting the first chat.
 
 ### Settings
 
@@ -548,17 +547,19 @@ Settings is a routed `/settings/*` page like every other surface, on desktop and
 - `components/settings/panels/`: leaf panels such as `AccountPanel`, `AppearancePanel`, `ThemeStudioPanel`, `AgentAccessPanel`, `AutonomyPanel`, `McpServerPanel`, `PrivacyPanel` and `DeveloperOptionsPanel`. Adding a panel means adding the component and a registry entry; navigation and breadcrumbs pick it up automatically.
 - `components/settings/controls/`: the shared form primitives every panel composes (`SettingsSwitch`, `SettingsRow`, `SettingsSection`, `SettingsSelect`, and the rest), so a boolean is a switch everywhere.
 
-### HashRouter vs BrowserRouter
+### Hash-based routing vs BrowserRouter
 
-The app uses HashRouter for desktop compatibility:
+The app uses a hash-based data router for desktop compatibility and to support safe navigation away from unsaved workflow canvases:
 
 ```typescript
 // App.tsx
-import { HashRouter } from "react-router-dom";
+import { createHashRouter, RouterProvider } from "react-router-dom";
 
-// URLs look like: app://localhost/#/home
-// Instead of: app://localhost/home
+// URLs look like: app://localhost/#/chat
+// Instead of: app://localhost/chat
 ```
+
+`FlowNavigationBlocker` uses the data router's `useBlocker` hook to prevent in-app route changes that would otherwise discard a dirty workflow. Browser-tab unload protection remains a separate `beforeunload` handler.
 
 Why HashRouter:
 

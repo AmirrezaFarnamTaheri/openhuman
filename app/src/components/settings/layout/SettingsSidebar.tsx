@@ -23,12 +23,9 @@ import { SETTINGS_NAV_ICONS } from './settingsNavIcons';
  * touched: shorter rows (`py-1` vs `py-1.5`), a different group-heading inset,
  * and a grey icon left sitting on the accent fill of a selected row.
  *
- * There is no search field here any more. It filtered against the full route
- * registry rather than these top-level entries, so it was the only way to reach
- * some deep destinations (privacy, security, agent-access, …) by name; those are
- * still reachable by navigating their parent section, but nothing types them
- * now. `components/settings/search/` went with it — that directory existed
- * solely for this header and had no other importer.
+ * Search now reuses the full settings route registry and its keyword aliases,
+ * restoring access to deep destinations without recreating the old search
+ * helper directory. The default view stays the compact grouped sidebar.
  */
 const SettingsSidebar = () => {
   const { t } = useT();
