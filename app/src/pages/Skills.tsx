@@ -19,16 +19,16 @@ import { SidebarContent } from '../components/layout/shell/SidebarSlot';
 import TwoPaneNav from '../components/layout/TwoPaneNav';
 import { SettingsLayoutProvider } from '../components/settings/layout/SettingsLayoutContext';
 import SettingsTabbedPage from '../components/settings/layout/SettingsTabbedPage';
-import ComposioPanel from '../components/settings/panels/ComposioPanel';
-import ComputerPanel, { type ComputerSection } from '../components/settings/panels/ComputerPanel';
-import EmbeddingsPanel from '../components/settings/panels/EmbeddingsPanel';
-import LiveVoicePanel from '../components/settings/panels/LiveVoicePanel';
-import LlmConnectionsPanel from '../components/settings/panels/LlmConnectionsPanel';
-import SearchPanel from '../components/settings/panels/SearchPanel';
-import ToolsPanel from '../components/settings/panels/ToolsPanel';
-import UsagePanel from '../components/settings/panels/UsagePanel';
-import VoiceConnectionsPanel from '../components/settings/panels/VoiceConnectionsPanel';
-import WalletPanel from '../components/settings/panels/WalletPanel';
+
+import type { ComputerSection } from '../components/settings/panels/ComputerPanel';
+
+
+
+
+
+
+
+
 import UnifiedSkillCard from '../components/skills/SkillCard';
 import {
   SKILL_CATEGORY_LABEL_KEYS,
@@ -70,6 +70,16 @@ import { openhumanComposioGetMode } from '../utils/tauriCommands';
 const Memory = lazy(() => import('./Memory'));
 const McpServersPage = lazy(() => import('../components/channels/mcp/McpServersPage'));
 const SkillsPage = lazy(() => import('../components/skills/SkillsPage'));
+const ComposioPanel = lazy(() => import('../components/settings/panels/ComposioPanel'));
+const ComputerPanel = lazy(() => import('../components/settings/panels/ComputerPanel'));
+const EmbeddingsPanel = lazy(() => import('../components/settings/panels/EmbeddingsPanel'));
+const LiveVoicePanel = lazy(() => import('../components/settings/panels/LiveVoicePanel'));
+const LlmConnectionsPanel = lazy(() => import('../components/settings/panels/LlmConnectionsPanel'));
+const SearchPanel = lazy(() => import('../components/settings/panels/SearchPanel'));
+const ToolsPanel = lazy(() => import('../components/settings/panels/ToolsPanel'));
+const UsagePanel = lazy(() => import('../components/settings/panels/UsagePanel'));
+const VoiceConnectionsPanel = lazy(() => import('../components/settings/panels/VoiceConnectionsPanel'));
+const WalletPanel = lazy(() => import('../components/settings/panels/WalletPanel'));
 
 /** Small inline icon helper for the Connections sidebar nav. */
 const navIcon = (d: string) => (
@@ -1244,6 +1254,11 @@ export default function Skills() {
                 it), so they skip the Connections-level header + card wrapper. */}
             {SELF_HEADER_TABS.has(activeTab) ? (
               <SettingsLayoutProvider value={{ inTwoPaneShell: true, headerless: true }}>
+                <Suspense fallback={
+                  <div role="status" className="text-sm text-content-muted">
+                    {t('common.loading')}
+                  </div>
+                }>
                 {activeTab === 'llm' && <LlmConnectionsPanel />}
                 {activeTab === 'voice' && <VoiceConnectionsPanel />}
                 {activeTab === 'voice-agents' && <LiveVoicePanel />}
@@ -1279,6 +1294,7 @@ export default function Skills() {
                 {/* Usage owns its page shell (header chip tabs), like LLM. */}
                 {activeTab === 'usage' && <UsagePanel />}
                 {activeTab === 'wallet' && <WalletPanel />}
+                </Suspense>
               </SettingsLayoutProvider>
             ) : (
               <>
