@@ -86,6 +86,23 @@ export function decide(entries) {
       cancel,
     };
   }
+  // On a personal fork the pull_request_target workflow completes with its
+  // routing job skipped. That does not mean hosted CI failed: its separate
+  // pull_request run may not have been queued yet. Keep the gate pending until
+  // the hosted run reports a decisive result instead of flashing false red.
+  const onlyRoutingFinished =
+    entries.length > 0 &&
+    !entries.some((e) => e.source.hosted) &&
+    entries.every((e) => !e.job || e.job.conclusion === "skipped");
+  if (onlyRoutingFinished) {
+    return {
+      state: "pending",
+      description: "Waiting for hosted CI to start",
+      targetUrl: entries[0].run.html_url ?? null,
+      cancel: [],
+    };
+  }
+
   const running = entries.filter((e) => e.run.status !== "completed");
   if (running.length > 0 || entries.length === 0) {
     const names = running.map((e) => e.source.name).join(", ");
