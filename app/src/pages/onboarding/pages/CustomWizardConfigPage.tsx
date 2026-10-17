@@ -1,8 +1,9 @@
 import createDebug from 'debug';
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useT } from '../../../lib/i18n/I18nContext';
+import { Alert, AlertDescription } from '../../../components/ui';
 import { useCoreState } from '../../../providers/CoreStateProvider';
 import { trackEvent } from '../../../services/analytics';
 import { CUSTOM_WIZARD_ROUTES, CUSTOM_WIZARD_STEPS } from '../customWizardSteps';
@@ -38,12 +39,14 @@ export default function CustomWizardConfigPage({
   const { clearSession } = useCoreState();
   const { completeAndExit } = useOnboardingContext();
   const stepIndex = CUSTOM_WIZARD_STEPS.indexOf(stepKey);
+  const [backError, setBackError] = useState(false);
 
   const isLast = stepIndex === CUSTOM_WIZARD_STEPS.length - 1;
   const isFirst = stepIndex === 0;
   const namespace = `onboarding.custom.${stepKey}`;
 
   const handleBack = async () => {
+    setBackError(false);
     // Going back from the first step returns to the welcome/login screen.
     // A session is always present here (OAuth or "Continue Locally"), so we
     // must clear it first — otherwise PublicRoute bounces "/" to /home.
@@ -54,6 +57,7 @@ export default function CustomWizardConfigPage({
         // Navigating to "/" with a live session would just bounce back to /home
         // via PublicRoute — so stay on the step and surface a dev-only diagnostic.
         log('[onboarding:custom-%s] clearSession on back failed: %s', stepKey, describeError(err));
+        setBackError(true);
         return;
       }
     }
@@ -61,6 +65,7 @@ export default function CustomWizardConfigPage({
   };
 
   return (
+    <>
     <CustomWizardStep
       testId={`onboarding-custom-${stepKey}-step`}
       stepIndex={stepIndex}
@@ -86,5 +91,13 @@ export default function CustomWizardConfigPage({
       }}
       continueLabel={isLast ? t('onboarding.custom.finish') : undefined}
     />
+    {backError && (
+      <Alert variant="destructive" data-testid="onboarding-back-error" role="alert">
+        <AlertDescription>
+          {t('onboarding.custom.backFailed', 'Could not go back. Please retry.')}
+        </AlertDescription>
+      </Alert>
+    )}
+    </>
   );
 }
