@@ -1259,41 +1259,41 @@ export default function Skills() {
                     {t('common.loading')}
                   </div>
                 }>
-                {activeTab === 'llm' && <LlmConnectionsPanel />}
-                {activeTab === 'voice' && <VoiceConnectionsPanel />}
-                {activeTab === 'voice-agents' && <LiveVoicePanel />}
-                {activeTab === 'embeddings' && (
-                  <SettingsTabbedPage
-                    title={t('pages.settings.ai.embeddings')}
-                    description={t('connections.header.embeddings')}>
-                    <EmbeddingsPanel embedded />
-                  </SettingsTabbedPage>
-                )}
-                {activeTab === 'agent-tools' && (
-                  <SettingsTabbedPage
-                    title={t('pages.settings.features.tools')}
-                    description={t('pages.settings.features.toolsDesc')}>
-                    <ToolsPanel bare />
-                  </SettingsTabbedPage>
-                )}
-                {activeTab === 'computer' && (
-                  <ComputerPanel
-                    section={computerSection}
-                    onSectionChange={handleComputerSection}
-                  />
-                )}
-                {/* Search owns its page shell (header switch + chip tabs), like LLM. */}
-                {activeTab === 'search' && <SearchPanel />}
-                {activeTab === 'composio-key' && (
-                  <SettingsTabbedPage
-                    title={t('connections.tabs.composioKey')}
-                    description={t('connections.header.composioKey')}>
-                    <ComposioPanel embedded />
-                  </SettingsTabbedPage>
-                )}
-                {/* Usage owns its page shell (header chip tabs), like LLM. */}
-                {activeTab === 'usage' && <UsagePanel />}
-                {activeTab === 'wallet' && <WalletPanel />}
+                  {activeTab === 'llm' && <LlmConnectionsPanel />}
+                  {activeTab === 'voice' && <VoiceConnectionsPanel />}
+                  {activeTab === 'voice-agents' && <LiveVoicePanel />}
+                  {activeTab === 'embeddings' && (
+                    <SettingsTabbedPage
+                      title={t('pages.settings.ai.embeddings')}
+                      description={t('connections.header.embeddings')}>
+                      <EmbeddingsPanel embedded />
+                    </SettingsTabbedPage>
+                  )}
+                  {activeTab === 'agent-tools' && (
+                    <SettingsTabbedPage
+                      title={t('pages.settings.features.tools')}
+                      description={t('pages.settings.features.toolsDesc')}>
+                      <ToolsPanel bare />
+                    </SettingsTabbedPage>
+                  )}
+                  {activeTab === 'computer' && (
+                    <ComputerPanel
+                      section={computerSection}
+                      onSectionChange={handleComputerSection}
+                    />
+                  )}
+                  {/* Search owns its page shell (header switch + chip tabs), like LLM. */}
+                  {activeTab === 'search' && <SearchPanel />}
+                  {activeTab === 'composio-key' && (
+                    <SettingsTabbedPage
+                      title={t('connections.tabs.composioKey')}
+                      description={t('connections.header.composioKey')}>
+                      <ComposioPanel embedded />
+                    </SettingsTabbedPage>
+                  )}
+                  {/* Usage owns its page shell (header chip tabs), like LLM. */}
+                  {activeTab === 'usage' && <UsagePanel />}
+                  {activeTab === 'wallet' && <WalletPanel />}
                 </Suspense>
               </SettingsLayoutProvider>
             ) : (
