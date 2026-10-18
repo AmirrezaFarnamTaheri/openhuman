@@ -120,9 +120,9 @@ pub use crate::agent::context::channels_prompt::build_system_prompt;
 #[cfg(feature = "channels")]
 pub use commands::doctor_channels;
 #[cfg(feature = "channels")]
-pub use runtime::start_channels;
-#[cfg(feature = "channels")]
 pub(crate) use runtime::{session, start_channels_with_session};
+#[cfg(feature = "channels")]
+pub use runtime::{start_channels, start_channels_in};
 
 #[cfg(all(test, feature = "channels", feature = "modules"))]
 #[path = "module_fixture_tests.rs"]

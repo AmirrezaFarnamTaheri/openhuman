@@ -300,7 +300,9 @@ pub fn endpoint_host(endpoint: &str) -> Option<String> {
 ///
 /// Derived entirely from [`BUILTIN_CLOUD_PROVIDERS`] so the set stays in sync
 /// with the provider registry. `host` is compared case-insensitively against
-/// each preset's [`endpoint_host`].
+/// each preset's [`endpoint_host`]. Loopback addresses are excluded: local
+/// gateways share their host with unrelated backends on other ports, so a
+/// host alone cannot identify their service.
 ///
 /// # Why this exists
 ///
@@ -315,12 +317,20 @@ pub fn endpoint_host(endpoint: &str) -> Option<String> {
 /// guard that fixed the Ollama case (OPENHUMAN-TAURI-51/-80/-7Z).
 pub fn host_is_builtin_cloud_provider(host: &str) -> bool {
     let host = host.trim().to_ascii_lowercase();
-    if host.is_empty() {
+    if host.is_empty() || host_is_loopback(&host) {
         return false;
     }
     BUILTIN_CLOUD_PROVIDERS
         .iter()
         .any(|p| endpoint_host(p.endpoint).as_deref() == Some(host.as_str()))
+}
+
+fn host_is_loopback(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host.ends_with(".localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 /// Whether an endpoint **host** is a known cloud host that does NOT serve the
@@ -335,13 +345,29 @@ pub fn host_is_builtin_cloud_provider(host: &str) -> bool {
 /// `integrate.api.nvidia.com` must never attempt `/responses` (TAURI-RUST-5A1),
 /// while a genuinely unknown proxy host keeps the permissive fallback so a real
 /// OpenAI proxy still gets `/responses`.
+///
+/// Loopback gateways are matched by URL origin, including scheme and port.
+/// A chat-only service on one local port must not disable the fallback for
+/// another local service, or inherit its Responses capability.
 pub fn endpoint_host_is_chat_completions_only(endpoint: &str) -> bool {
     let Some(host) = endpoint_host(endpoint) else {
         return false;
     };
+    let local_origin = if host_is_loopback(&host) {
+        let Ok(url) = url::Url::parse(endpoint) else {
+            return false;
+        };
+        Some(url.origin())
+    } else {
+        None
+    };
     let mut matched_chat_only = false;
     for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
-        if endpoint_host(provider.endpoint).as_deref() == Some(host.as_str()) {
+        if endpoint_host(provider.endpoint).as_deref() == Some(host.as_str())
+            && local_origin.as_ref().is_none_or(|origin| {
+                url::Url::parse(provider.endpoint).is_ok_and(|preset| preset.origin() == *origin)
+            })
+        {
             if builtin_cloud_supports_responses_api(provider.slug) {
                 // A Responses-capable built-in lives at this host → not chat-only.
                 return false;

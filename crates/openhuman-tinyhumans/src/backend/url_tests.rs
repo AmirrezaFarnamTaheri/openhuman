@@ -421,6 +421,31 @@ fn backend_url_falls_back_for_local_ai_override() {
 }
 
 #[test]
+fn local_gateway_presets_do_not_reclassify_other_loopback_backends() {
+    let _guard = env_lock();
+    let _env = EnvSnapshot::clear_backend_env();
+    for backend in [
+        "http://127.0.0.1:18765",
+        "http://localhost:18765",
+        "http://[::1]:18765",
+    ] {
+        assert_eq!(
+            effective_backend_api_url(&Some(backend.into())),
+            backend,
+            "a local inference preset must not repoint {backend}"
+        );
+    }
+    let fallback = fallback_backend_base_for_current_build();
+    for gateway in ["http://127.0.0.1:20128/v1", "http://127.0.0.1:4000/v1"] {
+        assert_eq!(
+            effective_backend_api_url(&Some(gateway.into())),
+            fallback,
+            "backend requests must not reach the inference gateway {gateway}"
+        );
+    }
+}
+
+#[test]
 fn backend_url_falls_back_for_cloud_inference_base() {
     // Regression: TAURI-RUST-HW1. A BYO user whose `api_url` is a public
     // cloud-inference provider's *canonical base* (no `/chat/completions`

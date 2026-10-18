@@ -57,7 +57,7 @@ async fn spawn_subagent_tool_runs_child_agent_e2e() {
 /// finished delegation: the parent's tool result must be a failure, so its own
 /// failure policy and its trace see it, and the `SubagentCompleted` progress
 /// event must say how the child was stopped.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn spawn_subagent_reports_a_stopped_child_as_a_failed_tool_result() {
     let _ = AgentDefinitionRegistry::init_global_builtins();
     let workspace = tempfile::TempDir::new().expect("workspace");

@@ -9,48 +9,18 @@
     "is a deliberate edit to this file, which is a reviewable diff.",
     "",
     "Delete an entry the moment the pins are reconciled. An exemption that has",
-    "stopped being true fails the gate too — `expect` must still match."
+    "stopped being true fails the gate too \u2014 `expect` must still match."
   ],
   "exemptions": [
     {
       "id": "tinyconnectors",
       "expect": "v0.19.3-76-gcb297ef1",
-      "reason": "The pinned TinyConnectors workspace package is still 0.19.3, matching the registry artifact; the gitlink sits 50 commits past that tag at the additive contract 1.22 (opt-in direct-route Composio triggers, off by default). Re-pin both once a release carrying it is cut. (Gitlink now at the merged upstream cb297ef1, storage schema v2.)"
-    },
-    {
-      "id": "tinywallet",
-      "expect": "v0.23.3-30-g7695a4ac",
-      "reason": "Storage schema v2 (epic #7973): the gitlink sits past the registry's released tag on the merged upstream commit carrying the uniform storage schema. Re-pin both once a release carrying it is cut; retire this entry then."
-    },
-    {
-      "id": "tinyjuice",
-      "expect": "v0.10.5-16-g7b9d1aff",
-      "reason": "Storage schema v2 (epic #7973): the gitlink sits past the registry's released tag on the merged upstream commit carrying the uniform storage schema. Re-pin both once a release carrying it is cut; retire this entry then."
-    },
-    {
-      "id": "tinymcp",
-      "expect": "v0.19.1-4-g4ef02dc9",
-      "reason": "Registry artifacts and all 17 published checksums are pinned to immutable v0.19.1. Upstream #7521 also requires the four subsequent TinyMCP #119 commits at 4ef02dc9: host-only client-lifecycle cleanup fences in tinymcp-bus, with no wire contract or module implementation changes. Preserve that source fix until a release includes it; reconcile the gitlink and remove this exact exemption then."
-    },
-    {
-      "id": "tinybox",
-      "expect": "v0.1.36-24-g8cb2a90c",
-      "reason": "The registry pins all 17 published v0.1.36 archives, whose TinyBox wire contract 1.21 matches the host at 8cb2a90c. Keep this descendant source pin for the storage schema v2 contract additions from upstream #7973; resetting to the release tag would discard them. The release and source both retain contract 1.21. Reconcile both pins and remove this exact exemption when the storage additions are released."
-    },
-    {
-      "id": "tinychannels",
-      "expect": "v0.1.34-34-g7ce04302",
-      "reason": "Storage schema v2 (epic #7973): the gitlink sits past the registry's released tag on the merged upstream commit carrying the uniform storage schema. Re-pin both once a release carrying it is cut; retire this entry then."
+      "reason": "The pinned TinyConnectors workspace package is still 0.19.3, matching the registry artifact; the gitlink sits 76 commits past that tag at the additive contract 1.22 (opt-in direct-route Composio triggers, off by default). Re-pin both once a release carrying it is cut. (Gitlink now at the merged upstream cb297ef1, storage schema v2.)"
     },
     {
       "id": "tinyflows",
       "expect": "v0.8.23-92-gcad43f97",
       "reason": "Keep cad43f97 for the upstream storage schema v2 declarations while serving the registry's immutable v0.8.23 Schedule v3 release. Source Schedule v4 adds only optional StartScheduler.config.now; OpenHuman omits it and uses the unchanged v3 requests, callbacks and records. The exact source version and v3 config subset are checked in core, and tinyflows_release_compatibility exercises the actual installed v0.8.23 module through host scheduling, document and policy adapters. Schedule v5/v6 remove ExecuteJob and require a separate host migration, so they are not drop-in artifact updates. Reconcile both pins and retire this exact exemption after a compatible release or reviewed migration."
-    },
-    {
-      "id": "tinymemes",
-      "expect": "v0.4.0-9-gb3a298fc",
-      "reason": "Storage schema v2 (epic #7973): the gitlink sits past the registry's released tag on the merged upstream commit carrying the uniform storage schema. Re-pin both once a release carrying it is cut; retire this entry then."
     }
   ]
 }

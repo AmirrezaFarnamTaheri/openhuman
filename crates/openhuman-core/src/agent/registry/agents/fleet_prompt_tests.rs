@@ -340,7 +340,7 @@ fn every_prompt_names_only_tools_its_agent_can_call() {
 
 /// Agents whose prompt defers to the rendered tool list instead of naming a
 /// tool; [`every_prompt_names_at_least_one_tool_it_can_call`] skips them.
-const NAMES_NO_TOOL: &[&str] = &["critic"];
+const NAMES_NO_TOOL: &[&str] = &[];
 
 const SKILL_SETUP_NAME: Option<&str> = if cfg!(feature = "skills") {
     Some("skill_setup")

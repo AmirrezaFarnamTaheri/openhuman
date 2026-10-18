@@ -79,6 +79,7 @@ async fn forgetting_sites_reports_how_many_went() {
     for site in ["shop.test", "books.test"] {
         std::fs::write(sites.join(format!("{site}.json")), b"{}").unwrap();
     }
+    let workspace = config.workspace_dir.clone();
     let ctx = CoreContext::for_test_with_config(DomainSet::full(), config);
 
     let (one, every) = CoreContext::scope(ctx.clone(), async {
@@ -97,7 +98,20 @@ async fn forgetting_sites_reports_how_many_went() {
 
     assert_eq!(one.unwrap()["forgotten"], 1);
     assert_eq!(every.unwrap()["forgotten"], 1);
-    assert!(!sites.join("books.test.json").exists());
+    // Legacy files are imported once and retained. Reopening the store must
+    // not resurrect the records removed by either controller call.
+    CoreContext::scope(ctx, async {
+        let reopened = super::site_memory_host::SiteStore::open(&workspace).unwrap();
+        assert_eq!(reopened.forget(None).await.unwrap(), 0);
+        for site in ["shop.test", "books.test"] {
+            assert!(reopened.load(site).await.unwrap().is_empty());
+            assert_eq!(
+                std::fs::read(sites.join(format!("{site}.json"))).unwrap(),
+                b"{}"
+            );
+        }
+    })
+    .await;
 }
 
 #[test]

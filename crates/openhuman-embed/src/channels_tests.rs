@@ -21,7 +21,16 @@ fn the_config_serves_only_this_bot_and_binds_it_to_the_agent() {
         .allowed_users(["alice", "42"])
         .mention_only(true)
         .chat_id("-100");
-    let config = telegram_config(&base(), &spec);
+    let mut shared = base();
+    shared.workspace_dir = std::path::PathBuf::from("runtime-workspace");
+    shared.action_dir = std::path::PathBuf::from("runtime-actions");
+    shared.default_model = Some("runtime-model".into());
+    let config = telegram_config(&shared, &spec);
+
+    assert_eq!(config.workspace_dir, shared.workspace_dir);
+    assert_eq!(config.action_dir, shared.action_dir);
+    assert_eq!(config.autonomy.enabled, shared.autonomy.enabled);
+    assert_eq!(config.default_model, shared.default_model);
 
     let telegram = config
         .channels_config

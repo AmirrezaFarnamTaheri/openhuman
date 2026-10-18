@@ -118,9 +118,9 @@ impl<'a> Channels<'a> {
     /// Start a Telegram listener whose messages `spec`'s agent answers.
     ///
     /// The agent must already exist on this runtime. The listener runs the
-    /// core's channel runtime for this one bot under the runtime's context,
-    /// with `agent.channel_agents.telegram` bound to the agent, so every
-    /// message is a turn of that agent: its prompt, its host tools, the
+    /// core's channel runtime for this one bot with the runtime's workspace
+    /// and policy and the bound agent's inference context. Every message is
+    /// a turn of that agent: its provider, its prompt, its host tools, the
     /// chat's history. Turns run as `ExternalChannel` and are capped at
     /// read-only: tools that write or reach outside are refused at once.
     ///
@@ -135,20 +135,23 @@ impl<'a> Channels<'a> {
         {
             return Err(ChannelError::UnknownAgent(spec.agent_id));
         }
+        let agent =
+            openhuman_core::agent::host_agents::resolve(spec.agent_id.trim()).ok_or_else(|| {
+                ChannelError::Invalid("the bound agent has no usable provider configuration".into())
+            })?;
         let config = telegram_config(self.runtime.base_config(), &spec);
-        let context = std::sync::Arc::clone(self.runtime.core_runtime().context());
+        let dispatch = openhuman_core::core::runtime::DispatchCtx::new(agent.context);
         log::info!(
             "[embed][channels] starting telegram listener for agent={}",
             spec.agent_id
         );
-        let task = tokio::spawn(openhuman_core::core::runtime::CoreContext::scope(
-            context,
-            async move {
-                if let Err(error) = openhuman_core::channels::start_channels(config).await {
-                    log::error!("[embed][channels] telegram listener ended: {error:#}");
-                }
-            },
-        ));
+        let task = tokio::spawn(async move {
+            if let Err(error) =
+                openhuman_core::channels::start_channels_in(dispatch, config, agent.config).await
+            {
+                log::error!("[embed][channels] telegram listener ended: {error:#}");
+            }
+        });
         Ok(ChannelListener {
             channel: "telegram",
             agent_id: spec.agent_id,

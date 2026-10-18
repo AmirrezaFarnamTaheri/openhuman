@@ -14,11 +14,20 @@ async fn graph_operation_reuses_scoped_read_policy_and_records_source_hashes() {
     let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
     let graph = run(
         &tool,
-        json!({"operation":"graph","path":"src","focus_path":"src/helper.ts"}),
+        json!({"operation":"graph","focus_path":"src/helper.ts"}),
     )
     .await;
     assert_eq!(graph["operation"], "graph");
     assert_eq!(graph["scan_complete"], true);
+    assert_eq!(graph["catalog_complete"], true);
+    assert_eq!(graph["scope_is_workspace"], true);
+    assert!(graph["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|node| node["source_hash"]
+            .as_str()
+            .is_some_and(|hash| hash.len() == 64)));
     assert_eq!(graph["edges"][0]["status"], "resolved");
     assert_eq!(graph["edges"][0]["to"], "src/helper.ts");
     assert_eq!(graph["impact"], json!(["src/main.ts"]));
@@ -98,8 +107,9 @@ async fn scoped_graph_reports_projection_scope_without_claiming_repository_cover
     let home = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
     std::fs::create_dir(project.path().join("pkg")).unwrap();
+    std::fs::write(project.path().join("pkg/main.ts"), "import './helper';\n").unwrap();
     std::fs::write(
-        project.path().join("pkg/main.ts"),
+        project.path().join("pkg/helper.ts"),
         "export const local = 1;\n",
     )
     .unwrap();
@@ -109,12 +119,24 @@ async fn scoped_graph_reports_projection_scope_without_claiming_repository_cover
     )
     .unwrap();
     let tool = SourceEvidenceTool::new(policy(home.path(), project.path()));
-    let result = run(&tool, json!({"operation":"graph","path":"pkg"})).await;
-    assert_eq!(result["scan_complete"], true);
+    let result = run(
+        &tool,
+        json!({"operation":"graph","path":"pkg","focus_path":"pkg/helper.ts"}),
+    )
+    .await;
+    assert_eq!(result["scan_complete"], false);
+    assert_eq!(result["catalog_complete"], false);
     assert_eq!(result["scope_path"], "pkg");
     assert_eq!(result["scope_is_workspace"], false);
+    assert!(result["truncated_reason"].is_null());
+    assert_eq!(result["edges"][0]["status"], "catalog_incomplete");
+    assert_eq!(result["edges"][0]["observed_candidate"], "pkg/helper.ts");
+    assert!(result["edges"][0]["to"].is_null());
+    assert_eq!(result["edges_complete"], false);
+    assert_eq!(result["impact"], json!([]));
+    assert_eq!(result["impact_omitted_reason"], "incomplete_catalog");
     assert_eq!(result["impact_exhaustive"], false);
-    assert_eq!(result["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(result["nodes"].as_array().unwrap().len(), 2);
 }
 
 #[tokio::test]

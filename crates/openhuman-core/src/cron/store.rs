@@ -309,31 +309,58 @@ pub fn list_runs(config: &Config, job_id: &str, limit: usize) -> Result<Vec<Cron
 }
 
 /// Moves a job's next run to `at`, which no production path can do directly
-/// (a patch reschedules from the schedule, not to a given instant). Writes the
-/// instant the store keeps (`next_run_ms`), so the due-job query sees it.
+/// (a patch reschedules from the schedule, not to a given instant). Updates the
+/// actual row written by either the linked schema-v2 module or the pinned
+/// v0.8.23 release, including every instant field that release reads.
 #[cfg(test)]
 pub(crate) fn force_next_run_for_test(
     config: &Config,
     job_id: &str,
     at: DateTime<Utc>,
 ) -> Result<()> {
-    use tinystoragedrivers::Precondition;
     let opened = crate::storage::local::open("cron::store", &config.workspace_dir)?;
     let docs = std::sync::Arc::clone(opened.scoped()?.documents());
     let job_id = job_id.to_string();
     crate::storage::block_on_anyhow(async move {
-        let stored = docs
-            .get("cron.jobs", &job_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("no job {job_id}"))?;
-        let mut doc = stored.doc;
-        doc["next_run_ms"] = serde_json::json!(at.timestamp_millis());
-        docs.put("cron.jobs", &job_id, doc, Precondition::None)
-            .await?;
-        Ok(())
+        force_next_run_in_documents_for_test(docs.as_ref(), &job_id, at).await
     })
+}
+
+#[cfg(test)]
+async fn force_next_run_in_documents_for_test(
+    docs: &dyn tinystoragedrivers::DocumentStore,
+    job_id: &str,
+    at: DateTime<Utc>,
+) -> Result<()> {
+    let mut found = None;
+    for collection in ["cron.jobs", "cron_jobs"] {
+        if let Some(stored) = docs.get(collection, job_id).await? {
+            anyhow::ensure!(
+                found.is_none(),
+                "job {job_id} exists in both schedule schemas"
+            );
+            found = Some((collection, stored));
+        }
+    }
+    let (collection, stored) = found.ok_or_else(|| anyhow::anyhow!("no job {job_id}"))?;
+    let unchanged = stored.unchanged();
+    let mut doc = stored.doc;
+    doc["next_run_ms"] = serde_json::json!(at.timestamp_millis());
+    if collection == "cron_jobs" {
+        let nanos = at
+            .timestamp_nanos_opt()
+            .ok_or_else(|| anyhow::anyhow!("the release clock cannot represent {at}"))?;
+        doc["next_run"] = serde_json::json!(at.to_rfc3339());
+        doc["next_run_ns"] = serde_json::json!(nanos);
+    }
+    docs.put(collection, job_id, doc, unchanged).await?;
+    Ok(())
 }
 
 #[cfg(test)]
 #[path = "store_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "store_clock_tests.rs"]
+mod clock_tests;

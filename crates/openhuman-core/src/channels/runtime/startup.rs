@@ -51,8 +51,8 @@ pub(crate) async fn prepare_runtime_limits(
 }
 
 pub(crate) use credentials::hydrate_channel_credentials;
-pub use start_channels::start_channels;
 pub(crate) use start_channels::start_channels_with_session;
+pub use start_channels::{start_channels, start_channels_in};
 pub(crate) use turn_parts::{build_channel_turn_parts, runtime_context, PromptToolDescs};
 
 // Re-exported at module scope (rather than left as private `pub(super)`

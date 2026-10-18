@@ -279,6 +279,9 @@ fn http_cred_name_returns_none_for_non_http_cred_ref_or_empty_name() {
 
 #[tokio::test]
 async fn preflight_fails_before_dispatch_naming_the_missing_field() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
     // Seed the schema cache so no live Composio backend is needed. Uses its
@@ -328,6 +331,9 @@ async fn preflight_fails_before_dispatch_naming_the_missing_field() {
 
 #[tokio::test]
 async fn preflight_skips_when_no_schema_is_available() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
     // A slug whose toolkit is unknown to the curation catalog has no schema
@@ -339,6 +345,9 @@ async fn preflight_skips_when_no_schema_is_available() {
 
 #[tokio::test]
 async fn preflight_applies_static_arg_rules_without_a_catalog() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
     // No catalog seeding for this slug — `GMAIL_ADD_LABEL_TO_EMAIL` is never
@@ -374,6 +383,9 @@ async fn preflight_applies_static_arg_rules_without_a_catalog() {
 
 #[tokio::test]
 async fn preflight_invoker_gates_the_mock_tool_path() {
+    // Reaches the connector module, whose route is process-wide: hold the module
+    // lock (before TEST_ENV_LOCK, the established order) for the whole test.
+    let _module = crate::integrations::composio::module_client::module_guard().await;
     use tinyflows::caps::ToolInvoker as _;
 
     let tmp = TempDir::new().unwrap();

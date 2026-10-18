@@ -1,7 +1,8 @@
 //! A Telegram bot answered by a runtime agent, end to end: a mocked Bot API
 //! delivers a message, the agent bound to the bot answers it with its own
-//! prompt and host tools under the `ExternalChannel` origin, its write tool is
-//! refused at once, and the reply is posted back to the chat.
+//! config-selected local provider, prompt and host tools under the
+//! `ExternalChannel` origin, its write tool is refused at once, and the reply
+//! is posted back to the chat.
 
 #![cfg(feature = "channels")]
 
@@ -13,8 +14,8 @@ use std::time::Duration;
 
 use common::{chat_completion, chat_requests, offline_config, runtime, stub_backend};
 use openhuman_embed::{
-    AgentDefinitionSpec, AgentSpec, AgentTurnOrigin, ChannelError, HostTurnTools, Provider,
-    Runtime, TelegramChannelSpec, Tool, ToolScopeSpec, Workspace,
+    AgentDefinitionSpec, AgentSpec, AgentTurnOrigin, ChannelError, HostTurnTools, Runtime,
+    TelegramChannelSpec, Tool, ToolScopeSpec, Workspace,
 };
 use serde_json::{json, Value};
 use tinytools::{PermissionLevel, ToolResult};
@@ -141,12 +142,13 @@ async fn sent_texts(server: &MockServer) -> Vec<String> {
 }
 
 #[test]
-fn a_telegram_message_is_answered_by_the_bound_runtime_agent() {
+fn a_telegram_message_uses_the_bound_agents_configured_provider_and_tools() {
     runtime().block_on(async {
         tokio::spawn(async {
             let backend = stub_backend().await;
             let bot_api = telegram().await;
             let provider = provider().await;
+            let provider_url = format!("{}/v1", provider.uri());
             // The Bot API base is read when the channel is built.
             std::env::set_var("OPENHUMAN_TELEGRAM_BOT_API_BASE", bot_api.uri());
 
@@ -168,13 +170,15 @@ fn a_telegram_message_is_answered_by_the_bound_runtime_agent() {
             let agent = runtime
                 .agent(
                     AgentSpec::new("teeny-chat")
-                        .provider(
-                            Provider::openai_compatible(
-                                format!("{}/v1", provider.uri()),
-                                "sk-fixture",
-                            )
-                            .model("fixture"),
-                        )
+                        // The runtime has no chat provider. Startup must use
+                        // this complete config, not just a model or a Route.
+                        .config(move |config| {
+                            config.local_ai.base_url = Some(provider_url);
+                            config.chat_provider = Some("local-openai:fixture".into());
+                            config.reasoning_provider = Some("local-openai:fixture".into());
+                            config.agentic_provider = Some("local-openai:fixture".into());
+                            config.coding_provider = Some("local-openai:fixture".into());
+                        })
                         .definition(
                             AgentDefinitionSpec::new()
                                 .system_prompt("TEENY_CHANNEL_PROMPT")
@@ -246,6 +250,8 @@ fn a_telegram_message_is_answered_by_the_bound_runtime_agent() {
             let requests = chat_requests(&provider).await;
             assert_eq!(requests.len(), 3);
             let first = String::from_utf8_lossy(&requests[0].body).to_string();
+            let first_body: Value = serde_json::from_slice(&requests[0].body).unwrap();
+            assert_eq!(first_body["model"], "fixture");
             assert!(first.contains("TEENY_CHANNEL_PROMPT"));
             assert!(first.contains("hello teeny"));
             let advertised = common::tool_names(&requests[0]);

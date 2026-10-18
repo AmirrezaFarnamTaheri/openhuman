@@ -80,6 +80,7 @@ fn the_last_runtime_guard_keeps_admission_reserved_through_cleanup_completion() 
         .unwrap();
     executor.block_on(async {
         tokio::spawn(async {
+            let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
             let runtime = crate::Runtime::builder()
                 .config(openhuman_core::config::Config::default())
                 .workspace(crate::Workspace::Ephemeral)
@@ -133,6 +134,7 @@ fn exhausted_cleanup_releases_runtime_admission_but_preserves_the_ephemeral_work
         .unwrap();
     executor.block_on(async {
         tokio::spawn(async {
+            let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
             let runtime = crate::Runtime::builder()
                 .config(openhuman_core::config::Config::default())
                 .workspace(crate::Workspace::Ephemeral)
@@ -187,6 +189,7 @@ fn workspace_cleanup_control(cancel: bool) {
         .unwrap();
     executor.block_on(async {
         tokio::spawn(async move {
+            let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
             let runtime = crate::Runtime::builder()
                 .config(openhuman_core::config::Config::default())
                 .workspace(crate::Workspace::Ephemeral)
@@ -238,6 +241,7 @@ fn a_failed_purge_fences_the_same_directory_after_its_original_runtime_is_gone()
         .unwrap();
     executor.block_on(async {
         tokio::spawn(async {
+            let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
             let scratch = tempfile::tempdir().unwrap();
             let make_runtime = || {
                 crate::Runtime::builder()
@@ -300,6 +304,7 @@ fn repairing_and_retrying_purge_on_the_original_runtime_releases_the_directory()
         .unwrap();
     executor.block_on(async {
         tokio::spawn(async {
+            let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
             let scratch = tempfile::tempdir().unwrap();
             let runtime = crate::Runtime::builder()
                 .config(openhuman_core::config::Config::default())
@@ -359,6 +364,7 @@ fn dropping_an_agent_without_an_mcp_entry_keeps_normal_ephemeral_cleanup() {
         .unwrap();
     executor.block_on(async {
         tokio::spawn(async {
+            let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
             let runtime = crate::Runtime::builder()
                 .config(openhuman_core::config::Config::default())
                 .workspace(crate::Workspace::Ephemeral)

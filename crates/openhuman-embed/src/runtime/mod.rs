@@ -111,6 +111,12 @@ use crate::{Core, CoreError};
 /// Guards the process-scoped core state described in the module docs.
 pub(crate) static RUNTIME_LIVE: AtomicBool = AtomicBool::new(false);
 
+/// Unit tests which claim or inspect the process-wide runtime slot must share
+/// this lock through runtime cleanup. Async so holding it over `build().await`
+/// never blocks another test's executor thread. Production admission is unchanged.
+#[cfg(test)]
+pub(crate) static RUNTIME_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Error from building a [`Runtime`].
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {

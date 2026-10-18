@@ -180,6 +180,11 @@ fn host_is_builtin_cloud_provider_recognises_inference_hosts() {
         "api.tinyhumans.ai",
         "staging-api.tinyhumans.ai",
         "my-backend.example",
+        "127.0.0.1",
+        "127.0.0.2",
+        "::1",
+        "localhost",
+        "service.localhost",
         "",
     ] {
         assert!(
@@ -187,12 +192,15 @@ fn host_is_builtin_cloud_provider_recognises_inference_hosts() {
             "{host:?} is not a built-in cloud inference host"
         );
     }
-    // Every registry endpoint's own host must classify as builtin.
+    // Local gateway presets cannot classify every service on their host as
+    // cloud inference. Public preset hosts still identify their providers.
     for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
         let host = endpoint_host(provider.endpoint).expect("preset endpoint has a host");
-        assert!(
+        let expected = !matches!(provider.slug, "9router" | "prodex");
+        assert_eq!(
             host_is_builtin_cloud_provider(&host),
-            "{} ({host}) must be recognised",
+            expected,
+            "{} ({host}) cloud-host classification",
             provider.slug
         );
     }
@@ -237,6 +245,26 @@ fn openai_host_and_unknown_proxies_keep_the_responses_fallback() {
         assert!(
             !endpoint_host_is_chat_completions_only(endpoint),
             "{endpoint:?} is an unknown host and must keep the fallback"
+        );
+    }
+}
+
+#[test]
+fn local_gateway_capabilities_are_isolated_by_origin() {
+    assert!(endpoint_host_is_chat_completions_only(
+        "http://127.0.0.1:20128/v1"
+    ));
+    for endpoint in [
+        "http://127.0.0.1:4000/v1",   // Prodex explicitly supports Responses.
+        "http://127.0.0.1:18765/v1",  // An unrelated loopback service.
+        "http://127.0.0.1:20129/v1",  // An adjacent port is not 9Router.
+        "https://127.0.0.1:20128/v1", // A different scheme is another origin.
+        "http://127.0.0.2:20128/v1",  // No preset identifies this address.
+        "http://[::1]:20128/v1",
+    ] {
+        assert!(
+            !endpoint_host_is_chat_completions_only(endpoint),
+            "{endpoint} must not inherit 9Router's chat-only capability"
         );
     }
 }
