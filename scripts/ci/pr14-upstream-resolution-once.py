@@ -111,7 +111,7 @@ for file, policy in RULES.items():
         # The canonical regression appended after it needs its own #[test].
         text = text.replace(
             "fn owner_relaxed_json_recovery_preserves_action_normalization()",
-            "#[test]\\nfn owner_relaxed_json_recovery_preserves_action_normalization()",
+            "#[test]\nfn owner_relaxed_json_recovery_preserves_action_normalization()",
             1,
         )
     if file.endswith("/system/shell.rs"):
