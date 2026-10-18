@@ -215,6 +215,12 @@ name = "agent_harness_e2e"
 path = "../../tests/agent_harness_e2e.rs"
 
 [[test]]
+# Real structural tools, coding-pack dispatch, filesystem policy and the
+# installed root finish policy; no external services or model calls.
+name = "structural_code"
+path = "../../tests/structural_code.rs"
+
+[[test]]
 name = "cli_model_overrides_e2e"
 path = "../../tests/cli_model_overrides_e2e.rs"
 
