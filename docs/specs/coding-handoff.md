@@ -26,7 +26,9 @@ commit abbreviations are not content revisions.
 
 All limits count UTF-8 bytes. Both the marked input and the rendered report
 must fit 32,768 bytes. Unknown object fields, duplicate JSON fields, wrong
-types, trailing JSON and unsupported versions are rejected. The parser never
+types, trailing JSON and unsupported versions are rejected. Records must be
+objects and enum values must be strings; positional record arrays and
+object-encoded enum variants are rejected. The parser never
 echoes untrusted field names or values in an error.
 
 | Field | Contract |

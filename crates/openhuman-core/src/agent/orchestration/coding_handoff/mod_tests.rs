@@ -116,6 +116,7 @@ fn explicit_marker_rejects_malformed_unknown_or_wrongly_typed_contracts() {
         "null",
         "[]",
         r#"{"type":"coding_handoff","version":1,"objective":"x","objective":"duplicate"}"#,
+        r#"{"type":"coding_handoff","version":1,"objective":"x","checks":[{"command":"a","command":"b","cwd":"."}]}"#,
         r#"{"type":"other","version":1,"objective":"x"}"#,
         r#"{"type":"coding_handoff","version":"1","objective":"x"}"#,
         r#"{"type":"coding_handoff","version":1,"objective":"x","secret payload":"never echo this"}"#,
@@ -134,6 +135,40 @@ fn explicit_marker_rejects_malformed_unknown_or_wrongly_typed_contracts() {
     assert!(prepare(context(&source)).is_err());
     source["checks"] = json!([{"command":"x", "cwd":".", "verified":true}]);
     assert!(prepare(context(&source)).is_err());
+}
+
+#[test]
+fn rejects_positional_records_and_object_encoded_unit_enums() {
+    let revision = "a".repeat(64);
+    let mut invalid = vec![json!(["coding_handoff", 1, "x", [], [], [], [], [], null])];
+    let mut source = packet();
+    source["type"] = json!({"coding_handoff": null});
+    invalid.push(source);
+    for (field, record) in [
+        ("source_refs", json!(["src/lib.rs", revision, []])),
+        ("changed_files", json!(["src/lib.rs", null, revision])),
+        ("checks", json!(["cargo test", ".", "passed", 0, [], null])),
+    ] {
+        let mut source = packet();
+        source[field] = json!([record]);
+        invalid.push(source);
+    }
+    let mut source = packet();
+    source["checks"] = json!([{
+        "command": "cargo test", "cwd": ".", "status": {"passed": null}, "exit_code": 0
+    }]);
+    invalid.push(source);
+    let mut source = packet();
+    source["checks"] = json!([{
+        "command": "cargo test", "cwd": ".",
+        "source_revisions": [["src/lib.rs", revision]]
+    }]);
+    invalid.push(source);
+    let accepted = invalid
+        .into_iter()
+        .filter(|source| prepare(context(source)).is_ok())
+        .collect::<Vec<_>>();
+    assert!(accepted.is_empty(), "accepted {accepted:?}");
 }
 
 #[test]

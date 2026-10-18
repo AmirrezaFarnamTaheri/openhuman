@@ -6,8 +6,7 @@
 
 mod types;
 mod validate;
-
-use types::CodingHandoff;
+mod wire;
 
 pub(crate) const MARKER: &str = "[coding_handoff]";
 const MAX_CONTEXT_BYTES: usize = 32_768;
@@ -32,14 +31,7 @@ fn prepare(context: String) -> Result<String, String> {
             "coding_handoff: packet exceeds {MAX_CONTEXT_BYTES} UTF-8 bytes"
         ));
     }
-    let packet: CodingHandoff = serde_json::from_str(json).map_err(|error| {
-        // Do not echo an unknown field/value that may contain the caller's
-        // source code. The precise position and the schema identify the fix.
-        format!(
-            "coding_handoff: invalid JSON contract at line {}, column {}; see docs/specs/coding-handoff.md",
-            error.line(), error.column()
-        )
-    })?;
+    let packet = wire::parse(json).map_err(|error| format!("coding_handoff: {error}"))?;
     validate::validate(&packet).map_err(|error| format!("coding_handoff: {error}"))?;
     let encoded = serde_json::to_string(&packet)
         .map_err(|_| "coding_handoff: could not encode validated packet".to_string())?;
