@@ -8,6 +8,36 @@ import {
 } from './toolDefinitions';
 
 describe('normalizeEnabledToolList', () => {
+  it('maps structural inspection and mutation aliases to the existing file controls', () => {
+    const readers = ['ast_outline', 'ast_symbol', 'chunk_search', 'chunk_inspect'];
+    const writers = ['ast_patch', 'chunk_apply'];
+    const enabledReaders = getEnabledRustToolNames(['file_read']);
+    const enabledWriters = getEnabledRustToolNames(['file_write']);
+    for (const name of readers) {
+      expect(enabledReaders).toContain(name);
+      expect(enabledWriters).not.toContain(name);
+      expect(normalizeEnabledToolList([name])).toEqual(['file_read']);
+    }
+    for (const name of writers) {
+      expect(enabledWriters).toContain(name);
+      expect(enabledReaders).not.toContain(name);
+      expect(normalizeEnabledToolList([name])).toEqual(['file_write']);
+    }
+  });
+
+  it('round-trips persisted structural aliases without duplicate or new toggles', () => {
+    const restored = normalizeEnabledToolList([
+      'ast_outline',
+      'chunk_inspect',
+      'file_read',
+      'ast_patch',
+      'chunk_apply',
+    ]);
+    expect(restored).toEqual(['file_read', 'file_write']);
+    expect(normalizeEnabledToolList(getEnabledRustToolNames(restored))).toEqual(restored);
+    expect(TOOL_CATALOG.map(tool => tool.id)).not.toContain('ast_patch');
+  });
+
   it('converts a Rust tool name to its UI toggle ID', () => {
     // "web_search_tool" is the Rust name for the "web_search" UI toggle.
     // This was the root cause of #2742: handleSave persisted Rust names,

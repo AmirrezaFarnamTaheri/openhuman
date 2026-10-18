@@ -68,7 +68,14 @@ export function hasDisplayValue(value: unknown): boolean {
   return true;
 }
 
-export function ToolDataView({ value }: { value: unknown }) {
+export function ToolDataView({
+  value,
+  preserveObjectFields = false,
+}: {
+  value: unknown;
+  /** Retain receipt metadata beside content, query and diagnostic message fields. */
+  preserveObjectFields?: boolean;
+}) {
   const parsed = parsedValue(value);
   if (Array.isArray(parsed)) {
     if (isFlatObjectArray(parsed)) {
@@ -78,7 +85,7 @@ export function ToolDataView({ value }: { value: unknown }) {
       <ul className="space-y-1 text-xs">
         {parsed.map((item, index) => (
           <li key={index} className="bg-muted/50 rounded-md px-2 py-1.5">
-            <ToolDataView value={item} />
+            <ToolDataView value={item} preserveObjectFields={preserveObjectFields} />
           </li>
         ))}
       </ul>
@@ -86,9 +93,11 @@ export function ToolDataView({ value }: { value: unknown }) {
   }
   if (parsed && typeof parsed === 'object') {
     const entries = Object.entries(parsed);
-    for (const key of ['content', 'output', 'result', 'message', 'query', 'q']) {
-      const semantic = entries.find(([candidate]) => candidate === key)?.[1];
-      if (hasDisplayValue(semantic)) return <ToolDataView value={semantic} />;
+    if (!preserveObjectFields) {
+      for (const key of ['content', 'output', 'result', 'message', 'query', 'q']) {
+        const semantic = entries.find(([candidate]) => candidate === key)?.[1];
+        if (hasDisplayValue(semantic)) return <ToolDataView value={semantic} />;
+      }
     }
     return (
       <dl className="divide-border bg-muted/40 divide-y rounded-md px-2 text-xs">
@@ -96,7 +105,7 @@ export function ToolDataView({ value }: { value: unknown }) {
           <div key={key} className="grid grid-cols-[minmax(7rem,auto)_1fr] gap-3 py-1.5">
             <dt className="text-muted-foreground font-medium">{friendlyLabel(key)}</dt>
             <dd className="min-w-0 wrap-break-word">
-              <ToolDataView value={item} />
+              <ToolDataView value={item} preserveObjectFields={preserveObjectFields} />
             </dd>
           </div>
         ))}

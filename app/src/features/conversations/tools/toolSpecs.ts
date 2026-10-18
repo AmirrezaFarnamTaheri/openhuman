@@ -170,6 +170,17 @@ export const EXACT_TOOL_SPECS: Record<string, ToolSpec> = {
   run_linter: spec('runLinter', ListChecksIcon, 'code'),
   run_tests: spec('runTests', ListChecksIcon, 'code'),
   lsp: spec('analyzeCode', CodeIcon, 'code', { chip: chip.path() }),
+  // Structural tools return paged metadata and write/preview receipts. Their
+  // JSON fields must stay visible instead of becoming a plain file body.
+  ast_outline: spec('analyzeCode', CodeIcon, 'code', { chip: chip.path(), body: 'generic' }),
+  ast_symbol: spec('readFile', FileTextIcon, 'code', { chip: chip.path(), body: 'generic' }),
+  ast_patch: spec('applyEdits', FilePenIcon, 'code', { chip: chip.path(), body: 'generic' }),
+  chunk_search: spec('searchCode', TextSearchIcon, 'code', { chip: chip.query(), body: 'generic' }),
+  chunk_inspect: spec('analyzeCode', CodeIcon, 'code', {
+    chip: chip.text('id', 'manifest_path'),
+    body: 'generic',
+  }),
+  chunk_apply: spec('applyEdits', FilePenIcon, 'code', { chip: chip.path(), body: 'generic' }),
 
   // ── Shell and system ────────────────────────────────────────────────────
   shell: spec('runCommand', SquareTerminalIcon, 'shell', { chip: chip.command(), body: 'shell' }),
