@@ -10,6 +10,7 @@ use openhuman_embed::__host::composio::{register_composio_route_builder, Composi
 #[cfg(feature = "modules")]
 use openhuman_embed::__host::composio::{register_proxy_target, ProxyTarget};
 use openhuman_embed::__host::config::schema::COMPOSIO_MODE_BACKEND;
+#[cfg(feature = "modules")]
 use openhuman_embed::__host::config::Config;
 
 use super::build_client;
