@@ -35,7 +35,7 @@
     {
       "id": "tinybox",
       "expect": "v0.1.36-24-g8cb2a90c",
-      "reason": "Storage schema v2 (epic #7973): the gitlink sits past the registry's released tag on the merged upstream commit carrying the uniform storage schema. Re-pin both once a release carrying it is cut; retire this entry then."
+      "reason": "The registry pins all 17 published v0.1.36 archives, whose TinyBox wire contract 1.21 matches the host at 8cb2a90c. Keep this descendant source pin for the storage schema v2 contract additions from upstream #7973; resetting to the release tag would discard them. The release and source both retain contract 1.21. Reconcile both pins and remove this exact exemption when the storage additions are released."
     },
     {
       "id": "tinychannels",
