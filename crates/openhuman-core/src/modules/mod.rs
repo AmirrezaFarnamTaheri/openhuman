@@ -113,7 +113,6 @@ mod storage_import_tinyjuice_savings;
 mod storage_import_tinymcp;
 #[cfg(all(feature = "modules", feature = "web3"))]
 mod storage_import_tinywallet;
-#[cfg(feature = "modules")]
 pub mod tinybox;
 pub(crate) mod tinyflows;
 #[cfg(feature = "modules")]
