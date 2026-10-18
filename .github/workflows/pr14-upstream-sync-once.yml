@@ -1,0 +1,75 @@
+name: PR 14 upstream integration (one-shot)
+on:
+  push:
+    branches:
+      - ux/low-friction-product-pass-20261017
+    paths:
+      - .github/workflows/pr14-upstream-sync-once.yml
+permissions:
+  contents: write
+concurrency:
+  group: pr14-upstream-sync
+  cancel-in-progress: false
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout branch without submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: false
+      - name: Fetch and three-way merge canonical upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="ux/low-friction-product-pass-20261017"
+          expected="$GITHUB_SHA"
+          current="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
+          if [ "$current" != "$expected" ]; then
+            echo "::error::Branch moved during integration; refusing to merge an obsolete snapshot"
+            exit 3
+          fi
+          git remote add canonical https://github.com/tinyhumansai/openhuman.git
+          git fetch --no-tags canonical +refs/heads/main:refs/remotes/canonical/main
+          incoming="$(git rev-parse refs/remotes/canonical/main)"
+          echo "Canonical upstream: $incoming"
+          echo "Branch at checkout: $(git rev-parse HEAD)"
+          echo "Merge base: $(git merge-base HEAD "$incoming")"
+          mkdir -p upstream-sync-report
+          printf '%s\n' "$incoming" > upstream-sync-report/upstream-sha.txt
+          printf '%s\n' "$expected" > upstream-sync-report/branch-sha.txt
+          if git merge-base --is-ancestor "$incoming" HEAD; then
+            echo "Already caught up with canonical upstream"
+            exit 0
+          fi
+          if git -c merge.renameLimit=10000 merge --no-edit --no-commit --no-ff "$incoming"; then
+            # This workflow is temporary: its merge commit removes the trigger.
+            git rm -- .github/workflows/pr14-upstream-sync-once.yml
+            git diff --cached --check
+            git commit -m "merge: integrate latest canonical OpenHuman main ($incoming)"
+            git push origin "HEAD:refs/heads/$branch"
+            echo "Merged canonical upstream $incoming into PR #14"
+          else
+            echo "Merge has source conflicts; refusing a blind ours/theirs resolution"
+            git diff --name-only --diff-filter=U | tee upstream-sync-report/conflicts.txt
+            git status --short > upstream-sync-report/status.txt
+            git ls-files -u > upstream-sync-report/unmerged-stages.txt
+            git diff --cc > upstream-sync-report/combined-conflicts.diff
+            count="$(wc -l < upstream-sync-report/conflicts.txt)"
+            echo "::error::Unresolved conflict paths: $count"
+            echo "Conflict categories:"
+            git status --short | awk '$1 ~ /U|AA|DD/ {print $1}' | sort | uniq -c
+            exit 2
+          fi
+      - name: Upload merge-conflict details
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr14-upstream-merge-conflicts
+          path: upstream-sync-report/
+          if-no-files-found: warn
