@@ -1142,6 +1142,21 @@ test("private coverage pools profiles for every Rust configuration without chang
   }
 });
 
+
+test("hosted CI runs all embed examples without cold release LTO; private CI retains release measurements", () => {
+  for (const plan of plans()) {
+    const lint = plan.lanes.find((lane) => lane.name === "rust-lint");
+    const examples = lint.checks.find((check) => check.name === "embed-offline-examples");
+    assert.equal(examples.when, true);
+    assert.equal(
+      examples.run,
+      plan.profile === "hosted"
+        ? "node scripts/run-embed-examples.mjs --ci-smoke"
+        : "node scripts/run-embed-examples.mjs",
+    );
+  }
+});
+
 test("private release cleanup follows successful examples and names only the ordinary release profile", () => {
   for (const plan of plans()) {
     const lint = plan.lanes.find((lane) => lane.name === "rust-lint");

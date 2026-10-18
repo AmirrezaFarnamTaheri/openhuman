@@ -30,10 +30,18 @@ export function assertExampleOutput(name, result) {
     throw new Error(`${name}: successful exit without behavioral assertion marker\n${result.stdout}`);
   }
 }
-export function runExamples({ run = spawnSync, examples = discoverExamples(), environment = process.env } = {}) {
-  // Share one feature graph per declared build configuration. Measurements
-  // retain their release/minimal graph rather than inheriting other examples.
-  const configuration = (example) => `${example.profile ?? "dev"}:${example.defaultFeatures !== false}`;
+export function runExamples({
+  run = spawnSync,
+  examples = discoverExamples(),
+  environment = process.env,
+  ciSmoke = false,
+} = {}) {
+  // CI smoke executes every example's behavior in a debug build, avoiding a
+  // cold 30-minute release/LTO compile for a fleet benchmark on hosted runners.
+  // Normal measurements retain their declared release/minimal feature graph.
+  const profileFor = (example) =>
+    ciSmoke && example.profile === "release" ? "dev" : (example.profile ?? "dev");
+  const configuration = (example) => `${profileFor(example)}:${example.defaultFeatures !== false}`;
   const featureGroups = new Map();
   for (const example of examples) {
     const key = configuration(example);
@@ -43,8 +51,9 @@ export function runExamples({ run = spawnSync, examples = discoverExamples(), en
   }
   for (const example of examples) {
     const args = ["run", "--quiet", "-p", "openhuman-embed", "--example", example.name];
-    if (example.profile === "release") args.push("--release");
-    else if (example.profile && example.profile !== "dev") args.push("--profile", example.profile);
+    const profile = profileFor(example);
+    if (profile === "release") args.push("--release");
+    else if (profile !== "dev") args.push("--profile", profile);
     if (example.defaultFeatures === false) args.push("--no-default-features");
     const features = [...featureGroups.get(configuration(example))].sort();
     if (features.length) args.push("--features", features.join(","));
@@ -57,5 +66,5 @@ export function runExamples({ run = spawnSync, examples = discoverExamples(), en
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes("--list")) console.log(discoverExamples().map((example) => example.name).join("\n"));
-  else runExamples();
+  else runExamples({ ciSmoke: process.argv.includes("--ci-smoke") });
 }

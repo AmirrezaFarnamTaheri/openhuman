@@ -494,7 +494,12 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           name: "embed-offline-examples",
           when: core,
           needs: ["test-modules"],
-          run: "node scripts/run-embed-examples.mjs",
+          // Retain release-mode fleet benchmarking on the well provisioned
+          // private runner. Hosted PR CI tests the exact same behavior in
+          // debug; a cold release/LTO build exceeded its 30-minute timeout.
+          run: ex63
+            ? "node scripts/run-embed-examples.mjs"
+            : "node scripts/run-embed-examples.mjs --ci-smoke",
         },
         {
           name: "tinyhumans-clippy",

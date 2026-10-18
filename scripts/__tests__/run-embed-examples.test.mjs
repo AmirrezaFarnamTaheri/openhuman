@@ -60,3 +60,25 @@ test("fleet measurements retain their declared release and minimal-feature invoc
   assert.equal(calls.get("mcp").includes("--no-default-features"), false);
   assert.ok(calls.get("mcp").includes("mcp"));
 });
+
+test("hosted CI smoke executes fleet behavior in debug without changing its minimal features", () => {
+  const examples = discoverExamples().filter(({ name }) => name === "linux_fleet" || name === "mcp");
+  const fleet = examples.find(({ name }) => name === "linux_fleet");
+  assert.equal(fleet.profile, "release", "release measurement default remains declared");
+  const calls = new Map();
+  runExamples({
+    examples,
+    environment: {},
+    ciSmoke: true,
+    run(_command, args) {
+      const name = args[args.indexOf("--example") + 1];
+      calls.set(name, args);
+      return { status: 0, stdout: `EXAMPLE_OK ${name}\n`, stderr: "" };
+    },
+  });
+  assert.ok(!calls.get("linux_fleet").includes("--release"));
+  assert.ok(!calls.get("linux_fleet").includes("--profile"));
+  assert.ok(calls.get("linux_fleet").includes("--no-default-features"));
+  assert.ok(!calls.get("linux_fleet").includes("--features"));
+  assert.ok(calls.get("mcp").includes("--features"));
+});
