@@ -1751,7 +1751,7 @@ async fn json_rpc_removed_harness_provisioning_is_unavailable() {
 }
 
 #[tokio::test]
-async fn json_rpc_agent_registry_manages_defaults_and_custom_agents() {
+async fn json_rpc_agent_runs_and_registry_manage_defaults_and_custom_agents() {
     let _env_lock = json_rpc_e2e_env_lock_async().await;
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path();
@@ -1799,6 +1799,8 @@ async fn json_rpc_agent_registry_manages_defaults_and_custom_agents() {
         json!({}),
     )
     .await;
+    // agent_runs owns the agent.list_definitions RPC controller; exercise it
+    // over the same HTTP dispatcher as the registry's mutating controllers.
     let definitions_result = assert_no_jsonrpc_error(&definitions, "agent_list_definitions");
     let definitions = definitions_result
         .get("definitions")
