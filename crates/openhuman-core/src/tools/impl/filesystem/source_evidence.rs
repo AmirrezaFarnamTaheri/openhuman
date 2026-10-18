@@ -300,11 +300,15 @@ async fn read_checked(policy: &SecurityPolicy, path: &Path) -> anyhow::Result<Op
     // Limit reads at the OS handle, not after unbounded read_to_end; a file
     // can grow between metadata and reading. On Unix do not follow a symlink
     // substituted at the canonical final component after initial validation.
-    let mut options = tokio::fs::OpenOptions::new();
-    options.read(true);
     #[cfg(unix)]
-    options.custom_flags(libc::O_NOFOLLOW);
-    let Ok(file) = options.open(&actual).await else {
+    let opened = tokio::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&actual)
+        .await;
+    #[cfg(not(unix))]
+    let opened = tokio::fs::File::open(&actual).await;
+    let Ok(file) = opened else {
         return Ok(None);
     };
     let Ok(metadata) = file.metadata().await else {

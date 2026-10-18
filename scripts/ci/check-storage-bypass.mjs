@@ -13,6 +13,8 @@
 //   sqlite-open  rusqlite `Connection::open(` - use the document port
 //   json-write   fs::write / File::create / OpenOptions::new() / NamedTempFile - a raw file
 //                store; use the document, stream or secret port
+//                Closed, fully qualified read-only open chains are reads. Mutable
+//                builders and unknown options remain findings.
 //
 // A file may keep a rule when it is a read-only legacy importer, or when its
 // state is per-machine, bootstrap or non-record bytes. Each is listed in ALLOW
@@ -207,20 +209,48 @@ export function codeOf(line) {
   return line;
 }
 
+/**
+ * Recognize one closed read-only std/tokio builder expression. The builder must
+ * immediately open a file after literal read(true), optionally with O_NOFOLLOW.
+ * It cannot escape, be reused, enable writes or pass unreviewed custom flags.
+ * All other builder shapes remain findings; this is not Rust dataflow analysis.
+ */
+function closedReadOnlyOpen(codeLines, lineIndex, column) {
+  const prefix = codeLines[lineIndex].slice(0, column);
+  // Rust identifiers may contain Unicode; $std is a macro variable, not std.
+  if (!/(?:^|[^\p{ID_Continue}:$])(?:std|tokio)::fs::$/u.test(prefix)) return false;
+  const expression = codeLines.slice(lineIndex).join("\n").slice(column);
+  return /^OpenOptions::new\s*\(\s*\)\s*\.read\s*\(\s*true\s*\)\s*(?:\.custom_flags\s*\(\s*libc::O_NOFOLLOW\s*\)\s*)?\.open\s*\(/.test(
+    expression,
+  );
+}
+
 /** Findings in one file's source. */
 export function scan(rel, source) {
   const found = [];
   const occurrences = new Map();
   const lines = source.split(/\r?\n/);
+  const codeLines = lines.map(codeOf);
   for (const [index, raw] of lines.entries()) {
-    const code = codeOf(raw);
+    const code = codeLines[index];
     if (!code.trim()) continue;
     // A call may break between the path and its `(`: look one line ahead, and
     // count a match only when it starts on this line.
-    const searchable = `${code}\n${codeOf(lines[index + 1] ?? "")}`;
+    const searchable = `${code}\n${codeLines[index + 1] ?? ""}`;
     for (const { rule, pattern } of RULES) {
-      const hit = pattern.exec(searchable);
-      if (!hit || hit.index >= code.length) continue;
+      // A proven read must not hide a later writer on the same line (including
+      // an open() argument). Preserve the ratchet's one finding per rule/line.
+      const hits = [...searchable.matchAll(new RegExp(pattern.source, "g"))];
+      const hasWrite = hits.some(
+        (hit) =>
+          hit.index < code.length &&
+          !(
+            rule === "json-write" &&
+            hit[0].startsWith("OpenOptions::new") &&
+            closedReadOnlyOpen(codeLines, index, hit.index)
+          ),
+      );
+      if (!hasWrite) continue;
       const text = raw.trim();
       const key = `${rule}\0${text}`;
       const occurrence = (occurrences.get(key) ?? 0) + 1;
