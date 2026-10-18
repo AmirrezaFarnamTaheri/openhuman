@@ -20,7 +20,6 @@ pub(crate) mod background_completions;
 pub(crate) mod background_delivery;
 pub(crate) mod busy_guard;
 pub(crate) mod coding_handoff;
-pub mod command_center;
 pub(crate) mod completion_notice;
 pub(crate) mod completion_owners;
 pub(crate) mod completion_target;
