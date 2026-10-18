@@ -140,6 +140,46 @@
     "verification": "inference/context_window.rs: remembered_window(provider, model) delegates to tinyinference-llm resolver; no credentials are passed to the cache."
   },
   {
+    "file": "crates/openhuman-core/src/inference/provider/factory/key_pool.rs",
+    "scope": "",
+    "name": "POOLS",
+    "type": "OnceLock<Mutex<HashMap<String,Pool>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "BYOK credential health and bounded run-affinity state are keyed by the explicitly supplied workspace/provider/model scope. Hosted profiles receive distinct workspace paths from ProfileHost::forced_config and profile_config for their validated ProfileId; status/reset use the config bound to DispatchCtx, and CredentialFleetModel retains its construction scope for outcomes and lease release. Agents in one workspace intentionally share provider health. The pool stores salted key IDs, counters, deadlines and bounded run IDs, not plaintext credentials; the trusted host must preserve each profile's workspace binding.",
+    "verification": "profiles/layout_tests.rs: the_config_is_rooted_in_the_profile_and_bound_to_its_memory; profiles/types_proptest_tests.rs: distinct_users_get_distinct_ids, layout_dir_is_one_segment_under_users; config/ops/loader_explicit_ctx_tests.rs: concurrent_loads_never_see_each_others_config; inference/provider/factory/key_pool_tests.rs: pool_retains_only_salted_key_ids_not_raw_secrets, deleted_model_scope_does_not_remove_sibling_key_health; inference/provider/factory/cloud_slug.rs: fleet_scope; inference/provider/factory.rs: model_fleet_health and model_fleet_reset"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/provider/factory/key_pool.rs",
+    "scope": "",
+    "name": "SALT",
+    "type": "OnceLock<RandomState>",
+    "count": 1,
+    "category": "A",
+    "reason": "A process-created random SipHash seed used to derive transient credential identifiers. The OnceLock holds only RandomState, never the input credentials or per-tenant health records; those identifiers remain inside the separately scoped POOLS entries.",
+    "verification": "inference/provider/factory/key_pool.rs: secret_id initializes RandomState::new and hashes the borrowed input without retaining it; inference/provider/factory/key_pool_tests.rs: pool_retains_only_salted_key_ids_not_raw_secrets"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/provider/factory/tool_markup.rs",
+    "scope": "",
+    "name": "NEXT_QNML_CALL",
+    "type": "AtomicU64",
+    "count": 1,
+    "category": "A",
+    "reason": "Numeric process sequence used only to synthesize QNML call IDs together with the process ID. It stores no prompt, arguments, credentials, tenant identity or authorization state; the request's declared tool schema still validates each generated call.",
+    "verification": "inference/provider/factory/tool_markup.rs: parse_qnml_calls; inference/provider/factory/tool_markup_tests.rs: decodes_qwen_qnml_into_declared_typed_tool_calls, rejects_unknown_tools_and_invalid_arguments_before_creating_calls"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/provider/factory/tool_tagged_json.rs",
+    "scope": "",
+    "name": "NEXT_TAGGED_CALL",
+    "type": "AtomicU64",
+    "count": 1,
+    "category": "A",
+    "reason": "Numeric process sequence used only to synthesize tagged-JSON call IDs together with the process ID. It contains no call payload or tenant state and grants no tool authority; decode_calls validates against the tools declared for that request.",
+    "verification": "inference/provider/factory/tool_tagged_json.rs: decode_calls; inference/provider/factory/tool_markup_tests.rs: tagged_json_parallel_and_single_tool_calls_share_native_validation, tagged_json_bounded_parser_rejects_undeclared_or_wrongly_typed_tool_calls"
+  },
+  {
     "file": "crates/openhuman-core/src/inference/registry.rs",
     "scope": "",
     "name": "CATALOGS",
@@ -418,6 +458,16 @@
     "category": "B",
     "reason": "Holds only unit mutexes. The key is the workspace directory, so different workspaces never share or wait on a lock and no tenant data is stored.",
     "verification": "tinymemes/service_tests.rs: foreground_remixes_share_a_lock_per_workspace_and_never_across_workspaces"
+  },
+  {
+    "file": "crates/openhuman-core/src/tools/impl/filesystem/source_graph.rs",
+    "scope": "",
+    "name": "PATTERN",
+    "type": "OnceLock<Regex>",
+    "count": 6,
+    "category": "A",
+    "reason": "Six function-local caches contain immutable compiled regular expressions initialized only from hard-coded Rust, JavaScript and Python syntax patterns. Source documents, captures and graph results remain local to each bounded graph call and are never stored in these caches.",
+    "verification": "tools/impl/filesystem/source_graph.rs: pattern, rust_mod_pattern, js_from_pattern, js_side_effect_pattern, js_require_pattern, js_dynamic_pattern, python_from_pattern; tools/impl/filesystem/source_graph_tests.rs: javascript_relative_imports_are_resolved_only_from_observed_files, rust_module_paths_resolve_to_their_actual_file, python_relative_imports_resolve_module_file_and_package"
   },
   {
     "file": "crates/openhuman-core/src/tools/sources.rs",

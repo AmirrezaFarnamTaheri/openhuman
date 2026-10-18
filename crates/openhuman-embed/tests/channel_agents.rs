@@ -254,14 +254,16 @@ fn a_telegram_message_uses_the_bound_agents_configured_provider_and_tools() {
             assert_eq!(first_body["model"], "fixture");
             assert!(first.contains("TEENY_CHANNEL_PROMPT"));
             assert!(first.contains("hello teeny"));
-            let advertised = common::tool_names(&requests[0]);
+            // Local runtimes use prompt-guided tool calling. Inspect the
+            // whole outgoing request so its prompt must disclose only the
+            // read-only belt, just as a native tools array would.
             assert!(
-                advertised.contains(&"teeny_read".to_string()),
-                "{advertised:?}"
+                first.contains("teeny_read"),
+                "the read-only tool is advertised"
             );
             assert!(
-                !advertised.contains(&"teeny_write".to_string()),
-                "{advertised:?}"
+                !first.contains("teeny_write"),
+                "the write tool must not be advertised"
             );
 
             drop(agent);

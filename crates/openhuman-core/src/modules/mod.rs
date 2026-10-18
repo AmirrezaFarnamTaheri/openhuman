@@ -107,6 +107,7 @@ mod storage_import_tinybox;
 mod storage_import_tinyconnectors;
 #[cfg(feature = "modules")]
 mod storage_import_tinyjuice;
+#[cfg(feature = "modules")]
 mod storage_import_tinyjuice_savings;
 #[cfg(feature = "modules")]
 mod storage_import_tinymcp;

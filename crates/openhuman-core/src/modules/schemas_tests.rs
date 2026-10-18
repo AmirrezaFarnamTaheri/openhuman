@@ -101,7 +101,7 @@ async fn forgetting_sites_reports_how_many_went() {
     // Legacy files are imported once and retained. Reopening the store must
     // not resurrect the records removed by either controller call.
     CoreContext::scope(ctx, async {
-        let reopened = super::site_memory_host::SiteStore::open(&workspace).unwrap();
+        let reopened = crate::modules::site_memory_host::SiteStore::open(&workspace).unwrap();
         assert_eq!(reopened.forget(None).await.unwrap(), 0);
         for site in ["shop.test", "books.test"] {
             assert!(reopened.load(site).await.unwrap().is_empty());

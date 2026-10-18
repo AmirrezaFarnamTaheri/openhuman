@@ -25,12 +25,13 @@ fn workspace_with(snapshot: Option<&str>) -> tempfile::TempDir {
 
 #[tokio::test]
 async fn the_legacy_snapshot_is_handed_to_the_module_once_and_left_in_place() {
+    let ctx = DispatchCtx::unbound();
     let ws = workspace_with(Some(SNAPSHOT));
     let file = legacy_file(ws.path());
     let scoped = scoped();
     let calls = AtomicUsize::new(0);
     let got = std::sync::Mutex::new(None);
-    let outcome = import_into(&scoped, &file, |aggregate| {
+    let outcome = import_into(&ctx, &scoped, &file, |aggregate| {
         calls.fetch_add(1, Ordering::SeqCst);
         *got.lock().unwrap() = Some(aggregate);
         async { Ok(true) }
@@ -43,7 +44,7 @@ async fn the_legacy_snapshot_is_handed_to_the_module_once_and_left_in_place() {
     assert_eq!(aggregate.by_model["m"].events, 2);
     assert!(file.exists(), "the importer never deletes the legacy file");
 
-    let again = import_into(&scoped, &file, |_| async { Ok(true) })
+    let again = import_into(&ctx, &scoped, &file, |_| async { Ok(true) })
         .await
         .unwrap();
     assert_eq!(again, Outcome::AlreadyDone);
@@ -52,16 +53,17 @@ async fn the_legacy_snapshot_is_handed_to_the_module_once_and_left_in_place() {
 
 #[tokio::test]
 async fn a_missing_snapshot_is_no_source_and_writes_no_marker() {
+    let ctx = DispatchCtx::unbound();
     let ws = workspace_with(None);
     let file = legacy_file(ws.path());
     let scoped = scoped();
-    let outcome = import_into(&scoped, &file, |_| async { Ok(true) })
+    let outcome = import_into(&ctx, &scoped, &file, |_| async { Ok(true) })
         .await
         .unwrap();
     assert_eq!(outcome, Outcome::NoSource);
     std::fs::create_dir_all(ws.path().join("state")).unwrap();
     std::fs::write(&file, SNAPSHOT).unwrap();
-    let later = import_into(&scoped, &file, |_| async { Ok(true) })
+    let later = import_into(&ctx, &scoped, &file, |_| async { Ok(true) })
         .await
         .unwrap();
     assert_eq!(later, Outcome::Imported { adopted: true });
@@ -69,10 +71,11 @@ async fn a_missing_snapshot_is_no_source_and_writes_no_marker() {
 
 #[tokio::test]
 async fn a_corrupt_snapshot_is_skipped_and_not_retried() {
+    let ctx = DispatchCtx::unbound();
     let ws = workspace_with(Some("{not json"));
     let file = legacy_file(ws.path());
     let scoped = scoped();
-    let outcome = import_into(&scoped, &file, |_| async {
+    let outcome = import_into(&ctx, &scoped, &file, |_| async {
         panic!("a corrupt snapshot must not reach the module");
         #[allow(unreachable_code)]
         Ok(true)
@@ -80,7 +83,7 @@ async fn a_corrupt_snapshot_is_skipped_and_not_retried() {
     .await
     .unwrap();
     assert_eq!(outcome, Outcome::Imported { adopted: false });
-    let again = import_into(&scoped, &file, |_| async { Ok(true) })
+    let again = import_into(&ctx, &scoped, &file, |_| async { Ok(true) })
         .await
         .unwrap();
     assert_eq!(again, Outcome::AlreadyDone);
@@ -88,15 +91,16 @@ async fn a_corrupt_snapshot_is_skipped_and_not_retried() {
 
 #[tokio::test]
 async fn a_failed_hand_over_leaves_no_marker_so_the_next_start_retries() {
+    let ctx = DispatchCtx::unbound();
     let ws = workspace_with(Some(SNAPSHOT));
     let file = legacy_file(ws.path());
     let scoped = scoped();
-    let failed = import_into(&scoped, &file, |_| async {
+    let failed = import_into(&ctx, &scoped, &file, |_| async {
         Err(anyhow::anyhow!("bus down"))
     })
     .await;
     assert!(failed.is_err());
-    let retry = import_into(&scoped, &file, |_| async { Ok(false) })
+    let retry = import_into(&ctx, &scoped, &file, |_| async { Ok(false) })
         .await
         .unwrap();
     assert_eq!(retry, Outcome::Imported { adopted: false });
@@ -105,13 +109,14 @@ async fn a_failed_hand_over_leaves_no_marker_so_the_next_start_retries() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_symlinked_snapshot_is_not_followed() {
+    let ctx = DispatchCtx::unbound();
     let ws = workspace_with(None);
     let secret = ws.path().join("elsewhere.json");
     std::fs::write(&secret, SNAPSHOT).unwrap();
     std::fs::create_dir_all(ws.path().join("state")).unwrap();
     let file = legacy_file(ws.path());
     std::os::unix::fs::symlink(&secret, &file).unwrap();
-    let outcome = import_into(&scoped(), &file, |_| async {
+    let outcome = import_into(&ctx, &scoped(), &file, |_| async {
         panic!("a symlink must not be read");
         #[allow(unreachable_code)]
         Ok(true)

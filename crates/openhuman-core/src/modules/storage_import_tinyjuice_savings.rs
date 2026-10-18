@@ -66,10 +66,15 @@ where
     let Some(scoped) = support::module_scope(ctx, MODULE_ID)? else {
         return Ok(Outcome::NoBackend);
     };
-    import_into(&scoped, file, adopt).await
+    import_into(ctx, &scoped, file, adopt).await
 }
 
-async fn import_into<F, Fut>(scoped: &ScopedStorage, file: &Path, adopt: F) -> Result<Outcome>
+async fn import_into<F, Fut>(
+    ctx: &DispatchCtx,
+    scoped: &ScopedStorage,
+    file: &Path,
+    adopt: F,
+) -> Result<Outcome>
 where
     F: FnOnce(SavingsAggregate) -> Fut,
     Fut: Future<Output = Result<bool>>,
@@ -82,7 +87,8 @@ where
         return Ok(Outcome::NoSource);
     }
     let path = file.to_owned();
-    let bytes = tokio::task::spawn_blocking(move || read_regular(&path))
+    let bytes = ctx
+        .spawn_blocking(move || read_regular(&path))
         .await
         .context("the legacy reader panicked")??;
     let Some((_, bytes)) = bytes else {
