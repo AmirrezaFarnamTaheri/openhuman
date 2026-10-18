@@ -14,13 +14,18 @@
 //! renames it into place, so a file with the final name has been verified.
 //! [`restore`] verifies first, then puts the entries back under `workspace/`.
 
+#[cfg(feature = "storage-sqlite")]
 use std::collections::BTreeMap;
+#[cfg(feature = "storage-sqlite")]
 use std::fs::File;
+#[cfg(feature = "storage-sqlite")]
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "storage-sqlite")]
 use sha2::{Digest, Sha256};
+#[cfg(feature = "storage-sqlite")]
 use walkdir::WalkDir;
 
 use super::plan::Action;
@@ -32,6 +37,7 @@ pub const MANIFEST_ENTRY: &str = "MANIFEST.json";
 pub const ROOT: &str = "workspace";
 /// The prefix of profile-level files (beside `config.toml`) in the archive.
 pub const PROFILE_ROOT: &str = "profile";
+#[cfg(feature = "storage-sqlite")]
 const ZSTD_LEVEL: i32 = 3;
 
 /// One archived file.
@@ -82,11 +88,13 @@ pub struct Source {
     pub at: PathBuf,
 }
 
+#[cfg(feature = "storage-sqlite")]
 struct HashingReader<R> {
     inner: R,
     hasher: Sha256,
 }
 
+#[cfg(feature = "storage-sqlite")]
 impl<R: Read> Read for HashingReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let n = self.inner.read(buf)?;
@@ -95,6 +103,7 @@ impl<R: Read> Read for HashingReader<R> {
     }
 }
 
+#[cfg(feature = "storage-sqlite")]
 fn io(error: impl Into<anyhow::Error>) -> LayoutError {
     LayoutError::Other(error.into())
 }
@@ -105,6 +114,7 @@ fn io(error: impl Into<anyhow::Error>) -> LayoutError {
 /// # Errors
 ///
 /// An I/O error. A partly written `dest` is removed.
+#[cfg(feature = "storage-sqlite")]
 pub fn write(
     dest: &Path,
     user: &str,
@@ -122,6 +132,7 @@ pub fn write(
     result
 }
 
+#[cfg(feature = "storage-sqlite")]
 fn write_inner(
     dest: &Path,
     user: &str,
@@ -226,20 +237,22 @@ pub fn sidecar_path(archive: &Path) -> PathBuf {
     archive.with_file_name(name)
 }
 
+#[cfg(feature = "storage-sqlite")]
 fn write_sidecar(archive: &Path, body: &[u8]) -> Result<(), LayoutError> {
     std::fs::write(sidecar_path(archive), body)?;
     Ok(())
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "storage-sqlite"))]
 fn restrict(path: &Path, mode: u32) {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
 }
 
-#[cfg(not(unix))]
+#[cfg(all(not(unix), feature = "storage-sqlite"))]
 fn restrict(_path: &Path, _mode: u32) {}
 
+#[cfg(feature = "storage-sqlite")]
 fn open_archive(
     path: &Path,
 ) -> Result<tar::Archive<zstd::stream::read::Decoder<'static, BufReader<File>>>, LayoutError> {
@@ -255,6 +268,7 @@ fn open_archive(
 ///
 /// [`LayoutError::Verify`] naming the first discrepancy (or a read/decode
 /// failure, which is also a corrupt archive).
+#[cfg(feature = "storage-sqlite")]
 pub fn verify(archive: &Path) -> Result<Manifest, LayoutError> {
     let bad = |m: String| LayoutError::Verify(format!("archive {}: {m}", archive.display()));
     let mut tar = open_archive(archive)?;
@@ -335,6 +349,7 @@ pub fn verify(archive: &Path) -> Result<Manifest, LayoutError> {
 ///
 /// A failed verification (nothing is extracted then), a path that would leave
 /// `profile_dir`, or an I/O error.
+#[cfg(feature = "storage-sqlite")]
 pub fn restore(archive: &Path, profile_dir: &Path) -> Result<Manifest, LayoutError> {
     let manifest = verify(archive)?;
     let mut tar = open_archive(archive)?;
@@ -377,6 +392,40 @@ pub fn restore(archive: &Path, profile_dir: &Path) -> Result<Manifest, LayoutErr
     Ok(manifest)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "storage-sqlite"))]
 #[path = "archive_tests.rs"]
 mod tests;
+
+#[cfg(all(test, not(feature = "storage-sqlite")))]
+#[path = "archive_disabled_tests.rs"]
+mod disabled_tests;
+
+/// Lean hosts cannot migrate an old SQLite profile, and must not mistake
+/// an unsupported archive operation for a successful migration.
+#[cfg(not(feature = "storage-sqlite"))]
+fn sqlite_layout_unavailable<T>() -> Result<T, LayoutError> {
+    Err(LayoutError::Other(anyhow::anyhow!(
+        "Profile layout archives require the storage-sqlite feature"
+    )))
+}
+
+#[cfg(not(feature = "storage-sqlite"))]
+pub fn write(
+    _dest: &Path,
+    _user: &str,
+    _created_ms: i64,
+    _sources: &[Source],
+) -> Result<Manifest, LayoutError> {
+    sqlite_layout_unavailable()
+}
+
+#[cfg(not(feature = "storage-sqlite"))]
+pub fn verify(_archive: &Path) -> Result<Manifest, LayoutError> {
+    sqlite_layout_unavailable()
+}
+
+#[cfg(not(feature = "storage-sqlite"))]
+pub fn restore(_archive: &Path, _profile_dir: &Path) -> Result<Manifest, LayoutError> {
+    sqlite_layout_unavailable()
+}
+
