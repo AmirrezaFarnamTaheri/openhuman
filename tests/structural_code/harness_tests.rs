@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use tinyagents_harness::limits::RunLimits;
-use tinyagents_harness::middleware::{Middleware, ToolInvocationIdentity};
+use tinyagents_harness::middleware::{AgentRun, Middleware, ToolInvocationIdentity};
 use tinyagents_harness::runtime::{AgentHarness, RunPolicy};
 use tinyagents_harness::testkit::ScriptedModel;
 use tinyagents_harness::tool::packs::{PackRegistryHandle, UseSkillTool};
@@ -56,7 +56,7 @@ async fn run(
     fixture: &Fixture,
     call: ToolCall,
     denied_target: Option<&str>,
-) -> (tinyagents_harness::AgentRun, Arc<Capture>) {
+) -> (AgentRun, Arc<Capture>) {
     // Resolve the actual host factory tools through the canonical shared
     // adapter. Packing those adapters exercises the same metadata boundary as
     // the host's private UseSkillDispatch; that selector has sibling unit tests.
@@ -98,7 +98,7 @@ async fn run(
     };
     if let Some(name) = denied_target {
         policy.tool_rules = ToolRulePolicy::new(
-            serde_json::from_value(json!({
+            serde_json::from_value::<tinytools::ToolRules>(json!({
                 "rules": [{"effect": "deny", "match": {"name": name}}]
             }))
             .unwrap(),
