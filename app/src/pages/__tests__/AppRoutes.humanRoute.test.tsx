@@ -41,10 +41,10 @@ const renderAt = (path: string) =>
   );
 
 describe('Desktop /human + /chat routes', () => {
-  it('serves the Human page at /human without redirecting', () => {
+  it('serves the Human page at /human without redirecting', async () => {
     renderAt('/human');
+    expect(await screen.findByTestId('human-page')).toBeInTheDocument();
     expect(screen.getByTestId('pathname')).toHaveTextContent('/human');
-    expect(screen.getByTestId('human-page')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-page')).not.toBeInTheDocument();
   });
 

@@ -770,33 +770,42 @@ describe('AIPanel', () => {
     // rejection left "Add without verifying" on screen even after the next
     // attempt failed for an unrelated reason.
     vi.mocked(loadAISettings).mockResolvedValue(baseSettings);
-    vi.mocked(listProviderModels).mockRejectedValueOnce(new Error('provider returned 404'));
+    vi.mocked(listProviderModels)
+      .mockRejectedValueOnce(new Error('provider returned 404'))
+      .mockResolvedValueOnce([]);
 
     renderWithProviders(<AIPanel />);
     await openCustomProviderEditor();
+    // Query the active editor rather than recalculating accessible names for
+    // every control in the background settings page on each retry.
+    const editor = within(await screen.findByRole('dialog', { name: /Add cloud provider/i }));
 
-    fireEvent.change(await screen.findByPlaceholderText('My Provider'), {
+    fireEvent.change(editor.getByPlaceholderText('My Provider'), {
       target: { value: 'Azure Foundry' },
     });
-    fireEvent.change(screen.getByPlaceholderText('https://api.openai.com/v1'), {
+    fireEvent.change(editor.getByPlaceholderText('https://api.openai.com/v1'), {
       target: { value: 'https://my-resource.openai.azure.com/openai/v1' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^Add Provider$/i }));
+    fireEvent.click(editor.getByRole('button', { name: /^Add Provider$/i }));
     expect(
-      await screen.findByRole('button', { name: /Add without verifying/i })
+      await editor.findByRole('button', { name: /Add without verifying/i })
     ).toBeInTheDocument();
+    expect(saveAISettings).not.toHaveBeenCalled();
+    expect(setCloudProviderKey).not.toHaveBeenCalled();
 
     // Second attempt: the probe would now succeed, but the key write rejects.
     vi.mocked(setCloudProviderKey).mockRejectedValueOnce(new Error('keyring is locked'));
-    fireEvent.change(screen.getByLabelText(/^API key$/i), { target: { value: 'sk-test-key' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Add Provider$/i }));
+    fireEvent.change(editor.getByLabelText(/^API key$/i), { target: { value: 'sk-test-key' } });
+    fireEvent.click(editor.getByRole('button', { name: /^Add Provider$/i }));
 
-    expect(await screen.findByText(/keyring is locked/i)).toBeInTheDocument();
+    expect(await editor.findByText(/keyring is locked/i)).toBeInTheDocument();
     await waitFor(() =>
       expect(
-        screen.queryByRole('button', { name: /Add without verifying/i })
+        editor.queryByRole('button', { name: /Add without verifying/i })
       ).not.toBeInTheDocument()
     );
+    expect(listProviderModels).toHaveBeenCalledTimes(2);
+    expect(setCloudProviderKey).toHaveBeenCalledTimes(1);
   });
 
   it('offers a deployment-name field in the per-workload custom routing dialog', async () => {
