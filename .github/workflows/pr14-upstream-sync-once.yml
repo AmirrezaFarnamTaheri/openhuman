@@ -81,3 +81,5 @@ jobs:
           name: pr14-upstream-merge-conflicts
           path: upstream-sync-report/
           if-no-files-found: warn
+
+# Re-run after correcting the source conflict resolver's newline handling.
