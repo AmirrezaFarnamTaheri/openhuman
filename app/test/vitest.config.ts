@@ -54,7 +54,7 @@ export default defineConfig({
     clearMocks: true,
     mockReset: false,
     restoreMocks: false,
-    setupFiles: ["src/test/setup.ts"],
+    setupFiles: ["src/test/file-text-polyfill.ts", "src/test/setup.ts"],
     include: [
       "src/**/*.test.{ts,tsx}",
       "test/*.test.{ts,tsx}",
