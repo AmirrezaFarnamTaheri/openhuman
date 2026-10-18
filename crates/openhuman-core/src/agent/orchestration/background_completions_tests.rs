@@ -552,26 +552,45 @@ fn clear_all_also_withdraws_a_completion_a_delivery_has_leased() {
 
 #[test]
 fn the_session_cache_evicts_its_oldest_mapping_only() {
-    let _guard = test_guard();
+    // Concurrent lib tests also write into the process-global registry. Test
+    // the production eviction operation on private state instead.
+    let mut st = HostState::default();
+    let ctx = cx();
     for i in 0..(SESSION_THREADS_CAP + 5) {
-        note_session_thread(
-            &cx(),
-            &format!("evict-sess-{i}"),
+        thread_index::remember_session_thread(
+            &mut st,
+            key(&ctx, &format!("evict-sess-{i}")),
             &format!("evict-thread-{i}"),
         );
     }
-    assert_eq!(
-        thread_for_session(&cx(), "evict-sess-0"),
-        None,
+    assert_eq!(st.session_threads.len(), SESSION_THREADS_CAP);
+    assert_eq!(st.session_order.len(), SESSION_THREADS_CAP);
+    assert!(
+        !st.session_threads.contains_key(&key(&ctx, "evict-sess-0")),
         "oldest evicted"
     );
     for survivor in [5, SESSION_THREADS_CAP / 2, SESSION_THREADS_CAP + 4] {
         assert_eq!(
-            thread_for_session(&cx(), &format!("evict-sess-{survivor}")).as_deref(),
+            st.session_threads
+                .get(&key(&ctx, &format!("evict-sess-{survivor}")))
+                .map(String::as_str),
             Some(format!("evict-thread-{survivor}").as_str()),
             "a surviving session still resolves to its own thread"
         );
     }
+}
+
+#[test]
+fn the_session_cache_update_does_not_duplicate_fifo_entries() {
+    let mut st = HostState::default();
+    thread_index::remember_session_thread(&mut st, "one-session".to_owned(), "original-thread");
+    thread_index::remember_session_thread(&mut st, "one-session".to_owned(), "updated-thread");
+    assert_eq!(st.session_order.len(), 1);
+    assert_eq!(st.session_threads.len(), 1);
+    assert_eq!(
+        st.session_threads.get("one-session").map(String::as_str),
+        Some("updated-thread")
+    );
 }
 
 #[test]

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use tinyagents_tasks::CompletionRouter;
 
-use super::{router_for_workspace, state, SESSION_THREADS_CAP};
+use super::{router_for_workspace, state, HostState, SESSION_THREADS_CAP};
 use crate::core::runtime::DispatchCtx;
 
 /// The key of a thread or session id in `HostState`'s maps: per profile of
@@ -49,6 +49,12 @@ pub(crate) fn workspace_for_thread(ctx: &DispatchCtx, thread_id: &str) -> Option
 pub(crate) fn note_session_thread(ctx: &DispatchCtx, session_id: &str, thread_id: &str) {
     let session_key = key(ctx, session_id);
     let mut st = state();
+    remember_session_thread(&mut st, session_key, thread_id);
+}
+
+/// Update a single cache with FIFO eviction. Accepting explicit state makes
+/// boundary tests independent of other concurrently running registry users.
+pub(super) fn remember_session_thread(st: &mut HostState, session_key: String, thread_id: &str) {
     if st
         .session_threads
         .insert(session_key.clone(), thread_id.to_string())

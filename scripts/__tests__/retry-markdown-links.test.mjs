@@ -68,6 +68,43 @@ test("transient GitHub 500 responses are retried too", async () => {
   ]);
 });
 
+test("mixed GitHub 503 and GNU 429 are retried without accepting failures", async () => {
+  const limited =
+    "* [429] <https://www.gnu.org/licenses/license-list.en.html#apache2> | Too Many Requests\n";
+  const initialReport = unavailable + limited;
+  const { calls, check } = checker([{ status: 0, report: "" }]);
+  assert.deepEqual(serviceUnavailableUrls(initialReport), [
+    "https://example.test/docs#anchor",
+    "https://www.gnu.org/licenses/license-list.en.html#apache2",
+  ]);
+  assert.equal(
+    await retryServiceUnavailable({
+      initialReport,
+      check,
+      wait: async () => {},
+    }),
+    0,
+  );
+  assert.equal(calls.length, 1);
+});
+
+test("persistent HTTP 429 remains a failure after bounded retries", async () => {
+  const limited =
+    "* [429] <https://www.gnu.org/licenses/license-list.en.html#apache2> | Too Many Requests\n";
+  const { calls, check } = checker(
+    Array.from({ length: 3 }, () => ({ status: 2, report: limited })),
+  );
+  assert.equal(
+    await retryServiceUnavailable({
+      initialReport: limited,
+      check,
+      wait: async () => {},
+    }),
+    2,
+  );
+  assert.equal(calls.length, 3);
+});
+
 test("persistent 503 remains a failure after bounded retries", async () => {
   const { calls, check } = checker(
     Array.from({ length: 3 }, () => ({ status: 2, report: unavailable })),

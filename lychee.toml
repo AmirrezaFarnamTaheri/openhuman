@@ -1,0 +1,5 @@
+# Pace the public GNU documentation endpoint to avoid HTTP 429 responses
+# caused by a burst of valid outbound link checks.
+[hosts."www.gnu.org"]
+concurrency = 1
+request_interval = "2s"
