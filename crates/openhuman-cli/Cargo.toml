@@ -263,6 +263,10 @@ name = "composio_list_tools_stack_overflow_regression"
 path = "../../tests/composio_list_tools_stack_overflow_regression.rs"
 
 [[test]]
+name = "coding_handoff"
+path = "../../tests/coding_handoff.rs"
+
+[[test]]
 name = "windows_sandbox_env_e2e"
 path = "../../tests/windows_sandbox_env_e2e.rs"
 

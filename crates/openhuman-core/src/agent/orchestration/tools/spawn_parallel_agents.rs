@@ -135,7 +135,7 @@ fn parse_parallel_agent_tasks(
     let tasks_value = args.get("tasks").cloned().ok_or_else(|| {
         ParallelAgentTaskRequestError::MissingTasks("Missing 'tasks' parameter".into())
     })?;
-    let tasks: Vec<ParallelAgentTask> = serde_json::from_value(tasks_value).map_err(|err| {
+    let mut tasks: Vec<ParallelAgentTask> = serde_json::from_value(tasks_value).map_err(|err| {
         ParallelAgentTaskRequestError::InvalidTasks(format!("Invalid tasks array: {err}"))
     })?;
     if tasks.len() < 2 {
@@ -143,6 +143,8 @@ fn parse_parallel_agent_tasks(
             "spawn_parallel_agents requires at least two tasks".into(),
         ));
     }
+    crate::agent::orchestration::spawn_parallel::prepare_parallel_contexts(&mut tasks)
+        .map_err(ParallelAgentTaskRequestError::Rejected)?;
     Ok(tasks)
 }
 

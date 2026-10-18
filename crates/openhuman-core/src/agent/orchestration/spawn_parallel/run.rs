@@ -21,8 +21,19 @@ use super::staging::snapshot_agent_definitions;
 use super::types::ParallelAgentTask;
 use super::workers::run_spawn_parallel_workers;
 
+/// Validate the complete batch before any worker is staged. Typed callers use
+/// the same boundary as JSON callers; rendered reports are idempotent.
+pub(crate) fn prepare_parallel_contexts(tasks: &mut [ParallelAgentTask]) -> Result<(), String> {
+    for (index, task) in tasks.iter_mut().enumerate() {
+        task.context =
+            crate::agent::orchestration::coding_handoff::prepare_context(task.context.take())
+                .map_err(|error| format!("spawn_parallel_agents: task {}: {error}", index + 1))?;
+    }
+    Ok(())
+}
+
 pub(crate) async fn run_spawn_parallel_tasks_with_cancellation_and_workspace(
-    tasks: Vec<ParallelAgentTask>,
+    mut tasks: Vec<ParallelAgentTask>,
     cancel: CancellationToken,
     parent_workspace_descriptor: Option<WorkspaceDescriptor>,
     run_context: crate::agent::tinyagents::host::OpenHumanRunContext,
@@ -31,6 +42,9 @@ pub(crate) async fn run_spawn_parallel_tasks_with_cancellation_and_workspace(
     >,
     parent_call_id: Option<String>,
 ) -> Result<SpawnParallelGraphOutcome, String> {
+    if let Err(error) = prepare_parallel_contexts(&mut tasks) {
+        return Ok(SpawnParallelGraphOutcome::Rejected(error));
+    }
     let parent = match run_context.parent.clone() {
         Some(parent) => parent,
         None => {

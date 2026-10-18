@@ -20,7 +20,10 @@ impl SpawnAsyncSubagentTool {
             task_title,
             task_key,
             force_fresh,
-        } = decode_async_spawn_args(&args);
+        } = match decode_async_spawn_args(&args) {
+            Ok(decoded) => decoded,
+            Err(error) => return Ok(ToolResult::error(error)),
+        };
 
         if let Some(refusal) = refuse_empty_spawn_args(&agent_id, &prompt) {
             return Ok(refusal);

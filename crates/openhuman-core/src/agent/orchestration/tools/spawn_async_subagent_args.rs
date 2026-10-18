@@ -29,7 +29,7 @@ struct AsyncSpawnArgs {
     force_fresh: bool,
 }
 
-fn decode_async_spawn_args(args: &serde_json::Value) -> AsyncSpawnArgs {
+fn decode_async_spawn_args(args: &serde_json::Value) -> Result<AsyncSpawnArgs, String> {
     let agent_id = args
         .get("agent_id")
         .and_then(|v| v.as_str())
@@ -46,6 +46,7 @@ fn decode_async_spawn_args(args: &serde_json::Value) -> AsyncSpawnArgs {
         .get("context")
         .and_then(|v| v.as_str())
         .map(str::to_string);
+    let context = crate::agent::orchestration::coding_handoff::prepare_context(context)?;
     let model_override = args
         .get("model")
         .and_then(|v| v.as_str())
@@ -61,7 +62,7 @@ fn decode_async_spawn_args(args: &serde_json::Value) -> AsyncSpawnArgs {
     let task_key_source = durable_task_key_source(args, &prompt, context.as_deref());
     let task_key = subagent_sessions::normalize_task_key(&task_key_source);
     let force_fresh = args.get("fresh").and_then(|v| v.as_bool()).unwrap_or(false);
-    AsyncSpawnArgs {
+    Ok(AsyncSpawnArgs {
         agent_id,
         prompt,
         context,
@@ -69,5 +70,5 @@ fn decode_async_spawn_args(args: &serde_json::Value) -> AsyncSpawnArgs {
         task_title,
         task_key,
         force_fresh,
-    }
+    })
 }

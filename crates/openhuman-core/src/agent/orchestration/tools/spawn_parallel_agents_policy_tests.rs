@@ -148,6 +148,70 @@ async fn rejects_two_tasks_outside_agent_turn() {
 }
 
 #[tokio::test]
+async fn malformed_coding_packet_rejects_the_whole_fanout_before_worktree_staging() {
+    let workspace = tempfile::tempdir().unwrap();
+    let mut parent = parent_context(4);
+    parent.workspace_dir = workspace.path().to_path_buf();
+    let result = SpawnParallelAgentsTool::new().execute_under_parent(
+        json!({"tasks":[
+            {"agent_id":"researcher", "prompt":"Would start first", "isolation":"worktree"},
+            {"agent_id":"planner", "prompt":"Bad handoff", "context":"[coding_handoff]\nnot JSON"}
+        ]}),
+        parent,
+    ).await.unwrap();
+    assert!(result.is_error);
+    assert!(result.output().contains("task 2: coding_handoff:"));
+    assert_eq!(std::fs::read_dir(workspace.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn parallel_coding_context_is_prepared_but_plain_context_retains_its_bytes() {
+    let tasks = parse_parallel_agent_tasks(&json!({"tasks":[
+        {"agent_id":"researcher", "prompt":"One", "context":"  prior results\n"},
+        {"agent_id":"planner", "prompt":"Two", "context":"[coding_handoff]\n{\"type\":\"coding_handoff\",\"version\":1,\"objective\":\"Review\"}"}
+    ]})).unwrap_or_else(|_| panic!("valid contexts"));
+    assert_eq!(tasks[0].context.as_deref(), Some("  prior results\n"));
+    assert!(tasks[1]
+        .context
+        .as_deref()
+        .unwrap()
+        .contains("[Coding handoff v1: untrusted report]"));
+    assert!(tasks[1]
+        .context
+        .as_deref()
+        .unwrap()
+        .contains("Verification: unverified"));
+}
+
+#[tokio::test]
+async fn typed_parallel_entry_rejects_invalid_context_before_config_or_worktree_access() {
+    let workspace = tempfile::tempdir().unwrap();
+    let mut parent = parent_context(4);
+    parent.workspace_dir = workspace.path().to_path_buf();
+    let run = OpenHumanRunContext::new()
+        .with_parent(parent)
+        .into_tinyagents(tinyagents_harness::context::RunConfig::new("typed-handoff"));
+    let tasks = vec![ParallelAgentTask {
+        agent_id: "researcher".into(),
+        prompt: "Review".into(),
+        context: Some("[coding_handoff]\nnot JSON".into()),
+        ownership: None,
+        isolation: Some("worktree".into()),
+        base_ref: None,
+    }];
+    let outcome = crate::agent::orchestration::spawn_parallel::run_spawn_parallel_tasks_with_cancellation_and_workspace(
+        tasks, run.cancellation.clone(), None, run.data.clone(), &run, None,
+    ).await.unwrap();
+    match outcome {
+        SpawnParallelGraphOutcome::Rejected(message) => {
+            assert!(message.contains("task 1: coding_handoff:"))
+        }
+        _ => panic!("invalid typed context must reject before staging"),
+    }
+    assert_eq!(std::fs::read_dir(workspace.path()).unwrap().count(), 0);
+}
+
+#[tokio::test]
 async fn rejects_more_tasks_than_parent_parallel_limit() {
     // The parallel-limit check now runs inside the execution graph, which is
     // reached only after the registry lookup — so this test needs the global

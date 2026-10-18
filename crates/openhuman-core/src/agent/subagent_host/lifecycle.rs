@@ -32,14 +32,6 @@ use super::{
     SubagentRunError, SubagentRunOptions, SubagentRunOutcome, SubagentRunStatus, SubagentUsage,
 };
 
-fn root_context_from_options(
-    options: &SubagentRunOptions,
-) -> crate::agent::tinyagents::host::OpenHumanRunContext {
-    // The parent lineage is exactly what the caller put on the explicit
-    // carrier (`run_context.parent`); nothing is re-bound from an ambient turn.
-    options.run_context.clone()
-}
-
 /// Runs one host subagent through a neutral driver using a real direct child.
 ///
 /// Callers that are already inside a TinyAgents turn must use this entrypoint:
@@ -63,7 +55,7 @@ pub async fn run_subagent(
     input: &str,
     options: SubagentRunOptions,
 ) -> Result<SubagentRunOutcome, SubagentRunError> {
-    let mut root_data = root_context_from_options(&options);
+    let mut root_data = options.run_context.clone();
     let root_config = root_data.root_run_config("subagent-host");
     let root = root_data.into_tinyagents(root_config);
     run_subagent_with_parent(&root, definition.clone(), input, options).await
@@ -92,7 +84,7 @@ pub async fn continue_subagent(
     input: &str,
     options: SubagentRunOptions,
 ) -> Result<SubagentRunOutcome, SubagentRunError> {
-    let mut root_data = root_context_from_options(&options);
+    let mut root_data = options.run_context.clone();
     let root_config = root_data.root_run_config("subagent-host");
     let root = root_data.into_tinyagents(root_config);
     continue_subagent_with_parent(&root, original_key, definition.clone(), input, options).await
@@ -221,10 +213,14 @@ impl OpenHumanSubagentHost {
     }
 
     pub async fn run(
-        self,
+        mut self,
         parent: &RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
         input: String,
     ) -> Result<SubagentRunOutcome, SubagentRunError> {
+        self.options.context = crate::agent::orchestration::coding_handoff::prepare_context(
+            self.options.context.take(),
+        )
+        .map_err(SubagentRunError::InvalidContext)?;
         let task_id = self
             .options
             .task_id
@@ -241,11 +237,15 @@ impl OpenHumanSubagentHost {
     }
 
     async fn continue_with_key(
-        self,
+        mut self,
         parent: &RunContext<crate::agent::tinyagents::host::OpenHumanRunContext>,
         task_key: SubagentTaskKey,
         input: String,
     ) -> Result<SubagentRunOutcome, SubagentRunError> {
+        self.options.context = crate::agent::orchestration::coding_handoff::prepare_context(
+            self.options.context.take(),
+        )
+        .map_err(SubagentRunError::InvalidContext)?;
         let child_config = RunConfig::new(format!("subagent-{}", uuid::Uuid::new_v4()));
         let (_, child) = crate::agent::tinyagents::host::direct_subagent_child(
             parent,

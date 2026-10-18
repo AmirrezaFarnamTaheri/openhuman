@@ -292,6 +292,9 @@ pub struct SubagentCheckpointData {
 /// stringified version inside a tool result block.
 #[derive(Debug, Error)]
 pub enum SubagentRunError {
+    #[error("invalid sub-agent context: {0}")]
+    InvalidContext(String),
+
     #[error("spawn_subagent called outside of an agent turn — no parent context available")]
     NoParentContext,
 

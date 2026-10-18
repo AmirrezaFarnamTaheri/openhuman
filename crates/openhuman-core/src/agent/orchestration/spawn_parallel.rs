@@ -33,7 +33,9 @@ mod types;
 mod workers;
 
 pub(crate) use collect::{format_spawn_parallel_success, SpawnParallelGraphOutcome};
-pub(crate) use run::run_spawn_parallel_tasks_with_cancellation_and_workspace;
+pub(crate) use run::{
+    prepare_parallel_contexts, run_spawn_parallel_tasks_with_cancellation_and_workspace,
+};
 pub(crate) use types::ParallelAgentTask;
 
 #[cfg(test)]

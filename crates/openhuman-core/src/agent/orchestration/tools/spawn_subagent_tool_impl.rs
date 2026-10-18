@@ -96,6 +96,10 @@ impl SpawnSubagentTool {
             .get("context")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let context = match crate::agent::orchestration::coding_handoff::prepare_context(context) {
+            Ok(context) => context,
+            Err(error) => return Ok(ToolResult::error(error)),
+        };
 
         let model_override = args
             .get("model")

@@ -205,8 +205,13 @@ impl DelegateTool {
         let context = args
             .get("context")
             .and_then(|v| v.as_str())
-            .map(str::trim)
-            .unwrap_or("");
+            .map(str::to_owned);
+        let context = match crate::agent::orchestration::coding_handoff::prepare_context(context) {
+            Ok(context) => context.unwrap_or_default(),
+            Err(error) => return Ok(ToolResult::error(error)),
+        };
+        // Preserve the configured delegate's historical trimming convention.
+        let context = context.trim();
 
         // Look up agent config
         let agent_config = match self.agents.get(agent_name) {

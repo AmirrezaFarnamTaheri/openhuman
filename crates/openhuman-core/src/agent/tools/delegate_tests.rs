@@ -50,6 +50,19 @@ fn description_not_empty() {
     assert!(!tool.description().is_empty());
 }
 
+#[tokio::test]
+async fn malformed_coding_handoff_is_rejected_before_provider_or_action_admission() {
+    let tool = DelegateTool::new(sample_agents(), test_security());
+    let result = tool.execute(json!({
+        "agent":"researcher", "prompt":"Review this change",
+        "context":"[coding_handoff]\n{\"type\":\"coding_handoff\",\"version\":2,\"objective\":\"Review\"}"
+    })).await.unwrap();
+    assert!(result.is_error);
+    assert!(result
+        .output()
+        .contains("coding_handoff: unsupported version"));
+}
+
 #[test]
 fn schema_lists_agent_names() {
     let tool = DelegateTool::new(sample_agents(), test_security());

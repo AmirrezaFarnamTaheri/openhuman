@@ -309,3 +309,6 @@ mod model_resolution_tests;
 mod slug_filter_typed_mode_tests;
 #[path = "ops_tests_tier_gate_tests.rs"]
 mod tier_gate_tests;
+
+#[path = "ops_tests_coding_handoff_tests.rs"]
+mod coding_handoff_tests;
