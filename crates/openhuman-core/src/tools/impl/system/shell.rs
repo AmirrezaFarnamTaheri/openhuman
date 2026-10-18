@@ -1,8 +1,7 @@
 use super::shell_description::{command_param_description, shell_description};
-use super::shell_support::{append_verification_receipt, command_failure, exec_result, python_utf8_env, tool_timeout_message};
+use super::shell_support::{append_verification_receipt, exec_result, python_utf8_env};
 #[cfg(feature = "modules")]
 use super::shell_support::{container_environment, docker_module_result};
-use crate::agent::host_runtime::RuntimeAdapter;
 use crate::agent::tinyagents::host::run_context::{
     command_environment_for_tool, dispatch_ctx_for_tool,
 };
