@@ -2,6 +2,44 @@
 
 This review covers PR [#14](https://github.com/AmirrezaFarnamTaheri/openhuman/pull/14), its review discussion, and the supplied **AST and Boilerplate Engine Roadmap** dated 2026-10-17. The [CodeRabbit reconciliation](pr14-coderabbit-review.md) maps all 18 unique bot findings to their fixes and validation evidence. This review distinguishes working code from architectural proposals and benchmark targets. The original PR included a large upstream merge; neither a filename count nor the number of workflow YAML files measures duplicated runtime work.
 
+## Continuation on 2026-10-18
+
+The current upstream integration incorporates `tinyhumansai/openhuman:main` at
+`3d74e06ee0233e48752b892fab24ae37ccad906c`, including the seven mainline merges
+since the previous shared ancestor. This brings in the TinyHumans backend
+extraction, storage schema v2, MCP cleanup fences, credential fallbacks and the
+current CI routing and storage checks. The upstream range has no `app/src`
+changes; the PR's onboarding and navigation work remains in the integrated tree.
+
+Conflict resolution keeps candidate API-key probes separate from the new hosted
+catalog registry, so testing an unsaved credential cannot silently use a saved
+key or session. The managed/local CortexDB credential split is retained. The
+private CI lanes install their module fixtures after selecting the real test
+command, including nextest, and a missing fixture fails before tests run.
+
+The TinyMCP runtime registry is reconciled to the immutable
+[v0.19.1 release](https://github.com/tinyhumansai/tinymcp/releases/tag/v0.19.1)
+and all 17 entries in its published `checksum.toml`. That release carries wire
+contract 1.26. The required upstream source pin `4ef02dc9` remains four commits
+past the tag: those commits only change the host-side `tinymcp-bus` client
+cleanup table and its tests. The exact pin exemption records that reason; it
+must be removed when a release includes the cleanup fix.
+
+The earlier unpublished TinyTools, TinyAgents and host-adapter commit IDs below
+are historical records. Their source objects are unavailable in this workspace
+and in the canonical remotes, so their old test counts do not verify the current
+continuation. The owner changes are being rebuilt in isolated worktrees. They
+must pass their owner gates and be published before OpenHuman consumes them;
+the current host still uses published dependency pointers.
+
+The focused merge script regressions pass 149/149. The first full native
+`cargo check --locked -p openhuman -p openhuman-cli -p openhuman-tinyhumans --tests`
+attempt reached the core test crate, then was killed at the workspace's 8 GiB
+memory limit. Its stale unused import is corrected. That attempt is neither an
+executed-test pass nor a successful test-compilation result. Current full script,
+production Clippy and pre-push outcomes are recorded on the PR when this
+increment is published.
+
 ## Concrete review findings
 
 | Finding | Change and expected behavior |

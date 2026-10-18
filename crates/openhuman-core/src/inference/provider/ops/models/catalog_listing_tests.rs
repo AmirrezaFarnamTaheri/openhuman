@@ -88,6 +88,106 @@ async fn candidate_probe_uses_new_key_without_overwriting_existing_profile() {
 }
 
 #[tokio::test]
+async fn candidate_probe_stays_isolated_from_a_registered_catalog() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    use crate::core::runtime::{CoreContext, DomainSet};
+    use crate::inference::registry::{register_catalog_in, CatalogEntry};
+    use crate::security::credentials::AuthService;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .and(header("authorization", "Bearer replacement-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{ "id": "candidate-model" }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = crate::config::Config {
+        config_path: tmp.path().join("config.toml"),
+        workspace_dir: tmp.path().to_path_buf(),
+        ..Default::default()
+    };
+    config.secrets.encrypt = false;
+    config.cloud_providers.push(CloudProviderCreds {
+        slug: "registered-candidate".into(),
+        endpoint: format!("{}/v1", server.uri()),
+        auth_style: AuthStyle::Bearer,
+        ..Default::default()
+    });
+    let auth = AuthService::from_config(&config);
+    auth.store_provider_token(
+        "provider:registered-candidate",
+        "default",
+        "saved-key",
+        Default::default(),
+        true,
+    )
+    .unwrap();
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = Arc::clone(&calls);
+    let context = CoreContext::for_test(DomainSet::full(), None);
+    register_catalog_in(
+        context.extensions(),
+        "registered-candidate",
+        CatalogEntry {
+            list: Arc::new(move |_, request| {
+                assert_eq!(request.provider_key, "saved-key");
+                seen.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async {
+                    Ok(crate::core::Outcome::new(
+                        serde_json::json!({ "models": [{ "id": "registered-model" }] }),
+                        vec![],
+                    ))
+                })
+            }),
+            limits: None,
+        },
+    );
+
+    CoreContext::scope(context, async {
+        let saved = list_configured_models_from_config("registered-candidate", &config)
+            .await
+            .unwrap();
+        assert_eq!(saved.value["models"][0]["id"], "registered-model");
+        let candidate = list_configured_models_with_candidate_key_from_config(
+            "registered-candidate",
+            &config,
+            "replacement-key",
+        )
+        .await
+        .unwrap();
+        assert_eq!(candidate.value["models"][0]["id"], "candidate-model");
+
+        config.cloud_providers[0].auth_style = AuthStyle::OpenhumanJwt;
+        let error = list_configured_models_with_candidate_key_from_config(
+            "registered-candidate",
+            &config,
+            "replacement-key",
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("API-key provider"), "{error}");
+    })
+    .await;
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        auth.get_provider_bearer_token("provider:registered-candidate", None)
+            .unwrap()
+            .as_deref(),
+        Some("saved-key")
+    );
+}
+
+#[tokio::test]
 async fn failed_candidate_probe_preserves_existing_secret() {
     use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
     use crate::security::credentials::AuthService;
