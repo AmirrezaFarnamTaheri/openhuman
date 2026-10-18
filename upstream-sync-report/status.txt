@@ -1,0 +1,1041 @@
+M  AGENTS.md
+M  Cargo.lock
+M  Cargo.toml
+M  app/src/services/chatService.ts
+M  crates/openhuman-app/Cargo.lock
+M  crates/openhuman-core/Cargo.toml
+M  crates/openhuman-core/src/agent/README.md
+M  crates/openhuman-core/src/agent/agent_tests.rs
+M  crates/openhuman-core/src/agent/agent_turn_loop_nudge_tests.rs
+M  crates/openhuman-core/src/agent/agent_turn_loop_packed_tool_tests.rs
+M  crates/openhuman-core/src/agent/agent_turn_progress_release_tests.rs
+D  crates/openhuman-core/src/agent/attachments/provider.rs
+D  crates/openhuman-core/src/agent/attachments/provider_fallback.rs
+M  crates/openhuman-core/src/agent/bus.rs
+M  crates/openhuman-core/src/agent/context/README.md
+D  crates/openhuman-core/src/agent/context/manager.rs
+D  crates/openhuman-core/src/agent/context/manager_tests.rs
+M  crates/openhuman-core/src/agent/context/mod.rs
+D  crates/openhuman-core/src/agent/context/stats.rs
+M  crates/openhuman-core/src/agent/cost_tests.rs
+M  crates/openhuman-core/src/agent/goals/mod.rs
+M  crates/openhuman-core/src/agent/goals/runtime.rs
+M  crates/openhuman-core/src/agent/goals/runtime_tests.rs
+D  crates/openhuman-core/src/agent/goals/store.rs
+M  crates/openhuman-core/src/agent/goals/tools.rs
+M  crates/openhuman-core/src/agent/goals/tools_tests.rs
+M  crates/openhuman-core/src/agent/harness/README.md
+M  crates/openhuman-core/src/agent/harness/artifact_offload/artifact_offload_tests.rs
+M  crates/openhuman-core/src/agent/harness/artifact_offload/mod.rs
+D  crates/openhuman-core/src/agent/harness/builtin_definitions_tests.rs
+M  crates/openhuman-core/src/agent/harness/fork_context.rs
+M  crates/openhuman-core/src/agent/harness/graph.rs
+M  crates/openhuman-core/src/agent/harness/graph_tests.rs
+M  crates/openhuman-core/src/agent/harness/mod.rs
+R  crates/openhuman-core/src/agent/harness/builtin_definitions.rs -> crates/openhuman-core/src/agent/harness/test_support.rs
+M  crates/openhuman-core/src/agent/harness/tool_result_artifacts/mod.rs
+M  crates/openhuman-core/src/agent/hooks.rs
+D  crates/openhuman-core/src/agent/hooks_scope.rs
+D  crates/openhuman-core/src/agent/hooks_tests.rs
+M  crates/openhuman-core/src/agent/host_agents.rs
+M  crates/openhuman-core/src/agent/host_agents_tests.rs
+M  crates/openhuman-core/src/agent/host_overrides.rs
+M  crates/openhuman-core/src/agent/host_overrides_tests.rs
+M  crates/openhuman-core/src/agent/message_convert.rs
+M  crates/openhuman-core/src/agent/message_convert_tests.rs
+M  crates/openhuman-core/src/agent/mod.rs
+UU crates/openhuman-core/src/agent/multimodal.rs
+M  crates/openhuman-core/src/agent/multimodal_attachment_handling_tests.rs
+D  crates/openhuman-core/src/agent/multimodal_marker_extraction_tests.rs
+M  crates/openhuman-core/src/agent/multimodal_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/README.md
+M  crates/openhuman-core/src/agent/orchestration/agent_teams/mod.rs
+M  crates/openhuman-core/src/agent/orchestration/agent_teams/runtime.rs
+M  crates/openhuman-core/src/agent/orchestration/agent_teams/runtime_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/background_completions.rs
+A  crates/openhuman-core/src/agent/orchestration/background_completions/store_adapter.rs
+UU crates/openhuman-core/src/agent/orchestration/background_completions/thread_index.rs
+A  crates/openhuman-core/src/agent/orchestration/background_completions_migration_tests.rs
+A  crates/openhuman-core/src/agent/orchestration/background_completions_pause_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/background_completions_release_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/background_completions_tenant_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/background_completions_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/background_delivery.rs
+M  crates/openhuman-core/src/agent/orchestration/background_delivery_slots_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/completion_notice.rs
+M  crates/openhuman-core/src/agent/orchestration/completion_target.rs
+A  crates/openhuman-core/src/agent/orchestration/completion_target_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/delegation.rs
+M  crates/openhuman-core/src/agent/orchestration/delivery_drain.rs
+A  crates/openhuman-core/src/agent/orchestration/delivery_events.rs
+M  crates/openhuman-core/src/agent/orchestration/fleet_tools.rs
+M  crates/openhuman-core/src/agent/orchestration/fleet_tools_tests.rs
+UU crates/openhuman-core/src/agent/orchestration/mod.rs
+M  crates/openhuman-core/src/agent/orchestration/ops.rs
+M  crates/openhuman-core/src/agent/orchestration/ops_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/parent_context/builder.rs
+D  crates/openhuman-core/src/agent/orchestration/parent_context/mod.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents/cancel.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents/registry.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents/resolve.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents/roster.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents/steering.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents/task_ledger.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents/wait.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents_cancel_tests.rs
+A  crates/openhuman-core/src/agent/orchestration/running_subagents_projection_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents_steering_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents_tenant_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/running_subagents_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/spawn_parallel/collect.rs
+M  crates/openhuman-core/src/agent/orchestration/spawn_parallel/dispatch.rs
+M  crates/openhuman-core/src/agent/orchestration/spawn_parallel/run.rs
+M  crates/openhuman-core/src/agent/orchestration/spawn_parallel/staging.rs
+M  crates/openhuman-core/src/agent/orchestration/spawn_parallel/types.rs
+M  crates/openhuman-core/src/agent/orchestration/spawn_parallel/workers.rs
+M  crates/openhuman-core/src/agent/orchestration/subagent_sessions/mod.rs
+M  crates/openhuman-core/src/agent/orchestration/subagent_sessions/ops.rs
+A  crates/openhuman-core/src/agent/orchestration/subagent_sessions/ops_driver.rs
+M  crates/openhuman-core/src/agent/orchestration/subagent_sessions/ops_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/subagent_sessions/storage_schema.rs
+M  crates/openhuman-core/src/agent/orchestration/subagent_sessions/store_documents.rs
+M  crates/openhuman-core/src/agent/orchestration/subagent_sessions/store_documents_tests.rs
+A  crates/openhuman-core/src/agent/orchestration/subagent_sessions/tiny_port.rs
+A  crates/openhuman-core/src/agent/orchestration/subagent_sessions/tiny_port_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/subagent_sessions/types.rs
+M  crates/openhuman-core/src/agent/orchestration/tools.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/archetype_delegation.rs -> crates/openhuman-core/src/agent/orchestration/tools/archetype_delegation_host.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/archetype_delegation_tests.rs
+D  crates/openhuman-core/src/agent/orchestration/tools/close_subagent.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/close_subagent_tests.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/collapsed_delegation.rs -> crates/openhuman-core/src/agent/orchestration/tools/collapsed_delegation_host.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/continue_subagent.rs -> crates/openhuman-core/src/agent/orchestration/tools/continue_subagent_host.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/delegate_graph.rs
+A  crates/openhuman-core/src/agent/orchestration/tools/delegate_graph_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/dispatch_outcomes.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/dispatch_tests.rs
+D  crates/openhuman-core/src/agent/orchestration/tools/list_subagents.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/list_subagents_tests.rs
+A  crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_completion.rs
+UD crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_execute.rs
+A  crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_host_impl.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_results.rs -> crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_projection.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_args.rs -> crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_request.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent.rs -> crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_surface.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/spawn_parallel_agents.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/spawn_parallel_agents_policy_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/spawn_parallel_agents_tests.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/spawn_subagent_tool_impl.rs -> crates/openhuman-core/src/agent/orchestration/tools/spawn_subagent_host_impl.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/spawn_subagent_parameters.rs -> crates/openhuman-core/src/agent/orchestration/tools/spawn_subagent_schema.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/spawn_subagent.rs -> crates/openhuman-core/src/agent/orchestration/tools/spawn_subagent_surface.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/spawn_subagent_tests.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/parameters/steer_subagent.json -> crates/openhuman-core/src/agent/orchestration/tools/steer_subagent.json
+D  crates/openhuman-core/src/agent/orchestration/tools/steer_subagent.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/subagent_abort_report.rs
+A  crates/openhuman-core/src/agent/orchestration/tools/subagent_control_surfaces.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/dispatch.rs -> crates/openhuman-core/src/agent/orchestration/tools/subagent_dispatch_host.rs
+A  crates/openhuman-core/src/agent/orchestration/tools/tools_e2e_continuation_tests.rs
+A  crates/openhuman-core/src/agent/orchestration/tools/tools_e2e_driver_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/tools/tools_e2e_tests.rs
+A  crates/openhuman-core/src/agent/orchestration/tools/tools_e2e_workspace_owner_tests.rs
+D  crates/openhuman-core/src/agent/orchestration/tools/wait_subagent.rs
+D  crates/openhuman-core/src/agent/orchestration/workflow_runs/engine.rs
+D  crates/openhuman-core/src/agent/orchestration/workflow_runs/engine/cancel.rs
+D  crates/openhuman-core/src/agent/orchestration/workflow_runs/engine/cancel_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/workflow_runs/engine/lifecycle.rs
+M  crates/openhuman-core/src/agent/orchestration/workflow_runs/engine/lifecycle_tests.rs
+M  crates/openhuman-core/src/agent/orchestration/workflow_runs/host.rs
+D  crates/openhuman-core/src/agent/orchestration/workflow_runs/mod.rs
+M  crates/openhuman-core/src/agent/orchestration/worktree.rs
+D  crates/openhuman-core/src/agent/progress_sink.rs
+D  crates/openhuman-core/src/agent/progress_tracing.rs
+D  crates/openhuman-core/src/agent/progress_tracing/README.md
+D  crates/openhuman-core/src/agent/progress_tracing/collector/events.rs
+D  crates/openhuman-core/src/agent/progress_tracing/collector/finish.rs
+D  crates/openhuman-core/src/agent/progress_tracing/collector/generation.rs
+D  crates/openhuman-core/src/agent/progress_tracing/collector/generation_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/collector/mod.rs
+D  crates/openhuman-core/src/agent/progress_tracing/collector/model_call.rs
+D  crates/openhuman-core/src/agent/progress_tracing/collector/span_lifecycle.rs
+D  crates/openhuman-core/src/agent/progress_tracing/collector/state.rs
+D  crates/openhuman-core/src/agent/progress_tracing/journal_projection.rs
+D  crates/openhuman-core/src/agent/progress_tracing/journal_projection_accuracy_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/journal_projection_cost_rollup_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/journal_projection_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/journal_replay.rs
+D  crates/openhuman-core/src/agent/progress_tracing/journal_replay_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/langfuse.rs
+D  crates/openhuman-core/src/agent/progress_tracing/langfuse/journal_export.rs
+D  crates/openhuman-core/src/agent/progress_tracing/langfuse_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/otlp.rs
+D  crates/openhuman-core/src/agent/progress_tracing/otlp_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/progress_tracing_accuracy_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/progress_tracing_attribution_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/progress_tracing_content_gate_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/progress_tracing_span_tree_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/progress_tracing_stop_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/progress_tracing_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/progress_tracing_tool_span_tests.rs
+D  crates/openhuman-core/src/agent/progress_tracing/progress_tracing_ttft_tests.rs
+M  crates/openhuman-core/src/agent/prompts/README.md
+M  crates/openhuman-core/src/agent/prompts/agents_md.rs
+M  crates/openhuman-core/src/agent/prompts/agents_md_tests.rs
+D  crates/openhuman-core/src/agent/prompts/builder.rs
+M  crates/openhuman-core/src/agent/prompts/mod.rs
+M  crates/openhuman-core/src/agent/prompts/mod_tests.rs
+M  crates/openhuman-core/src/agent/prompts/mod_tests_builder_sections_tests.rs
+A  crates/openhuman-core/src/agent/prompts/mod_tests_composition_tests.rs
+D  crates/openhuman-core/src/agent/prompts/render_helpers.rs
+M  crates/openhuman-core/src/agent/prompts/render_helpers/subagent.rs
+M  crates/openhuman-core/src/agent/prompts/types.rs
+M  crates/openhuman-core/src/agent/queued_turn.rs
+M  crates/openhuman-core/src/agent/queued_turn_tests.rs
+M  crates/openhuman-core/src/agent/registration.rs
+D  crates/openhuman-core/src/agent/registry/agents/critic/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/image_agent/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/morning_briefing/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/orchestrator/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/planner/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/presentation_agent/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/summarizer/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/task_manager_agent/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/trigger_reactor/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/trigger_triage/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/video_agent/mod.rs
+D  crates/openhuman-core/src/agent/registry/agents/vision_agent/mod.rs
+M  crates/openhuman-core/src/agent/session_host/README.md
+M  crates/openhuman-core/src/agent/session_host/builder/builder_build.rs
+M  crates/openhuman-core/src/agent/session_host/builder/builder_tests.rs
+M  crates/openhuman-core/src/agent/session_host/builder/builder_tests_explicit_definition_tests.rs
+M  crates/openhuman-core/src/agent/session_host/builder/builder_tests_host_only_tests.rs
+M  crates/openhuman-core/src/agent/session_host/builder/builder_tests_host_tools_tests.rs
+M  crates/openhuman-core/src/agent/session_host/builder/builder_tests_session_definition_tests.rs
+M  crates/openhuman-core/src/agent/session_host/builder/builder_tests_tool_exposure_tests.rs
+M  crates/openhuman-core/src/agent/session_host/builder/builder_tests_tool_spec_views_tests.rs
+M  crates/openhuman-core/src/agent/session_host/builder/factory.rs
+A  crates/openhuman-core/src/agent/session_host/builder/factory_resolution.rs
+R  crates/openhuman-core/src/agent/session_host/builder/factory_provider_role_tests_tests.rs -> crates/openhuman-core/src/agent/session_host/builder/factory_resolution_tests.rs
+M  crates/openhuman-core/src/agent/session_host/builder/host_only.rs
+M  crates/openhuman-core/src/agent/session_host/builder/host_tools.rs
+M  crates/openhuman-core/src/agent/session_host/builder/iteration_cap.rs
+M  crates/openhuman-core/src/agent/session_host/builder/mod.rs
+M  crates/openhuman-core/src/agent/session_host/builder/setters.rs
+A  crates/openhuman-core/src/agent/session_host/builder_config.rs
+M  crates/openhuman-core/src/agent/session_host/codec.rs
+M  crates/openhuman-core/src/agent/session_host/codec_adoption_tests.rs
+M  crates/openhuman-core/src/agent/session_host/driver.rs
+M  crates/openhuman-core/src/agent/session_host/driver/grounded_close.rs
+M  crates/openhuman-core/src/agent/session_host/driver/grounded_close_tests.rs
+M  crates/openhuman-core/src/agent/session_host/driver_tests.rs
+D  crates/openhuman-core/src/agent/session_host/factory.rs
+D  crates/openhuman-core/src/agent/session_host/hooks.rs
+M  crates/openhuman-core/src/agent/session_host/mod.rs
+M  crates/openhuman-core/src/agent/session_host/orphaned_head_resume_tests.rs
+D  crates/openhuman-core/src/agent/session_host/prefix_snapshot.rs
+R  crates/openhuman-core/src/agent/session_host/session_api.rs -> crates/openhuman-core/src/agent/session_host/resume_bound_session_tests.rs
+M  crates/openhuman-core/src/agent/session_host/runtime/accessors.rs
+A  crates/openhuman-core/src/agent/session_host/runtime/accessors/registry.rs
+A  crates/openhuman-core/src/agent/session_host/runtime/accessors/runtime.rs
+A  crates/openhuman-core/src/agent/session_host/runtime/accessors/session.rs
+A  crates/openhuman-core/src/agent/session_host/runtime/accessors/tool_visibility.rs
+A  crates/openhuman-core/src/agent/session_host/runtime/accessors/turn_options.rs
+M  crates/openhuman-core/src/agent/session_host/runtime/run_loop.rs
+M  crates/openhuman-core/src/agent/session_host/runtime/turn_helpers.rs
+M  crates/openhuman-core/src/agent/session_host/runtime/turn_results.rs
+A  crates/openhuman-core/src/agent/session_host/runtime_adapter_session_state_tests.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_adapter_tests.rs
+A  crates/openhuman-core/src/agent/session_host/runtime_adapter_trace_tests.rs
+A  crates/openhuman-core/src/agent/session_host/runtime_adapter_usage_tests.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session/permanent.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session/post_commit.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session/post_commit_tests.rs
+A  crates/openhuman-core/src/agent/session_host/runtime_session/prelude.rs
+A  crates/openhuman-core/src/agent/session_host/runtime_session/prompt_surface.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session/tool_rules_tests.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session/transcript.rs
+D  crates/openhuman-core/src/agent/session_host/runtime_session_attachment_input.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session_juice_tests.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session_progress.rs
+A  crates/openhuman-core/src/agent/session_host/runtime_session_terminal_tests.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session_tests.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session_tool_surface.rs
+A  crates/openhuman-core/src/agent/session_host/runtime_session_tool_surface_tests.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session_turn.rs
+M  crates/openhuman-core/src/agent/session_host/runtime_session_usage.rs
+M  crates/openhuman-core/src/agent/session_host/stop_summary.rs
+D  crates/openhuman-core/src/agent/session_host/tool_progress.rs
+M  crates/openhuman-core/src/agent/session_host/transcript_compat_tests.rs
+M  crates/openhuman-core/src/agent/session_host/transcript_resume_stable_tests.rs
+M  crates/openhuman-core/src/agent/session_host/turn/context.rs
+D  crates/openhuman-core/src/agent/session_host/turn/graph.rs
+M  crates/openhuman-core/src/agent/session_host/turn/mod.rs
+D  crates/openhuman-core/src/agent/session_host/turn/tools.rs
+M  crates/openhuman-core/src/agent/session_host/turn_checkpoint.rs
+M  crates/openhuman-core/src/agent/session_host/turn_checkpoint_tests.rs
+M  crates/openhuman-core/src/agent/session_host/typed_transcript_compat_tests.rs
+M  crates/openhuman-core/src/agent/session_host/types.rs
+D  crates/openhuman-core/src/agent/session_import/mod.rs
+D  crates/openhuman-core/src/agent/session_store/ledger_sync.rs
+D  crates/openhuman-core/src/agent/stop_hooks.rs
+D  crates/openhuman-core/src/agent/stop_hooks_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/README.md
+M  crates/openhuman-core/src/agent/subagent_host/autonomous.rs
+UU crates/openhuman-core/src/agent/subagent_host/lifecycle.rs
+A  crates/openhuman-core/src/agent/subagent_host/lifecycle/driver_adapter.rs
+A  crates/openhuman-core/src/agent/subagent_host/lifecycle/driver_adapter_tests.rs
+A  crates/openhuman-core/src/agent/subagent_host/lifecycle/driver_result.rs
+A  crates/openhuman-core/src/agent/subagent_host/lifecycle/legacy_terminal.rs
+A  crates/openhuman-core/src/agent/subagent_host/lifecycle/persistence.rs
+M  crates/openhuman-core/src/agent/subagent_host/lifecycle_outcome.rs
+A  crates/openhuman-core/src/agent/subagent_host/lifecycle_outcome_tests.rs
+A  crates/openhuman-core/src/agent/subagent_host/lifecycle_storage_adoption_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/lifecycle_store.rs
+A  crates/openhuman-core/src/agent/subagent_host/lifecycle_terminal_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/lifecycle_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/mod.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/checkpoint.rs
+A  crates/openhuman-core/src/agent/subagent_host/ops/checkpoint_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/graph.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/graph/dispatch.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/graph/transcript.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/graph_failed_run_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/graph_policy_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/graph_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/mod.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/pause_checkpoint.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/prompt.rs
+D  crates/openhuman-core/src/agent/subagent_host/ops/prompt_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/provider.rs
+UU crates/openhuman-core/src/agent/subagent_host/ops/runner.rs
+A  crates/openhuman-core/src/agent/subagent_host/ops/runner_artifacts.rs
+A  crates/openhuman-core/src/agent/subagent_host/ops/runner_artifacts_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops/runner_checkpoint_tests.rs
+D  crates/openhuman-core/src/agent/subagent_host/ops/runner_result_cap.rs
+D  crates/openhuman-core/src/agent/subagent_host/ops/runner_result_cap_tests.rs
+D  crates/openhuman-core/src/agent/subagent_host/ops_dedup_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops_tests.rs
+A  crates/openhuman-core/src/agent/subagent_host/ops_tests_driver_bridge_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops_tests_model_resolution_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/ops_tests_slug_filter_typed_mode_tests.rs
+A  crates/openhuman-core/src/agent/subagent_host/ops_tests_trace_export_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/tool_prep.rs
+M  crates/openhuman-core/src/agent/subagent_host/tool_prep_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/tool_ranking_tests.rs
+M  crates/openhuman-core/src/agent/subagent_host/types.rs
+M  crates/openhuman-core/src/agent/tinyagents/README.md
+M  crates/openhuman-core/src/agent/tinyagents/budget.rs
+M  crates/openhuman-core/src/agent/tinyagents/budget_stop_turn_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/context_wiring.rs
+D  crates/openhuman-core/src/agent/tinyagents/embeddings.rs
+D  crates/openhuman-core/src/agent/tinyagents/embeddings_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/bundle.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/bundle_tests.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/context_composer.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/context_composer_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/definition_registry.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/definition_registry_tests.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/delegation.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/learning_sink.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/learning_sink_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/mod.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/model_resolver.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/model_resolver_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/operation_context.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/progress_sink.rs
+D  crates/openhuman-core/src/agent/tinyagents/host/progress_sink_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/run_context.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/security_gate.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/tool_outcome_classifier.rs
+M  crates/openhuman-core/src/agent/tinyagents/host/tool_outcome_classifier_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/hosted_error.rs
+M  crates/openhuman-core/src/agent/tinyagents/hosted_error_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/journal.rs
+M  crates/openhuman-core/src/agent/tinyagents/live_harness.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware.rs
+D  crates/openhuman-core/src/agent/tinyagents/middleware/embedder_hooks.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/failure_policy.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/fetched_site.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/memory_pack.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/packed_tool_route.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/repeated_failure.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/repeated_failure_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/tool_outcome_capture.rs
+UU crates/openhuman-core/src/agent/tinyagents/middleware/tool_policy.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/turn_context.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware/turn_context_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_classified_failure_fetch_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_classified_failure_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_command_exit_failure_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_failure_effect_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_failure_policy_class_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_loop_guard_tests.rs
+D  crates/openhuman-core/src/agent/tinyagents/middleware_memory_and_hooks_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_stop_cause_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_tool_output_compaction_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/middleware_tool_output_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/mod.rs
+M  crates/openhuman-core/src/agent/tinyagents/nested_calls_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/observability.rs
+M  crates/openhuman-core/src/agent/tinyagents/observability/bridge_types.rs
+M  crates/openhuman-core/src/agent/tinyagents/observability/event_bridge.rs
+M  crates/openhuman-core/src/agent/tinyagents/observability/event_projection.rs
+M  crates/openhuman-core/src/agent/tinyagents/observability/tool_progress_projection.rs
+M  crates/openhuman-core/src/agent/tinyagents/observability_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/payload_summarizer.rs
+M  crates/openhuman-core/src/agent/tinyagents/payload_summarizer_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/policy_denial.rs
+M  crates/openhuman-core/src/agent/tinyagents/policy_denial_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/reaper.rs
+M  crates/openhuman-core/src/agent/tinyagents/reaper_tests.rs
+D  crates/openhuman-core/src/agent/tinyagents/replay/local_checks.rs
+D  crates/openhuman-core/src/agent/tinyagents/replay/local_checks_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/routes.rs
+M  crates/openhuman-core/src/agent/tinyagents/routes_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/steering_forwarder.rs
+D  crates/openhuman-core/src/agent/tinyagents/stop_hooks.rs
+D  crates/openhuman-core/src/agent/tinyagents/stop_hooks_tests.rs
+A  crates/openhuman-core/src/agent/tinyagents/subagent_projection.rs
+A  crates/openhuman-core/src/agent/tinyagents/supplemental_trace.rs
+D  crates/openhuman-core/src/agent/tinyagents/todos.rs
+M  crates/openhuman-core/src/agent/tinyagents/tool_registration.rs
+M  crates/openhuman-core/src/agent/tinyagents/tool_registration_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/turn_exec.rs
+D  crates/openhuman-core/src/agent/tinyagents/turn_exec_hosted.rs
+A  crates/openhuman-core/src/agent/tinyagents/turn_exec_native.rs
+M  crates/openhuman-core/src/agent/tinyagents/turn_exec_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/turn_middleware.rs
+D  crates/openhuman-core/src/agent/tinyagents/turn_model_resolver.rs
+M  crates/openhuman-core/src/agent/tinyagents/turn_outcome.rs
+M  crates/openhuman-core/src/agent/tinyagents/turn_plan.rs
+M  crates/openhuman-core/src/agent/tinyagents/turn_plan_tests.rs
+M  crates/openhuman-core/src/agent/tinyagents/turn_policy.rs
+M  crates/openhuman-core/src/agent/tinyagents/turn_run_finalize.rs
+UD crates/openhuman-core/src/agent/tinyagents/use_skill_dispatch.rs
+M  crates/openhuman-core/src/agent/tinyagents/use_skill_dispatch_tests.rs
+D  crates/openhuman-core/src/agent/todos/README.md
+D  crates/openhuman-core/src/agent/todos/mod.rs
+D  crates/openhuman-core/src/agent/todos/ops.rs
+M  crates/openhuman-core/src/agent/tools.rs
+M  crates/openhuman-core/src/agent/tools/README.md
+M  crates/openhuman-core/src/agent/tools/plan_exit.rs
+M  crates/openhuman-core/src/agent/tools/plan_exit_tests.rs
+M  crates/openhuman-core/src/agent/tools/todo.rs
+M  crates/openhuman-core/src/agent/tools/todo_tests.rs
+D  crates/openhuman-core/src/agent/triage/decision_tests.rs
+D  crates/openhuman-core/src/agent/triage/evaluator/chain_tests.rs
+D  crates/openhuman-core/src/agent/triage/evaluator/prompt_tests.rs
+M  crates/openhuman-core/src/agent/turn_env.rs
+M  crates/openhuman-core/src/agent/turn_env_tests.rs
+D  crates/openhuman-core/src/agent/turn_projection.rs
+D  crates/openhuman-core/src/agent/turn_projection_tests.rs
+R  crates/openhuman-core/src/agent/registry/README.md -> crates/openhuman-core/src/agent_registry/README.md
+R  crates/openhuman-core/src/agent/registry/agents/critic/agent.toml -> crates/openhuman-core/src/agent_registry/agents/critic/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/critic/prompt.md -> crates/openhuman-core/src/agent_registry/agents/critic/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/critic/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/critic/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/fleet_prompt_tests.rs -> crates/openhuman-core/src/agent_registry/agents/fleet_prompt_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/image_agent/agent.toml -> crates/openhuman-core/src/agent_registry/agents/image_agent/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/image_agent/prompt.md -> crates/openhuman-core/src/agent_registry/agents/image_agent/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/image_agent/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/image_agent/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/image_agent/prompt_tests.rs -> crates/openhuman-core/src/agent_registry/agents/image_agent/prompt_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/loader.rs -> crates/openhuman-core/src/agent_registry/agents/loader.rs
+R  crates/openhuman-core/src/agent/registry/agents/loader_tests.rs -> crates/openhuman-core/src/agent_registry/agents/loader_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/loader_tests_builtin_registration_tests.rs -> crates/openhuman-core/src/agent_registry/agents/loader_tests_builtin_registration_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/loader_tests_orchestrator_tier_tests.rs -> crates/openhuman-core/src/agent_registry/agents/loader_tests_orchestrator_tier_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/loader_tests_specialist_agents_tests.rs -> crates/openhuman-core/src/agent_registry/agents/loader_tests_specialist_agents_tests.rs
+A  crates/openhuman-core/src/agent_registry/agents/mod.rs
+R  crates/openhuman-core/src/agent/registry/agents/morning_briefing/agent.toml -> crates/openhuman-core/src/agent_registry/agents/morning_briefing/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/morning_briefing/prompt.md -> crates/openhuman-core/src/agent_registry/agents/morning_briefing/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/morning_briefing/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/morning_briefing/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/morning_briefing/prompt_tests.rs -> crates/openhuman-core/src/agent_registry/agents/morning_briefing/prompt_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/orchestrator/agent.toml -> crates/openhuman-core/src/agent_registry/agents/orchestrator/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/orchestrator/prompt.md -> crates/openhuman-core/src/agent_registry/agents/orchestrator/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/orchestrator/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/orchestrator/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/orchestrator/prompt_tests.rs -> crates/openhuman-core/src/agent_registry/agents/orchestrator/prompt_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/orchestrator/prompt_tests_installed_skills_tests.rs -> crates/openhuman-core/src/agent_registry/agents/orchestrator/prompt_tests_installed_skills_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/orchestrator/prompt_tests_session_routing_tests.rs -> crates/openhuman-core/src/agent_registry/agents/orchestrator/prompt_tests_session_routing_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/planner/agent.toml -> crates/openhuman-core/src/agent_registry/agents/planner/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/planner/prompt.md -> crates/openhuman-core/src/agent_registry/agents/planner/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/planner/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/planner/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/presentation_agent/agent.toml -> crates/openhuman-core/src/agent_registry/agents/presentation_agent/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/presentation_agent/prompt.md -> crates/openhuman-core/src/agent_registry/agents/presentation_agent/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/presentation_agent/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/presentation_agent/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/presentation_agent/prompt_tests.rs -> crates/openhuman-core/src/agent_registry/agents/presentation_agent/prompt_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/summarizer/agent.toml -> crates/openhuman-core/src/agent_registry/agents/summarizer/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/summarizer/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/summarizer/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/task_manager_agent/agent.toml -> crates/openhuman-core/src/agent_registry/agents/task_manager_agent/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/task_manager_agent/prompt.md -> crates/openhuman-core/src/agent_registry/agents/task_manager_agent/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/task_manager_agent/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/task_manager_agent/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/task_manager_agent/prompt_tests.rs -> crates/openhuman-core/src/agent_registry/agents/task_manager_agent/prompt_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/trigger_reactor/agent.toml -> crates/openhuman-core/src/agent_registry/agents/trigger_reactor/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/trigger_reactor/prompt.md -> crates/openhuman-core/src/agent_registry/agents/trigger_reactor/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/trigger_triage/agent.toml -> crates/openhuman-core/src/agent_registry/agents/trigger_triage/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/trigger_triage/prompt.md -> crates/openhuman-core/src/agent_registry/agents/trigger_triage/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/video_agent/agent.toml -> crates/openhuman-core/src/agent_registry/agents/video_agent/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/video_agent/prompt.md -> crates/openhuman-core/src/agent_registry/agents/video_agent/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/video_agent/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/video_agent/prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/video_agent/prompt_tests.rs -> crates/openhuman-core/src/agent_registry/agents/video_agent/prompt_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/vision_agent/agent.toml -> crates/openhuman-core/src/agent_registry/agents/vision_agent/agent.toml
+R  crates/openhuman-core/src/agent/registry/agents/vision_agent/prompt.md -> crates/openhuman-core/src/agent_registry/agents/vision_agent/prompt.md
+R  crates/openhuman-core/src/agent/registry/agents/vision_agent/prompt.rs -> crates/openhuman-core/src/agent_registry/agents/vision_agent/prompt.rs
+R  crates/openhuman-core/src/agent/registry/defaults.rs -> crates/openhuman-core/src/agent_registry/defaults.rs
+R  crates/openhuman-core/src/agent/registry/defaults_tests.rs -> crates/openhuman-core/src/agent_registry/defaults_tests.rs
+R  crates/openhuman-core/src/agent/harness/host_definition.rs -> crates/openhuman-core/src/agent_registry/host_definition.rs
+R  crates/openhuman-core/src/agent/harness/host_definition_tests.rs -> crates/openhuman-core/src/agent_registry/host_definition_tests.rs
+R  crates/openhuman-core/src/agent/library/mod.rs -> crates/openhuman-core/src/agent_registry/library/mod.rs
+R  crates/openhuman-core/src/agent/library/ops.rs -> crates/openhuman-core/src/agent_registry/library/ops.rs
+R  crates/openhuman-core/src/agent/library/ops_tests.rs -> crates/openhuman-core/src/agent_registry/library/ops_tests.rs
+R  crates/openhuman-core/src/agent/library/types.rs -> crates/openhuman-core/src/agent_registry/library/types.rs
+R  crates/openhuman-core/src/agent/registry/mod.rs -> crates/openhuman-core/src/agent_registry/mod.rs
+R  crates/openhuman-core/src/agent/registry/ops.rs -> crates/openhuman-core/src/agent_registry/ops.rs
+R  crates/openhuman-core/src/agent/registry/ops_tests.rs -> crates/openhuman-core/src/agent_registry/ops_tests.rs
+R  crates/openhuman-core/src/agent/registry/rpc.rs -> crates/openhuman-core/src/agent_registry/rpc.rs
+R  crates/openhuman-core/src/agent/registry/schemas.rs -> crates/openhuman-core/src/agent_registry/schemas.rs
+R  crates/openhuman-core/src/agent/registry/schemas_tests.rs -> crates/openhuman-core/src/agent_registry/schemas_tests.rs
+R  crates/openhuman-core/src/agent/registry/types.rs -> crates/openhuman-core/src/agent_registry/types.rs
+R  crates/openhuman-core/src/agent/registry/types_tests.rs -> crates/openhuman-core/src/agent_registry/types_tests.rs
+A  crates/openhuman-core/src/agent_runs/agent_teams/mod.rs
+R  crates/openhuman-core/src/agent/orchestration/agent_teams/schemas.rs -> crates/openhuman-core/src/agent_runs/agent_teams/schemas.rs
+R  crates/openhuman-core/src/agent/orchestration/agent_teams/schemas_tests.rs -> crates/openhuman-core/src/agent_runs/agent_teams/schemas_tests.rs
+R  crates/openhuman-core/src/agent/orchestration/command_center/mod.rs -> crates/openhuman-core/src/agent_runs/command_center/mod.rs
+R  crates/openhuman-core/src/agent/orchestration/command_center/schemas.rs -> crates/openhuman-core/src/agent_runs/command_center/schemas.rs
+R  crates/openhuman-core/src/agent/orchestration/command_center/schemas_tests.rs -> crates/openhuman-core/src/agent_runs/command_center/schemas_tests.rs
+R  crates/openhuman-core/src/agent/context_breakdown.rs -> crates/openhuman-core/src/agent_runs/context_breakdown.rs
+R  crates/openhuman-core/src/agent/context_breakdown_tests.rs -> crates/openhuman-core/src/agent_runs/context_breakdown_tests.rs
+A  crates/openhuman-core/src/agent_runs/mod.rs
+AU crates/openhuman-core/src/agent_runs/replay/local_checks.rs
+AU crates/openhuman-core/src/agent_runs/replay/local_checks_tests.rs
+R  crates/openhuman-core/src/agent/tinyagents/replay/mod.rs -> crates/openhuman-core/src/agent_runs/replay/mod.rs
+R  crates/openhuman-core/src/agent/tinyagents/replay/ops.rs -> crates/openhuman-core/src/agent_runs/replay/ops.rs
+R  crates/openhuman-core/src/agent/tinyagents/replay/schemas.rs -> crates/openhuman-core/src/agent_runs/replay/schemas.rs
+R  crates/openhuman-core/src/agent/tinyagents/replay/schemas_tests.rs -> crates/openhuman-core/src/agent_runs/replay/schemas_tests.rs
+R  crates/openhuman-core/src/agent/schemas.rs -> crates/openhuman-core/src/agent_runs/schemas.rs
+R  crates/openhuman-core/src/agent/schemas_tests.rs -> crates/openhuman-core/src/agent_runs/schemas_tests.rs
+R  crates/openhuman-core/src/agent/orchestration/subagent_control.rs -> crates/openhuman-core/src/agent_runs/subagent_control.rs
+R  crates/openhuman-core/src/agent/orchestration/subagent_control_tests.rs -> crates/openhuman-core/src/agent_runs/subagent_control_tests.rs
+R  crates/openhuman-core/src/agent/orchestration/run_ledger_finalize.rs -> crates/openhuman-core/src/agent_runs/subagent_finalize.rs
+R  crates/openhuman-core/src/agent/orchestration/run_ledger_finalize_tests.rs -> crates/openhuman-core/src/agent_runs/subagent_finalize_tests.rs
+A  crates/openhuman-core/src/agent_runs/workflow_runs/mod.rs
+R  crates/openhuman-core/src/agent/orchestration/workflow_runs/ops.rs -> crates/openhuman-core/src/agent_runs/workflow_runs/ops.rs
+R  crates/openhuman-core/src/agent/orchestration/workflow_runs/ops_tests.rs -> crates/openhuman-core/src/agent_runs/workflow_runs/ops_tests.rs
+R  crates/openhuman-core/src/agent/orchestration/workflow_runs/schemas.rs -> crates/openhuman-core/src/agent_runs/workflow_runs/schemas.rs
+R  crates/openhuman-core/src/agent/orchestration/workflow_runs/schemas_tests.rs -> crates/openhuman-core/src/agent_runs/workflow_runs/schemas_tests.rs
+R  crates/openhuman-core/src/agent/orchestration/worktree_schemas.rs -> crates/openhuman-core/src/agent_runs/worktree_schemas.rs
+R  crates/openhuman-core/src/agent/orchestration/worktree_schemas_tests.rs -> crates/openhuman-core/src/agent_runs/worktree_schemas_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/README.md -> crates/openhuman-core/src/artifacts/README.md
+R  crates/openhuman-core/src/agent/session_host/artifact_wiring.rs -> crates/openhuman-core/src/artifacts/artifact_wiring.rs
+R  crates/openhuman-core/src/agent/session_host/artifact_wiring_tests.rs -> crates/openhuman-core/src/artifacts/artifact_wiring_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/files.rs -> crates/openhuman-core/src/artifacts/files.rs
+R  crates/openhuman-core/src/agent/artifacts/files_tests.rs -> crates/openhuman-core/src/artifacts/files_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/migrate.rs -> crates/openhuman-core/src/artifacts/migrate.rs
+R  crates/openhuman-core/src/agent/artifacts/migrate_tests.rs -> crates/openhuman-core/src/artifacts/migrate_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/mod.rs -> crates/openhuman-core/src/artifacts/mod.rs
+R  crates/openhuman-core/src/agent/artifacts/ops.rs -> crates/openhuman-core/src/artifacts/ops.rs
+R  crates/openhuman-core/src/agent/artifacts/ops_tests.rs -> crates/openhuman-core/src/artifacts/ops_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/preview.rs -> crates/openhuman-core/src/artifacts/preview.rs
+R  crates/openhuman-core/src/agent/artifacts/preview_tests.rs -> crates/openhuman-core/src/artifacts/preview_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/production.rs -> crates/openhuman-core/src/artifacts/production.rs
+R  crates/openhuman-core/src/agent/artifacts/production_tests.rs -> crates/openhuman-core/src/artifacts/production_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/publisher_slot.rs -> crates/openhuman-core/src/artifacts/publisher_slot.rs
+R  crates/openhuman-core/src/agent/artifacts/publisher_slot_tests.rs -> crates/openhuman-core/src/artifacts/publisher_slot_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/schemas.rs -> crates/openhuman-core/src/artifacts/schemas.rs
+R  crates/openhuman-core/src/agent/artifacts/schemas_tests.rs -> crates/openhuman-core/src/artifacts/schemas_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/storage_schema.rs -> crates/openhuman-core/src/artifacts/storage_schema.rs
+R  crates/openhuman-core/src/agent/artifacts/storage_schema_tests.rs -> crates/openhuman-core/src/artifacts/storage_schema_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/store.rs -> crates/openhuman-core/src/artifacts/store.rs
+R  crates/openhuman-core/src/agent/artifacts/store_documents.rs -> crates/openhuman-core/src/artifacts/store_documents.rs
+R  crates/openhuman-core/src/agent/artifacts/store_documents_tests.rs -> crates/openhuman-core/src/artifacts/store_documents_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/store_tests.rs -> crates/openhuman-core/src/artifacts/store_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/tiny_store.rs -> crates/openhuman-core/src/artifacts/tiny_store.rs
+R  crates/openhuman-core/src/agent/artifacts/tiny_store_tests.rs -> crates/openhuman-core/src/artifacts/tiny_store_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/types.rs -> crates/openhuman-core/src/artifacts/types.rs
+R  crates/openhuman-core/src/agent/artifacts/types_tests.rs -> crates/openhuman-core/src/artifacts/types_tests.rs
+R  crates/openhuman-core/src/agent/artifacts/version_documents.rs -> crates/openhuman-core/src/artifacts/version_documents.rs
+R  crates/openhuman-core/src/agent/artifacts/version_documents_tests.rs -> crates/openhuman-core/src/artifacts/version_documents_tests.rs
+R  crates/openhuman-core/src/agent/attachments/README.md -> crates/openhuman-core/src/attachments/README.md
+R  crates/openhuman-core/src/agent/attachments/host.rs -> crates/openhuman-core/src/attachments/host.rs
+R  crates/openhuman-core/src/agent/attachments/host_tests.rs -> crates/openhuman-core/src/attachments/host_tests.rs
+R  crates/openhuman-core/src/agent/attachments/legacy.rs -> crates/openhuman-core/src/attachments/legacy.rs
+R  crates/openhuman-core/src/agent/attachments/mod.rs -> crates/openhuman-core/src/attachments/mod.rs
+R  crates/openhuman-core/src/agent/attachments/mod_access_tests.rs -> crates/openhuman-core/src/attachments/mod_access_tests.rs
+R  crates/openhuman-core/src/agent/attachments/mod_tests.rs -> crates/openhuman-core/src/attachments/mod_tests.rs
+A  crates/openhuman-core/src/attachments/provider.rs
+R  crates/openhuman-core/src/agent/attachments/provider_cache.rs -> crates/openhuman-core/src/attachments/provider_cache.rs
+R  crates/openhuman-core/src/agent/attachments/provider_context_tests.rs -> crates/openhuman-core/src/attachments/provider_context_tests.rs
+A  crates/openhuman-core/src/attachments/provider_fallback.rs
+R  crates/openhuman-core/src/agent/attachments/provider_history_tests.rs -> crates/openhuman-core/src/attachments/provider_history_tests.rs
+A  crates/openhuman-core/src/attachments/provider_injected_tests.rs
+A  crates/openhuman-core/src/attachments/provider_owner.rs
+A  crates/openhuman-core/src/attachments/provider_owner_tests.rs
+R  crates/openhuman-core/src/agent/attachments/provider_routing_tests.rs -> crates/openhuman-core/src/attachments/provider_routing_tests.rs
+R  crates/openhuman-core/src/agent/attachments/provider_security_tests.rs -> crates/openhuman-core/src/attachments/provider_security_tests.rs
+R  crates/openhuman-core/src/agent/attachments/provider_source.rs -> crates/openhuman-core/src/attachments/provider_source.rs
+R  crates/openhuman-core/src/agent/attachments/provider_tests.rs -> crates/openhuman-core/src/attachments/provider_tests.rs
+M  crates/openhuman-core/src/channels/mod.rs
+M  crates/openhuman-core/src/channels/proactive.rs
+R  crates/openhuman-core/src/agent/context/channels_prompt.rs -> crates/openhuman-core/src/channels/prompt.rs
+R  crates/openhuman-core/src/agent/context/channels_prompt_tests.rs -> crates/openhuman-core/src/channels/prompt_tests.rs
+M  crates/openhuman-core/src/channels/providers/relay/ops_tests.rs
+M  crates/openhuman-core/src/channels/runtime/dispatch/host_agent/dispatch_tests.rs
+M  crates/openhuman-core/src/channels/runtime/dispatch/host_agent/mod.rs
+M  crates/openhuman-core/src/channels/runtime/dispatch/host_agent/posture.rs
+M  crates/openhuman-core/src/channels/runtime/dispatch/host_agent/turn.rs
+M  crates/openhuman-core/src/channels/runtime/dispatch/mod_scoping_tests_tests.rs
+M  crates/openhuman-core/src/channels/runtime/dispatch/processor/bus_turn.rs
+M  crates/openhuman-core/src/channels/runtime/dispatch/processor/turn.rs
+M  crates/openhuman-core/src/channels/runtime/dispatch/routing.rs
+M  crates/openhuman-core/src/channels/runtime/startup/start_channels.rs
+M  crates/openhuman-core/src/channels/runtime/startup/turn_parts.rs
+M  crates/openhuman-core/src/channels/runtime/test_support.rs
+M  crates/openhuman-core/src/channels/system_prompt.rs
+M  crates/openhuman-core/src/channels/tests/identity.rs
+M  crates/openhuman-core/src/channels/tests/prompt.rs
+M  crates/openhuman-core/src/channels/tests/runtime_dispatch.rs
+M  crates/openhuman-core/src/config/ops/agent.rs
+M  crates/openhuman-core/src/config/ops_files_dir_tests.rs
+M  crates/openhuman-core/src/config/schema/agent.rs
+M  crates/openhuman-core/src/config/schema/context.rs
+M  crates/openhuman-core/src/config/schema/hooks.rs
+M  crates/openhuman-core/src/config/schema/load/env_overlay/dictation_context.rs
+M  crates/openhuman-core/src/config/schema/load_env_overlay_context_tests.rs
+M  crates/openhuman-core/src/config/schema/tools/multimodal.rs
+M  crates/openhuman-core/src/config/schema/types/config.rs
+M  crates/openhuman-core/src/config/schema/types/defaults.rs
+M  crates/openhuman-core/src/core/agent_cli.rs
+R  crates/openhuman-core/src/agent/debug/dump_writer.rs -> crates/openhuman-core/src/core/agent_cli/debug/dump_writer.rs
+R  crates/openhuman-core/src/agent/debug/dump_writer_tests.rs -> crates/openhuman-core/src/core/agent_cli/debug/dump_writer_tests.rs
+R  crates/openhuman-core/src/agent/debug/mod.rs -> crates/openhuman-core/src/core/agent_cli/debug/mod.rs
+R  crates/openhuman-core/src/agent/debug/prompt_size.rs -> crates/openhuman-core/src/core/agent_cli/debug/prompt_size.rs
+R  crates/openhuman-core/src/agent/debug/prompt_size_tests.rs -> crates/openhuman-core/src/core/agent_cli/debug/prompt_size_tests.rs
+R  crates/openhuman-core/src/agent/debug/wire.rs -> crates/openhuman-core/src/core/agent_cli/debug/wire.rs
+R  crates/openhuman-core/src/agent/debug/wire_tests.rs -> crates/openhuman-core/src/core/agent_cli/debug/wire_tests.rs
+M  crates/openhuman-core/src/core/all.rs
+M  crates/openhuman-core/src/core/all_removed_tests.rs
+M  crates/openhuman-core/src/core/events.rs
+M  crates/openhuman-core/src/core/observability.rs
+A  crates/openhuman-core/src/core/observability/progress_tracing.rs
+R  crates/openhuman-core/src/agent/progress_tracing/export.rs -> crates/openhuman-core/src/core/observability/progress_tracing/export.rs
+A  crates/openhuman-core/src/core/observability/progress_tracing/export_tests.rs
+R  crates/openhuman-core/src/agent/progress_tracing/langfuse/environment.rs -> crates/openhuman-core/src/core/observability/telemetry/langfuse/environment.rs
+R  crates/openhuman-core/src/agent/progress_tracing/langfuse_trace_fields_tests.rs -> crates/openhuman-core/src/core/observability/telemetry/langfuse/environment_parse_tests.rs
+R  crates/openhuman-core/src/agent/progress_tracing/langfuse_batch_tests.rs -> crates/openhuman-core/src/core/observability/telemetry/langfuse/environment_policy_tests.rs
+A  crates/openhuman-core/src/core/observability/telemetry/mod.rs
+A  crates/openhuman-core/src/core/observability/trace_export_adoption_tests.rs
+A  crates/openhuman-core/src/core/observability_channel_message.rs
+M  crates/openhuman-core/src/core/observability_error_classification_user_state_tests.rs
+M  crates/openhuman-core/src/core/runtime/agent_scope_tests.rs
+M  crates/openhuman-core/src/core/runtime/bootstrap.rs
+M  crates/openhuman-core/src/core/runtime/context.rs
+M  crates/openhuman-core/src/core/runtime/context_agent.rs
+M  crates/openhuman-core/src/core/runtime/context_overlay.rs
+M  crates/openhuman-core/src/core/runtime/context_turn_origin.rs
+M  crates/openhuman-core/src/core/runtime/context_turn_origin_tests.rs
+M  crates/openhuman-core/src/core/runtime/dispatch_ctx.rs
+M  crates/openhuman-core/src/core/runtime/dispatch_ctx_tests.rs
+M  crates/openhuman-core/src/core/runtime/saas.rs
+M  crates/openhuman-core/src/core/runtime/saas_tests.rs
+M  crates/openhuman-core/src/core/runtime/subscribers.rs
+M  crates/openhuman-core/src/core/runtime/tenant.rs
+M  crates/openhuman-core/src/core/runtime/tenant_proptest_tests.rs
+M  crates/openhuman-core/src/cron/README.md
+M  crates/openhuman-core/src/cron/origin.rs
+M  crates/openhuman-core/src/cron/origin_tests.rs
+M  crates/openhuman-core/src/cron/scheduler/agent_run.rs
+M  crates/openhuman-core/src/cron/scheduler/origin_delivery.rs
+M  crates/openhuman-core/src/cron/scheduler/origin_delivery_tests.rs
+M  crates/openhuman-core/src/cron/scheduler_halt_and_persist_tests.rs
+M  crates/openhuman-core/src/cron/scheduler_host_agent_tests.rs
+M  crates/openhuman-core/src/desktop/notifications/README.md
+M  crates/openhuman-core/src/desktop/notifications/rpc.rs
+M  crates/openhuman-core/src/flows/README.md
+M  crates/openhuman-core/src/flows/agents/flow_discovery/prompt.rs
+M  crates/openhuman-core/src/flows/agents/mod.rs
+M  crates/openhuman-core/src/flows/agents/workflow_builder/prompt.rs
+M  crates/openhuman-core/src/flows/builder_host.rs
+M  crates/openhuman-core/src/flows/memory_tools.rs
+M  crates/openhuman-core/src/flows/mod.rs
+M  crates/openhuman-core/src/flows/ops.rs
+M  crates/openhuman-core/src/flows/ops/builder.rs
+M  crates/openhuman-core/src/flows/ops/builder_gates.rs
+M  crates/openhuman-core/src/flows/ops/discovery.rs
+M  crates/openhuman-core/src/flows/ops/inference_readiness.rs
+M  crates/openhuman-core/src/flows/ops/streaming.rs
+M  crates/openhuman-core/src/flows/ops_agent_binding_tests.rs
+M  crates/openhuman-core/src/flows/ops_inference_gate_tests.rs
+M  crates/openhuman-core/src/flows/ops_migration_and_side_effect_tests.rs
+M  crates/openhuman-core/src/flows/ops_run_status_and_prompt_binding_tests.rs
+M  crates/openhuman-core/src/flows/tinyflows/caps/agent.rs
+M  crates/openhuman-core/src/flows/tinyflows/caps/agent_tests.rs
+M  crates/openhuman-core/src/flows/tinyflows/caps/ops_tests.rs
+M  crates/openhuman-core/src/flows/tinyflows/caps/ops_tier_gate_and_timeouts_tests.rs
+M  crates/openhuman-core/src/flows/tinyflows/caps/prompt.rs
+M  crates/openhuman-core/src/flows/tinyflows/caps/tier.rs
+M  crates/openhuman-core/src/flows/tinyflows/langfuse_export.rs
+M  crates/openhuman-core/src/flows/tinyflows/memory_adapter.rs
+M  crates/openhuman-core/src/flows/tinyflows/memory_adapter_tests.rs
+M  crates/openhuman-core/src/flows/tinyflows/tinyflows_capabilities_tests.rs
+M  crates/openhuman-core/src/flows/tinyflows/tinyflows_tests.rs
+M  crates/openhuman-core/src/flows/tools.rs
+M  crates/openhuman-core/src/hooks/README.md
+D  crates/openhuman-core/src/hooks/bridge.rs
+D  crates/openhuman-core/src/hooks/bridge_tests.rs
+M  crates/openhuman-core/src/hooks/host.rs
+M  crates/openhuman-core/src/hooks/mod.rs
+M  crates/openhuman-core/src/hooks/ops.rs
+M  crates/openhuman-core/src/hooks/schemas.rs
+M  crates/openhuman-core/src/hooks/shell.rs
+M  crates/openhuman-core/src/inference/embedding_host/rpc/settings.rs
+M  crates/openhuman-core/src/inference/failure_copy/mod.rs
+A  crates/openhuman-core/src/inference/failure_copy/stop_summary.rs
+M  crates/openhuman-core/src/inference/host_runtime/mod.rs
+M  crates/openhuman-core/src/inference/host_runtime/ops/agent_chat.rs
+M  crates/openhuman-core/src/inference/host_runtime/ops/agent_chat_tests.rs
+M  crates/openhuman-core/src/inference/host_runtime/ops/turn_guards.rs
+M  crates/openhuman-core/src/inference/host_runtime/ops_tests.rs
+M  crates/openhuman-core/src/inference/host_runtime/schemas.rs
+M  crates/openhuman-core/src/inference/host_runtime/service/speech.rs
+M  crates/openhuman-core/src/inference/mod.rs
+M  crates/openhuman-core/src/inference/provider/factory/turn_model.rs
+M  crates/openhuman-core/src/inference/provider/mod.rs
+R  crates/openhuman-core/src/agent/tinyagents/model.rs -> crates/openhuman-core/src/inference/provider/model.rs
+R  crates/openhuman-core/src/agent/tinyagents/model_g1_usage_tests_tests.rs -> crates/openhuman-core/src/inference/provider/model_g1_usage_tests_tests.rs
+M  crates/openhuman-core/src/inference/provider/openai_codex.rs
+M  crates/openhuman-core/src/inference/provider/ops_tests_error_suppression_tests.rs
+R  crates/openhuman-core/src/agent/tinyagents/reasoning.rs -> crates/openhuman-core/src/inference/reasoning.rs
+R  crates/openhuman-core/src/agent/tinyagents/reasoning_tests.rs -> crates/openhuman-core/src/inference/reasoning_tests.rs
+M  crates/openhuman-core/src/inference/schemas/catalog.rs
+M  crates/openhuman-core/src/inference/tokenjuice/repl_tools.rs
+M  crates/openhuman-core/src/inference/tokenjuice/schemas.rs
+R  crates/openhuman-core/src/agent/tinyagents/turn_models.rs -> crates/openhuman-core/src/inference/turn_models.rs
+R  crates/openhuman-core/src/agent/tinyagents/turn_models_tests.rs -> crates/openhuman-core/src/inference/turn_models_tests.rs
+R  crates/openhuman-core/src/agent/session_host/announcement_notes.rs -> crates/openhuman-core/src/integrations/announcement_notes.rs
+M  crates/openhuman-core/src/integrations/composio/README.md
+A  crates/openhuman-core/src/integrations/composio/auth_probe.rs
+M  crates/openhuman-core/src/integrations/composio/bus.rs
+M  crates/openhuman-core/src/integrations/composio/bus/trigger_subscriber.rs
+M  crates/openhuman-core/src/integrations/composio/connected_integrations/cache.rs
+M  crates/openhuman-core/src/integrations/composio/connected_integrations/fetch.rs
+M  crates/openhuman-core/src/integrations/composio/mod.rs
+M  crates/openhuman-core/src/integrations/composio/ops/mod.rs
+M  crates/openhuman-core/src/integrations/composio/ops_route_parity_tests.rs
+M  crates/openhuman-core/src/integrations/composio/tools/registry.rs
+M  crates/openhuman-core/src/integrations/composio/tools_host_credential_tests.rs
+R  crates/openhuman-core/src/agent/prompts/connected_identities.rs -> crates/openhuman-core/src/integrations/connected_identities.rs
+M  crates/openhuman-core/src/integrations/mod.rs
+R  crates/openhuman-core/src/agent/session_host/prelude_integrations.rs -> crates/openhuman-core/src/integrations/prelude_integrations.rs
+R  crates/openhuman-core/src/agent/session_host/prelude_integrations_tests.rs -> crates/openhuman-core/src/integrations/prelude_integrations_tests.rs
+R  crates/openhuman-core/src/agent/session_host/recorded_tools.rs -> crates/openhuman-core/src/integrations/recorded_tools.rs
+R  crates/openhuman-core/src/agent/session_host/recorded_tools_tests.rs -> crates/openhuman-core/src/integrations/recorded_tools_tests.rs
+M  crates/openhuman-core/src/integrations/task_sources/README.md
+M  crates/openhuman-core/src/integrations/task_sources/route.rs
+M  crates/openhuman-core/src/lib.rs
+M  crates/openhuman-core/src/mcp/registry/ops_tests.rs
+M  crates/openhuman-core/src/mcp/server/resources.rs
+M  crates/openhuman-core/src/mcp/server/resources_tests.rs
+M  crates/openhuman-core/src/mcp/server/tools/dispatch.rs
+M  crates/openhuman-core/src/mcp/ui/tools.rs
+M  crates/openhuman-core/src/media/README.md
+M  crates/openhuman-core/src/media/generation/artifact_tool.rs
+M  crates/openhuman-core/src/media/generation/artifact_tool_tests.rs
+M  crates/openhuman-core/src/media/generation/tools.rs
+M  crates/openhuman-core/src/memory/README.md
+M  crates/openhuman-core/src/memory/lifecycle/date_hint.rs
+M  crates/openhuman-core/src/memory/lifecycle/sender.rs
+R  crates/openhuman-core/src/agent/session_host/runtime_session/memory_ingest.rs -> crates/openhuman-core/src/memory/lifecycle/session_hooks.rs
+R  crates/openhuman-core/src/agent/session_host/runtime_session/memory_ingest_tests.rs -> crates/openhuman-core/src/memory/lifecycle/session_hooks_tests.rs
+M  crates/openhuman-core/src/modules/README.md
+M  crates/openhuman-core/src/modules/mod.rs
+UU crates/openhuman-core/src/modules/storage_import_tinyjuice_savings.rs
+M  crates/openhuman-core/src/modules/tinybox.rs
+R  crates/openhuman-core/src/agent/host_runtime.rs -> crates/openhuman-core/src/modules/tinybox/host_runtime.rs
+R  crates/openhuman-core/src/agent/host_runtime_tests.rs -> crates/openhuman-core/src/modules/tinybox/host_runtime_tests.rs
+A  crates/openhuman-core/src/modules/tinybox/operations.rs
+R  crates/openhuman-core/src/modules/tinybox_tests.rs -> crates/openhuman-core/src/modules/tinybox/operations_tests.rs
+M  crates/openhuman-core/src/modules/wallet_host.rs
+M  crates/openhuman-core/src/modules/wallet_host_tests.rs
+R  crates/openhuman-core/src/agent/plan_review/gate.rs -> crates/openhuman-core/src/plan_review/gate.rs
+R  crates/openhuman-core/src/agent/plan_review/gate_tests.rs -> crates/openhuman-core/src/plan_review/gate_tests.rs
+R  crates/openhuman-core/src/agent/plan_review/mod.rs -> crates/openhuman-core/src/plan_review/mod.rs
+R  crates/openhuman-core/src/agent/plan_review/schemas.rs -> crates/openhuman-core/src/plan_review/schemas.rs
+R  crates/openhuman-core/src/agent/plan_review/schemas_tests.rs -> crates/openhuman-core/src/plan_review/schemas_tests.rs
+R  crates/openhuman-core/src/agent/plan_review/tool.rs -> crates/openhuman-core/src/plan_review/tool.rs
+R  crates/openhuman-core/src/agent/plan_review/tool_tests.rs -> crates/openhuman-core/src/plan_review/tool_tests.rs
+R  crates/openhuman-core/src/agent/plan_review/types.rs -> crates/openhuman-core/src/plan_review/types.rs
+M  crates/openhuman-core/src/platform/cost/scope.rs
+M  crates/openhuman-core/src/platform/cost/scope_tests.rs
+M  crates/openhuman-core/src/platform/llm_gate/README.md
+M  crates/openhuman-core/src/platform/llm_gate/gate.rs
+M  crates/openhuman-core/src/platform/llm_gate/gate_tests.rs
+M  crates/openhuman-core/src/profiles/capabilities.rs
+M  crates/openhuman-core/src/profiles/host_tests.rs
+M  crates/openhuman-core/src/profiles/recovery.rs
+R  crates/openhuman-core/src/agent/progress.rs -> crates/openhuman-core/src/progress.rs
+A  crates/openhuman-core/src/prompts/composition.rs
+A  crates/openhuman-core/src/prompts/mod.rs
+R  crates/openhuman-core/src/agent/prompts/render_helpers/section_renderers.rs -> crates/openhuman-core/src/prompts/section_renderers.rs
+R  crates/openhuman-core/src/agent/prompts/sections.rs -> crates/openhuman-core/src/prompts/sections.rs
+R  crates/openhuman-core/src/agent/prompts/render_helpers/workspace_files.rs -> crates/openhuman-core/src/prompts/workspace_files.rs
+M  crates/openhuman-core/src/sandbox/README.md
+M  crates/openhuman-core/src/search/README.md
+M  crates/openhuman-core/src/security/approval/README.md
+M  crates/openhuman-core/src/security/approval/gate.rs
+M  crates/openhuman-core/src/security/approval/gate_core_flow_tests.rs
+M  crates/openhuman-core/src/security/approval/gate_triage_tests.rs
+M  crates/openhuman-core/src/security/mod.rs
+M  crates/openhuman-core/src/security/policy/path_checks.rs
+M  crates/openhuman-core/src/security/policy/policy_media_artifact_tests.rs
+M  crates/openhuman-core/src/security/policy/types.rs
+R  crates/openhuman-core/src/agent/attachments/provider_open.rs -> crates/openhuman-core/src/security/secure_open.rs
+R  crates/openhuman-core/src/agent/turn_origin.rs -> crates/openhuman-core/src/security/turn_origin.rs
+R  crates/openhuman-core/src/agent/turn_origin_tests.rs -> crates/openhuman-core/src/security/turn_origin_tests.rs
+R  crates/openhuman-core/src/agent/session_db/mod.rs -> crates/openhuman-core/src/sessions/mod.rs
+R  crates/openhuman-core/src/agent/session_db/schemas.rs -> crates/openhuman-core/src/sessions/schemas.rs
+R  crates/openhuman-core/src/agent/session_db/schemas_tests.rs -> crates/openhuman-core/src/sessions/schemas_tests.rs
+M  crates/openhuman-core/src/skills/README.md
+M  crates/openhuman-core/src/skills/catalog/README.md
+M  crates/openhuman-core/src/skills/catalog/agent/skill_setup/prompt.rs
+M  crates/openhuman-core/src/skills/e2e_plumbing_tests.rs
+M  crates/openhuman-core/src/skills/mod.rs
+M  crates/openhuman-core/src/skills/registry.rs
+M  crates/openhuman-core/src/skills/run_log.rs
+R  crates/openhuman-core/src/agent/tools/run_workflow.rs -> crates/openhuman-core/src/skills/run_workflow.rs
+R  crates/openhuman-core/src/agent/tools/run_workflow_tests.rs -> crates/openhuman-core/src/skills/run_workflow_tests.rs
+M  crates/openhuman-core/src/skills/runtime/run_machinery.rs
+M  crates/openhuman-core/src/skills/runtime/schemas.rs
+M  crates/openhuman-core/src/skills/schemas/handlers.rs
+M  crates/openhuman-core/src/skills/webhooks/README.md
+M  crates/openhuman-core/src/skills/webhooks/bus.rs
+M  crates/openhuman-core/src/skills/webhooks/ops.rs
+M  crates/openhuman-core/src/skills/write_root.rs
+R  crates/openhuman-core/src/agent/session_import/README.md -> crates/openhuman-core/src/storage/import/README.md
+R  crates/openhuman-core/src/agent/session_import/live.rs -> crates/openhuman-core/src/storage/import/live.rs
+M  crates/openhuman-core/src/storage/import/mod.rs
+R  crates/openhuman-core/src/agent/session_import/schemas.rs -> crates/openhuman-core/src/storage/import/schemas.rs
+R  crates/openhuman-core/src/agent/session_import/schemas_tests.rs -> crates/openhuman-core/src/storage/import/schemas_tests.rs
+M  crates/openhuman-core/src/storage/import/sessions.rs
+M  crates/openhuman-core/src/storage/mod.rs
+M  crates/openhuman-core/src/storage/rebind.rs
+M  crates/openhuman-core/src/storage/schema.rs
+R  crates/openhuman-core/src/agent/session_store/mod.rs -> crates/openhuman-core/src/storage/sessions/mod.rs
+R  crates/openhuman-core/src/agent/session_store/mod_tests.rs -> crates/openhuman-core/src/storage/sessions/mod_tests.rs
+R  crates/openhuman-core/src/agent/session_store/rebound.rs -> crates/openhuman-core/src/storage/sessions/rebound.rs
+R  crates/openhuman-core/src/agent/session_store/rebound_tests.rs -> crates/openhuman-core/src/storage/sessions/rebound_tests.rs
+R  crates/openhuman-core/src/agent/session_store/splice_fixture.rs -> crates/openhuman-core/src/storage/sessions/splice_fixture_tests.rs
+R  crates/openhuman-core/src/agent/session_store/tenant_router.rs -> crates/openhuman-core/src/storage/sessions/tenant_router.rs
+R  crates/openhuman-core/src/agent/session_store/tenant_router_tests.rs -> crates/openhuman-core/src/storage/sessions/tenant_router_tests.rs
+R  crates/openhuman-core/src/agent/session_store/workspace.rs -> crates/openhuman-core/src/storage/sessions/workspace.rs
+R  crates/openhuman-core/src/agent/session_store/workspace_tests.rs -> crates/openhuman-core/src/storage/sessions/workspace_tests.rs
+M  crates/openhuman-core/src/threads/README.md
+M  crates/openhuman-core/src/threads/artifact_rows.rs
+M  crates/openhuman-core/src/threads/artifact_rows_tests.rs
+M  crates/openhuman-core/src/threads/mod.rs
+M  crates/openhuman-core/src/threads/ops/crud.rs
+M  crates/openhuman-core/src/threads/ops/crud_message_append_tests.rs
+M  crates/openhuman-core/src/threads/ops/edit.rs
+M  crates/openhuman-core/src/threads/ops/edit_tests.rs
+M  crates/openhuman-core/src/threads/ops/edit_turn_state_tests.rs
+M  crates/openhuman-core/src/threads/ops/live_state.rs
+M  crates/openhuman-core/src/threads/ops/live_state_tests.rs
+M  crates/openhuman-core/src/threads/ops/purge.rs
+M  crates/openhuman-core/src/threads/ops/support.rs
+M  crates/openhuman-core/src/threads/ops/transcript_tests.rs
+M  crates/openhuman-core/src/threads/ops/turn_state_ops.rs
+M  crates/openhuman-core/src/threads/ops_conversion_tests.rs
+R  crates/openhuman-core/src/agent/tinyagents/run_mode.rs -> crates/openhuman-core/src/threads/run_mode.rs
+R  crates/openhuman-core/src/agent/tinyagents/run_mode_tests.rs -> crates/openhuman-core/src/threads/run_mode_tests.rs
+M  crates/openhuman-core/src/threads/store/transcript_key.rs
+M  crates/openhuman-core/src/threads/transcript_host_tests.rs
+M  crates/openhuman-core/src/threads/turn_state/mirror/observe.rs
+M  crates/openhuman-core/src/threads/turn_state/mirror_tests.rs
+M  crates/openhuman-core/src/threads/turn_state/mod.rs
+R  crates/openhuman-core/src/agent/subagent_host/ops/graph/worker_mirror.rs -> crates/openhuman-core/src/threads/worker_mirror.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/worker_thread.rs -> crates/openhuman-core/src/threads/worker_thread.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/worker_thread_tests.rs -> crates/openhuman-core/src/threads/worker_thread_tests.rs
+R  crates/openhuman-core/src/agent/tools/delegate.rs -> crates/openhuman-core/src/tools/delegate.rs
+R  crates/openhuman-core/src/agent/tools/delegate_tests.rs -> crates/openhuman-core/src/tools/delegate_tests.rs
+M  crates/openhuman-core/src/tools/impl/README.md
+M  crates/openhuman-core/src/tools/impl/browser/browser.rs
+M  crates/openhuman-core/src/tools/impl/browser/browser_task_actions.rs
+M  crates/openhuman-core/src/tools/impl/browser/browser_unattended.rs
+M  crates/openhuman-core/src/tools/impl/document/mod.rs
+M  crates/openhuman-core/src/tools/impl/mod.rs
+M  crates/openhuman-core/src/tools/impl/network/mcp.rs
+M  crates/openhuman-core/src/tools/impl/presentation/mod.rs
+M  crates/openhuman-core/src/tools/impl/presentation/types.rs
+M  crates/openhuman-core/src/tools/impl/system/install_tool.rs
+M  crates/openhuman-core/src/tools/impl/system/lsp.rs
+M  crates/openhuman-core/src/tools/impl/system/schedule.rs
+UU crates/openhuman-core/src/tools/impl/system/shell.rs
+M  crates/openhuman-core/src/tools/impl/system/shell_description.rs
+M  crates/openhuman-core/src/tools/impl/system/shell_support.rs
+M  crates/openhuman-core/src/tools/impl/system/shell_tests.rs
+M  crates/openhuman-core/src/tools/impl/system/shell_tests_platform_tests.rs
+A  crates/openhuman-core/src/tools/impl/threads/mod.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/spawn_worker_thread.rs -> crates/openhuman-core/src/tools/impl/threads/spawn_worker_thread.rs
+R  crates/openhuman-core/src/agent/orchestration/tools/spawn_worker_thread_tests.rs -> crates/openhuman-core/src/tools/impl/threads/spawn_worker_thread_tests.rs
+M  crates/openhuman-core/src/tools/mod.rs
+M  crates/openhuman-core/src/tools/native_ops.rs
+M  crates/openhuman-core/src/tools/ops.rs
+M  crates/openhuman-core/src/tools/ops_tests_default_registry_tests.rs
+M  crates/openhuman-core/src/tools/orchestrator_tools.rs
+M  crates/openhuman-core/src/tools/orchestrator_tools_tests.rs
+M  crates/openhuman-core/src/tools/rules/ops.rs
+M  crates/openhuman-core/src/tools/rules/ops_tests.rs
+M  crates/openhuman-core/src/tools/sources.rs
+M  crates/openhuman-core/src/tools/sources_tests.rs
+M  crates/openhuman-core/src/tools/toolpacks/README.md
+M  crates/openhuman-core/src/tools/toolpacks/registry.rs
+R  crates/openhuman-core/src/agent/triage/README.md -> crates/openhuman-core/src/triage/README.md
+R  crates/openhuman-core/src/agent/triage/decision.rs -> crates/openhuman-core/src/triage/decision.rs
+UU crates/openhuman-core/src/triage/decision_tests.rs
+R  crates/openhuman-core/src/agent/triage/envelope.rs -> crates/openhuman-core/src/triage/envelope.rs
+R  crates/openhuman-core/src/agent/triage/envelope_tests.rs -> crates/openhuman-core/src/triage/envelope_tests.rs
+R  crates/openhuman-core/src/agent/triage/escalation.rs -> crates/openhuman-core/src/triage/escalation.rs
+R  crates/openhuman-core/src/agent/triage/escalation_tests.rs -> crates/openhuman-core/src/triage/escalation_tests.rs
+R  crates/openhuman-core/src/agent/triage/evaluator.rs -> crates/openhuman-core/src/triage/evaluator.rs
+R  crates/openhuman-core/src/agent/triage/evaluator/arm.rs -> crates/openhuman-core/src/triage/evaluator/arm.rs
+R  crates/openhuman-core/src/agent/triage/evaluator/chain.rs -> crates/openhuman-core/src/triage/evaluator/chain.rs
+A  crates/openhuman-core/src/triage/evaluator/chain_tests.rs
+R  crates/openhuman-core/src/agent/triage/evaluator/outcome.rs -> crates/openhuman-core/src/triage/evaluator/outcome.rs
+R  crates/openhuman-core/src/agent/triage/evaluator/prompt.rs -> crates/openhuman-core/src/triage/evaluator/prompt.rs
+AU crates/openhuman-core/src/triage/evaluator/prompt_tests.rs
+R  crates/openhuman-core/src/agent/triage/evaluator_deferral_tests.rs -> crates/openhuman-core/src/triage/evaluator_deferral_tests.rs
+R  crates/openhuman-core/src/agent/triage/evaluator_fallback_chain_tests.rs -> crates/openhuman-core/src/triage/evaluator_fallback_chain_tests.rs
+R  crates/openhuman-core/src/agent/triage/evaluator_tests.rs -> crates/openhuman-core/src/triage/evaluator_tests.rs
+R  crates/openhuman-core/src/agent/triage/events.rs -> crates/openhuman-core/src/triage/events.rs
+R  crates/openhuman-core/src/agent/triage/events_tests.rs -> crates/openhuman-core/src/triage/events_tests.rs
+R  crates/openhuman-core/src/agent/triage/mod.rs -> crates/openhuman-core/src/triage/mod.rs
+R  crates/openhuman-core/src/agent/triage/origin.rs -> crates/openhuman-core/src/triage/origin.rs
+R  crates/openhuman-core/src/agent/triage/origin_tests.rs -> crates/openhuman-core/src/triage/origin_tests.rs
+R  crates/openhuman-core/src/agent/triage/routing.rs -> crates/openhuman-core/src/triage/routing.rs
+R  crates/openhuman-core/src/agent/triage/routing_tests.rs -> crates/openhuman-core/src/triage/routing_tests.rs
+R  crates/openhuman-core/src/agent/registry/agents/trigger_reactor/prompt.rs -> crates/openhuman-core/src/triage/trigger_reactor_prompt.rs
+R  crates/openhuman-core/src/agent/registry/agents/trigger_triage/prompt.rs -> crates/openhuman-core/src/triage/trigger_triage_prompt.rs
+M  crates/openhuman-core/src/voice/live/session.rs
+M  crates/openhuman-core/src/voice/realtime_harness.rs
+M  crates/openhuman-core/src/voice/realtime_harness/agent.rs
+M  crates/openhuman-core/src/voice/realtime_harness/prompt.rs
+M  crates/openhuman-core/src/voice/realtime_harness/turn_handler.rs
+M  crates/openhuman-core/src/web_chat/README.md
+D  crates/openhuman-core/src/web_chat/journal_shadow.rs
+D  crates/openhuman-core/src/web_chat/journal_shadow_tests.rs
+M  crates/openhuman-core/src/web_chat/mod.rs
+M  crates/openhuman-core/src/web_chat/ops/channel_ops.rs
+M  crates/openhuman-core/src/web_chat/ops/parallel_turn.rs
+M  crates/openhuman-core/src/web_chat/ops/start_chat.rs
+M  crates/openhuman-core/src/web_chat/ops/system_turn.rs
+M  crates/openhuman-core/src/web_chat/ops/turn_guards.rs
+M  crates/openhuman-core/src/web_chat/ops/turn_guards_tests.rs
+M  crates/openhuman-core/src/web_chat/progress_bridge.rs
+A  crates/openhuman-core/src/web_chat/progress_bridge_ledger.rs
+M  crates/openhuman-core/src/web_chat/progress_bridge_tests.rs
+M  crates/openhuman-core/src/web_chat/progress_bridge_trace.rs
+A  crates/openhuman-core/src/web_chat/progress_bridge_trace_tests.rs
+M  crates/openhuman-core/src/web_chat/run_task.rs
+M  crates/openhuman-core/src/web_chat/session.rs
+M  crates/openhuman-core/src/web_chat/session_checkout_tests.rs
+M  crates/openhuman-core/src/web_chat/turn_activity.rs
+M  crates/openhuman-core/src/web_chat/turn_close.rs
+R  crates/openhuman-core/src/agent/session_host/turn_backstop.rs -> crates/openhuman-core/src/web_chat/turn_guards/backstop.rs
+R  crates/openhuman-core/src/agent/session_host/turn_backstop_tests.rs -> crates/openhuman-core/src/web_chat/turn_guards/backstop_tests.rs
+A  crates/openhuman-core/src/web_chat/turn_guards/mod.rs
+M  crates/openhuman-core/src/web_chat/types.rs
+M  crates/openhuman-core/src/web_chat/web_tests_error_copy_fixture_tests.rs
+M  crates/openhuman-embed/Cargo.toml
+M  crates/openhuman-embed/README.md
+M  crates/openhuman-embed/examples/hooks.rs
+M  crates/openhuman-embed/examples/runtime_events.rs
+M  crates/openhuman-embed/src/agent/build.rs
+M  crates/openhuman-embed/src/agent/definition.rs
+M  crates/openhuman-embed/src/agent/layout.rs
+M  crates/openhuman-embed/src/agent/mod.rs
+M  crates/openhuman-embed/src/agent/spec.rs
+M  crates/openhuman-embed/src/artifacts.rs
+M  crates/openhuman-embed/src/harness/access.rs
+M  crates/openhuman-embed/src/host_internals.rs
+M  crates/openhuman-embed/src/lib.rs
+M  crates/openhuman-embed/src/permission.rs
+M  crates/openhuman-embed/src/profiles.rs
+M  crates/openhuman-embed/src/profiles/host.rs
+M  crates/openhuman-embed/src/profiles/host_tests.rs
+M  crates/openhuman-embed/src/runtime/README.md
+M  crates/openhuman-embed/src/runtime/build.rs
+M  crates/openhuman-embed/src/runtime/live_hooks.rs
+M  crates/openhuman-embed/src/runtime/mod.rs
+M  crates/openhuman-embed/src/runtime/run.rs
+M  crates/openhuman-embed/src/runtime/seams.rs
+M  crates/openhuman-embed/src/runtime/seams_tests.rs
+M  crates/openhuman-embed/src/runtime/summary.rs
+M  crates/openhuman-embed/src/turn.rs
+M  crates/openhuman-embed/src/turn_control.rs
+M  crates/openhuman-embed/src/turn_types.rs
+M  crates/openhuman-embed/tests/agent_lifecycle.rs
+M  crates/openhuman-embed/tests/attached_tools.rs
+M  crates/openhuman-embed/tests/cron_agents.rs
+M  crates/openhuman-embed/tests/flow_approvals.rs
+M  crates/openhuman-embed/tests/inline_permissions.rs
+M  crates/openhuman-embed/tests/profile_direct_providers.rs
+M  crates/openhuman-embed/tests/profile_host_capabilities.rs
+M  crates/openhuman-embed/tests/profile_operator_tools.rs
+M  crates/openhuman-embed/tests/profile_refused_tool_generation.rs
+M  crates/openhuman-embed/tests/runtime_agents.rs
+M  crates/openhuman-embed/tests/runtime_observation.rs
+M  crates/openhuman-embed/tests/scoped_hooks.rs
+M  crates/openhuman-embed/tests/seams_runtime.rs
+M  crates/openhuman-embed/tests/session_store.rs
+M  crates/openhuman-embed/tests/tool_hook_context.rs
+M  crates/openhuman-embed/tests/unit/turn_usage.rs
+M  crates/openhuman-rpc/src/server/socketio.rs
+M  crates/openhuman-rpc/src/session_store/README.md
+M  crates/openhuman-tinyhumans/src/integrations/types.rs
+M  crates/openhuman-tinyhumans/src/runtime.rs
+M  docs/TEST-COVERAGE-MATRIX.md
+M  docs/dep-audit/2026-10-11-legacy-candidates.md
+M  docs/gitbooks/en/developing/agent-observability.md
+UU docs/gitbooks/en/developing/architecture/agent-harness.md
+M  docs/gitbooks/en/developing/architecture/memory.md
+M  docs/gitbooks/en/developing/architecture/security.md
+M  docs/gitbooks/en/developing/embed/api-index.json
+M  docs/gitbooks/en/developing/embed/concepts/hooks-seams.md
+M  docs/gitbooks/en/developing/embed/concepts/turns-sessions.md
+M  docs/gitbooks/en/developing/hooks.md
+M  docs/plans/extract-remaining-harness-session-and-subagent-runner.md
+M  docs/plans/migrate-agent-runtime-to-tinyagents.md
+M  docs/plans/migrate-agent-sessions-to-tinyagents-session.md
+M  docs/prompt-evals.md
+M  docs/specs/agent-runtime-upstream-boundary.md
+M  docs/specs/memory-v2.md
+M  llms-full.txt
+M  scripts/__tests__/embed-contract-boundary.test.mjs
+M  scripts/__tests__/storage-bypass-debt.test.mjs
+M  scripts/ci/agent-runtime-boundary-baseline.json
+M  scripts/ci/check-gated-test-allowlist.sh
+UU scripts/ci/check-openhuman-rust-layout.mjs
+UU scripts/ci/process-statics.json
+M  scripts/ci/saas-ambient-baseline.json
+M  scripts/ci/self-hosted/lanes-plan.mjs
+M  scripts/ci/storage-bypass-allow-reasons.json
+M  scripts/ci/storage-bypass-baseline.json
+UU scripts/ci/storage-bypass-debt.mjs
+M  scripts/ci/storage-bypass-extension.json
+M  scripts/prompt-report.sh
+M  tests/agent_harness_e2e.rs
+M  tests/composio_list_tools_stack_overflow_regression.rs
+D  tests/in_process/agent_harness_public.rs
+M  tests/in_process/agent_prompt_comprehension_e2e.rs
+M  tests/in_process/agent_turn_overrides_e2e.rs
+M  tests/in_process/calendar_grounding_e2e.rs
+M  tests/in_process/orchestrator_parallel_fanout_routing.rs
+M  tests/in_process/orchestrator_presentation_wiring.rs
+M  tests/in_process/worker_b_domain_e2e.rs
+M  tests/json_rpc_e2e.rs
+M  tests/media_generation_e2e.rs
+M  tests/memory_v2_e2e.rs
+M  tests/raw_coverage/tool_registry_approval_raw_coverage_e2e.rs
+M  tests/raw_coverage/worker_b_raw_coverage_e2e.rs
+UU vendor/tinyagents
+?? upstream-sync-report/

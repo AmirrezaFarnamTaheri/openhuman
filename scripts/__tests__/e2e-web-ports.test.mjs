@@ -20,13 +20,22 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const repoRoot = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+);
 const MARKER = "openhuman-e2e-bundle.marker";
 const APP_SCRIPTS = ["e2e-ports.sh", "e2e-web-session.sh", "e2e-web-build.sh"];
 // What the session stats to decide the bundle is not older than its sources
 // (#5919). The fake checkout has to carry them or the gate refuses every tree
 // here for a missing input instead of exercising what the test is about.
-const BUNDLE_INPUTS = ["src/App.tsx", "public/favicon.ico", "index.html", "vite.config.ts"];
+const BUNDLE_INPUTS = [
+  "src/App.tsx",
+  "public/favicon.ico",
+  "index.html",
+  "vite.config.ts",
+];
 
 function writeExecutable(file, body) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -74,9 +83,17 @@ fi
     path.join(bin, "curl"),
     `#!/usr/bin/env bash
 ${record("curl")}
-if [[ "$1" == *"/__admin/health" ]]; then
+url="$2"
+if [[ "$url" == *"/__admin/health" ]]; then
   for _ in {1..100}; do
     grep -q 'mock-api-server.mjs' "${log}" && exit 0
+    sleep 0.01
+  done
+  exit 1
+fi
+if [[ "$url" == *"/health" ]]; then
+  for _ in {1..100}; do
+    [[ -f "$OPENHUMAN_WORKSPACE/core.started" ]] && exit 0
     sleep 0.01
   done
   exit 1
@@ -87,13 +104,23 @@ fi
     path.join(bin, "pnpm"),
     `#!/usr/bin/env bash
 ${record("pnpm")}
+if [ "$1 $2" = "exec playwright" ]; then
+  printf 'playwright RUST_LOG=%s\\n' "\${RUST_LOG-}" >> "${log}"
+  printf 'playwright OPENHUMAN_LOG_FILE_CONSTRAINTS=%s\\n' "\${OPENHUMAN_LOG_FILE_CONSTRAINTS-}" >> "${log}"
+fi
 if [ "$1 $2" = "run build:web" ]; then
   rm -rf dist-web && mkdir -p dist-web && echo '<!doctype html>' > dist-web/index.html
 fi
 `,
   );
-  writeExecutable(path.join(bin, "rustc"), `#!/usr/bin/env bash\necho 'host: test-triple'\n`);
-  writeExecutable(path.join(bin, "cargo"), `#!/usr/bin/env bash\n${record("cargo")}\n`);
+  writeExecutable(
+    path.join(bin, "rustc"),
+    `#!/usr/bin/env bash\necho 'host: test-triple'\n`,
+  );
+  writeExecutable(
+    path.join(bin, "cargo"),
+    `#!/usr/bin/env bash\n${record("cargo")}\n`,
+  );
   writeExecutable(
     path.join(root, "scripts", "ci", "product-features.sh"),
     "#!/usr/bin/env bash\necho voice\n",
@@ -104,7 +131,9 @@ fi
   );
 
   const calls = () =>
-    fs.existsSync(log) ? fs.readFileSync(log, "utf8").split("\n").filter(Boolean) : [];
+    fs.existsSync(log)
+      ? fs.readFileSync(log, "utf8").split("\n").filter(Boolean)
+      : [];
   const cleanup = () => fs.rmSync(root, { recursive: true, force: true });
   return { root, bin, calls, cleanup };
 }
@@ -116,12 +145,21 @@ fi
  * neighbouring one and keeps running, so the session reads the address it
  * logs rather than trusting an HTTP probe.
  */
-function stubCore(tree, boundPort) {
+function stubCore(
+  tree,
+  boundPort,
+  startupDelayMs = 0,
+  respectLogFilter = false,
+) {
   const bin = path.join(tree.root, "target", "debug", "openhuman-core");
   writeExecutable(
     bin,
     `#!/usr/bin/env bash
+sleep ${startupDelayMs / 1000}
+touch "$OPENHUMAN_WORKSPACE/core.started"
+${respectLogFilter ? `if [[ -z "\${OPENHUMAN_LOG_FILE_CONSTRAINTS:-}" && ",\${RUST_LOG:-info}," =~ ,(info|debug|trace|openhuman_rpc(::server(::serve)?)?=(info|debug|trace)), ]]; then` : ""}
 ${boundPort == null ? "" : `echo "[core] OpenHuman core is ready \u2014 listening on http://127.0.0.1:${boundPort} (version test)"`}
+${respectLogFilter ? "fi" : ""}
 sleep 30
 `,
   );
@@ -187,7 +225,10 @@ function run(tree, script, env = {}) {
     });
     return { status: 0, output };
   } catch (err) {
-    return { status: err.status, output: `${err.stdout ?? ""}${err.stderr ?? ""}` };
+    return {
+      status: err.status,
+      output: `${err.stdout ?? ""}${err.stderr ?? ""}`,
+    };
   }
 }
 
@@ -237,7 +278,8 @@ async function freeBase() {
     } catch {
       continue;
     } finally {
-      for (const server of servers) await new Promise((resolve) => server.close(resolve));
+      for (const server of servers)
+        await new Promise((resolve) => server.close(resolve));
     }
   }
   throw new Error("no free port block found");
@@ -275,7 +317,10 @@ for (const [name, offset] of [
       );
 
       assert.equal(res.status, 1, res.output);
-      assert.match(res.output, new RegExp(`already in use on 127\\.0\\.0\\.1:.*${base + offset}`));
+      assert.match(
+        res.output,
+        new RegExp(`already in use on 127\\.0\\.0\\.1:.*${base + offset}`),
+      );
       assert.match(res.output, /E2E_PORT_BASE=<free base>/);
       assert.deepEqual(
         tree.calls().filter((c) => c.startsWith("node ")),
@@ -297,7 +342,9 @@ test("the session starts when all three ports are free", async () => {
     const base = await freeBase();
     markBundle(tree, { mockPort: base, corePort: base + 1 });
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.doesNotMatch(res.output, /already in use/);
     assert.match(res.output, /standalone core binary is missing/);
@@ -325,7 +372,10 @@ test("a taken port is reported even when another server answers its probe", asyn
     });
 
     assert.equal(res.status, 1, res.output);
-    assert.match(res.output, /would run this session's specs against that one's backend/);
+    assert.match(
+      res.output,
+      /would run this session's specs against that one's backend/,
+    );
   } finally {
     tree.cleanup();
   }
@@ -341,7 +391,9 @@ test("E2E_PORT_BASE gives the session base, base+1 and base+2", async () => {
     // passes only if the session derived the same pair.
     markBundle(tree, { mockPort: base, corePort: base + 1 });
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.doesNotMatch(res.output, /dist-web was built for E2E_MOCK_PORT/);
     assert.match(res.output, /standalone core binary is missing/);
@@ -378,7 +430,10 @@ test("the default block is unchanged when no base is set", () => {
   try {
     assert.equal(run(tree, "e2e-web-build.sh").status, 0);
     const recorded = JSON.parse(
-      fs.readFileSync(path.join(tree.root, "app", "dist-web", ".e2e-build-ports.json"), "utf8"),
+      fs.readFileSync(
+        path.join(tree.root, "app", "dist-web", ".e2e-build-ports.json"),
+        "utf8",
+      ),
     );
     assert.deepEqual(recorded.e2e_mock_port, "18473");
     assert.deepEqual(recorded.openhuman_core_port, "17788");
@@ -394,7 +449,11 @@ test("an unusable E2E_PORT_BASE is rejected, not silently ignored", () => {
     // invalid octal digit, both after passing a decimal range check.
     for (const base of ["abc", "80", "65534", "031000", "08000"]) {
       const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: base });
-      assert.equal(res.status, 1, `E2E_PORT_BASE=${base} should be refused: ${res.output}`);
+      assert.equal(
+        res.status,
+        1,
+        `E2E_PORT_BASE=${base} should be refused: ${res.output}`,
+      );
       assert.match(res.output, /E2E_PORT_BASE must be/);
     }
   } finally {
@@ -408,16 +467,24 @@ test("the build bakes the derived ports, so the same base passes the session's c
   const tree = makeTree();
   try {
     const base = await freeBase();
-    assert.equal(run(tree, "e2e-web-build.sh", { E2E_PORT_BASE: String(base) }).status, 0);
+    assert.equal(
+      run(tree, "e2e-web-build.sh", { E2E_PORT_BASE: String(base) }).status,
+      0,
+    );
 
     const recorded = JSON.parse(
-      fs.readFileSync(path.join(tree.root, "app", "dist-web", ".e2e-build-ports.json"), "utf8"),
+      fs.readFileSync(
+        path.join(tree.root, "app", "dist-web", ".e2e-build-ports.json"),
+        "utf8",
+      ),
     );
     assert.equal(recorded.e2e_mock_port, String(base));
     assert.equal(recorded.openhuman_core_port, String(base + 1));
     assert.equal(recorded.vite_backend_url, `http://127.0.0.1:${base}`);
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
     assert.doesNotMatch(res.output, /dist-web was built for E2E_MOCK_PORT/);
     assert.match(res.output, /standalone core binary is missing/);
   } finally {
@@ -432,9 +499,14 @@ test("a session on a different base than the build is refused", async () => {
   try {
     const built = await freeBase();
     const other = await freeBase();
-    assert.equal(run(tree, "e2e-web-build.sh", { E2E_PORT_BASE: String(built) }).status, 0);
+    assert.equal(
+      run(tree, "e2e-web-build.sh", { E2E_PORT_BASE: String(built) }).status,
+      0,
+    );
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(other) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(other),
+    });
 
     assert.equal(res.status, 1, res.output);
     assert.match(res.output, /dist-web was built for E2E_MOCK_PORT/);
@@ -477,7 +549,10 @@ test("a wildcard listener on one of the ports is still detected", async () => {
     );
 
     assert.equal(res.status, 1, res.output);
-    assert.match(res.output, new RegExp(`already in use on 127\\.0\\.0\\.1:.*${base}`));
+    assert.match(
+      res.output,
+      new RegExp(`already in use on 127\\.0\\.0\\.1:.*${base}`),
+    );
   } finally {
     tree.cleanup();
   }
@@ -488,7 +563,10 @@ test("a second session cannot acquire the same port block", async () => {
   try {
     const base = await freeBase();
     markBundle(tree, { mockPort: base, corePort: base + 1 });
-    const lock = path.join(tree.root, `openhuman-e2e-ports-${base}-${base + 1}-${base + 2}.lock`);
+    const lock = path.join(
+      tree.root,
+      `openhuman-e2e-ports-${base}-${base + 1}-${base + 2}.lock`,
+    );
     fs.mkdirSync(lock);
 
     const res = run(tree, "e2e-web-session.sh", {
@@ -497,9 +575,18 @@ test("a second session cannot acquire the same port block", async () => {
     });
 
     assert.equal(res.status, 1, res.output);
-    assert.match(res.output, /another web E2E session is starting or using ports/);
-    assert.match(res.output, new RegExp(`Lock: ${lock.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}`));
-    assert.ok(fs.existsSync(lock), "the failed contender must not remove the active session's lock");
+    assert.match(
+      res.output,
+      /another web E2E session is starting or using ports/,
+    );
+    assert.match(
+      res.output,
+      new RegExp(`Lock: ${lock.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}`),
+    );
+    assert.ok(
+      fs.existsSync(lock),
+      "the failed contender must not remove the active session's lock",
+    );
   } finally {
     tree.cleanup();
   }
@@ -515,12 +602,17 @@ test("a core that fell back to another port fails the session", async () => {
   try {
     const base = await freeBase();
     markBundle(tree, { mockPort: base, corePort: base + 1 });
-    stubCore(tree, base + 7);
+    stubCore(tree, base + 7, 3_000);
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.equal(res.status, 1, res.output);
-    assert.match(res.output, new RegExp(`the core bound 127\\.0\\.0\\.1:${base + 7}`));
+    assert.match(
+      res.output,
+      new RegExp(`the core bound 127\\.0\\.0\\.1:${base + 7}`),
+    );
     assert.match(res.output, new RegExp(`not 127\\.0\\.0\\.1:${base + 1}`));
   } finally {
     tree.cleanup();
@@ -536,7 +628,9 @@ test("a core on the requested port runs the specs", async () => {
     markBundle(tree, { mockPort: base, corePort: base + 1 });
     stubCore(tree, base + 1);
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.doesNotMatch(res.output, /the core bound/);
     assert.ok(
@@ -548,6 +642,46 @@ test("a core on the requested port runs the specs", async () => {
   }
 });
 
+for (const [rustLog, fileConstraints] of [
+  ["warn", ""],
+  ["off,openhuman_rpc::server::serve=off", ""],
+  ["info", "unrelated_module"],
+]) {
+  test(`the session retains core bind evidence with RUST_LOG=${rustLog} and file constraints=${fileConstraints}`, async () => {
+    // The bind line is INFO. A developer's quiet shell must not make a healthy
+    // core fail preflight, or change the filters inherited by the test runner.
+    const tree = makeTree();
+    try {
+      const base = await freeBase();
+      markBundle(tree, { mockPort: base, corePort: base + 1 });
+      stubCore(tree, base + 1, 0, true);
+
+      const res = run(tree, "e2e-web-session.sh", {
+        E2E_PORT_BASE: String(base),
+        RUST_LOG: rustLog,
+        OPENHUMAN_LOG_FILE_CONSTRAINTS: fileConstraints,
+      });
+
+      assert.equal(res.status, 0, res.output);
+      assert.ok(waitForCall(tree, "exec playwright"), "the specs must run");
+      assert.ok(
+        tree.calls().includes(`playwright RUST_LOG=${rustLog}`),
+        "only the core receives the required bind-log verbosity",
+      );
+      assert.ok(
+        tree
+          .calls()
+          .includes(
+            `playwright OPENHUMAN_LOG_FILE_CONSTRAINTS=${fileConstraints}`,
+          ),
+        "the test runner keeps the caller's file filter",
+      );
+    } finally {
+      tree.cleanup();
+    }
+  });
+}
+
 test("a core without binding evidence fails the session", async () => {
   const tree = makeTree();
   try {
@@ -555,7 +689,9 @@ test("a core without binding evidence fails the session", async () => {
     markBundle(tree, { mockPort: base, corePort: base + 1 });
     stubCore(tree, null);
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.equal(res.status, 1, res.output);
     assert.match(res.output, /could not read the core's bound address/);
@@ -578,10 +714,16 @@ test("the recorded build ports come from the pre-dotenv selection", async () => 
       "E2E_MOCK_PORT=28473\nOPENHUMAN_CORE_PORT=27788\n",
     );
 
-    assert.equal(run(tree, "e2e-web-build.sh", { E2E_PORT_BASE: String(base) }).status, 0);
+    assert.equal(
+      run(tree, "e2e-web-build.sh", { E2E_PORT_BASE: String(base) }).status,
+      0,
+    );
 
     const recorded = JSON.parse(
-      fs.readFileSync(path.join(tree.root, "app", "dist-web", ".e2e-build-ports.json"), "utf8"),
+      fs.readFileSync(
+        path.join(tree.root, "app", "dist-web", ".e2e-build-ports.json"),
+        "utf8",
+      ),
     );
     assert.equal(recorded.e2e_mock_port, String(base));
     assert.equal(recorded.openhuman_core_port, String(base + 1));
@@ -607,7 +749,9 @@ test("the session refuses a bundle older than the sources", async () => {
     fs.writeFileSync(edited, "// edited\n");
     setMtimeAfter(edited, marker);
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.equal(res.status, 1, res.output);
     assert.match(res.output, /is older than the sources it was built from/);
@@ -632,12 +776,15 @@ test("a file added after the build is caught even when the file itself is old", 
     stubCore(tree, base + 1);
     const added = path.join(tree.root, "app", "src", "Added.tsx");
     fs.writeFileSync(added, "");
-    const old = fs.statSync(path.join(tree.root, "app", "index.html")).mtimeMs / 1000;
+    const old =
+      fs.statSync(path.join(tree.root, "app", "index.html")).mtimeMs / 1000;
     fs.utimesSync(added, old, old);
     const marker = path.join(tree.root, "app", "dist-web", MARKER);
     setMtimeAfter(path.join(tree.root, "app", "src"), marker);
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.equal(res.status, 1, res.output);
     assert.match(res.output, /is older than the sources it was built from/);
@@ -654,7 +801,9 @@ test("the session runs the specs when the bundle is newer than the sources", asy
     markBundle(tree, { mockPort: base, corePort: base + 1 });
     stubCore(tree, base + 1);
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.doesNotMatch(res.output, /older than the sources/);
     assert.ok(
@@ -676,7 +825,9 @@ test("a bundle input that moved fails the check instead of disabling it", async 
     stubCore(tree, base + 1);
     fs.rmSync(path.join(tree.root, "app", "vite.config.ts"));
 
-    const res = run(tree, "e2e-web-session.sh", { E2E_PORT_BASE: String(base) });
+    const res = run(tree, "e2e-web-session.sh", {
+      E2E_PORT_BASE: String(base),
+    });
 
     assert.equal(res.status, 1, res.output);
     assert.match(res.output, /bundle input .*vite\.config\.ts does not exist/);
@@ -699,11 +850,17 @@ test("a change to either web E2E script arms the lane that runs this suite", () 
   );
   const header = "\nscripts:\n";
   const start = filter.indexOf(header);
-  assert.ok(start !== -1, "no `scripts:` filter in .github/ci-paths-filter.yml");
+  assert.ok(
+    start !== -1,
+    "no `scripts:` filter in .github/ci-paths-filter.yml",
+  );
   // Up to the next top-level key, so a path listed under another filter does
   // not make this pass.
   const scriptsBlock = filter.slice(start + header.length).split(/\n(?=\S)/)[0];
-  assert.ok(scriptsBlock.trim().length > 0, "the `scripts:` filter parsed empty");
+  assert.ok(
+    scriptsBlock.trim().length > 0,
+    "the `scripts:` filter parsed empty",
+  );
   for (const script of APP_SCRIPTS) {
     assert.ok(
       scriptsBlock.includes(`app/scripts/${script}`),
@@ -728,6 +885,11 @@ test("the session exports E2E_MOCK_PORT for the Playwright specs", () => {
   const readers = fs
     .readdirSync(specs)
     .filter((f) => f.endsWith(".spec.ts"))
-    .filter((f) => fs.readFileSync(path.join(specs, f), "utf8").includes("E2E_MOCK_PORT"));
-  assert.ok(readers.length > 0, "expected Playwright specs to read E2E_MOCK_PORT");
+    .filter((f) =>
+      fs.readFileSync(path.join(specs, f), "utf8").includes("E2E_MOCK_PORT"),
+    );
+  assert.ok(
+    readers.length > 0,
+    "expected Playwright specs to read E2E_MOCK_PORT",
+  );
 });

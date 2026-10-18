@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use serde_json::json;
 use std::sync::Arc;
 use tinytools::{PermissionLevel, Tool, ToolResult};
-use {crate::cron, tinyflows_schedule::types::Schedule};
+use {crate::cron, tinyflows_bus::schedule::types::Schedule};
 
 /// Tool that lets the agent manage recurring and one-shot scheduled tasks.
 pub struct ScheduleTool {
@@ -109,7 +109,8 @@ impl Tool for ScheduleTool {
                 }
                 let origin =
                     crate::agent::tinyagents::host::run_context::turn_origin_for_tool(tool_context);
-                self.handle_create_like(action, &args, origin.as_ref()).await
+                self.handle_create_like(action, &args, origin.as_ref())
+                    .await
             }
             "cancel" | "remove" => {
                 if let Some(blocked) = self.enforce_mutation_allowed(action) {
@@ -142,8 +143,8 @@ impl Tool for ScheduleTool {
                 Ok(self.handle_pause_resume(id, false))
             }
             other => Ok(ToolResult::error(format!(
-                    "Unknown action '{other}'. Use create/add/once/list/get/cancel/remove/pause/resume."
-                ))),
+                "Unknown action '{other}'. Use create/add/once/list/get/cancel/remove/pause/resume."
+            ))),
         }
     }
 }
@@ -248,7 +249,7 @@ impl ScheduleTool {
         &self,
         action: &str,
         args: &serde_json::Value,
-        origin: Option<&crate::agent::turn_origin::AgentTurnOrigin>,
+        origin: Option<&crate::security::turn_origin::AgentTurnOrigin>,
     ) -> Result<ToolResult> {
         let command = args
             .get("command")
@@ -325,7 +326,8 @@ impl ScheduleTool {
                     active_hours: None,
                 }
             } else if let Some(delay_str) = delay {
-                let at = Utc::now() + tinyflows_schedule::validation::parse_human_delay(delay_str)?;
+                let at = Utc::now()
+                    + crate::cron::client::parse_human_delay(&self.config, delay_str).await?;
                 Schedule::At { at }
             } else if let Some(at_str) = run_at {
                 let at: DateTime<Utc> = DateTime::parse_from_rfc3339(at_str)

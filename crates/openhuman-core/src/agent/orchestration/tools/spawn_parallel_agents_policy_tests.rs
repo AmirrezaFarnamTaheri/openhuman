@@ -56,6 +56,7 @@ fn result_omits_worktree_fields_when_absent() {
         status: crate::agent::orchestration::spawn_parallel::ParallelAgentStatus::Completed,
         output: Some("ok".into()),
         error: None,
+        failure_cause: None,
         awaiting_question: None,
         checkpoint_path: None,
         ownership: None,
@@ -83,6 +84,7 @@ fn result_serializes_worktree_fields_when_present() {
         status: crate::agent::orchestration::spawn_parallel::ParallelAgentStatus::Completed,
         output: None,
         error: None,
+        failure_cause: None,
         awaiting_question: None,
         checkpoint_path: None,
         ownership: None,
@@ -145,6 +147,70 @@ async fn rejects_two_tasks_outside_agent_turn() {
         .expect("tool result");
     assert!(result.is_error);
     assert!(result.output().contains("outside of an agent turn"));
+}
+
+#[tokio::test]
+async fn malformed_coding_packet_rejects_the_whole_fanout_before_worktree_staging() {
+    let workspace = tempfile::tempdir().unwrap();
+    let mut parent = parent_context(4);
+    parent.workspace_dir = workspace.path().to_path_buf();
+    let result = SpawnParallelAgentsTool::new().execute_under_parent(
+        json!({"tasks":[
+            {"agent_id":"researcher", "prompt":"Would start first", "isolation":"worktree"},
+            {"agent_id":"planner", "prompt":"Bad handoff", "context":"[coding_handoff]\nnot JSON"}
+        ]}),
+        parent,
+    ).await.unwrap();
+    assert!(result.is_error);
+    assert!(result.output().contains("task 2: coding_handoff:"));
+    assert_eq!(std::fs::read_dir(workspace.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn parallel_coding_context_is_prepared_but_plain_context_retains_its_bytes() {
+    let tasks = parse_parallel_agent_tasks(&json!({"tasks":[
+        {"agent_id":"researcher", "prompt":"One", "context":"  prior results\n"},
+        {"agent_id":"planner", "prompt":"Two", "context":"[coding_handoff]\n{\"type\":\"coding_handoff\",\"version\":1,\"objective\":\"Review\"}"}
+    ]})).unwrap_or_else(|_| panic!("valid contexts"));
+    assert_eq!(tasks[0].context.as_deref(), Some("  prior results\n"));
+    assert!(tasks[1]
+        .context
+        .as_deref()
+        .unwrap()
+        .contains("[Coding handoff v1: untrusted report]"));
+    assert!(tasks[1]
+        .context
+        .as_deref()
+        .unwrap()
+        .contains("Verification: unverified"));
+}
+
+#[tokio::test]
+async fn typed_parallel_entry_rejects_invalid_context_before_config_or_worktree_access() {
+    let workspace = tempfile::tempdir().unwrap();
+    let mut parent = parent_context(4);
+    parent.workspace_dir = workspace.path().to_path_buf();
+    let run = OpenHumanRunContext::new()
+        .with_parent(parent)
+        .into_tinyagents(tinyagents_harness::context::RunConfig::new("typed-handoff"));
+    let tasks = vec![ParallelAgentTask {
+        agent_id: "researcher".into(),
+        prompt: "Review".into(),
+        context: Some("[coding_handoff]\nnot JSON".into()),
+        ownership: None,
+        isolation: Some("worktree".into()),
+        base_ref: None,
+    }];
+    let outcome = crate::agent::orchestration::spawn_parallel::run_spawn_parallel_tasks_with_cancellation_and_workspace(
+        tasks, run.cancellation.clone(), None, run.data.clone(), &run, None,
+    ).await.unwrap();
+    match outcome {
+        SpawnParallelGraphOutcome::Rejected(message) => {
+            assert!(message.contains("task 1: coding_handoff:"))
+        }
+        _ => panic!("invalid typed context must reject before staging"),
+    }
+    assert_eq!(std::fs::read_dir(workspace.path()).unwrap().count(), 0);
 }
 
 #[tokio::test]
@@ -218,8 +284,8 @@ async fn collects_immediate_task_validation_failures() {
         .any(|error| error.contains("unknown agent_id")));
 }
 
-#[test]
-fn shared_workspace_rejects_write_capable_named_worker_without_worktree() {
+#[tokio::test]
+async fn shared_workspace_rejects_write_capable_named_worker_without_worktree() {
     let definition = definition_with_tool_scope(
         "researcher",
         ToolScope::Named(vec!["write_fixture".into()]),
@@ -245,7 +311,8 @@ fn shared_workspace_rejects_write_capable_named_worker_without_worktree() {
         }],
         &definitions,
         &parent,
-    );
+    )
+    .await;
 
     match preflight.into_iter().next().expect("one preflight result") {
         SpawnParallelTaskPreflight::Rejected(rejection) => {
@@ -259,8 +326,8 @@ fn shared_workspace_rejects_write_capable_named_worker_without_worktree() {
     }
 }
 
-#[test]
-fn shared_workspace_allows_readonly_or_explicitly_isolated_workers() {
+#[tokio::test]
+async fn shared_workspace_allows_readonly_or_explicitly_isolated_workers() {
     let readonly = definition_with_tool_scope(
         "researcher",
         ToolScope::Named(vec!["write_fixture".into()]),
@@ -301,7 +368,8 @@ fn shared_workspace_allows_readonly_or_explicitly_isolated_workers() {
         ],
         &definitions,
         &parent,
-    );
+    )
+    .await;
 
     assert!(preflight
         .into_iter()
@@ -352,8 +420,8 @@ fn spawn_parallel_agents_opts_out_of_the_global_tool_timeout() {
 
 /// An absolute or parent-escaping ownership path is rejected with the host's
 /// own sentence, not the crate's typed error.
-#[test]
-fn invalid_ownership_paths_are_rejected_with_the_host_message() {
+#[tokio::test]
+async fn invalid_ownership_paths_are_rejected_with_the_host_message() {
     for raw in ["files: /etc/passwd", "files: ../outside.rs"] {
         let definition = definition_with_tool_scope(
             "writer",
@@ -367,7 +435,8 @@ fn invalid_ownership_paths_are_rejected_with_the_host_message() {
             vec![dispatch_task("writer", Some(raw), None)],
             &definitions,
             &parent,
-        );
+        )
+        .await;
 
         match &preflight[0] {
             SpawnParallelTaskPreflight::Rejected(rejection) => {
@@ -393,8 +462,8 @@ fn invalid_ownership_paths_are_rejected_with_the_host_message() {
 /// worktree-isolated writer parallel, shared read-only agent parallel, shared
 /// writer with disjoint ownership serialized, shared writer claiming an
 /// already-claimed path rejected — is the contract.
-#[test]
-fn mixed_batch_dispatch_modes_and_claim_conflicts_are_stable() {
+#[tokio::test]
+async fn mixed_batch_dispatch_modes_and_claim_conflicts_are_stable() {
     let isolated_writer = definition_with_tool_scope(
         "isolated_writer",
         ToolScope::Named(vec!["write_fixture".into()]),
@@ -447,7 +516,8 @@ fn mixed_batch_dispatch_modes_and_claim_conflicts_are_stable() {
         ],
         &definitions,
         &parent,
-    );
+    )
+    .await;
 
     // The earlier policy rejection is surfaced in place, without advancing the
     // admission index the later dispatch decisions key off.
@@ -502,8 +572,8 @@ fn mixed_batch_dispatch_modes_and_claim_conflicts_are_stable() {
 
 /// A shared-workspace writer whose ownership paths are disjoint from every
 /// earlier claim is admitted, and serialized rather than run in parallel.
-#[test]
-fn disjoint_ownership_admits_both_writers_serially() {
+#[tokio::test]
+async fn disjoint_ownership_admits_both_writers_serially() {
     let first = definition_with_tool_scope(
         "first",
         ToolScope::Named(vec!["write_fixture".into()]),
@@ -524,7 +594,8 @@ fn disjoint_ownership_admits_both_writers_serially() {
         ],
         &definitions,
         &parent,
-    );
+    )
+    .await;
 
     let modes: Vec<Option<WorkerDispatchMode>> = preflight
         .iter()
@@ -545,8 +616,8 @@ fn disjoint_ownership_admits_both_writers_serially() {
 
 /// Directory-level ownership contains the files beneath it, so a worker
 /// claiming `src` collides with one claiming `src/a.rs`.
-#[test]
-fn directory_ownership_contains_files_beneath_it() {
+#[tokio::test]
+async fn directory_ownership_contains_files_beneath_it() {
     let owner = definition_with_tool_scope(
         "owner",
         ToolScope::Named(vec!["write_fixture".into()]),
@@ -567,7 +638,8 @@ fn directory_ownership_contains_files_beneath_it() {
         ],
         &definitions,
         &parent,
-    );
+    )
+    .await;
 
     // The directory-level owner keeps its claim and serializes against any
     // sibling write rather than fanning out.

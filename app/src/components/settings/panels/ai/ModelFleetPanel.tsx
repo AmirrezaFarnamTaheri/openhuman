@@ -14,8 +14,8 @@ import Button from '../../../ui/Button';
 import TextField from '../../../ui/TextField';
 import type { AISettings, CloudProvider } from './aiPanelTypes';
 import { summarizeFleetHealth } from './fleetHealthInsights';
-import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
 import { ModelFeasibilityPreview } from './ModelFeasibilityPreview';
+import { FLEET_MODEL_PRESETS } from './modelFleetCatalog';
 import {
   applyModelBulkPatch,
   createSingleFlightRunner,
@@ -51,7 +51,8 @@ export function ModelFleetPanel({ settings, persist }: Props) {
         if (!cancelled) setFleetHealth(status);
       })
       .catch(() => {
-        if (!cancelled) setHealthError(t('settings.ai.fleet.healthUnavailable', 'Fleet health is unavailable.'));
+        if (!cancelled)
+          setHealthError(t('settings.ai.fleet.healthUnavailable', 'Fleet health is unavailable.'));
       });
     return () => {
       cancelled = true;
@@ -104,17 +105,19 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const effectiveGroup = providers.some(p => p.slug === group) ? group : (providers[0]?.slug ?? '');
   const activeProvider = providers.find(p => p.slug === effectiveGroup);
   const providerRefreshPreview = useMemo(
-    () => syncConfiguredProviderPresets(
-      providers.map(p => ({ ...p, auth_style: p.authStyle })),
-      { updateExisting: true }
-    ),
+    () =>
+      syncConfiguredProviderPresets(
+        providers.map(p => ({ ...p, auth_style: p.authStyle })),
+        { updateExisting: true }
+      ),
     [providers]
   );
   const providerPresetDelta = useMemo(
-    () => syncConfiguredProviderPresets(
-      providers.map(p => ({ ...p, auth_style: p.authStyle })),
-      { updateExisting: confirmProviderRefresh }
-    ),
+    () =>
+      syncConfiguredProviderPresets(
+        providers.map(p => ({ ...p, auth_style: p.authStyle })),
+        { updateExisting: confirmProviderRefresh }
+      ),
     [providers, confirmProviderRefresh]
   );
   const modelRefreshPreview = useMemo(
@@ -122,9 +125,10 @@ export function ModelFleetPanel({ settings, persist }: Props) {
     [settings.modelRegistry]
   );
   const modelDelta = useMemo(
-    () => syncModelPresets(settings.modelRegistry, undefined, {
-      updateExisting: refreshExistingModels,
-    }),
+    () =>
+      syncModelPresets(settings.modelRegistry, undefined, {
+        updateExisting: refreshExistingModels,
+      }),
     [settings.modelRegistry, refreshExistingModels]
   );
   const modelChanges = useMemo(() => {
@@ -198,8 +202,12 @@ export function ModelFleetPanel({ settings, persist }: Props) {
         // Never silently send an existing encrypted key to a newly configured
         // host or re-interpret its auth header. Re-enter the key via the editor.
         if (keyedProviderDestinationChanges(providers, next).length > 0) {
-          throw new Error(t('settings.ai.fleet.reauthRequired',
-            'Re-enter the API key in the provider editor before changing its endpoint or authentication.'));
+          throw new Error(
+            t(
+              'settings.ai.fleet.reauthRequired',
+              'Re-enter the API key in the provider editor before changing its endpoint or authentication.'
+            )
+          );
         }
         await persist({ ...settings, cloudProviders: next });
         setConfirmProviderRefresh(false);
@@ -210,9 +218,17 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const applyProviderBulk = (clear = false) =>
     void run(
       async () => {
-        if (!selectedProviders.size) throw new Error(t('settings.ai.fleet.selectProvidersError', 'Select one or more providers.'));
+        if (!selectedProviders.size)
+          throw new Error(
+            t('settings.ai.fleet.selectProvidersError', 'Select one or more providers.')
+          );
         if (!clear && !validModelFleetImageEndpoint(groupImageUrl)) {
-          throw new Error(t('settings.ai.fleet.imageEndpointError', 'Image endpoints require HTTPS or loopback HTTP.'));
+          throw new Error(
+            t(
+              'settings.ai.fleet.imageEndpointError',
+              'Image endpoints require HTTPS or loopback HTTP.'
+            )
+          );
         }
         if (
           !clear &&
@@ -221,7 +237,10 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           !validProdexDestination(groupImageUrl.trim())
         ) {
           throw new Error(
-            t('settings.ai.fleet.prodexImageError', 'Prodex image endpoints require HTTPS or loopback HTTP without URL credentials.')
+            t(
+              'settings.ai.fleet.prodexImageError',
+              'Prodex image endpoints require HTTPS or loopback HTTP without URL credentials.'
+            )
           );
         }
         const next = updateSelectedGroupSettings(
@@ -243,10 +262,16 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const saveModelImageEndpoint = (remove = false) =>
     void run(
       async () => {
-        if (!activeProvider) throw new Error(t('settings.ai.fleet.chooseGroupError', 'Choose a provider group.'));
+        if (!activeProvider)
+          throw new Error(t('settings.ai.fleet.chooseGroupError', 'Choose a provider group.'));
         const id = modelId.trim();
         if (!remove && (!modelImageUrl.trim() || !validModelFleetImageEndpoint(modelImageUrl))) {
-          throw new Error(t('settings.ai.fleet.modelImageEndpointError', 'Enter an image endpoint using HTTPS or loopback HTTP.'));
+          throw new Error(
+            t(
+              'settings.ai.fleet.modelImageEndpointError',
+              'Enter an image endpoint using HTTPS or loopback HTTP.'
+            )
+          );
         }
         if (
           !remove &&
@@ -254,7 +279,10 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           !validProdexDestination(modelImageUrl.trim())
         ) {
           throw new Error(
-            t('settings.ai.fleet.prodexModelImageError', 'Prodex model image endpoints require HTTPS or loopback HTTP without URL credentials.')
+            t(
+              'settings.ai.fleet.prodexModelImageError',
+              'Prodex model image endpoints require HTTPS or loopback HTTP without URL credentials.'
+            )
           );
         }
         const next = providers.map(p => {
@@ -276,7 +304,8 @@ export function ModelFleetPanel({ settings, persist }: Props) {
   const applyModels = (remove = false) =>
     void run(
       async () => {
-        if (!selectedModels.size) throw new Error(t('settings.ai.fleet.selectModelsError', 'Select one or more models.'));
+        if (!selectedModels.size)
+          throw new Error(t('settings.ai.fleet.selectModelsError', 'Select one or more models.'));
         let models: ModelRegistryEntry[];
         if (remove) {
           models = settings.modelRegistry.filter(m => !selectedModels.has(keyOf(m)));
@@ -286,11 +315,19 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           if (contextAction.trim()) {
             const count = Number(contextAction.trim());
             if (!Number.isInteger(count) || count < 0 || count > 100_000_000) {
-              throw new Error(t('settings.ai.fleet.contextError', 'Context window must be an integer between 0 and 100,000,000.'));
+              throw new Error(
+                t(
+                  'settings.ai.fleet.contextError',
+                  'Context window must be an integer between 0 and 100,000,000.'
+                )
+              );
             }
             patch.context_window = count;
           }
-          if (!Object.keys(patch).length) throw new Error(t('settings.ai.fleet.selectPatchError', 'Choose at least one field to update.'));
+          if (!Object.keys(patch).length)
+            throw new Error(
+              t('settings.ai.fleet.selectPatchError', 'Choose at least one field to update.')
+            );
           models = applyModelBulkPatch(settings.modelRegistry, selectedModels, patch);
         }
         await persist({ ...settings, modelRegistry: models });
@@ -423,7 +460,12 @@ export function ModelFleetPanel({ settings, persist }: Props) {
             })
           )}
           {!fleetHealth?.providers.some(p => p.models.length > 0) && (
-            <p className="text-content-muted">{t('settings.ai.fleet.noKeyUsage', 'No inference key usage recorded in this session.')}</p>
+            <p className="text-content-muted">
+              {t(
+                'settings.ai.fleet.noKeyUsage',
+                'No inference key usage recorded in this session.'
+              )}
+            </p>
           )}
         </div>
       </div>
@@ -444,16 +486,26 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           </Button>
         </div>
         <p className="text-xs text-content-muted">
-          {t('settings.ai.fleet.groupSyncHintSafe',
-            'Saved provider endpoints are preserved by default. Review and explicitly approve changes; credentialed providers must be updated through the editor with a new key.')}
+          {t(
+            'settings.ai.fleet.groupSyncHintSafe',
+            'Saved provider endpoints are preserved by default. Review and explicitly approve changes; credentialed providers must be updated through the editor with a new key.'
+          )}
         </p>
         {providerRefreshPreview.updated > 0 && (
           <div className="space-y-2 rounded-lg border border-line-subtle p-2 text-xs">
             <label className="flex items-start gap-2 text-content-secondary">
-              <input type="checkbox" checked={confirmProviderRefresh} disabled={busy}
-                onChange={e => setConfirmProviderRefresh(e.target.checked)} />
-              <span>{t('settings.ai.fleet.approveProviderSync',
-                'Approve replacing official endpoints and authentication styles for configured providers')}</span>
+              <input
+                type="checkbox"
+                checked={confirmProviderRefresh}
+                disabled={busy}
+                onChange={e => setConfirmProviderRefresh(e.target.checked)}
+              />
+              <span>
+                {t(
+                  'settings.ai.fleet.approveProviderSync',
+                  'Approve replacing official endpoints and authentication styles for configured providers'
+                )}
+              </span>
             </label>
             <details>
               <summary className="cursor-pointer text-content">
@@ -463,17 +515,24 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               <ul className="mt-1 max-h-40 space-y-1 overflow-auto">
                 {providerRefreshPreview.providers.map(after => {
                   const before = providers.find(p => p.id === after.id);
-                  if (!before || (before.endpoint === after.endpoint &&
-                    before.authStyle === after.auth_style)) return null;
+                  if (
+                    !before ||
+                    (before.endpoint === after.endpoint && before.authStyle === after.auth_style)
+                  )
+                    return null;
                   return (
                     <li key={after.id} className="break-all text-content-muted">
                       <strong>{before.label}</strong>: {before.endpoint} → {after.endpoint}
                       {before.authStyle !== after.auth_style &&
                         ' (' + before.authStyle + ' → ' + after.auth_style + ')'}
-                      {before.maskedKey.startsWith('••••') &&
+                      {before.maskedKey.startsWith('••••') && (
                         <span className="ml-1 font-medium text-content">
-                          {t('settings.ai.fleet.providerNeedsKey', 'Requires key re-entry in editor')}
-                        </span>}
+                          {t(
+                            'settings.ai.fleet.providerNeedsKey',
+                            'Requires key re-entry in editor'
+                          )}
+                        </span>
+                      )}
                     </li>
                   );
                 })}
@@ -490,7 +549,9 @@ export function ModelFleetPanel({ settings, persist }: Props) {
                 type="checkbox"
                 checked={selectedProviders.has(p.slug)}
                 onChange={() => toggle(selectedProviders, setSelectedProviders, p.slug)}
-                aria-label={t('settings.ai.fleet.selectProvider', 'Select provider') + ' ' + p.label}
+                aria-label={
+                  t('settings.ai.fleet.selectProvider', 'Select provider') + ' ' + p.label
+                }
                 disabled={busy}
               />
               <span className="min-w-0 truncate">
@@ -520,7 +581,9 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               onClick={() => setSelectedProviders(new Set())}>
               {t('common.clear', 'Clear selection')}
             </Button>
-            <span className="text-xs text-content-muted">{selectedProviders.size} {t('settings.ai.fleet.selected', 'selected')}</span>
+            <span className="text-xs text-content-muted">
+              {selectedProviders.size} {t('settings.ai.fleet.selected', 'selected')}
+            </span>
           </div>
         )}
         <div className="grid gap-2 sm:grid-cols-2">
@@ -542,9 +605,13 @@ export function ModelFleetPanel({ settings, persist }: Props) {
               onChange={e => setStrategy(e.target.value as typeof strategy)}
               className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-content"
               aria-label={t('settings.ai.fleet.rotationAria', 'Multi-token selection strategy')}>
-              <option value="round_robin">{t('settings.ai.rotationRoundRobin', 'Round robin')}</option>
+              <option value="round_robin">
+                {t('settings.ai.rotationRoundRobin', 'Round robin')}
+              </option>
               <option value="least_busy">{t('settings.ai.rotationLeastBusy', 'Least busy')}</option>
-              <option value="priority_weighted">{t('settings.ai.rotationPriorityWeighted', 'Priority weighted')}</option>
+              <option value="priority_weighted">
+                {t('settings.ai.rotationPriorityWeighted', 'Priority weighted')}
+              </option>
             </select>
           </label>
         </div>
@@ -673,17 +740,28 @@ export function ModelFleetPanel({ settings, persist }: Props) {
           </Button>
         </div>
         <p className="text-xs text-content-muted">
-          {t('settings.ai.fleet.presetHintSafe',
-            'Import missing model presets without changing saved model metadata. Updating existing vision, context and prices is optional and may replace manual edits. Routes and credentials are never changed.')}
+          {t(
+            'settings.ai.fleet.presetHintSafe',
+            'Import missing model presets without changing saved model metadata. Updating existing vision, context and prices is optional and may replace manual edits. Routes and credentials are never changed.'
+          )}
         </p>
         {modelRefreshPreview.updated > 0 && (
           <label className="flex items-start gap-2 text-xs text-content-secondary">
-            <input type="checkbox" disabled={busy} checked={refreshExistingModels}
+            <input
+              type="checkbox"
+              disabled={busy}
+              checked={refreshExistingModels}
               onChange={e => setRefreshExistingModels(e.target.checked)}
-              aria-label={t('settings.ai.fleet.approveMetadataRefresh',
-                'Approve replacing saved model metadata')} />
-            <span>{t('settings.ai.fleet.approveMetadataRefresh',
-              'Approve replacing saved model metadata')}
+              aria-label={t(
+                'settings.ai.fleet.approveMetadataRefresh',
+                'Approve replacing saved model metadata'
+              )}
+            />
+            <span>
+              {t(
+                'settings.ai.fleet.approveMetadataRefresh',
+                'Approve replacing saved model metadata'
+              )}
               {' (' + modelRefreshPreview.updated + ')'}
             </span>
           </label>
@@ -697,14 +775,20 @@ export function ModelFleetPanel({ settings, persist }: Props) {
             <ul className="mt-1 max-h-36 space-y-1 overflow-auto text-content-muted">
               {modelChanges.map(({ model, original }) => (
                 <li key={keyOf(model)} className="break-all">
-                  {model.provider}/{model.id} — {original
+                  {model.provider}/{model.id} —{' '}
+                  {original
                     ? t('settings.ai.fleet.refreshLabel', 'refresh saved metadata')
                     : t('settings.ai.fleet.addLabel', 'add missing preset')}
-                  {original && ' (' +
-                    String(original.context_window ?? '?') + ' → ' +
-                    String(model.context_window ?? '?') + ' context; ' +
-                    String(original.cost_per_1m_input ?? '?') + ' → ' +
-                    String(model.cost_per_1m_input ?? '?') + ' input/1M USD)'}
+                  {original &&
+                    ' (' +
+                      String(original.context_window ?? '?') +
+                      ' → ' +
+                      String(model.context_window ?? '?') +
+                      ' context; ' +
+                      String(original.cost_per_1m_input ?? '?') +
+                      ' → ' +
+                      String(model.cost_per_1m_input ?? '?') +
+                      ' input/1M USD)'}
                 </li>
               ))}
             </ul>
@@ -733,7 +817,9 @@ export function ModelFleetPanel({ settings, persist }: Props) {
             disabled={!selectedModels.size}>
             {t('common.clear', 'Clear selection')}
           </Button>
-          <span className="text-xs text-content-muted">{selectedModels.size} {t('settings.ai.fleet.selected', 'selected')}</span>
+          <span className="text-xs text-content-muted">
+            {selectedModels.size} {t('settings.ai.fleet.selected', 'selected')}
+          </span>
         </div>
         <div className="max-h-52 overflow-y-auto rounded-lg border border-line-subtle">
           {shownModels.map(m => (
@@ -745,7 +831,9 @@ export function ModelFleetPanel({ settings, persist }: Props) {
                 checked={selectedModels.has(keyOf(m))}
                 disabled={busy}
                 onChange={() => toggle(selectedModels, setSelectedModels, keyOf(m))}
-                aria-label={t('settings.ai.fleet.selectModel', 'Select model') + ' ' + m.provider + ' ' + m.id}
+                aria-label={
+                  t('settings.ai.fleet.selectModel', 'Select model') + ' ' + m.provider + ' ' + m.id
+                }
               />
               <span className="min-w-0 flex-1 truncate" title={m.id}>
                 {presetNames.get(keyOf(m)) ?? m.id}
@@ -753,7 +841,11 @@ export function ModelFleetPanel({ settings, persist }: Props) {
                   ({m.provider}/{m.id})
                 </span>
               </span>
-              {m.vision && <span className="text-content-muted">{t('settings.ai.fleet.visionLabel', 'vision')}</span>}
+              {m.vision && (
+                <span className="text-content-muted">
+                  {t('settings.ai.fleet.visionLabel', 'vision')}
+                </span>
+              )}
             </label>
           ))}
           {shownModels.length === 0 && (

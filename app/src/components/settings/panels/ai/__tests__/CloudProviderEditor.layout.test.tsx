@@ -25,13 +25,17 @@ describe('CloudProviderEditor layout', () => {
     const scrollable = dialog.querySelector('.overflow-y-auto');
     expect(scrollable).toBeTruthy();
     expect(scrollable?.className).toContain('min-h-0');
-    expect(scrollable?.contains(screen.getByLabelText('settings.ai.modelTransportOverridesLabel'))).toBe(true);
+    expect(
+      scrollable?.contains(screen.getByLabelText('settings.ai.modelTransportOverridesLabel'))
+    ).toBe(true);
     expect(screen.getByLabelText('settings.ai.toolCodecLabel')).toBeTruthy();
     expect(screen.getByRole('option', { name: 'settings.ai.toolCodecTaggedJson' })).toBeTruthy();
     expect(screen.getByText('settings.ai.modelTransportOverridesHelp')).toBeTruthy();
     expect(screen.getByText('settings.ai.toolCodecHelp')).toBeTruthy();
     const buttons = Array.from(dialog.querySelectorAll('button'));
     expect(buttons.some(button => button.textContent?.includes('common.cancel'))).toBe(true);
-    expect(buttons.some(button => button.textContent?.includes('settings.ai.addProvider'))).toBe(true);
+    expect(buttons.some(button => button.textContent?.includes('settings.ai.addProvider'))).toBe(
+      true
+    );
   });
 });

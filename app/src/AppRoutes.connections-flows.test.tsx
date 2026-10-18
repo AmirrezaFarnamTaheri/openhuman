@@ -13,7 +13,7 @@
  * real table, and assert the landing URL rather than only that a page
  * rendered — the URL is the entire payload of the `/channels` redirect.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
 import { MemoryRouter, useLocation, useParams } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -91,24 +91,32 @@ function renderAt(entry: string) {
   };
 }
 
+describe('route-level code splitting', () => {
+  it('keeps a readable fallback visible while loading a secondary feature', async () => {
+    renderAt('/connections');
+    expect(screen.getByTestId('route-loading')).toBeInTheDocument();
+    expect((await screen.findByTestId('page')).textContent).toBe('connections');
+  });
+});
+
 describe('connections / channels back-compat redirects (real route table)', () => {
-  it('/skills lands on /connections and renders the Connections page', () => {
+  it('/skills lands on /connections and renders the Connections page', async () => {
     const at = renderAt('/skills');
+    expect((await screen.findByTestId('page')).textContent).toBe('connections');
     expect(at.href()).toBe('/connections');
-    expect(at.page()).toBe('connections');
   });
 
-  it('/channels lands on /connections?tab=messaging, preserving the tab selector', () => {
+  it('/channels lands on /connections?tab=messaging, preserving the tab selector', async () => {
     // The whole point of this redirect: `/channels` was an orphaned standalone
     // page, and the messaging tab of Connections replaced it. Landing on bare
     // `/connections` would drop the user on the Welcome tab instead — which a
     // test that only asserts the page rendered cannot distinguish.
     const at = renderAt('/channels');
+    expect((await screen.findByTestId('page')).textContent).toBe('connections');
     expect(at.href()).toBe('/connections?tab=messaging');
-    expect(at.page()).toBe('connections');
   });
 
-  it('/skills forwards its ?tab= query through to /connections', () => {
+  it('/skills forwards its ?tab= query through to /connections', async () => {
     // This used to pin the opposite: `<Navigate to="/connections" />` was given
     // an absolute path *string* with no search component, so the incoming query
     // was discarded — while `AppRoutes.tsx` claimed twice that the redirect
@@ -125,23 +133,23 @@ describe('connections / channels back-compat redirects (real route table)', () =
     // works after the redirect". While the query was dropped it was unreachable
     // dead code; this assertion is what proves the route can reach it at all.
     const at = renderAt('/skills?tab=messaging');
-    expect(at.href()).toBe('/connections?tab=messaging');
+    await waitFor(() => expect(at.href()).toBe('/connections?tab=messaging'));
   });
 });
 
 describe('automation route slugs', () => {
-  it('/routines redirects to /flows', () => {
+  it('/routines redirects to /flows', async () => {
     // `AGENTS.md:175` documents `/routines` -> `/settings/automations`. The two
     // agree on where the user ends up: `/settings/automations` is itself
     // `<Navigate to="/flows">` (settingsRouteElements.tsx:164), so the code
     // short-circuits one hop of the documented chain and lands in the same
     // place. `/workflows` is the real divergence — see the test below.
     const at = renderAt('/routines');
+    expect((await screen.findByTestId('page')).textContent).toBe('flows');
     expect(at.href()).toBe('/flows');
-    expect(at.page()).toBe('flows');
   });
 
-  it('/webhooks redirects to the Integrations settings page', () => {
+  it('/webhooks redirects to the Integrations settings page', async () => {
     // Webhooks were retired from the UI; the route survives only to keep old
     // deep links from 404-ing.
     //
@@ -152,10 +160,10 @@ describe('automation route slugs', () => {
     // documented destination would be a knowingly-failing test. The fix is a
     // source change and someone has to decide which side moves — see W5 BUG-13.
     const at = renderAt('/webhooks');
-    expect(at.href()).toBe('/settings/integrations');
+    await waitFor(() => expect(at.href()).toBe('/settings/integrations'));
   });
 
-  it('/workflows is NOT a redirect — it renders the legacy SKILL.md hub', () => {
+  it('/workflows is NOT a redirect — it renders the legacy SKILL.md hub', async () => {
     // ⚠️ CONTRACT DIVERGENCE, and a three-way one. `AGENTS.md:175` says
     // `/workflows` -> `/settings/automations`; `AppRoutes.tsx`'s own `/flows`
     // block comment says it redirects to `/flows`; the code renders <Activity/>
@@ -167,31 +175,33 @@ describe('automation route slugs', () => {
     // Activity, per the comment directly above its own route.
     const at = renderAt('/workflows');
     expect(at.href()).toBe('/workflows');
-    expect(at.page()).toBe('activity');
+    expect((await screen.findByTestId('page')).textContent).toBe('activity');
   });
 
-  it('/workflows/run renders the single-purpose Skill runner, not the hub', () => {
+  it('/workflows/run renders the single-purpose Skill runner, not the hub', async () => {
     const at = renderAt('/workflows/run');
     expect(at.href()).toBe('/workflows/run');
-    expect(at.page()).toBe('workflows-run');
+    expect((await screen.findByTestId('page')).textContent).toBe('workflows-run');
   });
 });
 
 describe('/flows canvas route ranking', () => {
-  it('/flows renders the flows list hub', () => {
-    expect(renderAt('/flows').page()).toBe('flows');
+  it('/flows renders the flows list hub', async () => {
+    renderAt('/flows');
+    expect((await screen.findByTestId('page')).textContent).toBe('flows');
   });
 
-  it('/flows/draft resolves to the draft canvas, not to /flows/:id', () => {
+  it('/flows/draft resolves to the draft canvas, not to /flows/:id', async () => {
     // `AppRoutes.tsx` warns that if `:id` won this match, the canvas would call
     // `flows_get('draft')` for a flow that does not exist. Pin the resolution
     // so a reorder or a rename of either route is caught here.
     const at = renderAt('/flows/draft');
-    expect(at.page()).toBe('flow-canvas-draft');
+    expect((await screen.findByTestId('page')).textContent).toBe('flow-canvas-draft');
     expect(at.page()).not.toBe('flow-canvas:draft');
   });
 
-  it('/flows/:id resolves to the canvas and hands it the id', () => {
-    expect(renderAt('/flows/flow_abc123').page()).toBe('flow-canvas:flow_abc123');
+  it('/flows/:id resolves to the canvas and hands it the id', async () => {
+    renderAt('/flows/flow_abc123');
+    expect((await screen.findByTestId('page')).textContent).toBe('flow-canvas:flow_abc123');
   });
 });

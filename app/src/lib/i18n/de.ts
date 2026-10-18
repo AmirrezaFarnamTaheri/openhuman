@@ -3,6 +3,27 @@ import type { TranslationMap } from './types';
 // German (Deutsch) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Navigation, model setup and local memory
+  'settings.navigation.search': 'Einstellungen durchsuchen',
+  'settings.search.noResults': 'Keine passenden Einstellungen',
+  'settings.ai.advancedModelManagement': 'Erweiterte Verwaltung von Modellen und API-Schlüsseln',
+  'settings.ai.providerConnectedRoutingHint':
+    'Anbieter verbunden. Wähle das Modell für deine Chats aus.',
+  'settings.ai.chooseChatModel': 'Chatmodell auswählen',
+  'walkthrough.takeTour': 'Einführung ansehen',
+  'connections.navigation.showAll': 'Alle Verbindungen anzeigen',
+  'connections.navigation.showFewer': 'Weniger Verbindungen anzeigen',
+  'memoryPage.advanced.fewer': 'Weniger Optionen',
+  'memoryPage.advanced.show': 'Erweitert',
+  'memoryPage.engine.autoLocalTitle': 'Gedächtnis auf diesem Computer',
+  'memoryPage.engine.autoLocalHint':
+    'OpenHuman richtet das lokale Gedächtnis für dich ein und verbindet es. Docker wird benötigt.',
+  'memoryPage.engine.autoLocalStarting': 'Lokales Gedächtnis wird gestartet…',
+  'memoryPage.engine.autoLocal': 'Lokales Gedächtnis starten',
+  'memoryPage.engine.autoLocalTroubleshoot':
+    'Starte Docker Desktop oder Docker Engine und stelle sicher, dass Port 3141 verfügbar ist.',
+  'memoryPage.engine.autoLocalHelp': 'Docker installieren oder starten',
+
   // Share cards (#5006).
   'share.copyImage': 'Bild kopieren',
   'feedback.header.desc':
@@ -3493,11 +3514,43 @@ const messages: TranslationMap = {
   // Chat: agent-generated artifacts (#2779)
   'chat.artifact.ready': 'Bereit',
   'chat.artifact.failed': 'Erstellung fehlgeschlagen',
+  'chat.artifact.savedNotShown': 'Gespeichert, aber nicht in deinem Files-Ordner aktualisiert',
   'chat.artifact.download': 'Herunterladen',
   'chat.artifact.downloading': 'Wird heruntergeladen…',
   'chat.artifact.download_failed': 'Download fehlgeschlagen: {reason}',
   'chat.artifact.retry': 'Erneut versuchen',
   'chat.artifact.reveal': 'Im Ordner anzeigen',
+  'chat.artifact.preview': 'Vorschau',
+  'chat.artifact.notFound': 'Dieses Artefakt ist nicht mehr verfügbar.',
+  'chat.artifact.panel.close': 'Bereich schließen',
+  'chat.artifact.panel.resize': 'Bereichsgröße ändern',
+  'chat.artifact.tabs.aria': 'Geöffnete Artefakte',
+  'chat.artifact.tab.close': '{title} schließen',
+  'chat.artifact.view.aria': 'Ansicht',
+  'chat.artifact.view.preview': 'Vorschau',
+  'chat.artifact.view.code': 'Code',
+  'chat.artifact.copy': 'In die Zwischenablage kopieren',
+  'chat.artifact.copied': 'Kopiert',
+  'chat.artifact.autosave.saved': 'Gespeichert',
+  'chat.artifact.autosave.pending': 'Nicht gespeicherte Änderungen',
+  'chat.artifact.autosave.saving': 'Wird gespeichert…',
+  'chat.artifact.autosave.error': 'Nicht gespeichert',
+  'chat.artifact.kind.text': 'Text',
+  'chat.artifact.kind.markdown': 'Markdown',
+  'chat.artifact.kind.html': 'HTML',
+  'chat.artifact.kind.image': 'Bild',
+  'chat.artifact.kind.file': 'Datei',
+  'chat.artifact.noPreview':
+    'Für diese Datei gibt es keine Vorschau. Lade sie herunter, um sie zu öffnen.',
+  'chat.artifact.htmlPreview': 'HTML-Vorschau',
+  'chat.artifact.editor': 'Quelltext des Artefakts',
+  'chat.artifact.share': 'Teilen: hochladen und Link kopieren',
+  'chat.artifact.share.failed': 'Nicht geteilt: {reason}',
+  'chat.artifact.share.copied': 'Link kopiert',
+  'chat.artifact.share.ready': 'Link bereit',
+  'chat.artifact.share.expires': 'läuft am {date} ab',
+  'chat.artifact.share.copyLink': 'Vollständigen Link kopieren',
+  'chat.artifact.share.copy': 'Kopieren',
 
   // Chat: files panel (#3024)
   'chat.files.chip.aria.one': '{count} Datei in diesem Chat',
@@ -5211,6 +5264,12 @@ const messages: TranslationMap = {
   'conversations.tools.checkArtifacts.done': 'Artefakte geprüft',
   'conversations.tools.deleteArtifact.active': 'Artefakt wird gelöscht',
   'conversations.tools.deleteArtifact.done': 'Artefakt gelöscht',
+  'conversations.tools.createArtifact.active': 'Artefakt wird erstellt',
+  'conversations.tools.createArtifact.done': 'Artefakt erstellt',
+  'conversations.tools.updateArtifact.active': 'Artefakt wird aktualisiert',
+  'conversations.tools.updateArtifact.done': 'Artefakt aktualisiert',
+  'conversations.tools.shareArtifact.active': 'Artefakt wird geteilt',
+  'conversations.tools.shareArtifact.done': 'Artefakt geteilt',
   'flows.suggest.trigger.schedule': 'Geplant',
   'flows.suggest.trigger.app_event': 'Bei Ereignis',
   'flows.suggest.trigger.manual': 'Auf Abruf',

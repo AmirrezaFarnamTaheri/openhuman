@@ -7,7 +7,8 @@
  *
  *   engine · migration · ask · explorer · learnings · conversations · brain · background · settings
  *
- * With no `?brain=` the page opens on the Provider (engine) chip. Retired
+ * With no `?brain=` the page opens on memory Explorer when available or
+ * Provider (engine) when disabled. Advanced chips are disclosed on request. Retired
  * values (v1's `graph`, `goals`, `sources`, `sync`, `history`; v2's
  * `documents` and `context`) are rewritten to their current chip. While
  * memory is off every chip but Engine shows an empty state that points there.
@@ -48,6 +49,20 @@ import {
 
 const log = debug('openhuman:memory');
 
+// The navigation favors tasks a user can perform. Engine, migration and
+// background tuning remain one click away and always show when deep-linked.
+const MEMORY_NAV_ORDER: readonly MemoryChip[] = [
+  'explorer',
+  'ask',
+  'learnings',
+  'conversations',
+  'brain',
+  'engine',
+  'migration',
+  'background',
+  'settings',
+];
+
 export default function Memory() {
   const { t } = useT();
   const location = useLocation();
@@ -56,6 +71,7 @@ export default function Memory() {
   const authUserId = snapshot.auth.userId;
 
   const [engine, setEngine] = useState<EngineState | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [engines, setEngines] = useState<EngineDescriptor[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -87,7 +103,8 @@ export default function Memory() {
   const rawChip = params.get('brain');
   const requested = resolveMemoryChip(rawChip);
   const on = isMemoryOn(engine);
-  const chip: MemoryChip | null = requested ?? (engine ? 'engine' : null);
+  const defaultChip: MemoryChip = on ? 'explorer' : 'engine';
+  const chip: MemoryChip | null = requested ?? (engine ? defaultChip : null);
 
   const setChip = useCallback(
     (next: MemoryChip, replace = false) => {
@@ -108,9 +125,9 @@ export default function Memory() {
       if (requested !== rawChip) setChip(requested, true);
     } else if (engine) {
       // Unknown value: land on the default chip once it is known.
-      setChip('engine', true);
+      setChip(defaultChip, true);
     }
-  }, [rawChip, requested, engine, setChip]);
+  }, [rawChip, requested, engine, defaultChip, setChip]);
 
   const headers: Record<MemoryChip, { title: string; description: string }> = {
     engine: { title: t('memoryPage.tabs.engine'), description: t('memoryPage.header.engine') },
@@ -141,6 +158,13 @@ export default function Memory() {
       description: t('memoryPage.header.settings'),
     },
   };
+
+  const everydayChips: readonly MemoryChip[] = on
+    ? ['explorer', 'ask', 'learnings', 'conversations', 'brain']
+    : ['engine', 'migration'];
+  const visibleChips = MEMORY_NAV_ORDER.filter(
+    id => showAdvanced || everydayChips.includes(id) || id === chip
+  );
 
   const activeLabel = isMemoryDisabled(engine)
     ? t('memoryPage.engine.disabled.title')
@@ -195,17 +219,20 @@ export default function Memory() {
       <SettingsTabbedPage<MemoryChip>
         title={t('nav.brain')}
         description={headers[chip ?? 'engine'].description}
-        tabs={[
-          { id: 'engine', label: t('memoryPage.tabs.engine') },
-          { id: 'migration', label: t('memoryPage.tabs.migration') },
-          { id: 'ask', label: t('memoryPage.tabs.ask') },
-          { id: 'explorer', label: t('memoryPage.tabs.explorer') },
-          { id: 'learnings', label: t('memoryPage.tabs.learnings') },
-          { id: 'conversations', label: t('memoryPage.tabs.conversations') },
-          { id: 'brain', label: t('memoryPage.tabs.brain') },
-          { id: 'background', label: t('memoryPage.tabs.background') },
-          { id: 'settings', label: t('memoryPage.tabs.settings') },
-        ]}
+        headerAction={
+          <Button
+            type="button"
+            variant="tertiary"
+            size="xs"
+            data-testid="memory-toggle-advanced"
+            aria-expanded={showAdvanced}
+            onClick={() => setShowAdvanced(value => !value)}>
+            {showAdvanced
+              ? t('memoryPage.advanced.fewer', 'Fewer options')
+              : t('memoryPage.advanced.show', 'Advanced')}
+          </Button>
+        }
+        tabs={visibleChips.map(id => ({ id, label: headers[id].title }))}
         value={chip ?? undefined}
         onChange={next => setChip(next)}
         tabsAriaLabel={t('nav.brain')}
@@ -233,6 +260,7 @@ export default function Memory() {
               </AlertDescription>
             </Alert>
           )}
+
           {body}
         </div>
       </SettingsTabbedPage>

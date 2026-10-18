@@ -5,15 +5,15 @@ import ar from './ar';
 import bn from './bn';
 import de from './de';
 import en from './en';
-import { fleetTranslations } from './fleetTranslations';
-import { parallelFlowTranslations } from './parallelFlowTranslations';
 import es from './es';
+import { fleetTranslations } from './fleetTranslations';
 import fr from './fr';
 import hi from './hi';
 import id from './id';
 import it from './it';
 import ja from './ja';
 import ko from './ko';
+import { parallelFlowTranslations } from './parallelFlowTranslations';
 import pl from './pl';
 import pt from './pt';
 import ru from './ru';
@@ -72,7 +72,9 @@ function resolveEn(): Record<string, string> {
 const I18nContext = createContext<I18nContextValue>({
   t: (key: string, fallback?: string) => {
     const map = resolveEn();
-    return parallelFlowTranslations.en[key] ?? fleetTranslations.en[key] ?? map[key] ?? fallback ?? key;
+    return (
+      parallelFlowTranslations.en[key] ?? fleetTranslations.en[key] ?? map[key] ?? fallback ?? key
+    );
   },
   locale: 'en',
 });

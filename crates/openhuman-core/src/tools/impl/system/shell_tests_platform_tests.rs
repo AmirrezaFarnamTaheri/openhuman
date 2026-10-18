@@ -5,7 +5,7 @@
 //! pinned on every CI host, not only on a Windows runner.
 
 use super::*;
-use crate::agent::host_runtime::{host_shell_flavor, ShellFlavor};
+use crate::modules::tinybox::host_runtime::{host_shell_flavor, ShellFlavor};
 #[cfg(feature = "modules")]
 use crate::tools::system::shell_support::PYTHON_UTF8_DEFAULTS;
 use std::collections::HashMap;
@@ -100,7 +100,7 @@ async fn the_container_environment_forwards_only_the_allowlist_plus_python_defau
         ("AWS_SECRET_ACCESS_KEY".to_owned(), "secret".to_owned()),
     ]);
     let env = scoped
-        .scope(async { container_environment() })
+        .scope(async { container_environment(None) })
         .await
         .unwrap();
     assert_eq!(env.get("PATH").map(String::as_str), Some("/bin"));
@@ -114,6 +114,29 @@ async fn the_container_environment_forwards_only_the_allowlist_plus_python_defau
             "unexpected {key}"
         );
     }
+}
+
+/// Explicit turn variables reach the module-backed shell without inheriting
+/// unrelated host variables.
+#[cfg(feature = "modules")]
+#[test]
+fn the_container_environment_forwards_explicit_turn_variables() {
+    let explicit = std::collections::BTreeMap::from([
+        ("TURN_OWNER".to_owned(), "isolated".to_owned()),
+        ("WORKER_LABEL".to_owned(), "test".to_owned()),
+    ]);
+    let env = container_environment(Some(&explicit)).unwrap();
+    assert_eq!(env.get("TURN_OWNER").map(String::as_str), Some("isolated"));
+    assert_eq!(env.get("WORKER_LABEL").map(String::as_str), Some("test"));
+    assert!(!env.contains_key("PATH"));
+    assert_eq!(env.get("PYTHONUTF8").map(String::as_str), Some("1"));
+
+    let mut sandbox = HashMap::<OsString, OsString>::new();
+    super::super::super::shell_support::extend_explicit_environment(&mut sandbox, Some(&explicit));
+    assert_eq!(
+        sandbox.get(OsString::from("TURN_OWNER").as_os_str()),
+        Some(&OsString::from("isolated"))
+    );
 }
 
 #[test]
@@ -185,7 +208,7 @@ fn the_tool_describes_the_shell_its_runtime_spawns() {
 
 #[test]
 fn the_docker_runtime_always_runs_posix_sh() {
-    let docker = crate::agent::host_runtime::create_runtime(
+    let docker = crate::modules::tinybox::host_runtime::create_runtime(
         &crate::config::RuntimeConfig {
             kind: "docker".into(),
             ..crate::config::RuntimeConfig::default()

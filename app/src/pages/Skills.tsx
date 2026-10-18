@@ -591,8 +591,8 @@ export default function Skills() {
     if (raw === 'voice-agent' || raw === 'live-voice') return 'voice-agents';
     // Browser and Desktop are sub-tabs of Computer now.
     if (raw === 'browser' || raw === 'desktop') return 'computer';
-    // Default landing is the Welcome overview for the Connections page.
-    return 'welcome';
+    // Put the main integrations list first; Welcome remains accessible explicitly.
+    return 'composio';
   }, [location.search]);
 
   // `?section=` picks Computer's sub-tab; the legacy `?tab=browser|desktop`
@@ -682,6 +682,16 @@ export default function Skills() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  const [showAllConnections, setShowAllConnections] = useState(false);
+  const primaryConnections = new Set<ConnectionsTab>([
+    'composio',
+    'channels',
+    'mcp',
+    'skills',
+    'brain',
+    'llm',
+    'voice',
+  ]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<SkillCategory>('All');
   const [hasComposioApiKey, setHasComposioApiKey] = useState<boolean | null>(null);
@@ -1010,6 +1020,20 @@ export default function Skills() {
             ariaLabel={t('nav.connections')}
             selected={activeTab}
             onSelect={value => handleTabChange(value as ConnectionsTab)}
+            header={
+              <Button
+                type="button"
+                size="xs"
+                variant="tertiary"
+                analyticsId="connections-toggle-more"
+                aria-expanded={showAllConnections}
+                onClick={() => setShowAllConnections(value => !value)}
+                className="w-full justify-start text-left text-content-muted hover:text-content">
+                {showAllConnections
+                  ? t('connections.navigation.showFewer', 'Show fewer connections')
+                  : t('connections.navigation.showAll', 'Show all connections')}
+              </Button>
+            }
             groups={[
               {
                 label: t('connections.groups.integrations'),
@@ -1125,7 +1149,17 @@ export default function Skills() {
                   },
                 ],
               },
-            ]}
+            ]
+              .map(group => ({
+                ...group,
+                items: group.items.filter(
+                  item =>
+                    showAllConnections ||
+                    primaryConnections.has(item.value as ConnectionsTab) ||
+                    item.value === activeTab
+                ),
+              }))
+              .filter(group => group.items.length > 0)}
           />
         </div>
       </SidebarContent>

@@ -1,0 +1,2062 @@
+{
+  "input_occurrences": 217,
+  "unique_identities": 198,
+  "repositories": [
+    {
+      "id": 1,
+      "requested_repository": "53ai/53aihub",
+      "occurrences": [
+        {
+          "line": 1,
+          "raw": "53ai/53aihub"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "requested_repository": "vercel-labs/agent-browser",
+      "occurrences": [
+        {
+          "line": 2,
+          "raw": "vercel-labs/agent-browser"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "requested_repository": "agentclientprotocol/agent-client-protocol",
+      "occurrences": [
+        {
+          "line": 3,
+          "raw": "agentclientprotocol/agent-client-protocol"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "requested_repository": "theagentrouter/agent-router",
+      "occurrences": [
+        {
+          "line": 4,
+          "raw": "theagentrouter/agent-router"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "requested_repository": "vercel-labs/skills",
+      "occurrences": [
+        {
+          "line": 5,
+          "raw": "vercel-labs/skills"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "requested_repository": "softaworks/agent-toolkit",
+      "occurrences": [
+        {
+          "line": 6,
+          "raw": "softaworks/agent-toolkit"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "requested_repository": "agentchute/agentchute",
+      "occurrences": [
+        {
+          "line": 7,
+          "raw": "agentchute/agentchute"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "requested_repository": "UNKNOWN/AgentDNS",
+      "occurrences": [
+        {
+          "line": 8,
+          "raw": "UNKNOWN/AgentDNS"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "requested_repository": "Agent-Field/agentfield",
+      "occurrences": [
+        {
+          "line": 9,
+          "raw": "Agent-Field/agentfield"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "requested_repository": "howardjohn/schemars",
+      "occurrences": [
+        {
+          "line": 10,
+          "raw": "howardjohn/schemars\""
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "requested_repository": "AgentsMesh/AgentsMesh",
+      "occurrences": [
+        {
+          "line": 11,
+          "raw": "AgentsMesh/AgentsMesh"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "requested_repository": "example/agixt-extension-hub",
+      "occurrences": [
+        {
+          "line": 12,
+          "raw": "example/agixt-extension-hub"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "requested_repository": "UNKNOWN/ai-codex",
+      "occurrences": [
+        {
+          "line": 13,
+          "raw": "UNKNOWN/ai-codex"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "requested_repository": "miragecoa/AI-Resource-Manager",
+      "occurrences": [
+        {
+          "line": 14,
+          "raw": "miragecoa/AI-Resource-Manager"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "requested_repository": "akitaonrails/ai-memory",
+      "occurrences": [
+        {
+          "line": 15,
+          "raw": "akitaonrails/ai-memory"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "requested_repository": "HKUDS/AI-Researcher",
+      "occurrences": [
+        {
+          "line": 16,
+          "raw": "HKUDS/AI-Researcher"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "requested_repository": "soulduse/ai-token-monitor",
+      "occurrences": [
+        {
+          "line": 17,
+          "raw": "soulduse/ai-token-monitor"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "requested_repository": "sigoden/aichat",
+      "occurrences": [
+        {
+          "line": 18,
+          "raw": "sigoden/aichat\""
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "requested_repository": "feder-cr/AIHawk",
+      "occurrences": [
+        {
+          "line": 19,
+          "raw": "feder-cr/AIHawk"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "requested_repository": "duolahypercho/andrej-karpathy-skills",
+      "occurrences": [
+        {
+          "line": 20,
+          "raw": "duolahypercho/andrej-karpathy-skills"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "requested_repository": "multica-ai/multica",
+      "occurrences": [
+        {
+          "line": 21,
+          "raw": "multica-ai/multica"
+        },
+        {
+          "line": 124,
+          "raw": "multica-ai/multica"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "requested_repository": "SylphxAI/anymd",
+      "occurrences": [
+        {
+          "line": 22,
+          "raw": "SylphxAI/anymd"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "requested_repository": "aoci-spec/aoci-code",
+      "occurrences": [
+        {
+          "line": 23,
+          "raw": "aoci-spec/aoci-code"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "requested_repository": "kaust-ark/ARK",
+      "occurrences": [
+        {
+          "line": 24,
+          "raw": "kaust-ark/ARK"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "requested_repository": "atripati/ark",
+      "occurrences": [
+        {
+          "line": 25,
+          "raw": "atripati/ark"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "requested_repository": "karpathy/arxiv-sanity-lite",
+      "occurrences": [
+        {
+          "line": 26,
+          "raw": "karpathy/arxiv-sanity-lite"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "requested_repository": "karpathy/autoresearch",
+      "occurrences": [
+        {
+          "line": 27,
+          "raw": "karpathy/autoresearch"
+        },
+        {
+          "line": 32,
+          "raw": "karpathy/autoresearch"
+        },
+        {
+          "line": 33,
+          "raw": "karpathy/autoresearch"
+        },
+        {
+          "line": 34,
+          "raw": "karpathy/autoresearch"
+        },
+        {
+          "line": 35,
+          "raw": "karpathy/autoresearch"
+        },
+        {
+          "line": 83,
+          "raw": "karpathy/autoresearch"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "requested_repository": "UNKNOWN/auto-research",
+      "occurrences": [
+        {
+          "line": 28,
+          "raw": "UNKNOWN/auto-research"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "requested_repository": "jackwener/opencli",
+      "occurrences": [
+        {
+          "line": 29,
+          "raw": "jackwener/opencli"
+        },
+        {
+          "line": 30,
+          "raw": "jackwener/opencli"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "requested_repository": "greyhaven-ai/autocontext",
+      "occurrences": [
+        {
+          "line": 31,
+          "raw": "greyhaven-ai/autocontext"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "requested_repository": "karpathy/nanochat",
+      "occurrences": [
+        {
+          "line": 36,
+          "raw": "karpathy/nanochat"
+        },
+        {
+          "line": 37,
+          "raw": "karpathy/nanochat"
+        },
+        {
+          "line": 125,
+          "raw": "karpathy/nanochat"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "requested_repository": "slavakurilyak/awesome-ai-agents",
+      "occurrences": [
+        {
+          "line": 38,
+          "raw": "slavakurilyak/awesome-ai-agents"
+        },
+        {
+          "line": 39,
+          "raw": "slavakurilyak/awesome-ai-agents"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "requested_repository": "UNKNOWN/blink",
+      "occurrences": [
+        {
+          "line": 40,
+          "raw": "UNKNOWN/blink"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "requested_repository": "jo-inc/camofox-browser",
+      "occurrences": [
+        {
+          "line": 41,
+          "raw": "jo-inc/camofox-browser"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "requested_repository": "qkal/canny",
+      "occurrences": [
+        {
+          "line": 42,
+          "raw": "qkal/canny"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "requested_repository": "JuliusBrussee/caveman",
+      "occurrences": [
+        {
+          "line": 43,
+          "raw": "JuliusBrussee/caveman"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "requested_repository": "NanmiCoder/cc-haha",
+      "occurrences": [
+        {
+          "line": 44,
+          "raw": "NanmiCoder/cc-haha"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "requested_repository": "T4cceptor/centian",
+      "occurrences": [
+        {
+          "line": 45,
+          "raw": "T4cceptor/centian"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "requested_repository": "BeaconBay/ck",
+      "occurrences": [
+        {
+          "line": 46,
+          "raw": "BeaconBay/ck"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "requested_repository": "Piebald-AI/github",
+      "occurrences": [
+        {
+          "line": 47,
+          "raw": "Piebald-AI/github"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "requested_repository": "davila7/claude-code-templates",
+      "occurrences": [
+        {
+          "line": 48,
+          "raw": "davila7/claude-code-templates"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "requested_repository": "RoggeOhta/awesome-codex-cli",
+      "occurrences": [
+        {
+          "line": 49,
+          "raw": "RoggeOhta/awesome-codex-cli"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "requested_repository": "buchmark/claude-jev",
+      "occurrences": [
+        {
+          "line": 50,
+          "raw": "buchmark/claude-jev"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "requested_repository": "create-go-app/cli",
+      "occurrences": [
+        {
+          "line": 51,
+          "raw": "create-go-app/cli"
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "requested_repository": "entireio/scoop-bucket",
+      "occurrences": [
+        {
+          "line": 52,
+          "raw": "entireio/scoop-bucket"
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "requested_repository": "googleworkspace/cli",
+      "occurrences": [
+        {
+          "line": 53,
+          "raw": "googleworkspace/cli"
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "requested_repository": "dark-hxx/CLI-Manager",
+      "occurrences": [
+        {
+          "line": 54,
+          "raw": "dark-hxx/CLI-Manager"
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "requested_repository": "thellimist/clihub",
+      "occurrences": [
+        {
+          "line": 55,
+          "raw": "thellimist/clihub"
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "requested_repository": "kittors/codeProxy",
+      "occurrences": [
+        {
+          "line": 56,
+          "raw": "kittors/codeProxy\">Control"
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "requested_repository": "jlcodes99/cockpit-tools",
+      "occurrences": [
+        {
+          "line": 57,
+          "raw": "jlcodes99/cockpit-tools"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "requested_repository": "colbymchenry/codegraph",
+      "occurrences": [
+        {
+          "line": 58,
+          "raw": "colbymchenry/codegraph"
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "requested_repository": "codegraph/embedding-system",
+      "occurrences": [
+        {
+          "line": 59,
+          "raw": "codegraph/embedding-system\""
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "requested_repository": "CodeGraphContext/CodeGraphContext",
+      "occurrences": [
+        {
+          "line": 60,
+          "raw": "CodeGraphContext/CodeGraphContext"
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "requested_repository": "Houseofmvps/codesight",
+      "occurrences": [
+        {
+          "line": 61,
+          "raw": "Houseofmvps/codesight"
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "requested_repository": "leo-lilinxiao/codex-autoresearch",
+      "occurrences": [
+        {
+          "line": 62,
+          "raw": "leo-lilinxiao/codex-autoresearch\"><img"
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "requested_repository": "JustVugg/colibri",
+      "occurrences": [
+        {
+          "line": 63,
+          "raw": "JustVugg/colibri"
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "requested_repository": "ComposioHQ/composio",
+      "occurrences": [
+        {
+          "line": 64,
+          "raw": "ComposioHQ/composio"
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "requested_repository": "sheawinkler/ContextLattice",
+      "occurrences": [
+        {
+          "line": 65,
+          "raw": "sheawinkler/ContextLattice"
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "requested_repository": "cube-js/cube",
+      "occurrences": [
+        {
+          "line": 66,
+          "raw": "cube-js/cube"
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "requested_repository": "eqtylab/cupcake",
+      "occurrences": [
+        {
+          "line": 67,
+          "raw": "eqtylab/cupcake"
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "requested_repository": "Zongwei9888/Experiment_Images",
+      "occurrences": [
+        {
+          "line": 68,
+          "raw": "Zongwei9888/Experiment_Images"
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "requested_repository": "astral-sh/uv",
+      "occurrences": [
+        {
+          "line": 69,
+          "raw": "astral-sh/uv"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "requested_repository": "deepseek-ai/deepseek-harness",
+      "occurrences": [
+        {
+          "line": 70,
+          "raw": "deepseek-ai/deepseek-harness"
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "requested_repository": "HKUDS/DeepTutor",
+      "occurrences": [
+        {
+          "line": 71,
+          "raw": "HKUDS/DeepTutor"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "requested_repository": "HKUDS/DiffGraph",
+      "occurrences": [
+        {
+          "line": 72,
+          "raw": "HKUDS/DiffGraph"
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "requested_repository": "mathematic-inc/earl",
+      "occurrences": [
+        {
+          "line": 73,
+          "raw": "mathematic-inc/earl"
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "requested_repository": "router-for-me/CLIProxyAPI",
+      "occurrences": [
+        {
+          "line": 74,
+          "raw": "router-for-me/CLIProxyAPI"
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "requested_repository": "user-attachments/assets",
+      "occurrences": [
+        {
+          "line": 75,
+          "raw": "user-attachments/assets"
+        },
+        {
+          "line": 155,
+          "raw": "user-attachments/assets"
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "requested_repository": "erupts/erupt",
+      "occurrences": [
+        {
+          "line": 76,
+          "raw": "erupts/erupt\"><img"
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "requested_repository": "extism/extism",
+      "occurrences": [
+        {
+          "line": 77,
+          "raw": "extism/extism\""
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "requested_repository": "microbus-io/fabric",
+      "occurrences": [
+        {
+          "line": 78,
+          "raw": "microbus-io/fabric"
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "requested_repository": "browser-use/jev-ultrafast",
+      "occurrences": [
+        {
+          "line": 79,
+          "raw": "browser-use/jev-ultrafast)):"
+        },
+        {
+          "line": 98,
+          "raw": "browser-use/jev-ultrafast"
+        },
+        {
+          "line": 100,
+          "raw": "browser-use/jev-ultrafast"
+        },
+        {
+          "line": 106,
+          "raw": "browser-use/jev-ultrafast"
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "requested_repository": "timrogers/formanator",
+      "occurrences": [
+        {
+          "line": 80,
+          "raw": "timrogers/formanator\""
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "requested_repository": "kyu08/fzf-make",
+      "occurrences": [
+        {
+          "line": 81,
+          "raw": "kyu08/fzf-make\""
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "requested_repository": "google-gemini/gemini-cli",
+      "occurrences": [
+        {
+          "line": 82,
+          "raw": "google-gemini/gemini-cli"
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "requested_repository": "ozgurcd/gograph",
+      "occurrences": [
+        {
+          "line": 84,
+          "raw": "ozgurcd/gograph"
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "requested_repository": "speakeasy-api/gram",
+      "occurrences": [
+        {
+          "line": 85,
+          "raw": "speakeasy-api/gram"
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "requested_repository": "elbruno/graphify-dotnet",
+      "occurrences": [
+        {
+          "line": 86,
+          "raw": "elbruno/graphify-dotnet"
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "requested_repository": "TtTRz/graphify-rs",
+      "occurrences": [
+        {
+          "line": 87,
+          "raw": "TtTRz/graphify-rs\""
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "requested_repository": "angelnicolasc/graymatter",
+      "occurrences": [
+        {
+          "line": 88,
+          "raw": "angelnicolasc/graymatter"
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "requested_repository": "yoanbernabeu/grepai",
+      "occurrences": [
+        {
+          "line": 89,
+          "raw": "yoanbernabeu/grepai"
+        }
+      ]
+    },
+    {
+      "id": 82,
+      "requested_repository": "max-sixty/worktrunk",
+      "occurrences": [
+        {
+          "line": 90,
+          "raw": "max-sixty/worktrunk"
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "requested_repository": "yusukebe/hono-jev-router",
+      "occurrences": [
+        {
+          "line": 91,
+          "raw": "yusukebe/hono-jev-router"
+        }
+      ]
+    },
+    {
+      "id": 84,
+      "requested_repository": "manvesh2011/hybrid-search",
+      "occurrences": [
+        {
+          "line": 92,
+          "raw": "manvesh2011/hybrid-search"
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "requested_repository": "Ayms/node-Tor",
+      "occurrences": [
+        {
+          "line": 93,
+          "raw": "Ayms/node-Tor"
+        }
+      ]
+    },
+    {
+      "id": 86,
+      "requested_repository": "nimhar/imptokens",
+      "occurrences": [
+        {
+          "line": 94,
+          "raw": "nimhar/imptokens"
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "requested_repository": "UNKNOWN/Jev-Auto-Router",
+      "occurrences": [
+        {
+          "line": 95,
+          "raw": "UNKNOWN/Jev-Auto-Router"
+        }
+      ]
+    },
+    {
+      "id": 88,
+      "requested_repository": "0xNatoshi/jev-codex-router",
+      "occurrences": [
+        {
+          "line": 96,
+          "raw": "0xNatoshi/jev-codex-router"
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "requested_repository": "minghanminghan/jev-demo",
+      "occurrences": [
+        {
+          "line": 97,
+          "raw": "minghanminghan/jev-demo"
+        }
+      ]
+    },
+    {
+      "id": 90,
+      "requested_repository": "UNKNOWN/jev-model-router",
+      "occurrences": [
+        {
+          "line": 99,
+          "raw": "UNKNOWN/jev-model-router"
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "requested_repository": "UNKNOWN/jev-review",
+      "occurrences": [
+        {
+          "line": 101,
+          "raw": "UNKNOWN/jev-review"
+        }
+      ]
+    },
+    {
+      "id": 92,
+      "requested_repository": "hugo-alves/jev-router-playground",
+      "occurrences": [
+        {
+          "line": 102,
+          "raw": "hugo-alves/jev-router-playground"
+        }
+      ]
+    },
+    {
+      "id": 93,
+      "requested_repository": "wuyoscar/jev-skill",
+      "occurrences": [
+        {
+          "line": 103,
+          "raw": "wuyoscar/jev-skill"
+        }
+      ]
+    },
+    {
+      "id": 94,
+      "requested_repository": "UNKNOWN/jev-trader",
+      "occurrences": [
+        {
+          "line": 104,
+          "raw": "UNKNOWN/jev-trader"
+        }
+      ]
+    },
+    {
+      "id": 95,
+      "requested_repository": "reachjalil/jev-tree",
+      "occurrences": [
+        {
+          "line": 105,
+          "raw": "reachjalil/jev-tree"
+        }
+      ]
+    },
+    {
+      "id": 96,
+      "requested_repository": "zkjoie/jevbus",
+      "occurrences": [
+        {
+          "line": 107,
+          "raw": "zkjoie/jevbus\""
+        }
+      ]
+    },
+    {
+      "id": 97,
+      "requested_repository": "abhixhek/jevcal",
+      "occurrences": [
+        {
+          "line": 108,
+          "raw": "abhixhek/jevcal\""
+        }
+      ]
+    },
+    {
+      "id": 98,
+      "requested_repository": "jimmyhealer/jevex",
+      "occurrences": [
+        {
+          "line": 109,
+          "raw": "jimmyhealer/jevex"
+        }
+      ]
+    },
+    {
+      "id": 99,
+      "requested_repository": "zjunlp/JevLoop",
+      "occurrences": [
+        {
+          "line": 110,
+          "raw": "zjunlp/JevLoop"
+        }
+      ]
+    },
+    {
+      "id": 100,
+      "requested_repository": "bnsd55/jevmlx",
+      "occurrences": [
+        {
+          "line": 111,
+          "raw": "bnsd55/jevmlx"
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "requested_repository": "BillionsBobby/JevRouter",
+      "occurrences": [
+        {
+          "line": 112,
+          "raw": "BillionsBobby/JevRouter"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "requested_repository": "Astro-Han/karpathy-llm-wiki",
+      "occurrences": [
+        {
+          "line": 113,
+          "raw": "Astro-Han/karpathy-llm-wiki"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "requested_repository": "K-Dense-AI/karpathy",
+      "occurrences": [
+        {
+          "line": 114,
+          "raw": "K-Dense-AI/karpathy"
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "requested_repository": "obra/superpowers-skills",
+      "occurrences": [
+        {
+          "line": 115,
+          "raw": "obra/superpowers-skills"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "requested_repository": "alvinunreal/awesome-autoresearch",
+      "occurrences": [
+        {
+          "line": 116,
+          "raw": "alvinunreal/awesome-autoresearch"
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "requested_repository": "LazyAGI/LazyMind",
+      "occurrences": [
+        {
+          "line": 117,
+          "raw": "LazyAGI/LazyMind"
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "requested_repository": "Zippland/Bubbles",
+      "occurrences": [
+        {
+          "line": 118,
+          "raw": "Zippland/Bubbles"
+        }
+      ]
+    },
+    {
+      "id": 108,
+      "requested_repository": "wundercorp/loki",
+      "occurrences": [
+        {
+          "line": 119,
+          "raw": "wundercorp/loki"
+        }
+      ]
+    },
+    {
+      "id": 109,
+      "requested_repository": "zdk/lowfat",
+      "occurrences": [
+        {
+          "line": 120,
+          "raw": "zdk/lowfat\""
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "requested_repository": "zilliztech/memsearch",
+      "occurrences": [
+        {
+          "line": 121,
+          "raw": "zilliztech/memsearch"
+        }
+      ]
+    },
+    {
+      "id": 111,
+      "requested_repository": "HKUDS/VideoRAG",
+      "occurrences": [
+        {
+          "line": 122,
+          "raw": "HKUDS/VideoRAG"
+        }
+      ]
+    },
+    {
+      "id": 112,
+      "requested_repository": "lexmount/parley",
+      "occurrences": [
+        {
+          "line": 123,
+          "raw": "lexmount/parley\""
+        }
+      ]
+    },
+    {
+      "id": 113,
+      "requested_repository": "TianyuCodings/JevHarness",
+      "occurrences": [
+        {
+          "line": 126,
+          "raw": "TianyuCodings/JevHarness)**"
+        }
+      ]
+    },
+    {
+      "id": 114,
+      "requested_repository": "neuml/ncoder",
+      "occurrences": [
+        {
+          "line": 127,
+          "raw": "neuml/ncoder"
+        }
+      ]
+    },
+    {
+      "id": 115,
+      "requested_repository": "jexp/neo4jev",
+      "occurrences": [
+        {
+          "line": 128,
+          "raw": "jexp/neo4jev"
+        }
+      ]
+    },
+    {
+      "id": 116,
+      "requested_repository": "tilework-tech/nori-cli",
+      "occurrences": [
+        {
+          "line": 129,
+          "raw": "tilework-tech/nori-cli"
+        }
+      ]
+    },
+    {
+      "id": 117,
+      "requested_repository": "UNKNOWN/NVCD-v24.59.0-product",
+      "occurrences": [
+        {
+          "line": 130,
+          "raw": "UNKNOWN/NVCD-v24.59.0-product"
+        }
+      ]
+    },
+    {
+      "id": 118,
+      "requested_repository": "nyroway/nyro",
+      "occurrences": [
+        {
+          "line": 131,
+          "raw": "nyroway/nyro\""
+        }
+      ]
+    },
+    {
+      "id": 119,
+      "requested_repository": "h4ckf0r0day/obscura",
+      "occurrences": [
+        {
+          "line": 132,
+          "raw": "h4ckf0r0day/obscura\""
+        }
+      ]
+    },
+    {
+      "id": 120,
+      "requested_repository": "GoogleCloudPlatform/knowledge-catalog",
+      "occurrences": [
+        {
+          "line": 133,
+          "raw": "GoogleCloudPlatform/knowledge-catalog"
+        }
+      ]
+    },
+    {
+      "id": 121,
+      "requested_repository": "aipoch/open-science",
+      "occurrences": [
+        {
+          "line": 134,
+          "raw": "aipoch/open-science"
+        }
+      ]
+    },
+    {
+      "id": 122,
+      "requested_repository": "andyvandaric/opencode-ag-auth",
+      "occurrences": [
+        {
+          "line": 135,
+          "raw": "andyvandaric/opencode-ag-auth"
+        },
+        {
+          "line": 136,
+          "raw": "andyvandaric/opencode-ag-auth"
+        }
+      ]
+    },
+    {
+      "id": 123,
+      "requested_repository": "anomalyco/opencode",
+      "occurrences": [
+        {
+          "line": 137,
+          "raw": "anomalyco/opencode"
+        }
+      ]
+    },
+    {
+      "id": 124,
+      "requested_repository": "yuseferi/opencode-litellm",
+      "occurrences": [
+        {
+          "line": 138,
+          "raw": "yuseferi/opencode-litellm"
+        }
+      ]
+    },
+    {
+      "id": 125,
+      "requested_repository": "6Kmfi6HP/opencode2api",
+      "occurrences": [
+        {
+          "line": 139,
+          "raw": "6Kmfi6HP/opencode2api"
+        }
+      ]
+    },
+    {
+      "id": 126,
+      "requested_repository": "jasonxu114514/opencode2api",
+      "occurrences": [
+        {
+          "line": 140,
+          "raw": "jasonxu114514/opencode2api"
+        }
+      ]
+    },
+    {
+      "id": 127,
+      "requested_repository": "lidge-jun/opencodex",
+      "occurrences": [
+        {
+          "line": 141,
+          "raw": "lidge-jun/opencodex"
+        }
+      ]
+    },
+    {
+      "id": 128,
+      "requested_repository": "OpenHands/OpenHands",
+      "occurrences": [
+        {
+          "line": 142,
+          "raw": "OpenHands/OpenHands"
+        }
+      ]
+    },
+    {
+      "id": 129,
+      "requested_repository": "HKUDS/OpenHarness",
+      "occurrences": [
+        {
+          "line": 143,
+          "raw": "HKUDS/OpenHarness"
+        }
+      ]
+    },
+    {
+      "id": 130,
+      "requested_repository": "rtk-ai/rtk",
+      "occurrences": [
+        {
+          "line": 144,
+          "raw": "rtk-ai/rtk"
+        },
+        {
+          "line": 173,
+          "raw": "rtk-ai/rtk"
+        }
+      ]
+    },
+    {
+      "id": 131,
+      "requested_repository": "alphaXiv/OpenResearch",
+      "occurrences": [
+        {
+          "line": 145,
+          "raw": "alphaXiv/OpenResearch\""
+        }
+      ]
+    },
+    {
+      "id": 132,
+      "requested_repository": "OpenRLHF/OpenRLHF",
+      "occurrences": [
+        {
+          "line": 146,
+          "raw": "OpenRLHF/OpenRLHF"
+        }
+      ]
+    },
+    {
+      "id": 133,
+      "requested_repository": "HKUDS/OpenSpace",
+      "occurrences": [
+        {
+          "line": 147,
+          "raw": "HKUDS/OpenSpace"
+        }
+      ]
+    },
+    {
+      "id": 134,
+      "requested_repository": "ollygarden/skills",
+      "occurrences": [
+        {
+          "line": 148,
+          "raw": "ollygarden/skills"
+        }
+      ]
+    },
+    {
+      "id": 135,
+      "requested_repository": "CatCatUncle/openworkbuddy",
+      "occurrences": [
+        {
+          "line": 149,
+          "raw": "CatCatUncle/openworkbuddy"
+        }
+      ]
+    },
+    {
+      "id": 136,
+      "requested_repository": "Ryandonofrio3/osgrep",
+      "occurrences": [
+        {
+          "line": 150,
+          "raw": "Ryandonofrio3/osgrep"
+        }
+      ]
+    },
+    {
+      "id": 137,
+      "requested_repository": "alibaba/page-agent",
+      "occurrences": [
+        {
+          "line": 151,
+          "raw": "alibaba/page-agent"
+        }
+      ]
+    },
+    {
+      "id": 138,
+      "requested_repository": "tw93/Pake",
+      "occurrences": [
+        {
+          "line": 152,
+          "raw": "tw93/Pake"
+        }
+      ]
+    },
+    {
+      "id": 139,
+      "requested_repository": "block/buzz",
+      "occurrences": [
+        {
+          "line": 153,
+          "raw": "block/buzz"
+        }
+      ]
+    },
+    {
+      "id": 140,
+      "requested_repository": "penpot/penpot",
+      "occurrences": [
+        {
+          "line": 154,
+          "raw": "penpot/penpot"
+        }
+      ]
+    },
+    {
+      "id": 141,
+      "requested_repository": "pulseaiclub/phi",
+      "occurrences": [
+        {
+          "line": 156,
+          "raw": "pulseaiclub/phi"
+        }
+      ]
+    },
+    {
+      "id": 142,
+      "requested_repository": "mejiasd3v/pi-jev-router",
+      "occurrences": [
+        {
+          "line": 157,
+          "raw": "mejiasd3v/pi-jev-router"
+        }
+      ]
+    },
+    {
+      "id": 143,
+      "requested_repository": "kerem-kaynak/wt",
+      "occurrences": [
+        {
+          "line": 158,
+          "raw": "kerem-kaynak/wt"
+        }
+      ]
+    },
+    {
+      "id": 144,
+      "requested_repository": "pinpoint-apm/pinpoint",
+      "occurrences": [
+        {
+          "line": 159,
+          "raw": "pinpoint-apm/pinpoint"
+        }
+      ]
+    },
+    {
+      "id": 145,
+      "requested_repository": "katanemo/plano",
+      "occurrences": [
+        {
+          "line": 160,
+          "raw": "katanemo/plano"
+        }
+      ]
+    },
+    {
+      "id": 146,
+      "requested_repository": "NousResearch/Hermes-Agent",
+      "occurrences": [
+        {
+          "line": 161,
+          "raw": "NousResearch/Hermes-Agent"
+        }
+      ]
+    },
+    {
+      "id": 147,
+      "requested_repository": "christiandoxa/prodex",
+      "occurrences": [
+        {
+          "line": 162,
+          "raw": "christiandoxa/prodex"
+        }
+      ]
+    },
+    {
+      "id": 148,
+      "requested_repository": "styler-ai/ProjectAtlas",
+      "occurrences": [
+        {
+          "line": 163,
+          "raw": "styler-ai/ProjectAtlas\""
+        }
+      ]
+    },
+    {
+      "id": 149,
+      "requested_repository": "routatic/proxy",
+      "occurrences": [
+        {
+          "line": 164,
+          "raw": "routatic/proxy"
+        }
+      ]
+    },
+    {
+      "id": 150,
+      "requested_repository": "cursor/plugins",
+      "occurrences": [
+        {
+          "line": 165,
+          "raw": "cursor/plugins"
+        }
+      ]
+    },
+    {
+      "id": 151,
+      "requested_repository": "rokbenko/quackd",
+      "occurrences": [
+        {
+          "line": 166,
+          "raw": "rokbenko/quackd"
+        }
+      ]
+    },
+    {
+      "id": 152,
+      "requested_repository": "nguyenphutrong/quotio",
+      "occurrences": [
+        {
+          "line": 167,
+          "raw": "nguyenphutrong/quotio"
+        }
+      ]
+    },
+    {
+      "id": 153,
+      "requested_repository": "neuml/rag",
+      "occurrences": [
+        {
+          "line": 168,
+          "raw": "neuml/rag"
+        }
+      ]
+    },
+    {
+      "id": 154,
+      "requested_repository": "kayba-ai/recursive-improve",
+      "occurrences": [
+        {
+          "line": 169,
+          "raw": "kayba-ai/recursive-improve.git\""
+        }
+      ]
+    },
+    {
+      "id": 155,
+      "requested_repository": "junjunjunbong/research-loop",
+      "occurrences": [
+        {
+          "line": 170,
+          "raw": "junjunjunbong/research-loop"
+        }
+      ]
+    },
+    {
+      "id": 156,
+      "requested_repository": "UNKNOWN/researchpooler",
+      "occurrences": [
+        {
+          "line": 171,
+          "raw": "UNKNOWN/researchpooler"
+        }
+      ]
+    },
+    {
+      "id": 157,
+      "requested_repository": "reticlehq/reticle",
+      "occurrences": [
+        {
+          "line": 172,
+          "raw": "reticlehq/reticle"
+        }
+      ]
+    },
+    {
+      "id": 158,
+      "requested_repository": "BadBeta/BB-skill-core",
+      "occurrences": [
+        {
+          "line": 174,
+          "raw": "BadBeta/BB-skill-core"
+        }
+      ]
+    },
+    {
+      "id": 159,
+      "requested_repository": "K-Dense-AI/scientific-agent-skills",
+      "occurrences": [
+        {
+          "line": 175,
+          "raw": "K-Dense-AI/scientific-agent-skills"
+        }
+      ]
+    },
+    {
+      "id": 160,
+      "requested_repository": "yu-xin-c/Sea-mult-agent",
+      "occurrences": [
+        {
+          "line": 176,
+          "raw": "yu-xin-c/Sea-mult-agent"
+        }
+      ]
+    },
+    {
+      "id": 161,
+      "requested_repository": "sturdy-dev/semantic-code-search",
+      "occurrences": [
+        {
+          "line": 177,
+          "raw": "sturdy-dev/semantic-code-search"
+        }
+      ]
+    },
+    {
+      "id": 162,
+      "requested_repository": "semantica-agi/semantica",
+      "occurrences": [
+        {
+          "line": 178,
+          "raw": "semantica-agi/semantica"
+        }
+      ]
+    },
+    {
+      "id": 163,
+      "requested_repository": "sponsors/kitze",
+      "occurrences": [
+        {
+          "line": 179,
+          "raw": "sponsors/kitze"
+        }
+      ]
+    },
+    {
+      "id": 164,
+      "requested_repository": "thousandflowers/skillreaper",
+      "occurrences": [
+        {
+          "line": 180,
+          "raw": "thousandflowers/skillreaper"
+        },
+        {
+          "line": 181,
+          "raw": "thousandflowers/skillreaper"
+        },
+        {
+          "line": 182,
+          "raw": "thousandflowers/skillreaper"
+        },
+        {
+          "line": 183,
+          "raw": "thousandflowers/skillreaper"
+        }
+      ]
+    },
+    {
+      "id": 165,
+      "requested_repository": "benchflow-ai/skillsbench",
+      "occurrences": [
+        {
+          "line": 184,
+          "raw": "benchflow-ai/skillsbench"
+        }
+      ]
+    },
+    {
+      "id": 166,
+      "requested_repository": "mgechev/skillgrade",
+      "occurrences": [
+        {
+          "line": 185,
+          "raw": "mgechev/skillgrade).**"
+        }
+      ]
+    },
+    {
+      "id": 167,
+      "requested_repository": "huggingface/smolagents",
+      "occurrences": [
+        {
+          "line": 186,
+          "raw": "huggingface/smolagents"
+        }
+      ]
+    },
+    {
+      "id": 168,
+      "requested_repository": "glincker/stacklit",
+      "occurrences": [
+        {
+          "line": 187,
+          "raw": "glincker/stacklit"
+        }
+      ]
+    },
+    {
+      "id": 169,
+      "requested_repository": "devagrawal09/stanley-code",
+      "occurrences": [
+        {
+          "line": 188,
+          "raw": "devagrawal09/stanley-code"
+        }
+      ]
+    },
+    {
+      "id": 170,
+      "requested_repository": "steel-dev/steel-browser",
+      "occurrences": [
+        {
+          "line": 189,
+          "raw": "steel-dev/steel-browser"
+        }
+      ]
+    },
+    {
+      "id": 171,
+      "requested_repository": "sidinsearch/superbrain",
+      "occurrences": [
+        {
+          "line": 190,
+          "raw": "sidinsearch/superbrain"
+        }
+      ]
+    },
+    {
+      "id": 172,
+      "requested_repository": "obra/superpowers",
+      "occurrences": [
+        {
+          "line": 191,
+          "raw": "obra/superpowers"
+        }
+      ]
+    },
+    {
+      "id": 173,
+      "requested_repository": "langtalks/swe-agent-langgraph",
+      "occurrences": [
+        {
+          "line": 192,
+          "raw": "langtalks/swe-agent-langgraph"
+        }
+      ]
+    },
+    {
+      "id": 174,
+      "requested_repository": "ruban-24/switchboard",
+      "occurrences": [
+        {
+          "line": 193,
+          "raw": "ruban-24/switchboard"
+        }
+      ]
+    },
+    {
+      "id": 175,
+      "requested_repository": "itsmostafa/system-one-connector",
+      "occurrences": [
+        {
+          "line": 194,
+          "raw": "itsmostafa/system-one-connector"
+        }
+      ]
+    },
+    {
+      "id": 176,
+      "requested_repository": "mmulet/term.everything",
+      "occurrences": [
+        {
+          "line": 195,
+          "raw": "mmulet/term.everything"
+        }
+      ]
+    },
+    {
+      "id": 177,
+      "requested_repository": "maker-KK/todo-jev",
+      "occurrences": [
+        {
+          "line": 196,
+          "raw": "maker-KK/todo-jev"
+        }
+      ]
+    },
+    {
+      "id": 178,
+      "requested_repository": "snchimata/tokenfold",
+      "occurrences": [
+        {
+          "line": 197,
+          "raw": "snchimata/tokenfold"
+        }
+      ]
+    },
+    {
+      "id": 179,
+      "requested_repository": "juninmd/tokenix",
+      "occurrences": [
+        {
+          "line": 198,
+          "raw": "juninmd/tokenix\""
+        }
+      ]
+    },
+    {
+      "id": 180,
+      "requested_repository": "huggingface/tokenizers",
+      "occurrences": [
+        {
+          "line": 199,
+          "raw": "huggingface/tokenizers"
+        }
+      ]
+    },
+    {
+      "id": 181,
+      "requested_repository": "missuo/tokens",
+      "occurrences": [
+        {
+          "line": 200,
+          "raw": "missuo/tokens"
+        }
+      ]
+    },
+    {
+      "id": 182,
+      "requested_repository": "aovestdipaperino/tokensave",
+      "occurrences": [
+        {
+          "line": 201,
+          "raw": "aovestdipaperino/tokensave\""
+        }
+      ]
+    },
+    {
+      "id": 183,
+      "requested_repository": "junhoyeo/tokscale",
+      "occurrences": [
+        {
+          "line": 202,
+          "raw": "junhoyeo/tokscale"
+        }
+      ]
+    },
+    {
+      "id": 184,
+      "requested_repository": "strands-agents/tools",
+      "occurrences": [
+        {
+          "line": 203,
+          "raw": "strands-agents/tools"
+        }
+      ]
+    },
+    {
+      "id": 185,
+      "requested_repository": "letta-ai/trajectory",
+      "occurrences": [
+        {
+          "line": 204,
+          "raw": "letta-ai/trajectory"
+        }
+      ]
+    },
+    {
+      "id": 186,
+      "requested_repository": "ComposioHQ/trustclaw",
+      "occurrences": [
+        {
+          "line": 205,
+          "raw": "ComposioHQ/trustclaw"
+        }
+      ]
+    },
+    {
+      "id": 187,
+      "requested_repository": "neuml/txtai",
+      "occurrences": [
+        {
+          "line": 206,
+          "raw": "neuml/txtai"
+        }
+      ]
+    },
+    {
+      "id": 188,
+      "requested_repository": "UNKNOWN/typesafe-jev-workflow",
+      "occurrences": [
+        {
+          "line": 207,
+          "raw": "UNKNOWN/typesafe-jev-workflow"
+        }
+      ]
+    },
+    {
+      "id": 189,
+      "requested_repository": "DECRUX9812/typesafe-skill-router",
+      "occurrences": [
+        {
+          "line": 208,
+          "raw": "DECRUX9812/typesafe-skill-router"
+        }
+      ]
+    },
+    {
+      "id": 190,
+      "requested_repository": "notque/vexjoy-agent",
+      "occurrences": [
+        {
+          "line": 209,
+          "raw": "notque/vexjoy-agent"
+        }
+      ]
+    },
+    {
+      "id": 191,
+      "requested_repository": "eastlondoner/cursor-tools",
+      "occurrences": [
+        {
+          "line": 210,
+          "raw": "eastlondoner/cursor-tools"
+        }
+      ]
+    },
+    {
+      "id": 192,
+      "requested_repository": "superagent-ai/vibekit",
+      "occurrences": [
+        {
+          "line": 211,
+          "raw": "superagent-ai/vibekit"
+        }
+      ]
+    },
+    {
+      "id": 193,
+      "requested_repository": "iAmCorey/Wake",
+      "occurrences": [
+        {
+          "line": 212,
+          "raw": "iAmCorey/Wake"
+        }
+      ]
+    },
+    {
+      "id": 194,
+      "requested_repository": "warpdotdev/command-corrections",
+      "occurrences": [
+        {
+          "line": 213,
+          "raw": "warpdotdev/command-corrections.git\""
+        }
+      ]
+    },
+    {
+      "id": 195,
+      "requested_repository": "scale-venture-partners/windbag",
+      "occurrences": [
+        {
+          "line": 214,
+          "raw": "scale-venture-partners/windbag\""
+        }
+      ]
+    },
+    {
+      "id": 196,
+      "requested_repository": "happyhappy-jun/depth-ar",
+      "occurrences": [
+        {
+          "line": 215,
+          "raw": "happyhappy-jun/depth-ar"
+        }
+      ]
+    },
+    {
+      "id": 197,
+      "requested_repository": "your-repo/xunter",
+      "occurrences": [
+        {
+          "line": 216,
+          "raw": "your-repo/xunter"
+        }
+      ]
+    },
+    {
+      "id": 198,
+      "requested_repository": "bitan-del/zap",
+      "occurrences": [
+        {
+          "line": 217,
+          "raw": "bitan-del/zap"
+        }
+      ]
+    }
+  ]
+}

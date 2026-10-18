@@ -10,6 +10,7 @@ import {
 import debug from 'debug';
 import { type FC, useEffect, useRef, useState } from 'react';
 
+import { useAnimationActivity } from '../../../hooks/useAnimationActivity';
 import type { MascotFace } from './Ghosty';
 import { loadManifestRiv } from './manifest/manifestService';
 import { pickIdleFlourish, resolveFaceToPose, resolveVisemeCode } from './manifest/stateEngine';
@@ -136,6 +137,7 @@ const ManifestRiveStage: FC<{
 
   const basePose = resolveFaceToPose(face, engine);
   const restPose = engine.states.idle;
+  const animationAllowed = useAnimationActivity();
 
   // Driven (face-derived) pose. A real activity pose always wins; the resting
   // pose is what the idle scheduler below is free to override.
@@ -148,7 +150,7 @@ const ManifestRiveStage: FC<{
   const setPoseRef = useRef(setPose);
   setPoseRef.current = setPose;
   useEffect(() => {
-    if (!idlePoseRotation || basePose !== restPose) return;
+    if (!idlePoseRotation || !animationAllowed || basePose !== restPose) return;
     let timer: number | undefined;
     let current = restPose;
     const toRest = () => {
@@ -167,7 +169,7 @@ const ManifestRiveStage: FC<{
       if (timer !== undefined) window.clearTimeout(timer);
       setPoseRef.current(matchEnumValue(restPose, poseValuesRef.current));
     };
-  }, [idlePoseRotation, basePose, restPose, engine]);
+  }, [idlePoseRotation, animationAllowed, basePose, restPose, engine]);
 
   useEffect(() => {
     const code = resolveVisemeCode(visemeCode, engine);
@@ -195,7 +197,7 @@ const ManifestRiveStage: FC<{
           key={channel.key}
           channel={channel}
           vmInstance={vmInstance}
-          autoCycle={idlePoseRotation}
+          autoCycle={idlePoseRotation && animationAllowed}
         />
       ))}
     </div>

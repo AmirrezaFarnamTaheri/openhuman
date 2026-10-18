@@ -1,3 +1,7 @@
+// tinybox's shell helpers are deprecated in favour of tinysecurity-policy; the
+// test-only comparisons below keep using them until that move lands.
+#![allow(deprecated)]
+
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
@@ -7,17 +11,7 @@ use super::types::{AutonomyLevel, GateDecision, SecurityPolicy};
 use crate::util::floor_char_boundary;
 use tinybox_bus::CommandClass;
 #[cfg(test)]
-use tinybox_core::shell::classify::{classify_segment, has_hidden_execution};
-#[cfg(test)]
-use tinybox_core::shell::env_guard::has_dangerous_env_prefix;
-#[cfg(test)]
-use tinybox_core::shell::executor::is_command_executor;
-#[cfg(test)]
-use tinybox_core::shell::scan::{
-    command_basename, contains_unquoted_char, contains_unquoted_single_ampersand,
-    has_leading_env_assignment, normalized_command_name, skip_env_assignments,
-    split_unquoted_segments, strip_quoted_heredoc_bodies,
-};
+use tinybox_core::shell::analysis::analyze_command;
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
 /// Deny broad recursive scans of OS trees before running a shell command.
@@ -185,17 +179,10 @@ impl SecurityPolicy {
     pub fn command_risk_level(&self, command: &str) -> CommandRiskLevel {
         let mut saw_medium = false;
 
-        for segment in split_unquoted_segments(command) {
-            let cmd_part = skip_env_assignments(&segment);
-            let mut words = cmd_part.split_whitespace();
-            let Some(base_raw) = words.next() else {
-                continue;
-            };
-
-            let base = normalized_command_name(base_raw);
-
-            let args: Vec<String> = words.map(|w| w.to_ascii_lowercase()).collect();
-            let joined_segment = cmd_part.to_ascii_lowercase();
+        for segment in analyze_command(command).segments {
+            let base = &segment.normalized_name;
+            let args = &segment.arguments;
+            let joined_segment = segment.command.to_ascii_lowercase();
 
             // High-risk = catastrophic / irreversible / privilege-escalating /
             // system-control commands ONLY. Interpreters (python/bash/…),
@@ -273,7 +260,7 @@ impl SecurityPolicy {
             // Interpreters / code executors run arbitrary code — medium-risk
             // (that is the job of a coding agent): prompted in Supervised,
             // allowed in Full. They are no longer classified high-risk.
-            let medium = medium || is_command_executor(base.as_str());
+            let medium = medium || segment.executor;
 
             saw_medium |= medium;
         }
@@ -295,32 +282,18 @@ impl SecurityPolicy {
     /// never lower it.
     #[cfg(test)]
     pub fn classify_command(&self, command: &str) -> CommandClass {
-        // A quoted heredoc body is document text, not shell. Without this the
-        // splitter chops the body into "commands" and a prose line containing
-        // `rm` or `curl` lifts a plain file write to Destructive/Network.
-        let command = &strip_quoted_heredoc_bodies(command);
-        let mut class = CommandClass::Read;
-        for segment in split_unquoted_segments(command) {
-            let cmd_part = skip_env_assignments(&segment);
-            let mut words = cmd_part.split_whitespace();
-            let Some(base_raw) = words.next() else {
-                continue;
-            };
-            let base = normalized_command_name(base_raw);
-            let args: Vec<String> = words.map(|w| w.to_ascii_lowercase()).collect();
-            let joined = cmd_part.to_ascii_lowercase();
-            let segment_class = classify_segment(&base, &args, &joined);
-            class = class.max(segment_class);
+        let analysis = analyze_command(command);
+        let class = analysis
+            .segments
+            .iter()
+            .map(|segment| segment.class)
+            .max()
+            .unwrap_or(CommandClass::Read);
+        if analysis.redirection || analysis.tee {
+            class.max(CommandClass::Write)
+        } else {
+            class
         }
-        // A redirect or `tee` writes a file regardless of the base command.
-        if contains_unquoted_char(command, '>')
-            || command
-                .split_whitespace()
-                .any(|w| w == "tee" || w.ends_with("/tee"))
-        {
-            class = class.max(CommandClass::Write);
-        }
-        class
     }
 
     /// The gate decision for an acting tool call of `class` under this policy's
@@ -382,7 +355,7 @@ impl SecurityPolicy {
                  cannot be done in this mode."
             ));
         }
-        if self.autonomy != AutonomyLevel::Full && has_hidden_execution(command) {
+        if self.autonomy != AutonomyLevel::Full && analyze_command(command).hidden_execution {
             return Err(format!(
                 "{POLICY_BLOCKED_MARKER} Command blocked: command/process substitution ($(…), \
                  <(…)), backticks, and background (&) are not allowed in this mode — they can run \
@@ -399,14 +372,7 @@ impl SecurityPolicy {
     /// interpreter code still needs a filesystem sandbox to enforce the floor.
     #[cfg(test)]
     pub fn check_protected_path_literals(&self, input: &str) -> Result<(), String> {
-        let words = strip_quoted_heredoc_bodies(input)
-            .split(|c: char| {
-                c.is_whitespace()
-                    || matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | ',' | ';' | '=')
-            })
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-        self.check_protected_path_words(&words)
+        self.check_protected_path_words(&analyze_command(input).literal_words)
     }
 
     /// Refuse protected paths and unsafe path literals returned by the
@@ -562,107 +528,29 @@ impl SecurityPolicy {
         if self.autonomy == AutonomyLevel::ReadOnly {
             return false;
         }
-        // See `classify_command`: a quoted heredoc body is data, so it must not
-        // be scanned for `$(`, `&` or a disallowed base command.
-        let command = &strip_quoted_heredoc_bodies(command);
-
-        // Full access bypasses the command allowlist AND the structural guards
-        // (redirects, pipes, subshells, background) — a Full-access agent is
-        // trusted to run any command, including the `mkdir`/`node`/`python`/
-        // redirect-using commands a coding workflow needs. The remaining safety
-        // net is `validate_command_execution`'s high-risk handling (still gated
-        // by `block_high_risk_commands`), plus path-level `forbidden_paths` and
-        // any configured sandbox. The allowlist + structural guards below stay
-        // in force for Supervised, which runs only curated commands.
         if self.autonomy == AutonomyLevel::Full {
             return true;
         }
-
-        // Block subshell/expansion operators — these allow hiding arbitrary
-        // commands inside an allowed command (e.g. `echo $(rm -rf /)`)
-        if command.contains('`')
-            || command.contains("$(")
-            || command.contains("${")
-            || command.contains("<(")
-            || command.contains(">(")
-        {
+        // Use the same parser facts as the compiled module, keeping quoted
+        // heredoc data out of the policy scan. Legacy scanner exports have
+        // moved upstream; this fixture must exercise the current contract.
+        let analysis = analyze_command(command);
+        if analysis.expansion || analysis.redirection || analysis.tee || analysis.background {
             return false;
         }
-
-        // Block output redirections (`>`, `>>`) — they can write to arbitrary paths.
-        // Ignore quoted literals, e.g. `echo "a>b"`.
-        if contains_unquoted_char(command, '>') {
-            return false;
-        }
-
-        // Block `tee` — it can write to arbitrary files, bypassing the
-        // redirect check above (e.g. `echo secret | tee /etc/crontab`)
-        if command
-            .split_whitespace()
-            .any(|w| w == "tee" || w.ends_with("/tee"))
-        {
-            return false;
-        }
-
-        // Block background command chaining (`&`), which can hide extra
-        // sub-commands and outlive timeout expectations. Keep `&&` allowed.
-        if contains_unquoted_single_ampersand(command) {
-            return false;
-        }
-
-        // Split on unquoted command separators and validate each sub-command.
-        let segments = split_unquoted_segments(command);
-        for segment in &segments {
-            // Reject ANY segment that prefixes the command with an env-var
-            // assignment, not just the known-dangerous names. Helper-style
-            // exec primitives (`GIT_SSH=./wrapper git ls-remote`,
-            // `SSH_ASKPASS=./prompt ssh user@host`, `LD_PRELOAD=./libx.so
-            // ls`, etc.) change which binary the allowed command actually
-            // resolves to — or change its behaviour via a hook — without
-            // any blocked command name ever appearing in the segment. The
-            // allowlist already names every command we want to permit, and
-            // none of those commands need an operator-set env var at
-            // invoke time, so the broader gate has no false-positive
-            // surface on the approved path. `has_dangerous_env_prefix`
-            // remains in the source for legacy tests and as the
-            // narrower-grained signal.
-            if has_leading_env_assignment(segment) || has_dangerous_env_prefix(segment) {
+        for segment in &analysis.segments {
+            if segment.leading_env_assignment || segment.dangerous_env_prefix {
                 return false;
             }
-
-            // Strip leading env var assignments (e.g. FOO=bar cmd)
-            let cmd_part = skip_env_assignments(segment);
-
-            let mut words = cmd_part.split_whitespace();
-            let base_raw = words.next().unwrap_or("");
-            let base_cmd = command_basename(base_raw);
-
-            if base_cmd.is_empty() {
-                continue;
-            }
-
-            if !self
-                .allowed_commands
-                .iter()
-                .any(|allowed| allowed == base_cmd)
-            {
+            let base = segment.basename.as_str();
+            if !self.allowed_commands.iter().any(|allowed| allowed == base) {
                 return false;
             }
-
-            // Validate arguments for the command
-            let args: Vec<String> = words.map(|w| w.to_ascii_lowercase()).collect();
-            if is_command_executor(base_cmd) || !self.is_args_safe(base_cmd, &args) {
+            if segment.executor || !self.is_args_safe(base, &segment.arguments) {
                 return false;
             }
         }
-
-        // At least one command must be present
-        let has_cmd = segments.iter().any(|s| {
-            let s = skip_env_assignments(s.trim());
-            s.split_whitespace().next().is_some_and(|w| !w.is_empty())
-        });
-
-        has_cmd
+        !analysis.segments.is_empty()
     }
 
     /// Check for dangerous arguments that allow sub-command execution.

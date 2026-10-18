@@ -110,10 +110,10 @@ const OWNED: Array<{ path: string; page: string; guard: Guard }> = [
 
 describe('AppRoutes — each route renders its page behind the right guard', () => {
   for (const { path, page, guard } of OWNED) {
-    it(`${path} renders ${page} with guard=${guard}`, () => {
+    it(`${path} renders ${page} with guard=${guard}`, async () => {
       visit(path);
 
-      expect(screen.getByTestId(page)).toBeInTheDocument();
+      expect(await screen.findByTestId(page)).toBeInTheDocument();
       // The catch-all must not have swallowed the route.
       expect(screen.queryByTestId('default-redirect')).not.toBeInTheDocument();
 
@@ -122,7 +122,7 @@ describe('AppRoutes — each route renders its page behind the right guard', () 
     });
   }
 
-  it('never disables the check on a route it wraps', () => {
+  it('never disables the check on a route it wraps', async () => {
     // `requireAuth` DEFAULTS to true (ProtectedRoute.tsx:18), so omitting it is
     // harmless and this deliberately does not assert the prop is spelled out —
     // that would fail on a harmless tidy-up and catch no real defect. What is
@@ -130,7 +130,10 @@ describe('AppRoutes — each route renders its page behind the right guard', () 
     // route reads as protected in review while the check is off. The route
     // table below classifies that separately, so it cannot pass unnoticed.
     visit('/connections');
-    expect(screen.getByTestId('guard-protected')).not.toHaveAttribute('data-require-auth', 'false');
+    expect(await screen.findByTestId('guard-protected')).not.toHaveAttribute(
+      'data-require-auth',
+      'false'
+    );
   });
 });
 

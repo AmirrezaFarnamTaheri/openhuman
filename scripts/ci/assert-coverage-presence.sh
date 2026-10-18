@@ -247,11 +247,11 @@ if [ "${MODE}" = all ]; then
   # working tree would also be checked, which is harmless (it is a real file
   # that either compiled or did not).
   listing=""
-  if listing="$(git ls-files 'src/*.rs' 'src/**/*.rs' 'crates/openhuman-core/src/*.rs' 'crates/openhuman-core/src/**/*.rs' 'crates/openhuman-embed/src/*.rs' 'crates/openhuman-embed/src/**/*.rs' 'crates/openhuman-rpc/src/*.rs' 'crates/openhuman-rpc/src/**/*.rs' 'crates/openhuman-session/src/*.rs' 'crates/openhuman-session/src/**/*.rs' 'crates/openhuman-tui/src/*.rs' 'crates/openhuman-tui/src/**/*.rs' 2>/dev/null)" && [ -n "${listing}" ]; then
+  if listing="$(git ls-files 'src/*.rs' 'src/**/*.rs' 'crates/openhuman-core/src/*.rs' 'crates/openhuman-core/src/**/*.rs' 'crates/openhuman-embed/src/*.rs' 'crates/openhuman-embed/src/**/*.rs' 'crates/openhuman-rpc/src/*.rs' 'crates/openhuman-rpc/src/**/*.rs' 'crates/openhuman-session/src/*.rs' 'crates/openhuman-session/src/**/*.rs' 'crates/openhuman-tinyhumans/src/*.rs' 'crates/openhuman-tinyhumans/src/**/*.rs' 'crates/openhuman-tui/src/*.rs' 'crates/openhuman-tui/src/**/*.rs' 2>/dev/null)" && [ -n "${listing}" ]; then
     log "enumerating tracked sources with git ls-files"
   else
     log "git ls-files unavailable or empty — falling back to a filesystem walk"
-    listing="$(find src crates/openhuman-core/src crates/openhuman-embed/src crates/openhuman-rpc/src crates/openhuman-session/src crates/openhuman-tui/src -type f -name '*.rs' 2>/dev/null || true)"
+    listing="$(find src crates/openhuman-core/src crates/openhuman-embed/src crates/openhuman-rpc/src crates/openhuman-session/src crates/openhuman-tinyhumans/src crates/openhuman-tui/src -type f -name '*.rs' 2>/dev/null || true)"
   fi
   while IFS= read -r f; do
     [ -n "${f}" ] && candidates+=("${f}")

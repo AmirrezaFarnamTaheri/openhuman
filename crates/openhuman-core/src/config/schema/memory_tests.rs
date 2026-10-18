@@ -223,6 +223,7 @@ fn endpoint_for_ignores_blank_and_missing_endpoints() {
         "cortexdb".into(),
         MemoryEngineSettings {
             endpoint: Some("   ".into()),
+            ..MemoryEngineSettings::default()
         },
     );
     assert_eq!(config.endpoint_for("cortexdb"), None);
@@ -230,11 +231,30 @@ fn endpoint_for_ignores_blank_and_missing_endpoints() {
         "cortexdb".into(),
         MemoryEngineSettings {
             endpoint: Some(" https://c.example ".into()),
+            ..MemoryEngineSettings::default()
         },
     );
     assert_eq!(
         config.endpoint_for("cortexdb").as_deref(),
         Some("https://c.example")
+    );
+}
+
+#[test]
+fn managed_local_provenance_is_explicit_and_survives_reload() {
+    let manual: MemoryEngineSettings =
+        toml::from_str("endpoint = 'http://127.0.0.1:3141'").unwrap();
+    assert!(!manual.managed_local);
+    assert!(!toml::to_string(&manual).unwrap().contains("managed_local"));
+
+    let managed = MemoryEngineSettings {
+        managed_local: true,
+        ..manual
+    };
+    let serialized = toml::to_string(&managed).unwrap();
+    assert_eq!(
+        toml::from_str::<MemoryEngineSettings>(&serialized).unwrap(),
+        managed
     );
 }
 

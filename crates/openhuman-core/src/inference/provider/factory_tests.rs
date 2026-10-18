@@ -305,7 +305,10 @@ fn credentialed_gateway_main_endpoints_allow_https_and_loopback_only() {
         "http://127.0.0.2:8000/v1",
         "http://[::1]:8000/v1",
     ] {
-        assert!(cloud_slug::prodex_gateway_endpoint_is_safe(endpoint), "{endpoint}");
+        assert!(
+            cloud_slug::prodex_gateway_endpoint_is_safe(endpoint),
+            "{endpoint}"
+        );
     }
 }
 
@@ -367,7 +370,9 @@ fn every_cloud_provider_rejects_unsafe_image_routes_loaded_directly_from_config(
         for by_model in [false, true] {
             let mut provider = openai_entry("p_vision", "vision-cloud");
             if by_model {
-                provider.model_image_endpoints.insert("vision-1".into(), url.into());
+                provider
+                    .model_image_endpoints
+                    .insert("vision-1".into(), url.into());
             } else {
                 provider.image_endpoint = Some(url.into());
             }
@@ -388,9 +393,13 @@ fn every_cloud_provider_rejects_unsafe_image_routes_loaded_directly_from_config(
 fn ordinary_cloud_providers_allow_https_and_loopback_image_routes() {
     let mut provider = openai_entry("p_vision", "vision-cloud");
     provider.image_endpoint = Some("https://images.example/v1".into());
-    provider.model_image_endpoints.insert("vision-1".into(), "http://[::1]:4111/v1".into());
+    provider
+        .model_image_endpoints
+        .insert("vision-1".into(), "http://[::1]:4111/v1".into());
     assert!(cloud_slug::image_destinations_are_safe(&provider));
-    provider.model_image_endpoints.insert("vision-2".into(), "http://remote.example/v1".into());
+    provider
+        .model_image_endpoints
+        .insert("vision-2".into(), "http://remote.example/v1".into());
     assert!(!cloud_slug::image_destinations_are_safe(&provider));
 }
 

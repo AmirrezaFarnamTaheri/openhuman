@@ -4,10 +4,11 @@
 use crate::core::{ControllerSchema, FieldSchema, TypeSchema};
 
 /// Every function of the namespace, in spec order.
-pub const FUNCTIONS: [&str; 35] = [
+pub const FUNCTIONS: [&str; 36] = [
     "engines_list",
     "engine_get",
     "engine_set",
+    "local_start",
     "policy_get",
     "policy_set",
     "pack_preview",
@@ -123,17 +124,24 @@ pub fn schema(function: &str) -> ControllerSchema {
             function: "engine_get",
             description: "The configured memory engine, its credential and health.",
             inputs: vec![],
-            outputs: out("{engine, endpoint?, has_key, status, reason?, fetch_modes}"),
+            outputs: out("{engine, endpoint?, has_key, managed_local?, status, reason?, fetch_modes}"),
         },
         "engine_set" => ControllerSchema {
             namespace: "memory",
             function: "engine_set",
             description: "Select a memory engine, optionally setting its endpoint and API key.",
             inputs: vec![
-                    req("engine", TypeSchema::String, "Engine id: tinyhumans or cortexdb."),
+                    req("engine", TypeSchema::String, "Engine id: tinyhumans, cortexdb or none (disabled)."),
                     opt("endpoint", TypeSchema::String, "Endpoint URL; empty clears it."),
                     opt("api_key", TypeSchema::String, "API key (cortexdb); empty removes it. Stored in the credential store, never in config."),
                 ],
+            outputs: out("Same as memory_engine_get."),
+        },
+        "local_start" => ControllerSchema {
+            namespace: "memory",
+            function: "local_start",
+            description: "Start app-managed local CortexDB through Docker and use it as the memory engine. No endpoint or key required.",
+            inputs: vec![],
             outputs: out("Same as memory_engine_get."),
         },
         "recall" => ControllerSchema {

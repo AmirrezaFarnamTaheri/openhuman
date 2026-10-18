@@ -190,7 +190,10 @@ export function validModelFleetEndpoint(value: string): boolean {
   // WHATWG URL parsing silently removes tab/newline controls in the middle
   // of a URL, potentially changing the endpoint the user actually entered.
   // Reject such ambiguous destinations before provider credentials are used.
-  if (/[\u0000-\u001f\u007f]/u.test(trimmed)) return false;
+  for (let index = 0; index < trimmed.length; index++) {
+    const code = trimmed.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return false;
+  }
   try {
     const url = new URL(trimmed);
     return (
@@ -220,11 +223,7 @@ export function validModelFleetImageEndpoint(value: string): boolean {
   if (url.protocol === 'https:') return true;
   if (url.protocol !== 'http:') return false;
   const host = url.hostname.toLowerCase();
-  return (
-    host === 'localhost' ||
-    host === '[::1]' ||
-    /^127(?:\.\d{1,3}){3}$/.test(host)
-  );
+  return host === 'localhost' || host === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(host);
 }
 
 /** A blank image-URL input means 'do not edit' unless Clear was clicked;
@@ -295,19 +294,18 @@ export function upsertModelImageEndpoint(
 export function keyedProviderDestinationChanges<
   T extends { id: string; endpoint: string; authStyle: string; maskedKey: string },
   U extends { id: string; endpoint: string; authStyle: string },
->(
-  before: readonly T[],
-  after: readonly U[]
-): string[] {
+>(before: readonly T[], after: readonly U[]): string[] {
   const newById = new Map(after.map(provider => [provider.id, provider]));
-  return before.filter(provider => {
-    if (!provider.maskedKey.startsWith('••••')) return false;
-    const candidate = newById.get(provider.id);
-    return candidate !== undefined && (
-      candidate.endpoint !== provider.endpoint ||
-      candidate.authStyle !== provider.authStyle
-    );
-  }).map(provider => provider.id);
+  return before
+    .filter(provider => {
+      if (!provider.maskedKey.startsWith('••••')) return false;
+      const candidate = newById.get(provider.id);
+      return (
+        candidate !== undefined &&
+        (candidate.endpoint !== provider.endpoint || candidate.authStyle !== provider.authStyle)
+      );
+    })
+    .map(provider => provider.id);
 }
 
 /** Explicit model-id-to-protocol mapping. Unknown models remain Auto.

@@ -17,6 +17,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { describe, expect, it, vi } from 'vitest';
 
+import { COMPOSER_HUMAN_MASCOT_URL } from '../../../assets/composerHumanMascot';
 import chatRuntimeReducer from '../../../store/chatRuntimeSlice';
 import mascotReducer from '../../../store/mascotSlice';
 import runModeReducer from '../../../store/runModeSlice';
@@ -117,7 +118,7 @@ describe('assistant-ui composer slots', () => {
     expect(icon).toHaveAttribute('width', '24');
     expect(icon).toHaveAttribute('height', '24');
     expect(icon.tagName).toBe('IMG');
-    expect(icon.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+    expect(icon).toHaveAttribute('src', COMPOSER_HUMAN_MASCOT_URL);
 
     rerender(<Provider store={store}>{chat(() => navigate('/human'))}</Provider>);
 

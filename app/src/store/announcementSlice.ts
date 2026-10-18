@@ -1,8 +1,8 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 /**
- * Tracks which announcements this user has already seen so the harness-init
- * banner shows each one exactly once. Persisted through `userScopedStorage`
+ * Tracks which announcements this user dismissed from the notice center.
+ * Persisted through `userScopedStorage`
  * (see store/index.ts) so the seen set is per-user and survives reloads.
  */
 export interface AnnouncementState {

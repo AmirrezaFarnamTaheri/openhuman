@@ -7,20 +7,13 @@
 //! `tests/harness_embed.rs`, which owns its process.
 //!
 //! The tests that *do* call `build()` are the ones that fail before it — and
-//! they serialize on [`GUARD`], because the runtime slot is process-wide and
-//! `cargo test` runs threads in parallel.
+//! they serialize on [`crate::runtime::RUNTIME_TEST_LOCK`] with the runtime
+//! cleanup tests, because the slot is process-wide and `cargo test` runs
+//! threads in parallel.
 
 use super::*;
 use crate::runtime::builder::apply_provider;
 use openhuman_core::config::Config;
-
-/// Serializes the tests that claim the process-wide harness slot.
-///
-/// An async mutex, not a `std` one: these tests hold it across `build().await`,
-/// and a blocking guard held over an await point can deadlock a single-threaded
-/// runtime.
-#[cfg(feature = "skills")]
-static GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[test]
 fn a_harness_identifies_as_a_library_host_by_default() {
@@ -68,7 +61,7 @@ fn inheriting_a_provider_leaves_the_configured_model_alone() {
 #[cfg(feature = "skills")]
 #[tokio::test]
 async fn skills_dir_is_refused_for_an_inherited_workspace() {
-    let _guard = GUARD.lock().await;
+    let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
     let err = Harness::builder()
         .workspace(Workspace::Inherit)
         .skills_dir("./skills")
@@ -81,7 +74,7 @@ async fn skills_dir_is_refused_for_an_inherited_workspace() {
 #[cfg(feature = "skills")]
 #[tokio::test]
 async fn a_failed_build_releases_the_process_slot() {
-    let _guard = GUARD.lock().await;
+    let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
     // Otherwise one bad build would poison the process against ever retrying —
     // and the retry is the natural response to an `Invalid` builder input.
     for _ in 0..2 {

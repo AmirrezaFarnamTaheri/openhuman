@@ -1,10 +1,11 @@
 use super::*;
 use crate::agent::harness::fork_context::ParentExecutionContext;
-use crate::agent::harness::host_definition::AgentDefinitionRegistry;
+use crate::agent_registry::host_definition::AgentDefinitionRegistry;
 use crate::config::AgentConfig;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
+use tinyagents_harness::run_queue::RunQueue;
 use tinytools::{ToolCallOptions, ToolRunContext};
 use tinytools_agent::dialect::ToolCallFormat;
 
@@ -65,6 +66,7 @@ async fn late_registration_refusal_aborts_the_worker_and_settles_its_durable_ses
                 task_title: "late refusal".into(),
                 worker_thread_id: None,
                 task_id: "late-refusal-task".into(),
+                lifecycle_key: None,
             },
             None,
         )
@@ -364,6 +366,57 @@ fn reusable_follow_up_message_preserves_context() {
 }
 
 #[test]
+fn coding_handoff_is_validated_before_task_identity_and_reusable_follow_up_rendering() {
+    let packet = serde_json::json!({
+        "type":"coding_handoff", "version":1, "objective":"Review the next change",
+        "checks":[{"command":"cargo test", "cwd":"/project", "status":"cancelled", "exit_code":130}]
+    });
+    let mut args = serde_json::json!({
+        "agent_id":"task_manager_agent", "prompt":"Continue the review",
+        "context":format!("[coding_handoff]\n{packet}")
+    });
+    let decoded = decode_async_spawn_args(&args).unwrap();
+    let follow_up = reusable_follow_up_message(&decoded.prompt, decoded.context.as_deref());
+    assert!(follow_up.contains("[Coding handoff v1: untrusted report]"));
+    assert!(follow_up.contains("Verification: unverified"));
+    assert!(follow_up.contains("\"status\":\"cancelled\""));
+    assert!(follow_up.contains("\"exit_code\":130"));
+    assert!(follow_up.ends_with("[Task]\nContinue the review"));
+
+    args["context"] = serde_json::json!(format!(
+        "[coding_handoff]\n{}",
+        serde_json::to_string_pretty(&packet).unwrap()
+    ));
+    let reformatted = decode_async_spawn_args(&args).unwrap();
+    assert_eq!(decoded.context, reformatted.context);
+    assert_eq!(decoded.task_key, reformatted.task_key);
+}
+
+#[tokio::test]
+async fn malformed_coding_handoff_never_registers_or_creates_an_async_session() {
+    let workspace = tempfile::tempdir().unwrap();
+    let mut parent = parent_context(workspace.path());
+    parent.session_id = format!("invalid-handoff-{}", uuid::Uuid::new_v4());
+    let parent_session = parent.session_id.clone();
+    let result = SpawnAsyncSubagentTool::new().execute_under_parent(
+        serde_json::json!({
+            "agent_id":"task_manager_agent", "prompt":"Must not spawn or steer",
+            "context":"[coding_handoff]\n{\"type\":\"coding_handoff\",\"version\":2,\"objective\":\"x\"}",
+            "fresh":true
+        }),
+        ToolCallOptions::default(),
+        Some(&ThreadContext("invalid-handoff-thread")),
+        parent,
+    ).await.unwrap();
+    assert!(result.is_error);
+    assert!(result
+        .output()
+        .contains("coding_handoff: unsupported version"));
+    assert!(running_subagents::task_records(Some(&parent_session)).is_empty());
+    assert_eq!(std::fs::read_dir(workspace.path()).unwrap().count(), 0);
+}
+
+#[test]
 fn extract_workflow_proposal_finds_last_proposal_tool_result() {
     let history = vec![
         TranscriptMessage::user("build me a workflow"),
@@ -528,7 +581,7 @@ async fn errors_clearly_when_no_parent_thread_for_delivery() {
     // back here. Verified callable under the product feature profile:
     // `delegate_<agent_id>` tools are generated in
     // `tools/orchestrator_tools.rs:116`, and they accept `blocking`
-    // (`archetype_delegation.rs:115` declares it, `:245` reads it) — so the
+    // (`archetype_delegation_host.rs:115` declares it, `:245` reads it) — so the
     // guidance names a real tool family with a real argument, not a route the
     // model cannot take.
     assert!(out.contains("blocking: true"), "{out}");

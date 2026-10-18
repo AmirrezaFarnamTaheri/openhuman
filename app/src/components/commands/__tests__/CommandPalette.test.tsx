@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hotkeyManager } from '../../../lib/commands/hotkeyManager';
 import { registry } from '../../../lib/commands/registry';
 import { ScopeContext } from '../../../lib/commands/ScopeContext';
+import { I18nProvider } from '../../../lib/i18n/I18nContext';
+import { renderWithProviders } from '../../../test/test-utils';
 import CommandPalette from '../CommandPalette';
 
 let currentFrame: symbol;
@@ -22,10 +24,22 @@ afterEach(() => {
   registry.reset();
 });
 
-function Harness({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+function Harness({
+  open,
+  onOpenChange,
+  onOpenSettingsRoute,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onOpenSettingsRoute?: (route: string) => void;
+}) {
   return (
     <ScopeContext.Provider value={currentFrame}>
-      <CommandPalette open={open} onOpenChange={onOpenChange} />
+      <CommandPalette
+        open={open}
+        onOpenChange={onOpenChange}
+        onOpenSettingsRoute={onOpenSettingsRoute}
+      />
     </ScopeContext.Provider>
   );
 }
@@ -71,6 +85,55 @@ describe('CommandPalette', () => {
       await new Promise(r => requestAnimationFrame(() => r(null)));
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('finds deeply nested settings by name and opens the destination', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const onOpenSettingsRoute = vi.fn();
+    render(<Harness open onOpenChange={onOpenChange} onOpenSettingsRoute={onOpenSettingsRoute} />);
+    // Do not flood the palette with settings on an empty search.
+    expect(screen.queryByTestId('command-settings-privacy')).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole('combobox'), 'privacy');
+    const hit = await screen.findByTestId('command-settings-privacy');
+    await user.click(hit);
+    await act(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+    });
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenSettingsRoute).toHaveBeenCalledWith('privacy');
+  });
+
+  it('starts a guided tour only when the user selects Take a tour', async () => {
+    const user = userEvent.setup();
+    localStorage.removeItem('openhuman:walkthrough_requested');
+    const onOpenChange = vi.fn();
+    render(<Harness open={true} onOpenChange={onOpenChange} />);
+
+    expect(localStorage.getItem('openhuman:walkthrough_requested')).toBeNull();
+    await user.type(screen.getByRole('combobox'), 'Take a tour');
+    await user.click(screen.getByTestId('command-start-tour'));
+    await act(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+    });
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(localStorage.getItem('openhuman:walkthrough_requested')).toBe('true');
+    localStorage.removeItem('openhuman:walkthrough_requested');
+  });
+
+  it('finds the guided tour by its translated title', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <I18nProvider>
+        <Harness open onOpenChange={() => {}} />
+      </I18nProvider>,
+      { preloadedState: { locale: { current: 'de' } } }
+    );
+    await user.type(screen.getByRole('combobox'), 'Einführung');
+    expect(screen.getByTestId('command-start-tour')).toHaveTextContent('Einführung ansehen');
   });
 
   it('renders footer hint advertising the in-palette shortcuts key', () => {

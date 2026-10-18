@@ -266,8 +266,10 @@ describe('AIPanel', () => {
     vi.mocked(loadAISettings).mockResolvedValue(baseSettings);
     vi.mocked(loadLocalProviderSnapshot).mockResolvedValue(baseLocalSnapshot);
     vi.mocked(loadProviderAuthErrors).mockResolvedValue([]);
-    vi.mocked(setCloudProviderKey).mockResolvedValue(undefined);
-    vi.mocked(clearCloudProviderKey).mockResolvedValue(undefined);
+    vi.mocked(saveAISettings).mockReset().mockResolvedValue(undefined);
+    vi.mocked(flushCloudProviders).mockReset().mockResolvedValue(undefined);
+    vi.mocked(setCloudProviderKey).mockReset().mockResolvedValue(undefined);
+    vi.mocked(clearCloudProviderKey).mockReset().mockResolvedValue(undefined);
     vi.mocked(importOpenAiCodexCliAuth).mockResolvedValue(undefined);
     vi.mocked(testProviderModel).mockResolvedValue({ reply: 'Hello from the selected model.' });
     vi.mocked(listProviderModels).mockResolvedValue([]);
@@ -755,7 +757,12 @@ describe('AIPanel', () => {
       screen.queryByRole('button', { name: /Add without verifying/i })
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/could not read this provider/i)).not.toBeInTheDocument();
-    expect(saveAISettings).not.toHaveBeenCalled();
+    // Verification is read-only. After it succeeds, configuration is saved
+    // before the key; a keyring failure restores the confirmed prior snapshot.
+    expect(saveAISettings).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(saveAISettings).mock.lastCall?.[1].cloudProviders).toEqual([
+      expect.objectContaining({ slug: 'openhuman' }),
+    ]);
   });
 
   it('clears the verification bypass once a later attempt fails for another reason', async () => {
@@ -763,33 +770,42 @@ describe('AIPanel', () => {
     // rejection left "Add without verifying" on screen even after the next
     // attempt failed for an unrelated reason.
     vi.mocked(loadAISettings).mockResolvedValue(baseSettings);
-    vi.mocked(listProviderModels).mockRejectedValueOnce(new Error('provider returned 404'));
+    vi.mocked(listProviderModels)
+      .mockRejectedValueOnce(new Error('provider returned 404'))
+      .mockResolvedValueOnce([]);
 
     renderWithProviders(<AIPanel />);
     await openCustomProviderEditor();
+    // Query the active editor rather than recalculating accessible names for
+    // every control in the background settings page on each retry.
+    const editor = within(await screen.findByRole('dialog', { name: /Add cloud provider/i }));
 
-    fireEvent.change(await screen.findByPlaceholderText('My Provider'), {
+    fireEvent.change(editor.getByPlaceholderText('My Provider'), {
       target: { value: 'Azure Foundry' },
     });
-    fireEvent.change(screen.getByPlaceholderText('https://api.openai.com/v1'), {
+    fireEvent.change(editor.getByPlaceholderText('https://api.openai.com/v1'), {
       target: { value: 'https://my-resource.openai.azure.com/openai/v1' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^Add Provider$/i }));
+    fireEvent.click(editor.getByRole('button', { name: /^Add Provider$/i }));
     expect(
-      await screen.findByRole('button', { name: /Add without verifying/i })
+      await editor.findByRole('button', { name: /Add without verifying/i })
     ).toBeInTheDocument();
+    expect(saveAISettings).not.toHaveBeenCalled();
+    expect(setCloudProviderKey).not.toHaveBeenCalled();
 
     // Second attempt: the probe would now succeed, but the key write rejects.
     vi.mocked(setCloudProviderKey).mockRejectedValueOnce(new Error('keyring is locked'));
-    fireEvent.change(screen.getByLabelText(/^API key$/i), { target: { value: 'sk-test-key' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Add Provider$/i }));
+    fireEvent.change(editor.getByLabelText(/^API key$/i), { target: { value: 'sk-test-key' } });
+    fireEvent.click(editor.getByRole('button', { name: /^Add Provider$/i }));
 
-    expect(await screen.findByText(/keyring is locked/i)).toBeInTheDocument();
+    expect(await editor.findByText(/keyring is locked/i)).toBeInTheDocument();
     await waitFor(() =>
       expect(
-        screen.queryByRole('button', { name: /Add without verifying/i })
+        editor.queryByRole('button', { name: /Add without verifying/i })
       ).not.toBeInTheDocument()
     );
+    expect(listProviderModels).toHaveBeenCalledTimes(2);
+    expect(setCloudProviderKey).toHaveBeenCalledTimes(1);
   });
 
   it('offers a deployment-name field in the per-workload custom routing dialog', async () => {
@@ -1148,14 +1164,9 @@ describe('AIPanel', () => {
     }
   });
 
-  it('#5341: logs (does not swallow) a rollback failure when a custom-provider add is rejected', async () => {
-    // Same un-swallow guarantee on the custom-provider editor path.
+  it('reports a custom-provider probe failure without changing live configuration or keys', async () => {
     vi.mocked(loadAISettings).mockResolvedValue(baseSettings);
     vi.mocked(listProviderModels).mockRejectedValue(new Error('provider returned 500'));
-    vi.mocked(flushCloudProviders)
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('flush boom'));
-    vi.mocked(clearCloudProviderKey).mockRejectedValueOnce(new Error('clear boom'));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
@@ -1172,14 +1183,13 @@ describe('AIPanel', () => {
 
       await waitFor(() =>
         expect(warnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('rollback clearCloudProviderKey failed'),
-          expect.any(Error)
+          expect.stringContaining('provider /models probe failed'),
+          expect.objectContaining({ slug: 'my-host' })
         )
       );
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('rollback flush failed'),
-        expect.any(Error)
-      );
+      expect(setCloudProviderKey).not.toHaveBeenCalled();
+      expect(clearCloudProviderKey).not.toHaveBeenCalled();
+      expect(flushCloudProviders).not.toHaveBeenCalled();
       expect(saveAISettings).not.toHaveBeenCalled();
     } finally {
       warnSpy.mockRestore();
@@ -1827,11 +1837,17 @@ describe('AIPanel', () => {
       expect(vi.mocked(setCloudProviderKey)).toHaveBeenCalledWith('my-team-gateway', 'sk-team-key')
     );
     await waitFor(() =>
-      expect(vi.mocked(listProviderModels)).toHaveBeenCalledWith('my-team-gateway')
+      expect(vi.mocked(listProviderModels)).toHaveBeenCalledWith(
+        'my-team-gateway',
+        'sk-team-key',
+        expect.objectContaining({ endpoint: 'https://gateway.example.com/v1' })
+      )
     );
   });
 
-  it('sends an uploaded CA certificate with the provider before probing models', async () => {
+  // This full AI settings integration is resource-heavy under concurrent hosted CI.
+  // waitFor still catches wrong PEM and failed saves; only setup gets headroom.
+  it('previews an uploaded CA certificate before persisting the provider', async () => {
     vi.mocked(loadAISettings).mockResolvedValue({ ...baseSettings, cloudProviders: [] });
     renderWithProviders(<AIPanel />);
     await openCustomProviderEditor();
@@ -1850,15 +1866,18 @@ describe('AIPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add provider/i }));
 
     await waitFor(() =>
-      expect(vi.mocked(flushCloudProviders)).toHaveBeenCalledWith(
-        expect.arrayContaining([expect.objectContaining({ ca_cert_pem: pem })])
+      expect(vi.mocked(listProviderModels)).toHaveBeenCalledWith(
+        'team-gateway',
+        '',
+        expect.objectContaining({ ca_cert_pem: pem })
       )
     );
-    await waitFor(() => expect(vi.mocked(listProviderModels)).toHaveBeenCalled());
-    expect(vi.mocked(flushCloudProviders).mock.invocationCallOrder.at(-1)).toBeLessThan(
-      vi.mocked(listProviderModels).mock.invocationCallOrder.at(-1) ?? Number.MAX_SAFE_INTEGER
+    await waitFor(() => expect(vi.mocked(saveAISettings)).toHaveBeenCalled());
+    expect(flushCloudProviders).not.toHaveBeenCalled();
+    expect(vi.mocked(listProviderModels).mock.invocationCallOrder.at(-1)).toBeLessThan(
+      vi.mocked(saveAISettings).mock.invocationCallOrder.at(-1) ?? Number.MAX_SAFE_INTEGER
     );
-  });
+  }, 60_000);
 
   it('keeps the most recently selected CA when an older file read finishes later', async () => {
     vi.mocked(loadAISettings).mockResolvedValue({ ...baseSettings, cloudProviders: [] });
@@ -1890,11 +1909,13 @@ describe('AIPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add provider/i }));
 
     await waitFor(() =>
-      expect(vi.mocked(flushCloudProviders)).toHaveBeenCalledWith(
-        expect.arrayContaining([expect.objectContaining({ ca_cert_pem: secondPem })])
+      expect(vi.mocked(listProviderModels)).toHaveBeenCalledWith(
+        'team-gateway',
+        '',
+        expect.objectContaining({ ca_cert_pem: secondPem })
       )
     );
-  });
+  }, 60_000);
 
   // ─── local runtime: Ollama endpoint URL dialog ──────────────────────────────
 

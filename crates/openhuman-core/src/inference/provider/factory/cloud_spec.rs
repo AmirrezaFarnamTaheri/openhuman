@@ -15,7 +15,7 @@ use tinyinference_llm::{ProviderKind, ProviderSpec};
 
 use crate::config::schema::cloud_providers::{CloudProviderCreds, ModelTransport};
 use tinyinference_llm::providers::openai::{
-    OpenAiConfig, build_openai_model, build_openai_model_with_http, endpoint_is_openrouter,
+    build_openai_model, build_openai_model_with_http, endpoint_is_openrouter, OpenAiConfig,
 };
 use tinyinference_llm::providers::registry::openrouter_default_provider_options;
 
@@ -116,7 +116,10 @@ pub(super) fn build_cloud_model(build: CloudBuild<'_>) -> anyhow::Result<Arc<dyn
     // Explicit chat_completions retains the native registry implementation,
     // but cannot silently select Anthropic Messages for an incompatible slug.
     if build.spec.kind != ProviderKind::Compatible
-        || !matches!(&build.auth_style, CompatAuthStyle::Bearer | CompatAuthStyle::None)
+        || !matches!(
+            &build.auth_style,
+            CompatAuthStyle::Bearer | CompatAuthStyle::None
+        )
     {
         anyhow::bail!(
             "[chat-factory] explicit model transport requires an OpenAI-compatible Bearer/None provider"

@@ -64,6 +64,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 /// Keychain entry name of the CortexDB API key.
 pub const MEMORY_CORTEXDB_KEY_NAME: &str = "memory-cortexdb";
+/// Separate key for the Docker-managed local engine. Switching to a cloud
+/// CortexDB account must never discard either credential.
+pub const MEMORY_CORTEXDB_LOCAL_KEY_NAME: &str = "memory-cortexdb-local";
 
 /// Engine a fresh config selects.
 pub const DEFAULT_MEMORY_ENGINE: &str = "tinyhumans";
@@ -258,6 +261,11 @@ pub struct MemoryEngineSettings {
     /// Base URL of the engine; unset uses the engine's default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub endpoint: Option<String>,
+    /// This connection was provisioned by `memory_local_start`. An endpoint
+    /// alone cannot distinguish the app's container from a manual installation
+    /// using the same loopback address. Manual connection changes clear this.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub managed_local: bool,
 }
 
 /// `[memory.conversations]`.

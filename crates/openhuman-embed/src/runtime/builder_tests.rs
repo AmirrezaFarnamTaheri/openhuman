@@ -80,6 +80,7 @@ fn default_domains_register_what_agents_can_only_narrow() {
 
 #[tokio::test]
 async fn a_blank_api_key_is_refused_before_the_slot_is_claimed() {
+    let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
     let err = RuntimeBuilder::new()
         .api_key("   ")
         .build()

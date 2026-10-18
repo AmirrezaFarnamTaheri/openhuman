@@ -1,0 +1,88 @@
+import type { ModelManagementMessages } from './en';
+
+const messages = {
+  'feasibility.contextTooSmall': 'कॉन्टेक्स्ट का आकार इनपुट और आउटपुट के कुल टोकन से कम है',
+  'feasibility.visionUnavailable':
+    'सहेजे गए मेटाडेटा के अनुसार चित्र समझने की क्षमता समर्थित नहीं है',
+  'feasibility.overBudget': 'अनुमानित लागत बजट से अधिक है',
+  'feasibility.unknownContext': 'कॉन्टेक्स्ट का आकार अज्ञात है',
+  'feasibility.unknownVision': 'चित्र समझने की क्षमता अज्ञात है',
+  'feasibility.unknownPrice': 'कीमत उपलब्ध नहीं है, शून्य है या अमान्य है',
+  'feasibility.aria': 'मॉडल की उपयुक्तता का पूर्वावलोकन',
+  'feasibility.title': 'मॉडल उपयुक्तता और लागत का पूर्वावलोकन',
+  'feasibility.advisory':
+    'यह पूर्वावलोकन सहेजे गए मेटाडेटा पर आधारित है। मौजूदा कीमतों, कोटा, कुंजियों या उपलब्धता की पुष्टि नहीं की गई है। यह केवल सुझाव देता है और किसी भी कार्यभार की राउटिंग नहीं बदलता।',
+  'feasibility.input': 'अनुमानित इनपुट टोकन',
+  'feasibility.cached': 'कैश किए गए इनपुट टोकन (इनपुट में शामिल)',
+  'feasibility.output': 'अनुमानित आउटपुट टोकन',
+  'feasibility.budget': 'लागत सीमा (USD, वैकल्पिक)',
+  'feasibility.budgetAria': 'अमेरिकी डॉलर में अनुमानित लागत की सीमा',
+  'feasibility.noLimit': 'कोई सीमा नहीं',
+  'feasibility.requireVision': 'विज़न आवश्यक',
+  'feasibility.invalidCached': 'कैश किए गए इनपुट के टोकन कुल इनपुट टोकन से अधिक नहीं हो सकते।',
+  'feasibility.invalidCounts':
+    'टोकन की संख्या शून्य या उससे बड़ी पूर्ण संख्या में दर्ज करें। कैश किया गया इनपुट कुल इनपुट का हिस्सा है। चाहें तो लागत की सीमा भी दर्ज करें; वह ऋणात्मक नहीं होनी चाहिए।',
+  'feasibility.fitCount': 'सहेजे गए मेटाडेटा के अनुसार उपयुक्त',
+  'feasibility.unknownCount': 'अज्ञात',
+  'feasibility.excludedCount': 'दिए गए प्रतिबंधों के कारण बाहर किए गए',
+  'feasibility.search': 'उपयुक्तता परिणाम खोजें',
+  'feasibility.filter': 'उपयुक्तता स्थिति से फ़िल्टर करें',
+  'feasibility.all': 'सभी स्थितियाँ',
+  'feasibility.fits': 'सहेजे गए मेटाडेटा के अनुसार उपयुक्त',
+  'feasibility.unknown': 'उपयुक्तता अज्ञात',
+  'feasibility.excluded': 'बाहर रखा गया',
+  'feasibility.fitDescription': 'सहेजे गए मेटाडेटा से मेल खाता है; उपलब्धता की पुष्टि नहीं हुई',
+  'feasibility.excludedDescription': 'प्रतिबंधों के कारण बाहर किए गए',
+  'feasibility.costUnknown': 'लागत अज्ञात',
+  'feasibility.empty': 'मूल्यांकन के लिए कोई सहेजा गया मॉडल नहीं है।',
+  'feasibility.noMatch': 'इन फ़िल्टर से कोई मॉडल मेल नहीं खाता।',
+  'feasibility.showing': 'दिखाए जा रहे हैं',
+  'feasibility.of': 'में से',
+  'feasibility.matching': 'मेल खाने वाली मॉडल प्रविष्टियाँ',
+  'feasibility.more': 'और मॉडल दिखाएँ',
+  'fleet.reauthRequired':
+    'एंडपॉइंट या प्रमाणीकरण का तरीका बदलने से पहले प्रदाता एडिटर में API कुंजी दोबारा दर्ज करें।',
+  'fleet.groupSyncHintSafe':
+    'सहेजे गए प्रदाता एंडपॉइंट डिफ़ॉल्ट रूप से बने रहते हैं। बदलावों की समीक्षा करके स्पष्ट रूप से स्वीकृति दें। जिन प्रदाताओं के क्रेडेंशियल सहेजे गए हैं, उन्हें एडिटर में नई कुंजी दर्ज करके अपडेट करना होगा।',
+  'fleet.approveProviderSync': 'प्रदाता एंडपॉइंट और प्रमाणीकरण बदलने की स्वीकृति दें',
+  'fleet.previewProviderChanges': 'प्रदाता परिवर्तनों का पूर्वावलोकन',
+  'fleet.providerNeedsKey': 'कुंजी फिर से दर्ज करनी होगी',
+  'fleet.presetHintSafe':
+    'सहेजे गए मॉडल मेटाडेटा को बदले बिना गैरमौजूद मॉडल प्रीसेट आयात करें। चित्र समझने की क्षमता, कॉन्टेक्स्ट और कीमतों की मौजूदा जानकारी को अपडेट करना वैकल्पिक है और इससे मैन्युअल बदलाव मिट सकते हैं। राउटिंग और क्रेडेंशियल कभी नहीं बदले जाते।',
+  'fleet.approveMetadataRefresh': 'सहेजे गए मॉडल मेटाडेटा को बदलने की स्वीकृति दें',
+  'fleet.previewModelChanges': 'मॉडल परिवर्तनों का पूर्वावलोकन',
+  'fleet.refreshLabel': 'सहेजा गया मेटाडेटा ताज़ा करें',
+  'fleet.addLabel': 'छूटा हुआ प्रीसेट जोड़ें',
+  'fleet.healthUnavailable': 'मॉडल समूह की स्थिति उपलब्ध नहीं है।',
+  'fleet.selectProvidersError': 'एक या अधिक प्रदाता चुनें।',
+  'fleet.imageEndpointError': 'इमेज एंडपॉइंट के लिए HTTPS या लूपबैक पते पर HTTP आवश्यक है।',
+  'fleet.chooseGroupError': 'प्रदाता समूह चुनें।',
+  'fleet.modelImageEndpointError':
+    'HTTPS या लूपबैक पते पर HTTP इस्तेमाल करने वाला इमेज एंडपॉइंट दर्ज करें।',
+  'fleet.selectModelsError': 'एक या अधिक मॉडल चुनें।',
+  'fleet.contextError':
+    'कॉन्टेक्स्ट विंडो का आकार 0 से 100,000,000 के बीच एक पूर्ण संख्या होना चाहिए।',
+  'fleet.selectPatchError': 'अपडेट करने के लिए कम से कम एक फ़ील्ड चुनें।',
+  'fleet.noKeyUsage': 'इस सत्र में इन्फरेंस कुंजी के उपयोग का कोई रिकॉर्ड नहीं है।',
+  'fleet.selectProvider': 'प्रदाता चुनें',
+  'fleet.selected': 'चुने गए',
+  'fleet.groupImageAria': 'समूह की इमेज API का मूल URL',
+  'fleet.rotationAria': 'एकाधिक टोकन में से चयन की रणनीति',
+  'fleet.imageGroupAria': 'इमेज एंडपॉइंट का प्रदाता समूह',
+  'fleet.imageModelIdAria': 'इमेज एंडपॉइंट का मॉडल आईडी',
+  'fleet.modelImageAria': 'मॉडल की इमेज API का मूल URL',
+  'fleet.searchAria': 'मॉडल प्रीसेट फ़िल्टर करें',
+  'fleet.selectModel': 'मॉडल चुनें',
+  'fleet.visionLabel': 'चित्र समझना',
+  'fleet.keepUnchanged': 'बिना बदलाव के रखें',
+  'fleet.enabled': 'सक्षम',
+  'fleet.disabled': 'अक्षम',
+  'fleet.leaveBlank': 'मौजूदा मान रखने के लिए खाली छोड़ें',
+  'fleet.bulkContextAria': 'सामूहिक अपडेट के लिए कॉन्टेक्स्ट टोकन',
+  'fleet.prodexImageError':
+    'Prodex इमेज एंडपॉइंट के लिए HTTPS या लूपबैक पते पर HTTP आवश्यक है और URL में क्रेडेंशियल नहीं होने चाहिए।',
+  'fleet.prodexModelImageError':
+    'Prodex मॉडल इमेज एंडपॉइंट के लिए HTTPS या लूपबैक पते पर HTTP आवश्यक है और URL में क्रेडेंशियल नहीं होने चाहिए।',
+} satisfies ModelManagementMessages;
+
+export default messages;

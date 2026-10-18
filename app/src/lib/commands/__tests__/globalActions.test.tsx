@@ -55,6 +55,19 @@ describe('registerGlobalActions', () => {
     expect(navigate).toHaveBeenCalledWith('/home');
   });
 
+  it('opens the actual Memory and Workflow Runs destinations', () => {
+    const frame = hotkeyManager.pushFrame('global', 'root');
+    const navigate = vi.fn();
+    registerGlobalActions(makeHandlers({ navigate }), frame);
+    registry.setActiveStack([frame]);
+
+    registry.runAction('nav.intelligence');
+    expect(navigate).toHaveBeenLastCalledWith('/connections?tab=brain');
+
+    registry.runAction('nav.activity');
+    expect(navigate).toHaveBeenLastCalledWith('/flows?view=runs');
+  });
+
   it('routes chat/view/general actions to their handlers', () => {
     const frame = hotkeyManager.pushFrame('global', 'root');
     const newChat = vi.fn();

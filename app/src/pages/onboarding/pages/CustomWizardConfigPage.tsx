@@ -1,7 +1,8 @@
 import createDebug from 'debug';
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { Alert, AlertDescription } from '../../../components/ui';
 import { useT } from '../../../lib/i18n/I18nContext';
 import { useCoreState } from '../../../providers/CoreStateProvider';
 import { trackEvent } from '../../../services/analytics';
@@ -38,12 +39,14 @@ export default function CustomWizardConfigPage({
   const { clearSession } = useCoreState();
   const { completeAndExit } = useOnboardingContext();
   const stepIndex = CUSTOM_WIZARD_STEPS.indexOf(stepKey);
+  const [backError, setBackError] = useState(false);
 
   const isLast = stepIndex === CUSTOM_WIZARD_STEPS.length - 1;
   const isFirst = stepIndex === 0;
   const namespace = `onboarding.custom.${stepKey}`;
 
   const handleBack = async () => {
+    setBackError(false);
     // Going back from the first step returns to the welcome/login screen.
     // A session is always present here (OAuth or "Continue Locally"), so we
     // must clear it first — otherwise PublicRoute bounces "/" to /home.
@@ -54,6 +57,7 @@ export default function CustomWizardConfigPage({
         // Navigating to "/" with a live session would just bounce back to /home
         // via PublicRoute — so stay on the step and surface a dev-only diagnostic.
         log('[onboarding:custom-%s] clearSession on back failed: %s', stepKey, describeError(err));
+        setBackError(true);
         return;
       }
     }
@@ -61,30 +65,39 @@ export default function CustomWizardConfigPage({
   };
 
   return (
-    <CustomWizardStep
-      testId={`onboarding-custom-${stepKey}-step`}
-      stepIndex={stepIndex}
-      stepCount={CUSTOM_WIZARD_STEPS.length}
-      title={t(`${namespace}.title`)}
-      subtitle={t(`${namespace}.subtitle`)}
-      configureContent={configureContent}
-      continueDisabled={continueDisabled}
-      continueHint={continueHint}
-      secondaryAction={secondaryAction}
-      onBack={() => void handleBack()}
-      onContinue={async () => {
-        trackEvent('onboarding_step_complete', { step_name: `custom_${stepKey}` });
-        if (isLast) {
-          try {
-            await completeAndExit();
-          } catch (err) {
-            log('[onboarding:custom-%s] completeAndExit failed: %s', stepKey, describeError(err));
+    <>
+      <CustomWizardStep
+        testId={`onboarding-custom-${stepKey}-step`}
+        stepIndex={stepIndex}
+        stepCount={CUSTOM_WIZARD_STEPS.length}
+        title={t(`${namespace}.title`)}
+        subtitle={t(`${namespace}.subtitle`)}
+        configureContent={configureContent}
+        continueDisabled={continueDisabled}
+        continueHint={continueHint}
+        secondaryAction={secondaryAction}
+        onBack={() => void handleBack()}
+        onContinue={async () => {
+          trackEvent('onboarding_step_complete', { step_name: `custom_${stepKey}` });
+          if (isLast) {
+            try {
+              await completeAndExit();
+            } catch (err) {
+              log('[onboarding:custom-%s] completeAndExit failed: %s', stepKey, describeError(err));
+            }
+            return;
           }
-          return;
-        }
-        navigate(CUSTOM_WIZARD_ROUTES[CUSTOM_WIZARD_STEPS[stepIndex + 1]]);
-      }}
-      continueLabel={isLast ? t('onboarding.custom.finish') : undefined}
-    />
+          navigate(CUSTOM_WIZARD_ROUTES[CUSTOM_WIZARD_STEPS[stepIndex + 1]]);
+        }}
+        continueLabel={isLast ? t('onboarding.custom.finish') : undefined}
+      />
+      {backError && (
+        <Alert variant="destructive" data-testid="onboarding-back-error" role="alert">
+          <AlertDescription>
+            {t('onboarding.custom.backFailed', 'Could not go back. Please retry.')}
+          </AlertDescription>
+        </Alert>
+      )}
+    </>
   );
 }

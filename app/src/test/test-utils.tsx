@@ -13,6 +13,7 @@ import { SidebarSlotOutlet, SidebarSlotProvider } from '../components/layout/she
 import { getCoreStateSnapshot } from '../lib/coreState/store';
 import { CoreStateContext } from '../providers/coreStateContext';
 import accountsReducer from '../store/accountsSlice';
+import announcementReducer from '../store/announcementSlice';
 import channelConnectionsReducer from '../store/channelConnectionsSlice';
 import chatRuntimeReducer from '../store/chatRuntimeSlice';
 import connectivityReducer from '../store/connectivitySlice';
@@ -40,6 +41,7 @@ import threadReducer from '../store/threadSlice';
  */
 const testRootReducer = combineReducers({
   accounts: accountsReducer,
+  announcement: announcementReducer,
   channelConnections: channelConnectionsReducer,
   chatRuntime: chatRuntimeReducer,
   connectivity: connectivityReducer,

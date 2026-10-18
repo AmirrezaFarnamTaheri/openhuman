@@ -300,7 +300,9 @@ pub fn endpoint_host(endpoint: &str) -> Option<String> {
 ///
 /// Derived entirely from [`BUILTIN_CLOUD_PROVIDERS`] so the set stays in sync
 /// with the provider registry. `host` is compared case-insensitively against
-/// each preset's [`endpoint_host`].
+/// each preset's [`endpoint_host`]. Loopback addresses are excluded: local
+/// gateways share their host with unrelated backends on other ports, so a
+/// host alone cannot identify their service.
 ///
 /// # Why this exists
 ///
@@ -309,18 +311,26 @@ pub fn endpoint_host(endpoint: &str) -> Option<String> {
 /// OpenHuman **backend** base for team/billing/auth calls. A BYO user who
 /// points `api_url` at a provider's canonical base (`https://openrouter.ai/api/v1`)
 /// would otherwise have every backend domain call routed to the inference host
-/// → 400/404 (TAURI-RUST-HW1: 4932 `GET /teams/me/usage` 400s from `openrouter.ai`).
+/// → 400/404 (TAURI-RUST-HW1: 4932 team-usage 400s from `openrouter.ai`).
 /// The backend-URL resolver uses this to treat such hosts as non-backend and
 /// fall back to the default backend chain — the cloud analogue of the local-AI
 /// guard that fixed the Ollama case (OPENHUMAN-TAURI-51/-80/-7Z).
 pub fn host_is_builtin_cloud_provider(host: &str) -> bool {
     let host = host.trim().to_ascii_lowercase();
-    if host.is_empty() {
+    if host.is_empty() || host_is_loopback(&host) {
         return false;
     }
     BUILTIN_CLOUD_PROVIDERS
         .iter()
         .any(|p| endpoint_host(p.endpoint).as_deref() == Some(host.as_str()))
+}
+
+fn host_is_loopback(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host.ends_with(".localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 /// Whether an endpoint **host** is a known cloud host that does NOT serve the
@@ -335,13 +345,29 @@ pub fn host_is_builtin_cloud_provider(host: &str) -> bool {
 /// `integrate.api.nvidia.com` must never attempt `/responses` (TAURI-RUST-5A1),
 /// while a genuinely unknown proxy host keeps the permissive fallback so a real
 /// OpenAI proxy still gets `/responses`.
+///
+/// Loopback gateways are matched by URL origin, including scheme and port.
+/// A chat-only service on one local port must not disable the fallback for
+/// another local service, or inherit its Responses capability.
 pub fn endpoint_host_is_chat_completions_only(endpoint: &str) -> bool {
     let Some(host) = endpoint_host(endpoint) else {
         return false;
     };
+    let local_origin = if host_is_loopback(&host) {
+        let Ok(url) = url::Url::parse(endpoint) else {
+            return false;
+        };
+        Some(url.origin())
+    } else {
+        None
+    };
     let mut matched_chat_only = false;
     for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
-        if endpoint_host(provider.endpoint).as_deref() == Some(host.as_str()) {
+        if endpoint_host(provider.endpoint).as_deref() == Some(host.as_str())
+            && local_origin.as_ref().is_none_or(|origin| {
+                url::Url::parse(provider.endpoint).is_ok_and(|preset| preset.origin() == *origin)
+            })
+        {
             if builtin_cloud_supports_responses_api(provider.slug) {
                 // A Responses-capable built-in lives at this host → not chat-only.
                 return false;
@@ -459,7 +485,6 @@ pub struct CloudProviderCreds {
     #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub model_transports: std::collections::HashMap<String, ModelTransport>,
 
-
     /// Default provider-native model used by BYOK routes without a model suffix.
     // keep until v0.66 (review after 2027-01-11): active BYOK routes and the
     // inference settings RPC depend on this field; replacement needs route migration.
@@ -489,7 +514,10 @@ impl CloudProviderCreds {
     /// The exact model's configured protocol, or registry behavior for
     /// unknown models. No provider-name or endpoint heuristics are applied.
     pub fn model_transport(&self, model: &str) -> ModelTransport {
-        self.model_transports.get(model).copied().unwrap_or_default()
+        self.model_transports
+            .get(model)
+            .copied()
+            .unwrap_or_default()
     }
 }
 
@@ -502,11 +530,7 @@ pub fn normalize_model_transports(
         return Err("too many model transport overrides (maximum 512)".into());
     }
     for id in overrides.keys() {
-        if id.is_empty()
-            || id.len() > 200
-            || id.trim() != id
-            || id.chars().any(char::is_control)
-        {
+        if id.is_empty() || id.len() > 200 || id.trim() != id || id.chars().any(char::is_control) {
             return Err("model transport id must be 1-200 printable, unpadded characters".into());
         }
     }
@@ -522,9 +546,13 @@ pub fn normalize_model_transports_for_auth(
 ) -> Result<std::collections::HashMap<String, ModelTransport>, String> {
     let normalized = normalize_model_transports(overrides)?;
     if !matches!(auth_style, AuthStyle::Bearer | AuthStyle::None)
-        && normalized.values().any(|mode| *mode != ModelTransport::Auto)
+        && normalized
+            .values()
+            .any(|mode| *mode != ModelTransport::Auto)
     {
-        return Err("explicit OpenAI model transports require bearer or none authentication".into());
+        return Err(
+            "explicit OpenAI model transports require bearer or none authentication".into(),
+        );
     }
     Ok(normalized)
 }
@@ -568,18 +596,13 @@ pub fn normalize_fleet_config(
         // the credential in transit. Explicit loopback development gateways
         // keep working, including IPv6 localhost.
         if url.scheme() == "http" {
-            let host = url
-                .host_str()
-                .unwrap_or_default()
-                .trim_matches(['[', ']']);
+            let host = url.host_str().unwrap_or_default().trim_matches(['[', ']']);
             let loopback = host.eq_ignore_ascii_case("localhost")
                 || host
                     .parse::<std::net::IpAddr>()
                     .is_ok_and(|address| address.is_loopback());
             if !loopback {
-                return Err(
-                    "image endpoints must use HTTPS outside loopback hosts".to_string(),
-                );
+                return Err("image endpoints must use HTTPS outside loopback hosts".to_string());
             }
         }
         Ok(value.to_owned())

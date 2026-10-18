@@ -26,6 +26,9 @@ concurrency:
 jobs:
   route:
     name: Route (outsiders → GitHub-hosted)
+    # Only upstream requires an org-membership decision. Fork PRs can
+    # launch the same shared hosted lanes immediately, saving a runner job.
+    if: github.repository == 'tinyhumansai/openhuman'
     runs-on: ubuntu-latest
     timeout-minutes: 6
     outputs:
@@ -50,9 +53,16 @@ jobs:
         run: bash scripts/ci/ci-fast-route.sh
 
   lanes:
+    # CI Gate runs from the default branch. Keep this caller name stable so
+    # the already-deployed evaluator can recognize an unmerged PR's gate.
     name: Lanes
     needs: route
-    if: needs.route.outputs.outsider == 'true'
+    # Forks skip route, so an explicit status function must override the
+    # implicit success() dependency gate without ignoring cancellation.
+    if: >-
+      !cancelled() &&
+      (github.repository != 'tinyhumansai/openhuman' ||
+       (needs.route.result == 'success' && needs.route.outputs.outsider == 'true'))
     uses: ./.github/workflows/ci-lanes.yml
     with:
       profile: hosted

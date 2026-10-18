@@ -7,7 +7,10 @@
 //! per-attempt timeout and retries the client applies, and a deadline of
 //! its own so a slow answer becomes a fallback rather than a stalled turn.
 
-use std::{collections::{BTreeMap, HashSet}, time::Duration};
+use std::{
+    collections::{BTreeMap, HashSet},
+    time::Duration,
+};
 
 use serde_json::{json, Value};
 use tinyjevclient::{
@@ -84,7 +87,7 @@ impl TinyJevEvaluator {
         }
         if request.options.is_empty() || request.options.len() > MAX_DECISION_OPTIONS {
             return Err(RankError::invalid_input(
-                "System-One requires 1 to 255 distinct tool choices".to_owned()
+                "System-One requires 1 to 255 distinct tool choices".to_owned(),
             ));
         }
         let mut keys = HashSet::with_capacity(request.options.len());
@@ -96,20 +99,23 @@ impl TinyJevEvaluator {
                 || !keys.insert(option.key.as_str())
             {
                 return Err(RankError::invalid_input(
-                    "System-One contains an invalid or duplicate tool option key".to_owned()
+                    "System-One contains an invalid or duplicate tool option key".to_owned(),
                 ));
             }
-            let characters = option.description.chars()
-                .take(MAX_DECISION_OPTION_DESCRIPTION_CHARS + 1).count();
+            let characters = option
+                .description
+                .chars()
+                .take(MAX_DECISION_OPTION_DESCRIPTION_CHARS + 1)
+                .count();
             if characters > MAX_DECISION_OPTION_DESCRIPTION_CHARS {
                 return Err(RankError::invalid_input(
-                    "System-One tool option description exceeds the decision budget".to_owned()
+                    "System-One tool option description exceeds the decision budget".to_owned(),
                 ));
             }
             description_total += characters;
             if description_total > MAX_DECISION_TOTAL_DESCRIPTION_CHARS {
                 return Err(RankError::invalid_input(
-                    "System-One cumulative tool-choice description exceeds the budget".to_owned()
+                    "System-One cumulative tool-choice description exceeds the budget".to_owned(),
                 ));
             }
         }
@@ -122,11 +128,20 @@ impl TinyJevEvaluator {
         // to the decision model; this is a size guard, not semantic summarization.
         let intent_truncated = request.intent.chars().count() > MAX_DECISION_INTENT_CHARS;
         let intent = if intent_truncated {
-            let head: String = request.intent.chars()
-                .take(MAX_DECISION_INTENT_CHARS / 2).collect();
-            let tail: String = request.intent.chars().rev()
+            let head: String = request
+                .intent
+                .chars()
                 .take(MAX_DECISION_INTENT_CHARS / 2)
-                .collect::<Vec<_>>().into_iter().rev().collect();
+                .collect();
+            let tail: String = request
+                .intent
+                .chars()
+                .rev()
+                .take(MAX_DECISION_INTENT_CHARS / 2)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
             format!("{head}\n[... middle of request omitted due to context budget ...]\n{tail}")
         } else {
             request.intent.clone()
@@ -135,18 +150,23 @@ impl TinyJevEvaluator {
         // Jev receives only task intent and bounded user-turn context, never
         // the raw system prompt, history, tool results or credentials. Choosing
         // the latest turns matches how tool choice should use recent intent.
-        let candidates: Vec<_> = request.recent_turns.iter()
+        let candidates: Vec<_> = request
+            .recent_turns
+            .iter()
             .filter(|turn| !turn.trim().is_empty())
             .collect();
         let offset = candidates.len().saturating_sub(MAX_DECISION_RECENT_TURNS);
         let selected = &candidates[offset..];
         let mut truncated = offset != 0 || intent_truncated;
-        let recent: Vec<Value> = selected.iter().map(|turn| {
-            if turn.chars().count() > MAX_DECISION_TURN_CHARS {
-                truncated = true;
-            }
-            Value::String(turn.chars().take(MAX_DECISION_TURN_CHARS).collect())
-        }).collect();
+        let recent: Vec<Value> = selected
+            .iter()
+            .map(|turn| {
+                if turn.chars().count() > MAX_DECISION_TURN_CHARS {
+                    truncated = true;
+                }
+                Value::String(turn.chars().take(MAX_DECISION_TURN_CHARS).collect())
+            })
+            .collect();
         if let Some(object) = state.as_object_mut() {
             if !recent.is_empty() {
                 object.insert("recent_user_turns".to_owned(), Value::Array(recent));
@@ -259,7 +279,12 @@ impl JevEvaluator for TinyJevEvaluator {
             Some(Answer::Noul(noul)) => Some(noul.noul),
             _ => None,
         };
-        validate_choice_numbers(request, &choice.probabilities, choice.confidence, needs_tool)?;
+        validate_choice_numbers(
+            request,
+            &choice.probabilities,
+            choice.confidence,
+            needs_tool,
+        )?;
         log::debug!(
             "[tool-search] jev evaluated {} option(s) (confidence={:.2} needs_tool={:?} latency_ms={} attempts={} input_tokens={:?})",
             request.options.len(),

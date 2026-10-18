@@ -1,7 +1,7 @@
 use super::*;
 
-use tinyflows_schedule::types::JobType;
-use tinyflows_schedule::types::Schedule;
+use tinyflows_bus::schedule::types::JobType;
+use tinyflows_bus::schedule::types::Schedule;
 // TAURI-RUST-514 — a BYO provider insufficient-credits 402 ("requires more
 // credits") leaks from a cron-fired agent job through `last_agent_error`.
 // `is_insufficient_credits_failure` must consult the message classifier so the
@@ -332,7 +332,7 @@ async fn cron_agent_job_uses_agent_definition_tool_scope() {
     // than relied upon from another test: `install_for_tests` is
     // `Once`-guarded, so a test that omits it passes only while some
     // earlier test in the same binary happened to run first.
-    crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global_builtins()
+    crate::agent_registry::host_definition::AgentDefinitionRegistry::init_global_builtins()
         .expect("init built-in agent definitions");
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp).await;
@@ -344,7 +344,7 @@ async fn cron_agent_job_uses_agent_definition_tool_scope() {
     let built =
         build_agent_for_cron_job(&crate::core::runtime::DispatchCtx::ambient(), &config, &job)
             .expect("build cron agent");
-    let visible = built.agent.visible_tool_names_for_test();
+    let visible = built.agent.visible_tool_specs_arc();
 
     assert!(
         !visible.is_empty(),
@@ -361,7 +361,6 @@ async fn run_through_scheduler(config: &Config, job_id: &str) {
         Utc::now() - ChronoDuration::seconds(1),
     )
     .unwrap();
-    let job = cron::get_job(config, job_id).unwrap();
     let security = Arc::new(SecurityPolicy::from_config(
         &config.autonomy,
         &config.workspace_dir,
@@ -372,7 +371,7 @@ async fn run_through_scheduler(config: &Config, job_id: &str) {
         config,
         &security,
     );
-    dispatcher.dispatch(vec![job]).await.unwrap();
+    dispatcher.tick(config).await.unwrap();
     dispatcher.drain().await;
 }
 
@@ -436,7 +435,7 @@ async fn scheduler_flow_runs_active_hours_job_and_reschedules_inside_window() {
         &config,
         &security,
     );
-    dispatcher.dispatch(vec![job.clone()]).await.unwrap();
+    dispatcher.tick(&config).await.unwrap();
     dispatcher.drain().await;
 
     let stored = cron::get_job(&config, &job.id).unwrap();
@@ -480,7 +479,7 @@ fn one_shot(config: &Config, command: &str, delete_after_run: bool) -> CronJob {
         cron::update_job(
             config,
             &job.id,
-            tinyflows_schedule::types::CronJobPatch {
+            tinyflows_bus::schedule::types::CronJobPatch {
                 delete_after_run: Some(true),
                 ..Default::default()
             },

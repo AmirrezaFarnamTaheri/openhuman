@@ -341,12 +341,32 @@ fn shell_schema_advertises_timeout_secs() {
     assert_eq!(timeout["maximum"], 3600);
 }
 
+#[cfg(feature = "modules")]
 #[test]
-fn shell_output_limit_is_1mb() {
-    assert_eq!(
-        MAX_OUTPUT_BYTES, 1_048_576,
-        "max output must be 1 MB to prevent OOM"
+fn docker_module_output_limit_preserves_utf8_in_both_streams() {
+    use crate::modules::tinybox::contract::DockerRunOutput;
+
+    let oversized = format!("a{}", "🙂".repeat(1_048_576 / 4));
+    let result = docker_module_result(
+        DockerRunOutput {
+            exit_code: 0,
+            stdout: oversized.clone(),
+            stderr: oversized,
+            timed_out: false,
+        },
+        None,
     );
+    assert!(!result.is_error);
+    let output = result.output();
+    let (stdout, stderr) = output.split_once("\n[stderr]\n").unwrap();
+    for (stream, suffix) in [
+        (stdout, "\n... [output truncated at 1MB]"),
+        (stderr, "\n... [stderr truncated at 1MB]"),
+    ] {
+        let bounded = stream.strip_suffix(suffix).expect("truncation is explicit");
+        assert_eq!(bounded.len(), 1_048_576 - 3);
+        assert!(bounded.ends_with('🙂'));
+    }
 }
 
 // ── §5.3 Non-UTF8 binary output tests ────────────────────

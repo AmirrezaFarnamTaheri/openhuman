@@ -19,7 +19,9 @@ fn quota_cooldown(streak: u32, retry_after_ms: Option<u64>) -> Duration {
         return Duration::from_millis(retry_ms).min(MAX_COOLDOWN);
     }
     let shift = streak.saturating_sub(1).min(3);
-    DEFAULT_COOLDOWN.saturating_mul(1 << shift).min(MAX_COOLDOWN)
+    DEFAULT_COOLDOWN
+        .saturating_mul(1 << shift)
+        .min(MAX_COOLDOWN)
 }
 const SESSION_BINDING_TTL: Duration = Duration::from_secs(30 * 60);
 const MAX_STICKY_RUN_ID_BYTES: usize = 256;
@@ -361,9 +363,7 @@ fn record_result_by_id(
             entry.consecutive_rate_limits = 0;
             // A success from a parallel in-flight request is not evidence that
             // another request's active 429 cooldown has been lifted.
-            entry.cooldown_until = entry
-                .cooldown_until
-                .filter(|until| *until > Instant::now());
+            entry.cooldown_until = entry.cooldown_until.filter(|until| *until > Instant::now());
         }
         Some(KeyFailure::Authentication) => {
             entry.failures += 1;

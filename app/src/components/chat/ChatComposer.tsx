@@ -250,12 +250,6 @@ function ChatComposerBody({
   // follow-up can be queued instead of cancelling the current turn.
   const hasTypedContent = inputValue.trim().length > 0 || attachments.length > 0;
   const showStopButton = isSending && !!onStopGeneration && !hasTypedContent;
-  // Empty composer, nothing in flight: the primary slot offers the Human page
-  // instead of a dead disabled arrow. Stop and the in-flight spinner both win
-  // over it — a turn is still the thing the button is about while one is
-  // running — and the first typed character hands the slot back to Send.
-  const showHumanModeButton =
-    !!onOpenHumanMode && !hasTypedContent && !showStopButton && !showSendingSpinner;
 
   // Attachment ingest is blocked while the feature is off, the composer is
   // locked, or the budget is full — drag-drop and paste honour the same gate as
@@ -477,14 +471,8 @@ function ChatComposerBody({
               </Button>
             )}
 
-            {/* Human / Send / Stop — upstream's `ComposerAction`, with one extra
-                state. Empty and idle, the slot is the Human-page shortcut (see
-                `showHumanModeButton`). While a turn is in flight and a cancel
-                handler is wired, Send becomes Stop so generation can be halted
-                from inside the composer. Once a follow-up is typed the Send
-                arrow returns so the follow-up can be queued (parallel send)
-                instead of cancelling the current turn. */}
-            {showHumanModeButton ? (
+            {/* Human is a separate, stable action; Send and Stop retain one purpose. */}
+            {onOpenHumanMode && (
               <Button
                 type="button"
                 iconOnly
@@ -494,14 +482,12 @@ function ChatComposerBody({
                 data-testid="human-mode-button"
                 aria-label={t('composer.humanMode')}
                 title={t('composer.humanMode')}
-                onClick={() => {
-                  debug('[chat-composer] human-mode click');
-                  onOpenHumanMode?.();
-                }}
+                onClick={onOpenHumanMode}
                 className={COMPOSER_SEND}>
                 <HumanModeIcon />
               </Button>
-            ) : showStopButton ? (
+            )}
+            {showStopButton ? (
               <Button
                 type="button"
                 iconOnly

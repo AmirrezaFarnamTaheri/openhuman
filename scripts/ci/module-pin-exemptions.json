@@ -14,8 +14,13 @@
   "exemptions": [
     {
       "id": "tinyconnectors",
-      "expect": "v0.19.3-50-g00c5609b",
-      "reason": "The pinned TinyConnectors workspace package is still 0.19.3, matching the registry artifact; the gitlink sits 50 commits past that tag at the additive contract 1.22 (opt-in direct-route Composio triggers, off by default). Re-pin both once a release carrying it is cut."
+      "expect": "v0.19.3-76-gcb297ef1",
+      "reason": "The pinned TinyConnectors workspace package is still 0.19.3, matching the registry artifact; the gitlink sits 76 commits past that tag at the additive contract 1.22 (opt-in direct-route Composio triggers, off by default). Re-pin both once a release carrying it is cut. (Gitlink now at the merged upstream cb297ef1, storage schema v2.)"
+    },
+    {
+      "id": "tinyflows",
+      "expect": "v0.8.23-92-gcad43f97",
+      "reason": "Keep cad43f97 for the upstream storage schema v2 declarations while serving the registry's immutable v0.8.23 Schedule v3 release. Source Schedule v4 adds only optional StartScheduler.config.now; OpenHuman omits it and uses the unchanged v3 requests, callbacks and records. The exact source version and v3 config subset are checked in core, and tinyflows_release_compatibility exercises the actual installed v0.8.23 module through host scheduling, document and policy adapters. Schedule v5/v6 remove ExecuteJob and require a separate host migration, so they are not drop-in artifact updates. Reconcile both pins and retire this exact exemption after a compatible release or reviewed migration."
     }
   ]
 }

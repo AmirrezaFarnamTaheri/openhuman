@@ -127,18 +127,19 @@ fn least_busy_reserves_active_lease_before_returning_the_key() {
     // before the second request makes its choice, otherwise both select A.
     let scope = "key-pool-test-atomic-reservation";
     let keys = vec!["first".to_owned(), "second".to_owned()];
-    let (first_index, first) = choose_key_and_acquire_for_run(
-        scope, &keys, &[], RotationStrategy::LeastBusy, None,
-    )
-    .expect("first credential available");
+    let (first_index, first) =
+        choose_key_and_acquire_for_run(scope, &keys, &[], RotationStrategy::LeastBusy, None)
+            .expect("first credential available");
     assert_eq!(first_index, 0);
     assert_eq!(snapshot(scope)[first_index].active_leases, 1);
 
-    let (second_index, second) = choose_key_and_acquire_for_run(
-        scope, &keys, &[], RotationStrategy::LeastBusy, None,
-    )
-    .expect("second credential available");
-    assert_ne!(first_index, second_index, "lease reservation must influence the next selection");
+    let (second_index, second) =
+        choose_key_and_acquire_for_run(scope, &keys, &[], RotationStrategy::LeastBusy, None)
+            .expect("second credential available");
+    assert_ne!(
+        first_index, second_index,
+        "lease reservation must influence the next selection"
+    );
     assert_eq!(snapshot(scope)[second_index].active_leases, 1);
 
     release(scope, &first);
@@ -152,11 +153,19 @@ fn reservations_honor_excluded_keys_and_run_affinity_without_double_acquire() {
     let scope = "key-pool-test-atomic-exclusions";
     let keys = vec!["a".to_owned(), "b".to_owned()];
     let (selected, secret) = choose_key_and_acquire_for_run(
-        scope, &keys, &[], RotationStrategy::RoundRobin, Some("session"),
+        scope,
+        &keys,
+        &[],
+        RotationStrategy::RoundRobin,
+        Some("session"),
     )
     .unwrap();
     let (sticky, again) = choose_key_and_acquire_for_run(
-        scope, &keys, &[], RotationStrategy::RoundRobin, Some("session"),
+        scope,
+        &keys,
+        &[],
+        RotationStrategy::RoundRobin,
+        Some("session"),
     )
     .unwrap();
     assert_eq!(selected, sticky, "healthy session binding stays stable");
@@ -218,7 +227,10 @@ fn parallel_rate_limit_outcomes_cannot_shorten_the_existing_deadline() {
         let pools = registry().lock().unwrap();
         pools.get(scope).unwrap().keys[0].cooldown_until.unwrap()
     };
-    assert!(second_deadline >= first_deadline, "an overlapping 429 shortened an active cooldown");
+    assert!(
+        second_deadline >= first_deadline,
+        "an overlapping 429 shortened an active cooldown"
+    );
     forget(scope);
 }
 
@@ -233,10 +245,8 @@ fn session_affinity_cache_evicts_earliest_expiring_binding() {
         let base = Instant::now();
         let id = secret_id("stable");
         for i in 0..512u64 {
-            pool.sticky.insert(
-                format!("run-{i}"),
-                (id, base + Duration::from_secs(60 + i)),
-            );
+            pool.sticky
+                .insert(format!("run-{i}"), (id, base + Duration::from_secs(60 + i)));
         }
     }
 
@@ -252,7 +262,10 @@ fn session_affinity_cache_evicts_earliest_expiring_binding() {
         let pools = registry().lock().unwrap();
         let sticky = &pools.get(scope).unwrap().sticky;
         assert_eq!(sticky.len(), 512);
-        assert!(!sticky.contains_key("run-0"), "evict oldest/earliest expiry, not arbitrary HashMap entry");
+        assert!(
+            !sticky.contains_key("run-0"),
+            "evict oldest/earliest expiry, not arbitrary HashMap entry"
+        );
         assert!(sticky.contains_key("run-511"));
         assert!(sticky.contains_key("run-new"));
     }
@@ -320,5 +333,8 @@ fn explicit_retry_after_is_honored_and_concurrent_shorter_limits_do_not_erase_it
     record_result_for(scope, &key, Some(KeyFailure::RateLimited), Some(2_000));
     let second = snapshot(scope)[0].cooldown_remaining_ms;
     assert!(first > 245_000 && first <= 250_000);
-    assert!(second > 244_000, "later 429 must not shorten existing cooldown");
+    assert!(
+        second > 244_000,
+        "later 429 must not shorten existing cooldown"
+    );
 }

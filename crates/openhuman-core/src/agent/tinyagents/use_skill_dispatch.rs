@@ -236,17 +236,21 @@ impl Tool for BoundUseSkillTool {
     }
 
     fn permission_level(&self) -> tinytools::PermissionLevel {
-        self.inner.as_ref().map_or_else(
-            || self.outer.permission_level(),
-            |tool| tool.permission_level(),
-        )
+        // Only named calls are bound here. A missing target is a frozen
+        // not-found answer, not the dispatcher's read-only disclosure path.
+        self.inner
+            .as_ref()
+            .map_or(tinytools::PermissionLevel::Dangerous, |tool| {
+                tool.permission_level()
+            })
     }
 
     fn permission_level_with_args(&self, _arguments: &Value) -> tinytools::PermissionLevel {
-        self.inner.as_ref().map_or_else(
-            || self.outer.permission_level(),
-            |tool| tool.permission_level_with_args(&self.inner_arguments),
-        )
+        self.inner
+            .as_ref()
+            .map_or(tinytools::PermissionLevel::Dangerous, |tool| {
+                tool.permission_level_with_args(&self.inner_arguments)
+            })
     }
 
     fn external_effect_with_args(&self, _arguments: &Value) -> bool {
@@ -364,3 +368,7 @@ impl ToolDispatch<(), OpenHumanRunContext> for BoundUseSkillDispatch {
 #[cfg(test)]
 #[path = "use_skill_dispatch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "use_skill_dispatch_permissions_tests.rs"]
+mod permissions_tests;

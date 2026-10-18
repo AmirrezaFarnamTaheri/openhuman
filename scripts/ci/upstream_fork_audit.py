@@ -11,6 +11,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import time
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,10 @@ from urllib.request import Request, urlopen
 
 class RequestBudgetExhausted(RuntimeError):
     """Request budget or GitHub rate limit exhausted."""
+
+
+class GitHubTemporarilyUnavailable(RuntimeError):
+    """One API operation exhausted its retries; other forks may still work."""
 
 
 class GitHubApi:
@@ -34,8 +39,6 @@ class GitHubApi:
     def get(self, path: str) -> Any:
         if not path.startswith("/repos/") or "/../" in path or path.endswith("/.."):
             raise ValueError(f"invalid GitHub API path: {path}")
-        if self.max_requests and self.requests >= self.max_requests:
-            raise RequestBudgetExhausted(f"request budget ({self.max_requests}) exceeded")
         request = Request(
             "https://api.github.com" + path,
             headers={
@@ -45,21 +48,39 @@ class GitHubApi:
                 "User-Agent": "openhuman-upstream-fork-audit/1.0",
             },
         )
-        self.requests += 1
-        try:
-            with urlopen(request, timeout=35) as response:
-                return json.load(response)
-        except HTTPError as exc:
-            if exc.code in {403, 429} and (
-                exc.headers.get("x-ratelimit-remaining") == "0"
-                or exc.headers.get("retry-after")
-            ):
+        # GitHub occasionally disconnects a long-running fork comparison
+        # before it returns headers. Bound retries and count every attempt
+        # against the scan budget; if still unavailable, the caller saves an
+        # INCOMPLETE checkpoint and the next run resumes from it.
+        for attempt in range(3):
+            if self.max_requests and self.requests >= self.max_requests:
                 raise RequestBudgetExhausted(
-                    f"GitHub API rate limit after {self.requests} requests"
-                ) from exc
-            raise RuntimeError(f"GitHub HTTP {exc.code}: {path}") from exc
-        except URLError as exc:
-            raise RuntimeError(f"GitHub API transport failure for {path}: {exc.reason}") from exc
+                    f"request budget ({self.max_requests}) exceeded"
+                )
+            self.requests += 1
+            try:
+                with urlopen(request, timeout=35) as response:
+                    return json.load(response)
+            except HTTPError as exc:
+                if exc.code in {403, 429} and (
+                    exc.headers.get("x-ratelimit-remaining") == "0"
+                    or exc.headers.get("retry-after")
+                ):
+                    raise RequestBudgetExhausted(
+                        f"GitHub API rate limit after {self.requests} requests"
+                    ) from exc
+                if exc.code not in {500, 502, 503, 504}:
+                    raise RuntimeError(f"GitHub HTTP {exc.code}: {path}") from exc
+                problem = f"GitHub HTTP {exc.code}: {path}"
+            except (URLError, OSError) as exc:
+                # http.client.RemoteDisconnected is a ConnectionResetError,
+                # not a URLError, and was escaping as an uncaught traceback.
+                problem = f"GitHub API transport failure for {path}: {exc}"
+            if attempt == 2:
+                raise GitHubTemporarilyUnavailable(
+                    f"GitHub temporarily unavailable after {self.requests} requests: {problem}"
+                )
+            time.sleep(2 ** attempt)
 
 
 def enumerate_forks(api: Any, upstream: str) -> dict[str, dict[str, Any]]:
@@ -216,22 +237,31 @@ def main() -> int:
         state = json.loads(args.checkpoint.read_text(encoding="utf-8"))
         if state.get("upstream") != args.upstream:
             parser.error("checkpoint belongs to another upstream")
-        if args.upstream_sha and state["sha"] != args.upstream_sha:
+        if args.upstream_sha and state.get("sha") and state["sha"] != args.upstream_sha:
             parser.error("checkpoint pinned to another upstream SHA")
+        state["sha"] = state.get("sha") or args.upstream_sha
     else:
-        sha = args.upstream_sha
-        metadata = api.get(f"/repos/{args.upstream}")
-        if not sha:
-            branch = metadata.get("default_branch") or "main"
-            sha = api.get(f"/repos/{args.upstream}/commits/{quote(branch, safe='')}")["sha"]
         state = {
-            "upstream": args.upstream, "sha": sha,
-            "declared_fork_count": metadata.get("forks_count", 0),
+            "upstream": args.upstream, "sha": args.upstream_sha,
+            "declared_fork_count": None,
             "forks": {}, "comparisons": {}, "errors": {},
         }
     try:
+        if not state["sha"] or state.get("declared_fork_count") is None:
+            # Setup is resumable too: a disconnect before the first fork page
+            # must still produce an honest checkpoint and incomplete report.
+            metadata = api.get(f"/repos/{args.upstream}")
+            if not state["sha"]:
+                branch = metadata.get("default_branch") or "main"
+                state["sha"] = api.get(
+                    f"/repos/{args.upstream}/commits/{quote(branch, safe='')}"
+                )["sha"]
+            state["declared_fork_count"] = metadata.get("forks_count", 0)
+            state["errors"].pop("_setup", None)
+            write_checkpoint(args.checkpoint, state)
         if not state["forks"]:
             state["forks"] = enumerate_forks(api, args.upstream)
+            state["errors"].pop("_enumeration", None)
             write_checkpoint(args.checkpoint, state)
         for name, row in sorted(state["forks"].items()):
             if name in state["comparisons"]:
@@ -252,7 +282,14 @@ def main() -> int:
                 f"GitHub reports {state['declared_fork_count']} forks but only "
                 f"{len(state['forks'])} were visible in the API"
             )
-    except RequestBudgetExhausted as exc:
+    except (RequestBudgetExhausted, GitHubTemporarilyUnavailable) as exc:
+        # Enumeration cannot proceed without its missing page; preserve the
+        # checkpoint and report an incomplete census. Per-fork failures above
+        # remain isolated so later comparisons can still make progress.
+        if not state["sha"] or state.get("declared_fork_count") is None:
+            state["errors"]["_setup"] = str(exc)
+        elif not state["forks"]:
+            state["errors"]["_enumeration"] = str(exc)
         print(f"Audit paused: {exc}")
     finally:
         write_checkpoint(args.checkpoint, state)
@@ -261,7 +298,7 @@ def main() -> int:
         args.output_md.parent.mkdir(parents=True, exist_ok=True)
         args.output_md.write_text(
             markdown_report(
-                args.upstream, state["sha"], len(state["forks"]),
+                args.upstream, state["sha"] or "(unresolved)", len(state["forks"]),
                 state["comparisons"], state["errors"]
             ),
             encoding="utf-8",

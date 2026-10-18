@@ -93,6 +93,8 @@ export interface EnginesList {
 export interface EngineState {
   engine: string | null;
   endpoint?: string;
+  /** True only for memory started and owned by this app. Older cores omit it. */
+  managed_local?: boolean;
   has_key: boolean;
   status: EngineStatus;
   reason?: string;
@@ -701,6 +703,11 @@ export function memoryEngineGet(): Promise<EngineState> {
 
 export function memoryEngineSet(req: EngineSetRequest): Promise<EngineState> {
   return call<EngineState>(CORE_RPC_METHODS.memoryEngineSet, req);
+}
+
+/** One-click desktop-managed CortexDB. Requires a working Docker installation. */
+export function memoryLocalStart(): Promise<EngineState> {
+  return call<EngineState>(CORE_RPC_METHODS.memoryLocalStart);
 }
 
 // ─── Recall / fetch / store ──────────────────────────────────────────────────

@@ -2,7 +2,8 @@ import * as Sentry from '@sentry/react';
 import { useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
 import {
-  HashRouter as Router,
+  createHashRouter,
+  RouterProvider,
   useLocation,
   useNavigate,
   useNavigationType,
@@ -11,7 +12,6 @@ import { PersistGate } from 'redux-persist/integration/react';
 
 import AppRoutes from './AppRoutes';
 import { AnalyticsPageTracker } from './components/analytics';
-import AnnouncementGate from './components/Announcement/AnnouncementGate';
 import AppBackground from './components/AppBackground';
 import AppUpdatePrompt from './components/AppUpdatePrompt';
 import BootCheckGate from './components/BootCheckGate/BootCheckGate';
@@ -72,7 +72,9 @@ if (import.meta.hot) {
   import.meta.hot.dispose(stopBootServicesForHmr);
 }
 
-function App() {
+type AppDataRouterInstance = ReturnType<typeof createHashRouter>;
+
+function App({ router }: { router: AppDataRouterInstance }) {
   const onMobile = getIsMobile();
 
   // The desktop shell is one webview with no back button, so a link that
@@ -113,7 +115,7 @@ function App() {
    * 7. CoreStateProvider — Core app snapshot: auth, session, onboarding state
    * 8. SocketProvider — Core socket.io events; desktop only (mobile uses the TunnelTransport relay)
    * 9. ChatRuntimeProvider — Chat runtime events, tool timeline, and approvals
-   * 10. Router — HashRouter navigation for all routes
+   * 10. AppDataRouter — Hash-based data routing that supports navigation blockers
    * 11. CommandProvider — Command palette context
    * 12. ServiceBlockingGate — Blocks the shell until required services are configured
    * @end-source:provider-chain
@@ -140,20 +142,7 @@ function App() {
                   <CoreStateProvider>
                     {socketWrapped(
                       <ChatRuntimeProvider>
-                        <Router>
-                          <CommandProvider>
-                            <ServiceBlockingGate>
-                              <AnalyticsPageTracker />
-                              <AppShell />
-                              <SecurityBanner />
-                              {!onMobile && <DictationHotkeyManager />}
-                              {!onMobile && <PttHotkeyManager />}
-                              {!onMobile && <AppUpdatePrompt />}
-                              <KeyringConsentOverlay />
-                              <AnnouncementGate />
-                            </ServiceBlockingGate>
-                          </CommandProvider>
-                        </Router>
+                        <AppDataRouter router={router} />
                       </ChatRuntimeProvider>
                     )}
                   </CoreStateProvider>
@@ -167,10 +156,50 @@ function App() {
   );
 }
 
+/**
+ * Use a hash-based data router so edited workflows can block any client-side
+ * navigation, including sidebar actions, shortcuts, the command palette and
+ * history navigation. A plain HashRouter does not expose useBlocker.
+ *
+ * main.tsx creates this once after hash and user bootstrap, before rendering
+ * React. Keeping creation outside render avoids duplicate history listeners
+ * during StrictMode replay and preserves direct-entry hashes.
+ */
+export function createAppDataRouter(): AppDataRouterInstance {
+  return createHashRouter([{ path: '/*', element: <AppDataRoutes /> }]);
+}
+
+function AppDataRoutes() {
+  const onMobile = getIsMobile();
+  return (
+    <CommandProvider>
+      <ServiceBlockingGate>
+        <AnalyticsPageTracker />
+        <AppShell />
+        <SecurityBanner />
+        {!onMobile && <DictationHotkeyManager />}
+        {!onMobile && <PttHotkeyManager />}
+        {!onMobile && <AppUpdatePrompt />}
+        <KeyringConsentOverlay />
+        {/* Runtime notices and announcements remain available across routes on
+            desktop and mobile without interrupting the current task. */}
+        <NoticeCenter />
+      </ServiceBlockingGate>
+    </CommandProvider>
+  );
+}
+
+function AppDataRouter({ router }: { router: AppDataRouterInstance }) {
+  return <RouterProvider router={router} />;
+}
+
 /** Minimal mobile shell — renders routes only, no desktop chrome. */
 function AppShellMobile() {
   return (
-    <div className="relative h-screen flex flex-col overflow-hidden bg-[#0f1117]">
+    <div
+      className="relative h-screen flex flex-col overflow-hidden bg-[#0f1117]"
+      data-app-focus-fallback
+      tabIndex={-1}>
       <AppRoutes />
     </div>
   );
@@ -285,11 +314,6 @@ export function AppShellDesktop() {
           )}
         </div>
         <OpenhumanLinkModal />
-        {/* Every notice the app raises, in one bottom-left FAB: classified
-            runtime errors (#3931), the memory-embedding budget (#5324), plan
-            usage limits. Mounted outside the routes so entries survive route
-            changes and background-job completion. */}
-        <NoticeCenter />
         {/* Post-onboarding Joyride walkthrough — mounted here (outside routes) so
             it persists across tab navigations. Joyride targets span Home + the
             sidebar nav so it must stay mounted while the user moves between routes. */}

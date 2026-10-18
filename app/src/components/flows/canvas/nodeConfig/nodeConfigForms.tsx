@@ -36,7 +36,6 @@ import {
 } from './composioFields';
 import { DedupForm } from './dedupFields';
 import { LoopForm } from './loopFields';
-import { GatherForm, ScatterForm } from './parallelFields';
 import { MemoryForm } from './memoryFields';
 import { NATIVE_TOOL_PREFIX, NativeToolField } from './nativeToolFields';
 import {
@@ -51,6 +50,7 @@ import {
   TextField,
   UpstreamInsertSelect,
 } from './nodeConfigFields';
+import { GatherForm, ScatterForm } from './parallelFields';
 import { ScheduleField } from './ScheduleField';
 import type { UpstreamExpressionOption } from './upstreamOptions';
 

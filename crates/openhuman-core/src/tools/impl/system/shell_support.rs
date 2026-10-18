@@ -11,7 +11,9 @@ pub(super) const COMMAND_TIMEOUT_NOTE: &str = "[exit 124: the command's own `tim
 
 /// The result when the tool's own `timeout_secs` deadline killed the command.
 pub(super) fn tool_timeout_message(secs: u64) -> String {
-    format!("Command timed out after {secs}s and was killed: the shell tool's timeout_secs limit fired.")
+    format!(
+        "Command timed out after {secs}s and was killed: the shell tool's timeout_secs limit fired."
+    )
 }
 
 /// [`tinytools::command_failure`], plus [`COMMAND_TIMEOUT_NOTE`] on exit 124.
@@ -54,6 +56,50 @@ pub(super) fn exec_result(
     }
 }
 
+/// Maximum output size in bytes (1MB).
+#[cfg(feature = "modules")]
+const MAX_OUTPUT_BYTES: usize = 1_048_576;
+#[cfg(feature = "modules")]
+pub(super) fn docker_module_result(
+    output: crate::modules::tinybox::contract::DockerRunOutput,
+    explicit_timeout: Option<Duration>,
+) -> ToolResult {
+    let mut stdout = output.stdout;
+    let mut stderr = output.stderr;
+    if stdout.len() > MAX_OUTPUT_BYTES {
+        stdout.truncate(crate::util::floor_char_boundary(&stdout, MAX_OUTPUT_BYTES));
+        stdout.push_str("\n... [output truncated at 1MB]");
+    }
+    if stderr.len() > MAX_OUTPUT_BYTES {
+        stderr.truncate(crate::util::floor_char_boundary(&stderr, MAX_OUTPUT_BYTES));
+        stderr.push_str("\n... [stderr truncated at 1MB]");
+    }
+
+    if output.timed_out {
+        let secs = explicit_timeout
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        let mut message = tool_timeout_message(secs);
+        if !stdout.is_empty() {
+            message.push_str("\n[stdout]\n");
+            message.push_str(&stdout);
+        }
+        if !stderr.is_empty() {
+            message.push_str("\n[stderr]\n");
+            message.push_str(&stderr);
+        }
+        ToolResult::error(message)
+    } else if output.exit_code == 0 {
+        if stderr.is_empty() {
+            ToolResult::success(stdout)
+        } else {
+            ToolResult::success(format!("{stdout}\n[stderr]\n{stderr}"))
+        }
+    } else {
+        command_failure(Some(output.exit_code), &stdout, &stderr)
+    }
+}
+
 /// Python's text-encoding defaults for a child, unless the parent sets its own.
 /// Under `cmd.exe` the console code page is a legacy one (cp1252, cp437), so a
 /// script printing anything outside it dies with `UnicodeEncodeError`. Both are
@@ -78,20 +124,57 @@ pub(super) fn python_utf8_env(
 /// The host environment a Docker container receives: the sandbox allowlist from
 /// the parent plus the Python encoding defaults. `None` when a value is not UTF-8.
 #[cfg(feature = "modules")]
-pub(super) fn container_environment() -> Option<std::collections::BTreeMap<String, String>> {
+pub(super) fn container_environment(
+    explicit: Option<&std::collections::BTreeMap<String, String>>,
+) -> Option<std::collections::BTreeMap<String, String>> {
     let mut env = std::collections::BTreeMap::new();
-    let inherited = crate::sandbox::ops::SANDBOX_ENV_PASSTHROUGH
-        .iter()
-        .filter_map(|name| {
-            tinytools_std::timeout::CommandEnvironment::var_os(name).map(|value| (*name, value))
-        })
-        .chain(python_utf8_env(
-            tinytools_std::timeout::CommandEnvironment::var_os,
-        ));
+    if let Some(explicit) = explicit {
+        env.extend(
+            explicit
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone())),
+        );
+    }
+    let inherited = if explicit.is_none() {
+        crate::sandbox::ops::SANDBOX_ENV_PASSTHROUGH
+            .iter()
+            .filter_map(|name| {
+                tinytools_std::timeout::CommandEnvironment::var_os(name).map(|value| (*name, value))
+            })
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    }
+    .into_iter()
+    .chain(python_utf8_env(|name| {
+        explicit
+            .and_then(|overrides| overrides.get(name).map(std::ffi::OsString::from))
+            .or_else(|| {
+                explicit
+                    .is_none()
+                    .then(|| tinytools_std::timeout::CommandEnvironment::var_os(name))
+                    .flatten()
+            })
+    }));
     for (name, value) in inherited {
         env.insert(name.to_owned(), value.into_string().ok()?);
     }
     Some(env)
+}
+
+/// Add the explicit turn environment to a sandbox command request.
+pub(super) fn extend_explicit_environment(
+    environment: &mut std::collections::HashMap<std::ffi::OsString, std::ffi::OsString>,
+    explicit: Option<&std::collections::BTreeMap<String, String>>,
+) {
+    if let Some(explicit) = explicit {
+        environment.extend(explicit.iter().map(|(name, value)| {
+            (
+                std::ffi::OsString::from(name),
+                std::ffi::OsString::from(value),
+            )
+        }));
+    }
 }
 
 /// Recognize only a simple top-level test/build/lint invocation whose OS
@@ -106,7 +189,10 @@ fn verification_kind(command: &str) -> Option<&'static str> {
     let source = command.trim();
     if source.is_empty()
         || source.chars().any(|c| {
-            matches!(c, '|' | '&' | ';' | '<' | '>' | '$' | '\x60' | '\\' | '\'' | '"' | '#' | '\n' | '\r')
+            matches!(
+                c,
+                '|' | '&' | ';' | '<' | '>' | '$' | '\x60' | '\\' | '\'' | '"' | '#' | '\n' | '\r'
+            )
         })
     {
         return None;
@@ -115,9 +201,16 @@ fn verification_kind(command: &str) -> Option<&'static str> {
     if args.iter().any(|arg| {
         matches!(
             *arg,
-            "-h" | "-V" | "--help" | "--version" | "--list" |
-            "-list" | "--collect-only" | "--no-run" | "--dry-run" |
-            "--if-present" | "--passWithNoTests"
+            "-h" | "-V"
+                | "--help"
+                | "--version"
+                | "--list"
+                | "-list"
+                | "--collect-only"
+                | "--no-run"
+                | "--dry-run"
+                | "--if-present"
+                | "--passWithNoTests"
         )
     }) {
         return None;

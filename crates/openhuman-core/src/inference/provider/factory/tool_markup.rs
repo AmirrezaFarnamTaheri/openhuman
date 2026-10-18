@@ -6,6 +6,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use crate::config::schema::cloud_providers::ToolCallCodec;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde_json::{Map, Value};
@@ -15,7 +16,6 @@ use tinyinference_llm::model::{
     ModelRequest, ModelResponse, ModelStream, ModelStreamItem, StreamAccumulator, ToolChoice,
 };
 use tinyinference_llm::tool::{ToolCall, ToolSchema};
-use crate::config::schema::cloud_providers::ToolCallCodec;
 
 #[path = "tool_tagged_json.rs"]
 mod tagged_json;
@@ -39,18 +39,19 @@ fn invalid(reason: &'static str) -> tinyinference_llm::Error {
     tinyinference_llm::Error::Validation(format!("QNML tool-call response: {reason}"))
 }
 
-fn name_and_rest<'a>(
-    raw: &'a str,
-    open: &str,
-) -> tinyinference_llm::Result<(&'a str, &'a str)> {
-    let rest = raw.strip_prefix(open).ok_or_else(|| invalid("expected opening tag"))?;
-    let end = rest.find("\">").ok_or_else(|| invalid("unterminated name attribute"))?;
+fn name_and_rest<'a>(raw: &'a str, open: &str) -> tinyinference_llm::Result<(&'a str, &'a str)> {
+    let rest = raw
+        .strip_prefix(open)
+        .ok_or_else(|| invalid("expected opening tag"))?;
+    let end = rest
+        .find("\">")
+        .ok_or_else(|| invalid("unterminated name attribute"))?;
     let name = &rest[..end];
     if name.is_empty()
         || name.len() > 128
-        || !name.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.')
-        })
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
     {
         return Err(invalid("invalid tool or parameter name"));
     }
@@ -175,7 +176,10 @@ fn prepare_compat_request(
     }
     let declared = allowed_qnml_tools(&request);
     if declared.is_empty() {
-        if matches!(request.tool_choice, ToolChoice::Required | ToolChoice::Tool(_)) {
+        if matches!(
+            request.tool_choice,
+            ToolChoice::Required | ToolChoice::Tool(_)
+        ) {
             return Err(invalid("selected or required tool was not declared"));
         }
         if codec == ToolCallCodec::Qnml {
@@ -190,9 +194,14 @@ fn prepare_compat_request(
     let tools_json = serde_json::to_string(&declared)
         .map_err(|_| invalid("unable to serialize declared tools"))?;
     if tools_json.len() > MAX_TOOL_PROMPT_BYTES {
-        return Err(invalid("declared tool schema exceeds protocol prompt limit"));
+        return Err(invalid(
+            "declared tool schema exceeds protocol prompt limit",
+        ));
     }
-    let require_tool = matches!(request.tool_choice, ToolChoice::Required | ToolChoice::Tool(_));
+    let require_tool = matches!(
+        request.tool_choice,
+        ToolChoice::Required | ToolChoice::Tool(_)
+    );
     let instruction = match codec {
         ToolCallCodec::Qnml => format!(
             r#"2API QNML tool transport. Use only the declared tools below.
@@ -257,9 +266,15 @@ fn enforce_tool_choice(
             Err(invalid("selected tool call missing from model response"))
         }
         ToolChoice::Tool(name)
-            if response.message.tool_calls.iter().any(|call| call.name != *name) =>
+            if response
+                .message
+                .tool_calls
+                .iter()
+                .any(|call| call.name != *name) =>
         {
-            Err(invalid("gateway returned a tool outside the named tool choice"))
+            Err(invalid(
+                "gateway returned a tool outside the named tool choice",
+            ))
         }
         ToolChoice::None if !response.message.tool_calls.is_empty() => {
             Err(invalid("gateway returned a tool despite tool_choice none"))
@@ -380,7 +395,10 @@ impl ChatModel<()> for TextToolCompatModel {
         let choice = request.tool_choice.clone();
         let prepared = prepare_compat_request(request, self.codec)?;
         let response = self.inner.invoke(state, prepared).await?;
-        enforce_tool_choice(rewrite_text_codec_response(response, &declared, self.codec)?, &choice)
+        enforce_tool_choice(
+            rewrite_text_codec_response(response, &declared, self.codec)?,
+            &choice,
+        )
     }
 
     async fn stream(
@@ -405,9 +423,8 @@ impl ChatModel<()> for TextToolCompatModel {
             // rogue ToolCallDelta or terminal native tool-call response.
             let live = self.inner.stream(state, prepared).await?;
             let metadata = live.metadata().clone();
-            let guarded = futures::stream::unfold(
-                (live, false),
-                |(mut upstream, stopped)| async move {
+            let guarded =
+                futures::stream::unfold((live, false), |(mut upstream, stopped)| async move {
                     if stopped {
                         return None;
                     }
@@ -415,22 +432,26 @@ impl ChatModel<()> for TextToolCompatModel {
                     let (event, terminal) = match event {
                         ModelStreamItem::ToolCallDelta(_) => (
                             ModelStreamItem::Failed(
-                                "gateway emitted native tool-call data while tools were disabled".into(),
+                                "gateway emitted native tool-call data while tools were disabled"
+                                    .into(),
                             ),
                             true,
                         ),
                         ModelStreamItem::Completed(ref response)
-                            if !response.message.tool_calls.is_empty() => (
-                            ModelStreamItem::Failed(
-                                "gateway returned native tool calls while tools were disabled".into(),
-                            ),
-                            true,
-                        ),
+                            if !response.message.tool_calls.is_empty() =>
+                        {
+                            (
+                                ModelStreamItem::Failed(
+                                    "gateway returned native tool calls while tools were disabled"
+                                        .into(),
+                                ),
+                                true,
+                            )
+                        }
                         other => (other, false),
                     };
                     Some((event, (upstream, terminal)))
-                },
-            );
+                });
             return Ok(ModelStream::new(Box::pin(guarded)).with_metadata(metadata));
         }
         let mut original = self.inner.stream(state, prepared).await?;

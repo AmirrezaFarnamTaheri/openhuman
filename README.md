@@ -53,6 +53,12 @@
 
 ## Install
 
+> **Which build am I installing?** The download links and installer scripts below
+> are maintained by the upstream OpenHuman project (`tinyhumansai/openhuman`).
+> They do **not** install a build of this fork. To run this fork's code, follow
+> its local development/build instructions or use a release published in this
+> repository, if one is available.
+
 The easiest way is to download the desktop app from [tinyhumans.ai/openhuman](https://tinyhumans.ai/openhuman?utm_source=github&utm_medium=readme) or the [latest release](https://github.com/tinyhumansai/openhuman/releases/latest). There is a `.dmg` for macOS, an `.msi` or `.exe` for Windows, and a `.deb` or `.AppImage` for Linux.
 
 Prefer the terminal? The install script picks the right package for your system, checks its checksum and installs it:

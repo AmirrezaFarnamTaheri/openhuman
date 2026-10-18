@@ -203,6 +203,70 @@ describe('tool chips', () => {
   });
 });
 
+describe('structural tool presentation', () => {
+  it.each([
+    ['ast_outline', 'Analyzed code'],
+    ['ast_symbol', 'Read file'],
+    ['ast_patch', 'Applied edits'],
+    ['chunk_search', 'Searched code'],
+    ['chunk_inspect', 'Analyzed code'],
+    ['chunk_apply', 'Applied edits'],
+  ])('gives %s an explicit code label and a generic receipt body', (name, expected) => {
+    const presentation = describeToolCall({ name, status: 'success' });
+    expect(toolLabel(presentation)).toBe(expected);
+    expect(presentation.source).toBe('exact');
+    expect(presentation.category).toBe('code');
+    expect(presentation.body).toBe('generic');
+  });
+
+  it.each(['ast_patch', 'chunk_apply'])(
+    'describes only literal true previews of %s as reading changes',
+    name => {
+      expect(active(name, { path: 'src/lib.rs', dry_run: true })).toBe('Reading changes');
+      expect(done(name, { path: 'src/lib.rs', dry_run: true })).toBe('Read changes');
+      for (const dry_run of [undefined, false, 'true', null, 1]) {
+        expect(done(name, { path: 'src/lib.rs', dry_run })).toBe('Applied edits');
+      }
+    }
+  );
+
+  it.each(['ast_patch', 'chunk_apply'])(
+    'preserves literal preview semantics for packed and deferred %s calls',
+    name => {
+      for (const dry_run of [true, false, 'true']) {
+        const packed = { skill: 'coding', tool: name, args: { path: 'src/lib.rs', dry_run } };
+        const expected = dry_run === true ? 'Read changes' : 'Applied edits';
+        expect(done('use_skill', packed)).toBe(expected);
+        const deferred = describeToolCall({
+          name: 'tool_call',
+          args: JSON.stringify({ name: 'use_skill', arguments: packed }),
+          status: 'success',
+        });
+        expect(toolLabel(deferred)).toBe(expected);
+        expect(deferred.baseName).toBe(name);
+        expect(deferred.body).toBe('generic');
+        expect(deferred.chip).toBe('src/lib.rs');
+      }
+    }
+  );
+
+  it('keeps pack disclosure skill-labeled and translates structural labels through existing keys', () => {
+    expect(done('use_skill', { skill: 'coding' })).toBe('Used skill');
+    expect(done('use_skill', { skill: 'coding', tool: 'unknown' })).toBe('Used skill');
+    expect(done('use_skill', { skill: 'code', tool: 'ast_patch', args: { dry_run: true } })).toBe(
+      'Used skill'
+    );
+    const presentation = describeToolCall({
+      name: 'ast_patch',
+      args: { dry_run: true },
+      status: 'success',
+    });
+    const t = (key: string, fallback?: string) =>
+      key === 'conversations.tools.readChanges.done' ? 'Änderungen gelesen' : (fallback ?? key);
+    expect(toolLabel(presentation, t)).toBe('Änderungen gelesen');
+  });
+});
+
 describe('tool labels: translation', () => {
   it('serves the label through the phrase key and fills placeholders', () => {
     const t = (key: string, fallback?: string) =>

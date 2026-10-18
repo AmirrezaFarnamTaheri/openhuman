@@ -335,13 +335,20 @@ export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 # where it exists so the CI path is unchanged: it also detaches the controlling
 # terminal, making the core a full session leader rather than only a process
 # group leader.
+# The binding check below needs the RPC server's INFO record. Preserve the
+# caller's diagnostics while enabling that target for this core process only,
+# including shells that default to RUST_LOG=warn or disable the RPC target.
+# File constraints can hide the same record, so keep those on the caller only.
+E2E_CORE_RUST_LOG="${RUST_LOG:-info},openhuman_rpc::server::serve=info"
 if command -v setsid >/dev/null 2>&1; then
-  env HOME="$E2E_WEB_CORE_HOME" setsid "$OPENHUMAN_CORE_BIN" run --host 127.0.0.1 --port "$OPENHUMAN_CORE_PORT" \
+  env HOME="$E2E_WEB_CORE_HOME" RUST_LOG="$E2E_CORE_RUST_LOG" OPENHUMAN_LOG_FILE_CONSTRAINTS="" \
+    setsid "$OPENHUMAN_CORE_BIN" run --host 127.0.0.1 --port "$OPENHUMAN_CORE_PORT" \
     >"$OPENHUMAN_WORKSPACE/core.log" 2>&1 &
   CORE_PID=$!
 else
   set -m
-  env HOME="$E2E_WEB_CORE_HOME" "$OPENHUMAN_CORE_BIN" run --host 127.0.0.1 --port "$OPENHUMAN_CORE_PORT" \
+  env HOME="$E2E_WEB_CORE_HOME" RUST_LOG="$E2E_CORE_RUST_LOG" OPENHUMAN_LOG_FILE_CONSTRAINTS="" \
+    "$OPENHUMAN_CORE_BIN" run --host 127.0.0.1 --port "$OPENHUMAN_CORE_PORT" \
     >"$OPENHUMAN_WORKSPACE/core.log" 2>&1 &
   CORE_PID=$!
   set +m

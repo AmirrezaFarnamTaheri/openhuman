@@ -30,6 +30,8 @@ concurrency:
 jobs:
   route:
     name: Route (org members → EX63)
+    # A fork cannot use upstream's EX63 runner group; skip API calls entirely.
+    if: github.repository == 'tinyhumansai/openhuman'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

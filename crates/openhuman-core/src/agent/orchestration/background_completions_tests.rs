@@ -1,5 +1,6 @@
 use super::*;
 use crate::core::runtime::DispatchCtx;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tinyagents_tasks::CompletionStatus;
 use tokio::sync::MutexGuard;
 
@@ -282,30 +283,6 @@ fn record_failure_queues_a_framed_failure_for_delivery() {
 }
 
 #[test]
-fn record_awaiting_input_queues_a_framed_needs_input_for_delivery() {
-    let _guard = test_guard();
-    let ws = workspace();
-    let w = ws.path();
-    futures::executor::block_on(record_awaiting_input(
-        &cx(),
-        w,
-        "sess-ask",
-        "sub-ask",
-        "researcher",
-        "which repo?",
-        true,
-        Some("thread-ask".into()),
-    ));
-    let pending = pending_for(w, "thread-ask");
-    assert_eq!(pending.len(), 1);
-    assert_eq!(
-        BackgroundAgentOutcome::of(&pending[0]),
-        BackgroundAgentOutcome::AwaitingInput
-    );
-    assert!(pending[0].result.text.contains("which repo?"));
-}
-
-#[test]
 fn the_outcome_survives_a_claim() {
     let _guard = test_guard();
     let ws = workspace();
@@ -552,26 +529,45 @@ fn clear_all_also_withdraws_a_completion_a_delivery_has_leased() {
 
 #[test]
 fn the_session_cache_evicts_its_oldest_mapping_only() {
-    let _guard = test_guard();
+    // Concurrent lib tests also write into the process-global registry. Test
+    // the production eviction operation on private state instead.
+    let mut st = HostState::default();
+    let ctx = cx();
     for i in 0..(SESSION_THREADS_CAP + 5) {
-        note_session_thread(
-            &cx(),
-            &format!("evict-sess-{i}"),
+        thread_index::remember_session_thread(
+            &mut st,
+            key(&ctx, &format!("evict-sess-{i}")),
             &format!("evict-thread-{i}"),
         );
     }
-    assert_eq!(
-        thread_for_session(&cx(), "evict-sess-0"),
-        None,
+    assert_eq!(st.session_threads.len(), SESSION_THREADS_CAP);
+    assert_eq!(st.session_order.len(), SESSION_THREADS_CAP);
+    assert!(
+        !st.session_threads.contains_key(&key(&ctx, "evict-sess-0")),
         "oldest evicted"
     );
     for survivor in [5, SESSION_THREADS_CAP / 2, SESSION_THREADS_CAP + 4] {
         assert_eq!(
-            thread_for_session(&cx(), &format!("evict-sess-{survivor}")).as_deref(),
+            st.session_threads
+                .get(&key(&ctx, &format!("evict-sess-{survivor}")))
+                .map(String::as_str),
             Some(format!("evict-thread-{survivor}").as_str()),
             "a surviving session still resolves to its own thread"
         );
     }
+}
+
+#[test]
+fn the_session_cache_update_does_not_duplicate_fifo_entries() {
+    let mut st = HostState::default();
+    thread_index::remember_session_thread(&mut st, "one-session".to_owned(), "original-thread");
+    thread_index::remember_session_thread(&mut st, "one-session".to_owned(), "updated-thread");
+    assert_eq!(st.session_order.len(), 1);
+    assert_eq!(st.session_threads.len(), 1);
+    assert_eq!(
+        st.session_threads.get("one-session").map(String::as_str),
+        Some("updated-thread")
+    );
 }
 
 #[test]
@@ -632,60 +628,5 @@ fn a_completion_for_a_removed_workspace_does_not_recreate_it() {
     assert!(!gone.exists(), "the workspace directory is not recreated");
 }
 
-/// A store whose writes always fail, like a full disk.
-struct FullDisk(InMemoryCompletionStore);
-
-impl CompletionStore for FullDisk {
-    fn get(&self, task_id: &str) -> Option<CompletionRecord> {
-        self.0.get(task_id)
-    }
-    fn put(&self, _record: &CompletionRecord) -> tinyagents_harness::error::Result<()> {
-        Err(tinyagents_harness::error::TinyAgentsError::Graph(
-            "disk full".into(),
-        ))
-    }
-    fn list(&self, parent_key: Option<&str>) -> Vec<CompletionRecord> {
-        self.0.list(parent_key)
-    }
-}
-
-#[tokio::test]
-async fn a_store_that_keeps_failing_degrades_to_memory_instead_of_losing_the_result() {
-    let _guard = crate::config::TEST_ENV_LOCK.lock().await;
-    let ws = workspace();
-    let w = ws.path();
-    install_store_for_test(w, Arc::new(FullDisk(InMemoryCompletionStore::new())));
-
-    record_completion(
-        &cx(),
-        w,
-        "sess-fd",
-        "sub-1",
-        "researcher",
-        "must not be lost",
-        Some("thread-fd".into()),
-    )
-    .await;
-
-    let pending = pending_for(w, "thread-fd");
-    assert_eq!(pending.len(), 1, "the result is held in memory");
-    assert_eq!(pending[0].result.text, "must not be lost");
-}
-
-#[tokio::test]
-async fn concurrent_degradation_installs_one_fallback() {
-    let _guard = crate::config::TEST_ENV_LOCK.lock().await;
-    let ws = workspace();
-    let w = ws.path();
-    let failing = router_for_workspace(w);
-
-    // Two records saw the same failing router; both ask to degrade.
-    let first = degrade_to_memory(w, &failing);
-    let second = degrade_to_memory(w, &failing);
-
-    assert!(
-        Arc::ptr_eq(&first.router, &second.router),
-        "the second caller reuses the fallback the first installed"
-    );
-    assert!(Arc::ptr_eq(&entry_for(w).router, &first.router));
-}
+#[path = "background_completions_migration_tests.rs"]
+mod migration_tests;

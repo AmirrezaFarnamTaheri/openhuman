@@ -299,6 +299,62 @@ test("--all walks the tracked tree", () => {
   );
 });
 
+for (const fallback of [false, true]) {
+  const discovery = fallback ? "filesystem fallback" : "tracked Git tree";
+  test(`--all requires TinyHumans records through the ${discovery}`, (t) => {
+    const core = "crates/openhuman-core/src/covered.rs";
+    const rootSource = "crates/openhuman-tinyhumans/src/install.rs";
+    const nestedSource = "crates/openhuman-tinyhumans/src/backend/product.rs";
+    const files = {
+      [core]: WITH_FN,
+      [rootSource]: WITH_FN,
+      [nestedSource]: WITH_FN,
+      "crates/openhuman-tinyhumans/src/lib.rs": WITH_FN,
+      "crates/openhuman-tinyhumans/src/install_tests.rs": WITH_FN,
+      "crates/openhuman-tinyhumans/src/backend/mod.rs": NO_FN,
+    };
+    const env = {};
+    if (fallback) {
+      const bin = fs.mkdtempSync(path.join(os.tmpdir(), "openhuman-fakegit-"));
+      t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+      fs.writeFileSync(path.join(bin, "git"), "#!/bin/sh\nexit 128\n", {
+        mode: 0o755,
+      });
+      env.PATH = `${bin}:${process.env.PATH}`;
+    }
+
+    // A covered core file keeps the old omission from being caught only by
+    // the zero-candidate guard: it incorrectly reported a successful scan.
+    const missing = run(files, [core], ["--all"], null, env);
+    assert.equal(missing.status, 1, missing.output);
+    assert.match(missing.output, /checked 3 eligible/);
+    assert.match(
+      missing.output,
+      /crates\/openhuman-tinyhumans\/src\/install\.rs produced no coverage records/,
+    );
+    assert.match(
+      missing.output,
+      /crates\/openhuman-tinyhumans\/src\/backend\/product\.rs produced no coverage records/,
+    );
+    assert.match(
+      missing.output,
+      fallback
+        ? /falling back to a filesystem walk/
+        : /enumerating tracked sources/,
+    );
+
+    const complete = run(
+      files,
+      [core, rootSource, nestedSource],
+      ["--all"],
+      null,
+      env,
+    );
+    assert.equal(complete.status, 0, complete.output);
+    assert.match(complete.output, /checked 3 eligible/);
+  });
+}
+
 test("--all still enumerates when git ls-files fails (CI dubious-ownership)", () => {
   // Regression for run 32367545922: actions/checkout registers `safe.directory`
   // under a temporarily overridden HOME, so `git ls-files` in a later step dies

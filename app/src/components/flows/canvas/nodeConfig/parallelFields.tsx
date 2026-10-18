@@ -9,7 +9,12 @@
  */
 import { useT } from '../../../../lib/i18n/I18nContext';
 import {
-  configNumber, configString, NumberField, SelectField, TextAreaField, TextField,
+  configNumber,
+  configString,
+  NumberField,
+  SelectField,
+  TextAreaField,
+  TextField,
 } from './nodeConfigFields';
 
 interface ParallelFormProps {
@@ -58,19 +63,30 @@ export function GatherForm({ config, onChange }: ParallelFormProps) {
         value={from}
         rows={3}
         mono
-        onChange={value => onChange({
-          from: [...new Set(value.split(/[\n,]/).map(id => id.trim()).filter(Boolean))],
-        })}
+        onChange={value =>
+          onChange({
+            from: [
+              ...new Set(
+                value
+                  .split(/[\n,]/)
+                  .map(id => id.trim())
+                  .filter(Boolean)
+              ),
+            ],
+          })
+        }
         testId="node-config-gather-sources"
       />
       <SelectField
         label={t('flows.nodeConfig.gather.releaseLabel')}
         value={release}
-        onChange={value => onChange(
-          value === 'first_n' || value === 'quorum'
-            ? { release: value, n: configNumber(config, 'n') ?? 1 }
-            : { release: value }
-        )}
+        onChange={value =>
+          onChange(
+            value === 'first_n' || value === 'quorum'
+              ? { release: value, n: configNumber(config, 'n') ?? 1 }
+              : { release: value }
+          )
+        }
         testId="node-config-gather-release"
         options={[
           { value: 'all', label: t('flows.nodeConfig.gather.release_all') },

@@ -194,6 +194,23 @@ describe('FlowCanvasPage', () => {
     expect(screen.getByText('core unreachable')).toBeInTheDocument();
   });
 
+  it('retries a transient workflow load error without losing the requested flow', async () => {
+    getFlow
+      .mockRejectedValueOnce(new Error('temporary core outage'))
+      .mockResolvedValueOnce(makeFlow());
+    renderAtFlowId('test-id');
+
+    expect(await screen.findByTestId('flow-canvas-error')).toHaveTextContent(
+      'temporary core outage'
+    );
+
+    fireEvent.click(screen.getByTestId('flow-canvas-retry'));
+
+    expect(await screen.findByTestId('flow-canvas')).toBeInTheDocument();
+    expect(getFlow).toHaveBeenCalledTimes(2);
+    expect(getFlow).toHaveBeenLastCalledWith('test-id');
+  });
+
   describe('run-error banner (#flows-canvas-error-banner)', () => {
     // Run always goes through the header icon → confirm popup → accept, same
     // as a real user flow (see `handleRun` wiring around `confirmAction`).
@@ -631,6 +648,36 @@ describe('FlowCanvasPage', () => {
     // Pristine → straight to the list, no confirmation dialog.
     await waitFor(() => expect(screen.getByTestId('flows-list')).toBeInTheDocument());
     expect(screen.queryByTestId('flow-leave-confirm')).not.toBeInTheDocument();
+  });
+
+  it('leaves a dirty deep link after its initial history entry was replaced', async () => {
+    getFlow.mockResolvedValue(makeFlow());
+    const previousHistory = window.history.state;
+    window.history.replaceState({ ...previousHistory, idx: 0 }, '');
+    const router = createMemoryRouter(
+      [
+        { path: '/flows/:id', element: <FlowCanvasPage /> },
+        { path: '/flows', element: <div data-testid="flows-list">Flows list</div> },
+      ],
+      { initialEntries: [{ pathname: '/flows/test-id', key: 'replaced-deep-link' }] }
+    );
+    try {
+      render(
+        <SidebarSlotProvider>
+          <SidebarSlotOutlet />
+          <RouterProvider router={router} />
+        </SidebarSlotProvider>
+      );
+      await screen.findByTestId('flow-canvas');
+      fireEvent.click(screen.getByTestId('flow-canvas-legend-toggle'));
+      fireEvent.click(screen.getByTestId('flow-palette-item-agent'));
+      fireEvent.click(screen.getByTestId('flow-canvas-back'));
+      fireEvent.click(await screen.findByTestId('flow-leave-discard'));
+      await waitFor(() => expect(router.state.location.pathname).toBe('/flows'));
+      expect(screen.queryByTestId('flow-leave-confirm')).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState(previousHistory, '');
+    }
   });
 
   it('prompts before leaving when dirty, and discards to navigate away', async () => {

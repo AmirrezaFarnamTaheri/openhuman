@@ -6,11 +6,31 @@ use chrono::{Duration as ChronoDuration, Timelike, Utc};
 use std::sync::Arc;
 use tempfile::TempDir;
 use tinyagents_harness::agent_error::AgentError;
-use tinyflows_schedule::types::JobType;
-use tinyflows_schedule::types::SessionTarget;
+use tinyflows_bus::schedule::types::JobType;
+use tinyflows_bus::schedule::types::SessionTarget;
 use {
-    crate::cron, tinyflows_schedule::types::ActiveHours, tinyflows_schedule::types::DeliveryConfig,
+    crate::cron, tinyflows_bus::schedule::types::ActiveHours,
+    tinyflows_bus::schedule::types::DeliveryConfig,
 };
+
+#[test]
+fn scheduler_config_stays_within_the_released_schedule_v3_subset() {
+    let mut config = Config::default();
+    config.reliability.scheduler_poll_secs = 17;
+    config.scheduler.max_concurrent = 3;
+    config.reliability.scheduler_retries = 2;
+    config.reliability.provider_backoff_ms = 700;
+    let wire = scheduler_config(&config);
+    assert_eq!(wire["poll_secs"], 17);
+    assert_eq!(wire["max_concurrent"], 3);
+    assert_eq!(wire["retries"], 2);
+    assert_eq!(wire["backoff_ms"], 700);
+    assert_eq!(wire.as_object().unwrap().len(), 4);
+    assert!(
+        wire.get("now").is_none(),
+        "fixed-clock mode needs Schedule v4"
+    );
+}
 
 async fn test_config(tmp: &TempDir) -> Config {
     let ws = tmp.path().join("workspace");
@@ -30,9 +50,9 @@ fn test_job(command: &str) -> CronJob {
     CronJob {
         claim_generation: 0,
         policy: Default::default(),
-        id: "test-job".into(),
+        id: format!("test-job-{}", uuid::Uuid::new_v4()),
         expression: "* * * * *".into(),
-        schedule: tinyflows_schedule::types::Schedule::Cron {
+        schedule: tinyflows_bus::schedule::types::Schedule::Cron {
             expr: "* * * * *".into(),
             tz: None,
             active_hours: None,
@@ -236,6 +256,9 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
         "fixture must be read-only, or this test does not exercise the blocked path"
     );
 
+    // The first call in a process starts the module runtime and attaches the
+    // module (seconds); warm it so the timing below measures retry sleeps only.
+    cron::list_jobs(&config).unwrap();
     let started = std::time::Instant::now();
     let (success, output) = execute_job_now(
         &crate::core::runtime::DispatchCtx::ambient(),
@@ -258,7 +281,7 @@ async fn security_policy_block_halts_without_spending_the_retry_budget() {
         attempt_count(&counter)
     );
     assert!(
-        elapsed < std::time::Duration::from_secs(1),
+        elapsed < std::time::Duration::from_millis(config.reliability.provider_backoff_ms) * 2,
         "the loop slept for {elapsed:?} on a deterministic policy refusal. A security block is \
          permanent across the backoff curve and must return on the first attempt; retrying it \
          only delays the user's error by the full retry budget (here about 4 s)."

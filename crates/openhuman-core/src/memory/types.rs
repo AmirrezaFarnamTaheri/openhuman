@@ -63,6 +63,9 @@ pub struct EngineView {
     pub endpoint: Option<String>,
     /// Whether a credential is available to the engine.
     pub has_key: bool,
+    /// Whether this connection uses a local server provisioned by OpenHuman.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub managed_local: bool,
     /// Health.
     pub status: EngineStatus,
     /// Why the status is not `ok`.
@@ -115,7 +118,8 @@ pub struct RefersTo {
 /// `memory_recall` result.
 #[derive(Debug, Clone, Serialize)]
 pub struct RecallView {
-    /// The synthesised answer.
+    /// The synthesised answer; in evidence mode
+    /// ([`super::ops::recall_with`]), the recalled evidence as text.
     pub answer: String,
     /// The items it rests on.
     pub citations: Vec<Citation>,

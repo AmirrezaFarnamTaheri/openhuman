@@ -37,7 +37,7 @@ async fn run_builder_gates_does_not_reject_when_signed_out() {
     // Authoring is never blocked by inference readiness (design correction,
     // B45): a signed-out session must NOT appear among `run_builder_gates`'
     // errors for an otherwise-valid agent-node graph.
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(true);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(true);
 
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
@@ -64,7 +64,7 @@ async fn proposal_surfaces_signed_out_inference_status() {
     // The proposal still WARNS about the signed-out state (advisory, never a
     // rejection) so the UI can render a "sign in" nudge alongside the built
     // workflow.
-    let _signed_out = crate::cron::scheduler_gate::SignedOutTestGuard::set(true);
+    let _signed_out = crate::platform::llm_gate::SignedOutTestGuard::set(true);
 
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);
@@ -189,7 +189,7 @@ fn agent_node_role_prefers_custom_registry_entry_model_pin_over_default() {
     // precedence `OpenHumanAgentRunner::run_via_harness` applies via
     // `resolve_node_model(&request, entry_model)`, reusing the same sync,
     // config-only accessor (`find_custom_in_config`) it calls.
-    use crate::agent::registry::types::{AgentRegistryEntry, AgentRegistrySource};
+    use crate::agent_registry::types::{AgentRegistryEntry, AgentRegistrySource};
 
     let tmp = TempDir::new().unwrap();
     let mut config = test_config(&tmp);

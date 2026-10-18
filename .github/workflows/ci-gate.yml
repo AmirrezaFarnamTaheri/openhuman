@@ -17,7 +17,9 @@ name: CI Gate
 on:
   workflow_run:
     workflows: ["CI Fast", "CI Fast (hosted)"]
-    types: [requested, completed]
+    # A required commit status is expected while CI is running; evaluate
+    # only after a flow finishes. Requested + completed doubled these runs.
+    types: [completed]
 
 permissions:
   actions: write # cancel the superseded GitHub-hosted runs

@@ -145,7 +145,12 @@ pub fn resolve(config: &Config, env: EnvLookup<'_>) -> Result<ResolvedRoute, Ran
     // display callers. Actual network routing must be stricter: a typo in an
     // explicitly selected provider must never silently spend a different
     // provider's credentials or send request context to its endpoint.
-    let normalized = config.agent.tool_search.jev_route.trim().to_ascii_lowercase();
+    let normalized = config
+        .agent
+        .tool_search
+        .jev_route
+        .trim()
+        .to_ascii_lowercase();
     if !matches!(
         normalized.as_str(),
         "" | "auto" | "tinyhumans" | "typesafe" | "openrouter"

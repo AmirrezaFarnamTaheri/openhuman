@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { FLEET_MODEL_PRESETS } from '../modelFleetCatalog';
 import {
   applyModelBulkPatch,
-  createSingleFlightRunner,
   applyProviderBulkPatch,
+  createSingleFlightRunner,
   insertFleetKeysAtSelection,
+  keyedProviderDestinationChanges,
   parseFleetApiKeys,
   parseModelImageEndpoints,
   parseModelTransportOverrides,
@@ -13,7 +14,6 @@ import {
   syncModelPresets,
   updateSelectedGroupSettings,
   upsertModelImageEndpoint,
-  keyedProviderDestinationChanges,
   validModelFleetEndpoint,
   validModelFleetImageEndpoint,
 } from '../modelFleetOps';
@@ -173,32 +173,30 @@ describe('model-fleet preset management', () => {
   });
 
   it('parses exact model transport overrides and rejects malformed or duplicated rows', () => {
-    expect(parseModelTransportOverrides(
-      'vendor/response = responses\nvendor/chat = chat_completions'
-    )).toEqual({
-      'vendor/response': 'responses',
-      'vendor/chat': 'chat_completions',
-    });
+    expect(
+      parseModelTransportOverrides('vendor/response = responses\nvendor/chat = chat_completions')
+    ).toEqual({ 'vendor/response': 'responses', 'vendor/chat': 'chat_completions' });
     expect(parseModelTransportOverrides('')).toEqual({});
     expect(() => parseModelTransportOverrides('x = responses\nx = auto')).toThrow(/Duplicate/);
     expect(() => parseModelTransportOverrides('x = invalid')).toThrow(/Protocol/);
     expect(() => parseModelTransportOverrides('  = responses')).toThrow();
     expect(() => parseModelTransportOverrides('x =')).toThrow();
     expect(() => parseModelTransportOverrides('x = responses\ny')).toThrow();
-    expect(() => parseModelTransportOverrides(
-      Array.from({ length: 513 }, (_, i) => 'model-' + i + ' = responses').join('\n')
-    )).toThrow(/512/);
+    expect(() =>
+      parseModelTransportOverrides(
+        Array.from({ length: 513 }, (_, i) => 'model-' + i + ' = responses').join('\n')
+      )
+    ).toThrow(/512/);
   });
 
   it('matches the Rust 200-byte model ID boundary and rejects prototype-key pollution', () => {
     const exactLimit = 'é'.repeat(100); // 200 bytes of UTF-8
     const overLimit = 'é'.repeat(101); // 202 bytes, but only 101 JS code units
-    expect(parseModelTransportOverrides(`${exactLimit} = responses`)[exactLimit])
-      .toBe('responses');
+    expect(parseModelTransportOverrides(`${exactLimit} = responses`)[exactLimit]).toBe('responses');
     expect(() => parseModelTransportOverrides(`${overLimit} = responses`)).toThrow(/200/);
-    expect(() => parseModelImageEndpoints(
-      `${overLimit} = https://images.example/v1`
-    )).toThrow(/200/);
+    expect(() => parseModelImageEndpoints(`${overLimit} = https://images.example/v1`)).toThrow(
+      /200/
+    );
     const special = parseModelTransportOverrides('__proto__ = responses');
     expect(Object.getPrototypeOf(special)).toBeNull();
     expect(Object.prototype.hasOwnProperty.call(special, '__proto__')).toBe(true);
@@ -266,7 +264,6 @@ describe('model-fleet preset management', () => {
   });
 });
 
-
 describe('image credential transport boundaries', () => {
   it('rejects remote plaintext image URLs through both bulk editing paths', () => {
     const selected = new Set(['ordinary-provider']);
@@ -278,12 +275,12 @@ describe('image credential transport boundaries', () => {
       'http://169.254.169.254/latest/meta-data',
       'http://localhost.evil.example/v1',
     ]) {
-      expect(() => updateSelectedGroupSettings(groups, selected, { imageEndpoint: unsafe })).toThrow(
-        /HTTPS|loopback/
-      );
-      expect(() => applyProviderBulkPatch(configured, selected, { image_endpoint: unsafe })).toThrow(
-        /HTTPS|loopback/
-      );
+      expect(() =>
+        updateSelectedGroupSettings(groups, selected, { imageEndpoint: unsafe })
+      ).toThrow(/HTTPS|loopback/);
+      expect(() =>
+        applyProviderBulkPatch(configured, selected, { image_endpoint: unsafe })
+      ).toThrow(/HTTPS|loopback/);
     }
     expect(groups[0].imageEndpoint).toBe('https://safe.example/v1');
   });
@@ -297,16 +294,21 @@ describe('image credential transport boundaries', () => {
       'http://127.0.0.1:3300/v1',
       'http://[::1]:3300/v1',
     ]) {
-      expect(updateSelectedGroupSettings(groups, selected, { imageEndpoint: safe })[0].imageEndpoint)
-        .toBe(safe);
-      expect(applyProviderBulkPatch(configured, selected, { image_endpoint: safe })[0].image_endpoint)
-        .toBe(safe);
+      expect(
+        updateSelectedGroupSettings(groups, selected, { imageEndpoint: safe })[0].imageEndpoint
+      ).toBe(safe);
+      expect(
+        applyProviderBulkPatch(configured, selected, { image_endpoint: safe })[0].image_endpoint
+      ).toBe(safe);
     }
-    expect(updateSelectedGroupSettings(groups, selected, { imageEndpoint: '' })[0].imageEndpoint).toBe('');
-    expect(applyProviderBulkPatch(configured, selected, { image_endpoint: null })[0].image_endpoint).toBeNull();
+    expect(
+      updateSelectedGroupSettings(groups, selected, { imageEndpoint: '' })[0].imageEndpoint
+    ).toBe('');
+    expect(
+      applyProviderBulkPatch(configured, selected, { image_endpoint: null })[0].image_endpoint
+    ).toBeNull();
   });
 });
-
 
 describe('Model Fleet single-flight persistence', () => {
   it('prevents overlapping writes from rapid repeated clicks and releases after settlement', async () => {
@@ -335,14 +337,25 @@ describe('Model Fleet single-flight persistence', () => {
 
   it('does not permanently lock the panel after a failed persistence call', async () => {
     const singleFlight = createSingleFlightRunner();
-    await expect(singleFlight(async () => { throw new Error('failed write'); }))
-      .rejects.toThrow('failed write');
+    await expect(
+      singleFlight(async () => {
+        throw new Error('failed write');
+      })
+    ).rejects.toThrow('failed write');
     await expect(singleFlight(async () => 'recovered')).resolves.toBe('recovered');
   });
 });
 
-
 describe('model fleet destination parsing safety', () => {
+  it.each(['\u0000', '\u001f', '\u007f'])(
+    'rejects the ASCII control boundary %j in a URL',
+    control => {
+      const endpoint = `https://images.example/v1/${control}image`;
+      expect(validModelFleetEndpoint(endpoint)).toBe(false);
+      expect(validModelFleetImageEndpoint(endpoint)).toBe(false);
+    }
+  );
+
   it('rejects embedded URL control characters that WHATWG URL silently strips', () => {
     expect(validModelFleetEndpoint('https://host.example/v1/\npath')).toBe(false);
     expect(validModelFleetImageEndpoint('https://host.example/v1/\timage')).toBe(false);
@@ -357,11 +370,11 @@ describe('model fleet destination parsing safety', () => {
       (_, index) => 'model-' + index + ' = https://images.example/v1'
     );
     expect(Object.keys(parseModelImageEndpoints(mappings.join('\n')))).toHaveLength(512);
-    expect(() => parseModelImageEndpoints([...mappings, 'overflow = https://images.example/v1'].join('\n')))
-      .toThrow(/512/);
+    expect(() =>
+      parseModelImageEndpoints([...mappings, 'overflow = https://images.example/v1'].join('\n'))
+    ).toThrow(/512/);
   });
 });
-
 
 describe('direct image mapping editor regression contract', () => {
   it('keeps prototype-shaped model IDs as own serializable data keys', () => {
@@ -378,41 +391,64 @@ describe('direct image mapping editor regression contract', () => {
 
   it('enforces the Rust UTF-8 model ID budget and credentialed transport policy', () => {
     const existing = { vision: 'https://vision.example/v1' };
-    expect(() => upsertModelImageEndpoint(existing, 'é'.repeat(101), 'https://images.example/v1'))
-      .toThrow(/200/);
-    expect(() => upsertModelImageEndpoint(existing, 'danger', 'http://remote.example/v1'))
-      .toThrow(/HTTPS|loopback/);
+    expect(() =>
+      upsertModelImageEndpoint(existing, 'é'.repeat(101), 'https://images.example/v1')
+    ).toThrow(/200/);
+    expect(() => upsertModelImageEndpoint(existing, 'danger', 'http://remote.example/v1')).toThrow(
+      /HTTPS|loopback/
+    );
     expect(existing).toEqual({ vision: 'https://vision.example/v1' });
   });
 
   it('refuses a 513th mapping while allowing replacements and removals at capacity', () => {
-    const existing = Object.fromEntries(Array.from(
-      { length: 512 }, (_, index) => ['model-' + index, 'https://images.example/v1']
-    ));
-    expect(() => upsertModelImageEndpoint(existing, 'overflow', 'https://images.example/v1'))
-      .toThrow(/512/);
-    expect(Object.keys(upsertModelImageEndpoint(existing, 'model-0', 'https://new.example/v1')))
-      .toHaveLength(512);
-    expect(Object.keys(upsertModelImageEndpoint(existing, 'model-0', null)))
-      .toHaveLength(511);
+    const existing = Object.fromEntries(
+      Array.from({ length: 512 }, (_, index) => ['model-' + index, 'https://images.example/v1'])
+    );
+    expect(() =>
+      upsertModelImageEndpoint(existing, 'overflow', 'https://images.example/v1')
+    ).toThrow(/512/);
+    expect(
+      Object.keys(upsertModelImageEndpoint(existing, 'model-0', 'https://new.example/v1'))
+    ).toHaveLength(512);
+    expect(Object.keys(upsertModelImageEndpoint(existing, 'model-0', null))).toHaveLength(511);
     expect(Object.keys(existing)).toHaveLength(512);
   });
 });
 
-
 describe('consent-preserving catalog synchronization', () => {
   it('imports missing model presets but leaves saved model overrides intact unless refreshed', () => {
-    const catalog = [{
-      id: 'model-x', provider: 'catalog', displayName: 'Model X',
-      vision: true, context_window: 64_000,
-      cost_per_1m_input: 2, cost_per_1m_cached_input: 1, cost_per_1m_output: 4,
-    }, {
-      id: 'model-y', provider: 'catalog', displayName: 'Model Y',
-      vision: false, context_window: 32_000,
-      cost_per_1m_input: 1, cost_per_1m_cached_input: 0.5, cost_per_1m_output: 2,
-    }];
-    const saved = [{ id: 'model-x', provider: 'catalog', vision: false,
-      context_window: 10_000, cost_per_1m_input: 100, cost_per_1m_output: 200 }];
+    const catalog = [
+      {
+        id: 'model-x',
+        provider: 'catalog',
+        displayName: 'Model X',
+        vision: true,
+        context_window: 64_000,
+        cost_per_1m_input: 2,
+        cost_per_1m_cached_input: 1,
+        cost_per_1m_output: 4,
+      },
+      {
+        id: 'model-y',
+        provider: 'catalog',
+        displayName: 'Model Y',
+        vision: false,
+        context_window: 32_000,
+        cost_per_1m_input: 1,
+        cost_per_1m_cached_input: 0.5,
+        cost_per_1m_output: 2,
+      },
+    ];
+    const saved = [
+      {
+        id: 'model-x',
+        provider: 'catalog',
+        vision: false,
+        context_window: 10_000,
+        cost_per_1m_input: 100,
+        cost_per_1m_output: 200,
+      },
+    ];
     const safe = syncModelPresets(saved, catalog, { updateExisting: false });
     expect(safe.added).toBe(1);
     expect(safe.updated).toBe(0);
@@ -425,11 +461,16 @@ describe('consent-preserving catalog synchronization', () => {
   });
 
   it('does not replace user-configured provider endpoints without explicit opt-in', () => {
-    const saved = [{
-      id: 'p1', slug: 'openrouter', label: 'Custom',
-      endpoint: 'https://private-gateway.example/v1', auth_style: 'bearer' as const,
-      model_image_endpoints: { picture: 'https://images.example/v1' },
-    }];
+    const saved = [
+      {
+        id: 'p1',
+        slug: 'openrouter',
+        label: 'Custom',
+        endpoint: 'https://private-gateway.example/v1',
+        auth_style: 'bearer' as const,
+        model_image_endpoints: { picture: 'https://images.example/v1' },
+      },
+    ];
     const safe = syncConfiguredProviderPresets(saved, { updateExisting: false });
     expect(safe.updated).toBe(0);
     expect(safe.providers).toEqual(saved);
@@ -440,26 +481,32 @@ describe('consent-preserving catalog synchronization', () => {
   });
 });
 
-
 describe('provider refresh credential boundaries', () => {
   it('detects only destination or auth changes for providers with saved credentials', () => {
-    const before = [{
-      id: 'saved', endpoint: 'https://old.example/v1',
-      authStyle: 'bearer', maskedKey: '••••stored',
-    }, {
-      id: 'unkeyed', endpoint: 'https://old.example/v1',
-      authStyle: 'bearer', maskedKey: '',
-    }];
-    expect(keyedProviderDestinationChanges(before, [{
-      id: 'saved', endpoint: 'https://new.example/v1', authStyle: 'bearer',
-    }, {
-      id: 'unkeyed', endpoint: 'https://new.example/v1', authStyle: 'bearer',
-    }])).toEqual(['saved']);
-    expect(keyedProviderDestinationChanges(before, [{
-      id: 'saved', endpoint: 'https://old.example/v1', authStyle: 'bearer',
-    }])).toEqual([]);
-    expect(keyedProviderDestinationChanges(before, [{
-      id: 'saved', endpoint: 'https://old.example/v1', authStyle: 'anthropic',
-    }])).toEqual(['saved']);
+    const before = [
+      {
+        id: 'saved',
+        endpoint: 'https://old.example/v1',
+        authStyle: 'bearer',
+        maskedKey: '••••stored',
+      },
+      { id: 'unkeyed', endpoint: 'https://old.example/v1', authStyle: 'bearer', maskedKey: '' },
+    ];
+    expect(
+      keyedProviderDestinationChanges(before, [
+        { id: 'saved', endpoint: 'https://new.example/v1', authStyle: 'bearer' },
+        { id: 'unkeyed', endpoint: 'https://new.example/v1', authStyle: 'bearer' },
+      ])
+    ).toEqual(['saved']);
+    expect(
+      keyedProviderDestinationChanges(before, [
+        { id: 'saved', endpoint: 'https://old.example/v1', authStyle: 'bearer' },
+      ])
+    ).toEqual([]);
+    expect(
+      keyedProviderDestinationChanges(before, [
+        { id: 'saved', endpoint: 'https://old.example/v1', authStyle: 'anthropic' },
+      ])
+    ).toEqual(['saved']);
   });
 });

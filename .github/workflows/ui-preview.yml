@@ -9,7 +9,8 @@
 # .github/tinysweeper/ui-preview.json.
 #
 # Same-repository, non-draft pull requests only: a fork's job cannot read the
-# secrets below.
+# secrets below. An unconfigured preview server is optional and must be gated
+# before downloading the core toolchain or building a desktop bundle.
 name: UI preview
 
 on:
@@ -36,7 +37,8 @@ jobs:
     name: ui-preview
     if: >-
       github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      vars.TINYSWEEPER_SERVER_URL != ''
     runs-on: ubuntu-22.04
     defaults:
       run:

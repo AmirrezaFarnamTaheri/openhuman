@@ -9,7 +9,8 @@
 use chrono::Utc;
 use tinymemory_api::{
     EraseRequest, FetchRequest, ForgetTarget, ItemId, LearningKind, ListRequest, MemoryMeta,
-    MetaFilter, RecallRequest, StoreItem, StoreReceipt, TimeHint, WriteOptions,
+    MetaFilter, RecallMode, RecallRequest, StoreItem, StoreReceipt, ThreadWindow, TimeHint,
+    WriteOptions,
 };
 
 use crate::config::Config;
@@ -60,6 +61,7 @@ pub async fn engine_get(config: &Config) -> EngineView {
                 engine: Some(bound.id.clone()),
                 endpoint: Some(bound.endpoint.clone()),
                 has_key: engine::has_key(config, &bound.id),
+                managed_local: bound.id == CORTEXDB_ENGINE && engine::is_managed_cortexdb(config),
                 status,
                 reason,
                 fetch_modes: bound.engine.descriptor().fetch_modes.clone(),
@@ -73,6 +75,8 @@ pub async fn engine_get(config: &Config) -> EngineView {
             let id = id.or(configured);
             EngineView {
                 has_key: id.as_deref().is_some_and(|id| engine::has_key(config, id)),
+                managed_local: id.as_deref() == Some(CORTEXDB_ENGINE)
+                    && engine::is_managed_cortexdb(config),
                 engine: id,
                 endpoint,
                 status: EngineStatus::Off,
@@ -122,6 +126,13 @@ pub fn apply_engine_set(config: &mut Config, params: &EngineSetParams) -> Memory
                 .endpoint = Some(endpoint.to_string());
         }
     }
+    // `engine_set` configures manual connections. Reusing a local URL or
+    // editing its key must not silently select the app-owned credential.
+    if engine_id == CORTEXDB_ENGINE && (params.endpoint.is_some() || params.api_key.is_some()) {
+        if let Some(settings) = config.memory.engines.get_mut(engine_id) {
+            settings.managed_local = false;
+        }
+    }
     if let Some(key) = params.api_key.as_deref() {
         match engine_id {
             CORTEXDB_ENGINE if key.trim().is_empty() => {
@@ -139,6 +150,24 @@ pub fn apply_engine_set(config: &mut Config, params: &EngineSetParams) -> Memory
     config.memory.engine = engine_id.to_string();
     engine::invalidate();
     tracing::info!(engine = %engine_id, "[memory:ops] engine selected");
+    Ok(())
+}
+
+/// Select a container whose ownership and health were verified by the local
+/// provisioner. This is deliberately separate from the manual engine setter.
+pub fn apply_managed_local_engine(config: &mut Config, key: &str) -> MemoryResult<()> {
+    engine::store_managed_cortexdb_key(config, key)?;
+    let settings = config
+        .memory
+        .engines
+        .entry(CORTEXDB_ENGINE.to_string())
+        .or_default();
+    settings.endpoint = Some(super::local_cortex::MANAGED_ENDPOINT.to_string());
+    settings.managed_local = true;
+    config.memory.engine = CORTEXDB_ENGINE.to_string();
+    config.components.memory = true;
+    engine::invalidate();
+    tracing::info!("[memory:ops] managed local memory selected");
     Ok(())
 }
 
@@ -170,6 +199,19 @@ fn time_hint(config: &Config, refers_to: Option<RefersTo>) -> MemoryResult<Optio
 
 /// `memory_recall`.
 pub async fn recall(config: &Config, params: RecallParams) -> MemoryResult<RecallView> {
+    recall_with(config, params, RecallMode::Answer, None).await
+}
+
+/// [`recall`] in `mode`, leaving `exclude_thread`'s turns out. The agent's
+/// memory tool asks for [`RecallMode::Evidence`] (its own model answers) and
+/// excludes the thread it runs in, whose user turn is logged before the tool
+/// reads and would otherwise come back as a memory.
+pub async fn recall_with(
+    config: &Config,
+    params: RecallParams,
+    mode: RecallMode,
+    exclude_thread: Option<ThreadWindow>,
+) -> MemoryResult<RecallView> {
     let bound = bound(config)?;
     let request = RecallRequest {
         question: params.question,
@@ -177,12 +219,15 @@ pub async fn recall(config: &Config, params: RecallParams) -> MemoryResult<Recal
         limit: clamp_limit(params.limit),
         instructions: None,
         refers_to: time_hint(config, params.refers_to)?,
+        exclude_thread,
+        mode,
     };
     request.validate()?;
     let answer = bound.engine.recall(request).await?;
     tracing::debug!(
         engine = %bound.id,
         citations = answer.citations.len(),
+        ?mode,
         "[memory:ops] recall answered"
     );
     Ok(RecallView {
@@ -195,6 +240,15 @@ pub async fn recall(config: &Config, params: RecallParams) -> MemoryResult<Recal
 /// `memory_fetch`. An unset mode uses the engine's first declared mode; a
 /// mode the engine does not declare is `UNSUPPORTED`.
 pub async fn fetch(config: &Config, params: FetchParams) -> MemoryResult<FetchView> {
+    fetch_with(config, params, None).await
+}
+
+/// [`fetch`] leaving `exclude_thread`'s turns out (see [`recall_with`]).
+pub async fn fetch_with(
+    config: &Config,
+    params: FetchParams,
+    exclude_thread: Option<ThreadWindow>,
+) -> MemoryResult<FetchView> {
     let bound = bound(config)?;
     let descriptor = bound.engine.descriptor();
     let mode = match params.mode {
@@ -216,6 +270,7 @@ pub async fn fetch(config: &Config, params: FetchParams) -> MemoryResult<FetchVi
         beliefs: 0,
         max_scopes: None,
         refers_to: time_hint(config, params.refers_to)?,
+        exclude_thread,
     };
     request.validate()?;
     let page = bound.engine.fetch(request).await?;
@@ -361,18 +416,24 @@ pub async fn store_on_with(
     Ok(receipt)
 }
 
-/// Stores `items` on `bound` in one bulk call (`MemoryEngine::store_many`):
-/// each is listed on return, ranked recall may lag behind for all but the
-/// last. For imports and backfills.
-pub async fn store_many_on(
+/// Stores `items` on `bound` in one bulk call, returning as soon as
+/// `options` allows. With [`WriteOptions::visible`] each item is listed on
+/// return, and ranked recall may lag behind for all but the last. A backfill
+/// or an import that reads nothing back until it ends passes
+/// [`WriteOptions::accepted`]: an engine that supports it (CortexDB) returns
+/// once the items are durably accepted, before they are indexed, and any
+/// other stores them as with `visible`.
+pub async fn store_many_on_with(
     bound: &BoundEngine,
     items: Vec<StoreItem>,
+    options: WriteOptions,
 ) -> MemoryResult<Vec<StoreReceipt>> {
     let count = items.len();
-    let receipts = bound.engine.store_many(items).await?;
+    let receipts = bound.engine.store_many_with(items, options).await?;
     tracing::debug!(
         engine = %bound.id,
         count,
+        wait = ?options.wait,
         replayed = receipts.iter().filter(|r| r.replayed).count(),
         "[memory:ops] batch stored"
     );

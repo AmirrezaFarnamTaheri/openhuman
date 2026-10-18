@@ -59,6 +59,9 @@ modules
 # flow_discovery agents.
 flows
 
+# Native AST navigation/edits and reusable code chunks.
+structural-code
+
 
 # SKILL.md discovery/parse/install, workflow execution, remote catalogs.
 skills

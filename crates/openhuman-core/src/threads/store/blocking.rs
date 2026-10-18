@@ -108,7 +108,8 @@ pub async fn list_threads(
     .await
 }
 
-/// [`store::get_messages`] on the blocking pool.
+/// [`super::get_messages`] on the blocking pool: the thread's messages without
+/// artifact rows (see [`crate::threads::artifact_rows`]).
 pub async fn get_messages(
     ctx: DispatchCtx,
     workspace_dir: PathBuf,
@@ -116,6 +117,22 @@ pub async fn get_messages(
 ) -> Result<Vec<ConversationMessage>, String> {
     run(ctx.clone(), "get_messages", move || {
         store::get_messages(&ctx, workspace_dir, &thread_id)
+    })
+    .await
+}
+
+/// [`super::backend::get_messages`] on the blocking pool, artifact rows included. Only
+/// for the UI's message list and the artifact-row writers.
+pub async fn get_messages_with_artifact_rows(
+    ctx: DispatchCtx,
+    workspace_dir: PathBuf,
+    thread_id: &str,
+) -> Result<Vec<ConversationMessage>, String> {
+    let thread_id = thread_id.to_string();
+    // The backend's read keeps every row; `store::get_messages` drops the
+    // artifact rows.
+    run(ctx.clone(), "get_messages_with_artifact_rows", move || {
+        super::backend::get_messages(&ctx, workspace_dir, &thread_id)
     })
     .await
 }
@@ -257,6 +274,10 @@ pub async fn purge_threads(
 ///
 /// The heaviest operation in the family: a cold inverted index reads every
 /// thread's transcript before the search runs.
+///
+/// Artifact rows never come back: they only place cards in the UI, and these
+/// hits feed search results and the agent's cross-chat context. The search asks
+/// for extra hits so dropping rows still fills `limit`.
 pub async fn search_cross_thread_messages(
     ctx: DispatchCtx,
     workspace_dir: PathBuf,
@@ -264,14 +285,20 @@ pub async fn search_cross_thread_messages(
     limit: usize,
     exclude_thread_id: Option<String>,
 ) -> Result<Vec<CrossThreadHit>, String> {
-    run(ctx.clone(), "search_cross_thread_messages", move || {
+    let wanted = limit.saturating_mul(2).max(limit.saturating_add(8));
+    let hits = run(ctx.clone(), "search_cross_thread_messages", move || {
         ConversationStore::new(ctx, workspace_dir).search_cross_thread_messages(
             &query,
-            limit,
+            wanted,
             exclude_thread_id.as_deref(),
         )
     })
-    .await
+    .await?;
+    Ok(hits
+        .into_iter()
+        .filter(|hit| !crate::threads::artifact_rows::is_artifact_row_id(&hit.message_id))
+        .take(limit)
+        .collect())
 }
 
 #[cfg(test)]

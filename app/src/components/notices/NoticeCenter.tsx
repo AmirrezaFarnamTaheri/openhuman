@@ -3,7 +3,7 @@
  *
  * A small, quiet FAB in the **bottom-right** corner with a count badge,
  * opening a panel of everything currently worth telling them: classified
- * runtime errors and plan usage limits. Sources are
+ * runtime errors, plan usage limits, and announcements. Sources are
  * merged by {@link useAppNotices}; this file is presentation only.
  *
  * It replaces the full-width banners that used to be pushed above every route
@@ -12,8 +12,8 @@
  * up to three could stack. Nothing is lost by moving them here: the copy, the
  * CTA and the dismissal rules are carried over intact.
  *
- * Privacy: only translated copy and privacy-safe metadata are rendered — never
- * raw provider responses, tokens, prompts, or PII.
+ * Privacy: only user-facing copy and privacy-safe metadata are rendered —
+ * never raw provider responses, tokens, prompts, or PII.
  */
 import { useEffect, useRef, useState } from 'react';
 import { LuBell, LuInfo, LuTriangleAlert, LuX } from 'react-icons/lu';
@@ -95,6 +95,31 @@ export default function NoticeCenter() {
   const notices = useAppNotices();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const wasOpenRef = useRef(false);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const containsFocusRef = useRef(false);
+
+  // This is a non-modal notice panel, but focus must enter it on open and
+  // return to the invoking bell when the user closes it.
+  useEffect(() => {
+    const visible = open && notices.length > 0;
+    if (visible && !wasOpenRef.current) {
+      closeRef.current?.focus();
+    } else if (!visible && wasOpenRef.current && containsFocusRef.current) {
+      // Dismissing the final notice removes the bell too. Return to the
+      // previous app control, or the persistent content area if it is gone.
+      const previous = previousFocusRef.current;
+      const target =
+        triggerRef.current ??
+        (previous?.isConnected
+          ? previous
+          : document.querySelector<HTMLElement>('[data-app-focus-fallback]'));
+      target?.focus();
+    }
+    wasOpenRef.current = visible;
+  }, [open, notices.length]);
 
   // Close on Escape while the panel is open. A fixed overlay with no dismissal
   // affordance beyond its own toggle is a trap for keyboard users.
@@ -121,7 +146,22 @@ export default function NoticeCenter() {
   return (
     <div
       className="fixed bottom-2 right-2 z-50 flex flex-col items-end gap-2"
-      data-testid="notice-center">
+      data-testid="notice-center"
+      onFocusCapture={event => {
+        const previous = event.relatedTarget;
+        if (previous instanceof HTMLElement && !event.currentTarget.contains(previous)) {
+          previousFocusRef.current = previous;
+        }
+        containsFocusRef.current = true;
+      }}
+      onBlurCapture={event => {
+        if (
+          event.relatedTarget instanceof Node &&
+          !event.currentTarget.contains(event.relatedTarget)
+        ) {
+          containsFocusRef.current = false;
+        }
+      }}>
       {open && (
         <div
           ref={panelRef}
@@ -135,6 +175,7 @@ export default function NoticeCenter() {
               iconOnly
               size="xs"
               variant="tertiary"
+              ref={closeRef}
               data-testid="notice-close"
               analyticsId="notice-center-close"
               aria-label={t('common.close')}
@@ -157,6 +198,7 @@ export default function NoticeCenter() {
       <Button
         iconOnly
         variant="secondary"
+        ref={triggerRef}
         data-testid="notice-trigger"
         analyticsId="notice-center-toggle"
         aria-label={t('notices.title')}

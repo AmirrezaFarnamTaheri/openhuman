@@ -35,15 +35,22 @@ describe('graphAdapter', () => {
         nodes: [
           node({ id: 'start', kind: 'trigger', name: 'Start', position: { x: 0, y: 0 } }),
           node({
-            id: 'scatter', kind: 'scatter', name: 'Scatter',
-            config: { lanes: 8, path: 'rows' }, position: { x: 0, y: 132 },
+            id: 'scatter',
+            kind: 'scatter',
+            name: 'Scatter',
+            config: { lanes: 8, path: 'rows' },
+            position: { x: 0, y: 132 },
           }),
           node({
-            id: 'transform', kind: 'transform', name: 'Transform',
+            id: 'transform',
+            kind: 'transform',
+            name: 'Transform',
             position: { x: 0, y: 264 },
           }),
           node({
-            id: 'gather', kind: 'gather', name: 'Gather',
+            id: 'gather',
+            kind: 'gather',
+            name: 'Gather',
             config: {
               from: ['transform'],
               release: 'quorum',

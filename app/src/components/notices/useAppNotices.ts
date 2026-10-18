@@ -30,6 +30,7 @@ import type { UserActionableError, UserErrorAction } from '../../types/userError
 import { PRICING_URL } from '../../utils/links';
 import { openUrl } from '../../utils/openUrl';
 import { dismissBanner, shouldShowBanner } from '../upsell/upsellDismissState';
+import { useAnnouncementNotice } from './useAnnouncementNotice';
 
 export type NoticeSeverity = 'error' | 'warning' | 'info';
 
@@ -107,6 +108,7 @@ export function useAppNotices(): AppNotice[] {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const active = useAppSelector(selectActiveUserErrors);
+  const announcement = useAnnouncementNotice();
   const {
     teamUsage,
     isLoading: usageLoading,
@@ -151,6 +153,7 @@ export function useAppNotices(): AppNotice[] {
 
   return useMemo(() => {
     const notices: AppNotice[] = [];
+    if (announcement) notices.push(announcement);
 
     // ── Classified runtime errors (#3931) ──────────────────────────────
     for (const entry of active) {
@@ -252,6 +255,7 @@ export function useAppNotices(): AppNotice[] {
     return notices.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
   }, [
     active,
+    announcement,
     dismiss,
     dismissed,
     dispatch,

@@ -27,7 +27,12 @@ import {
 } from '../tools/ToolBodies';
 import { hasDisplayValue, parsedValue, ToolDataView } from '../tools/ToolDataView';
 import { ToolIcon } from '../tools/ToolIcon';
-import { describeToolCall, parseToolArgs, toolLabel } from '../tools/toolPresentation';
+import {
+  describeToolCall,
+  isStructuralToolName,
+  parseToolArgs,
+  toolLabel,
+} from '../tools/toolPresentation';
 
 /** `1234` → "1.2s", `850` → "850ms", `75000` → "1m 15s". */
 export function formatElapsed(ms: number): string {
@@ -128,6 +133,7 @@ export function AssistantUiToolCallCard({
   });
   const activeLabel = toolLabel({ ...presentation, tense: 'active' }, t);
   const doneLabel = toolLabel({ ...presentation, tense: 'done' }, t);
+  const preserveObjectFields = isStructuralToolName(presentation.baseName);
   const failed = status === 'error';
   const awaiting = awaitingUser || status === 'awaiting_user';
   // Live clock while the tool runs (not while it waits on the user, whose
@@ -197,14 +203,14 @@ export function AssistantUiToolCallCard({
       request={
         !richBody && hasDisplayValue(input) ? (
           <div data-testid="assistant-ui-tool-input">
-            <ToolDataView value={input} />
+            <ToolDataView value={input} preserveObjectFields={preserveObjectFields} />
           </div>
         ) : undefined
       }
       result={
         !richBody && showOutput ? (
           <div data-testid="assistant-ui-tool-output">
-            <ToolDataView value={output} />
+            <ToolDataView value={output} preserveObjectFields={preserveObjectFields} />
           </div>
         ) : undefined
       }

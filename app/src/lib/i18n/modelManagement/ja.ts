@@ -1,0 +1,88 @@
+import type { ModelManagementMessages } from './en';
+
+const messages = {
+  'feasibility.contextTooSmall': 'コンテキスト長が入力と出力の合計トークン数を下回っています',
+  'feasibility.visionUnavailable': '保存済みメタデータでは画像認識に対応していません',
+  'feasibility.overBudget': '推定費用が予算を超えています',
+  'feasibility.unknownContext': 'コンテキスト長が不明です',
+  'feasibility.unknownVision': '画像認識機能の対応状況が不明です',
+  'feasibility.unknownPrice': '料金が未設定、0、または無効です',
+  'feasibility.aria': 'モデルの適合性プレビュー',
+  'feasibility.title': 'モデルの適合性と費用のプレビュー',
+  'feasibility.advisory':
+    '保存済みのメタデータに基づく参考情報です。現在の料金、利用上限、API キー、利用可否は検証していません。ワークロードのルーティングは変更されません。',
+  'feasibility.input': '推定入力トークン数',
+  'feasibility.cached': 'キャッシュ済み入力トークン数（入力の内数）',
+  'feasibility.output': '推定出力トークン数',
+  'feasibility.budget': '費用上限（USD・任意）',
+  'feasibility.budgetAria': '米ドルでの推定費用の上限',
+  'feasibility.noLimit': '上限なし',
+  'feasibility.requireVision': '画像対応を必須にする',
+  'feasibility.invalidCached':
+    'キャッシュ済み入力のトークン数は、入力全体のトークン数以下にしてください。',
+  'feasibility.invalidCounts':
+    'トークン数を 0 以上の整数で入力してください。キャッシュ済み入力は入力全体の一部です。必要に応じて、費用の上限を 0 以上の値で指定できます。',
+  'feasibility.fitCount': '保存済みメタデータに適合',
+  'feasibility.unknownCount': '不明',
+  'feasibility.excludedCount': '指定された制約により除外',
+  'feasibility.search': '適合性結果を検索',
+  'feasibility.filter': '適合性ステータスで絞り込む',
+  'feasibility.all': 'すべてのステータス',
+  'feasibility.fits': '保存済み情報では適合',
+  'feasibility.unknown': '適合性不明',
+  'feasibility.excluded': '対象外',
+  'feasibility.fitDescription': '保存済みメタデータに適合していますが、利用可否は未確認です',
+  'feasibility.excludedDescription': '制約により除外',
+  'feasibility.costUnknown': '費用不明',
+  'feasibility.empty': '評価する保存済みモデルがありません。',
+  'feasibility.noMatch': '条件に一致するモデルはありません。',
+  'feasibility.showing': '表示中',
+  'feasibility.of': '／',
+  'feasibility.matching': '一致するモデル項目',
+  'feasibility.more': 'さらにモデルを表示',
+  'fleet.reauthRequired':
+    '接続先や認証方式を変更する前に、プロバイダーの編集画面で API キーを再入力してください。',
+  'fleet.groupSyncHintSafe':
+    '保存済みのプロバイダー接続先は、既定では保持されます。変更内容を確認し、明示的に承認してください。認証情報を設定済みのプロバイダーは、編集画面で新しいキーを入力して更新する必要があります。',
+  'fleet.approveProviderSync': 'プロバイダーの接続先と認証方式の変更を承認',
+  'fleet.previewProviderChanges': 'プロバイダー変更をプレビュー',
+  'fleet.providerNeedsKey': 'キーの再入力が必要',
+  'fleet.presetHintSafe':
+    '保存済みのモデルメタデータを変更せずに、未登録のモデルプリセットを取り込めます。既存の画像認識対応、コンテキスト長、料金の更新は任意ですが、手動で編集した内容が上書きされる場合があります。ルーティングと認証情報は変更されません。',
+  'fleet.approveMetadataRefresh': '保存済みモデル情報の置換を承認',
+  'fleet.previewModelChanges': 'モデル変更をプレビュー',
+  'fleet.refreshLabel': '保存済みメタデータを更新',
+  'fleet.addLabel': '未登録のプリセットを追加',
+  'fleet.healthUnavailable': 'モデル構成の稼働状況を取得できません。',
+  'fleet.selectProvidersError': 'プロバイダーを 1 つ以上選択してください。',
+  'fleet.imageEndpointError':
+    '画像の接続先には HTTPS、またはループバックアドレスの HTTP が必要です。',
+  'fleet.chooseGroupError': 'プロバイダーグループを選択してください。',
+  'fleet.modelImageEndpointError':
+    'HTTPS、またはループバックアドレスの HTTP を使用した画像の接続先を入力してください。',
+  'fleet.selectModelsError': 'モデルを 1 つ以上選択してください。',
+  'fleet.contextError': 'コンテキスト長は 0 から 100,000,000 までの整数で指定してください。',
+  'fleet.selectPatchError': '更新する項目を 1 つ以上選択してください。',
+  'fleet.noKeyUsage': 'このセッションには推論用キーの使用記録がありません。',
+  'fleet.selectProvider': 'プロバイダーを選択',
+  'fleet.selected': '選択済み',
+  'fleet.groupImageAria': 'グループの画像 API ベース URL',
+  'fleet.rotationAria': '複数トークンの選択方式',
+  'fleet.imageGroupAria': '画像接続先のプロバイダーグループ',
+  'fleet.imageModelIdAria': '画像接続先のモデル ID',
+  'fleet.modelImageAria': 'モデルの画像 API ベース URL',
+  'fleet.searchAria': 'モデルプリセットを絞り込む',
+  'fleet.selectModel': 'モデルを選択',
+  'fleet.visionLabel': '画像認識',
+  'fleet.keepUnchanged': '変更しない',
+  'fleet.enabled': '有効',
+  'fleet.disabled': '無効',
+  'fleet.leaveBlank': '変更しない場合は空欄',
+  'fleet.bulkContextAria': '一括設定するコンテキストのトークン数',
+  'fleet.prodexImageError':
+    'Prodex の画像接続先には、認証情報を含まない HTTPS、またはループバックアドレスの HTTP URL が必要です。',
+  'fleet.prodexModelImageError':
+    'Prodex のモデル別画像接続先には、認証情報を含まない HTTPS、またはループバックアドレスの HTTP URL が必要です。',
+} satisfies ModelManagementMessages;
+
+export default messages;

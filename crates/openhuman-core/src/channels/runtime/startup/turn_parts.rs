@@ -8,12 +8,12 @@
 
 use super::chat_workload::{resolve_chat_workload, ChatWorkloadResolution};
 use super::prompt::format_access_context;
-use crate::agent::host_runtime;
 use crate::channels::context::ChannelRuntimeContext;
 use crate::channels::system_prompt::{ChannelPromptInputs, ChannelSystemPrompt};
 use crate::config::Config;
 use crate::core::runtime::DispatchCtx;
 use crate::inference::provider;
+use crate::modules::tinybox::host_runtime;
 use crate::security::SecurityPolicy;
 use crate::tools;
 use anyhow::Result;
@@ -98,19 +98,35 @@ pub(crate) fn build_channel_turn_parts(
     security: &Arc<SecurityPolicy>,
     descs: PromptToolDescs,
 ) -> Result<ChannelTurnParts> {
+    build_channel_turn_parts_with_inference(dispatch, config, config, security, descs)
+}
+
+/// A bound library agent supplies inference without replacing the channel
+/// runtime's workspace, tool policy, or service configuration. Keep its entire
+/// resolved inference config so new provider settings need no parallel mapping.
+pub(super) fn build_channel_turn_parts_with_inference(
+    dispatch: &DispatchCtx,
+    config: &Config,
+    inference_config: &Config,
+    security: &Arc<SecurityPolicy>,
+    descs: PromptToolDescs,
+) -> Result<ChannelTurnParts> {
     let provider_runtime_options = provider::ProviderRuntimeOptions {
         auth_profile_override: None,
-        openhuman_dir: config.config_path.parent().map(std::path::PathBuf::from),
-        secrets_encrypt: config.secrets.encrypt,
-        reasoning_enabled: config.runtime.reasoning_enabled,
+        openhuman_dir: inference_config
+            .config_path
+            .parent()
+            .map(std::path::PathBuf::from),
+        secrets_encrypt: inference_config.secrets.encrypt,
+        reasoning_enabled: inference_config.runtime.reasoning_enabled,
     };
-    let (model, provider_name) = match resolve_chat_workload(config) {
+    let (model, provider_name) = match resolve_chat_workload(inference_config) {
         ChatWorkloadResolution::Cloud => {
             let (_chat, model) = provider::create_chat_model_with_model_id_in(
                 dispatch,
                 "chat",
-                config,
-                config.default_temperature,
+                inference_config,
+                inference_config.default_temperature,
             )?;
             (model, provider::INFERENCE_BACKEND_ID.to_string())
         }
@@ -126,8 +142,8 @@ pub(crate) fn build_channel_turn_parts(
             let (_chat, model_id) = provider::create_chat_model_with_model_id_in(
                 dispatch,
                 "chat",
-                config,
-                config.default_temperature,
+                inference_config,
+                inference_config.default_temperature,
             )?;
             (model_id, slug)
         }

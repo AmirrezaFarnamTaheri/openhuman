@@ -98,7 +98,7 @@ export default function MemoryConnectionPanel({
   const planName = plan === 'PRO' ? 'Pro' : plan === 'BASIC' ? 'Basic' : null;
 
   const keyField = (value: string, onChange: (value: string) => void) => {
-    const saved = active && state.has_key;
+    const saved = active && state.has_key && !state.managed_local;
     return (
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${baseId}-key`} className="text-xs text-content-secondary">

@@ -235,8 +235,8 @@ const chatRuntimePersistConfig = {
 };
 const persistedChatRuntimeReducer = persistReducer(chatRuntimePersistConfig, chatRuntimeReducer);
 
-// Persist the set of announcement ids this user has already seen so the
-// harness-init banner shows each announcement exactly once (user-scoped).
+// Persist dismissed announcement ids so the notice center does not repeat
+// them after a restart. The history remains scoped to the current user.
 const announcementPersistConfig = { key: 'announcement', storage, whitelist: ['shownIds'] };
 const persistedAnnouncementReducer = persistReducer(announcementPersistConfig, announcementReducer);
 

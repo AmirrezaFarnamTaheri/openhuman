@@ -17,10 +17,8 @@ import WelcomePage from './pages/WelcomePage';
  * screens later was the same question twice. Its page and step files stay on
  * disk, unrouted.
  *
- * Each custom step asks Default (let OpenHuman manage it) vs Configure
- * (let me pick). Default is a one-click pick; Configure renders inline
- * controls (or a deep-link callout to Settings, for domains not yet
- * embedded). A local session skips the choice entirely and always configures.
+ * Local steps expose configuration directly, without a repeated
+ * Default-versus-Configure choice. Optional search can be skipped.
  *
  * Voice, OAuth and embeddings are retired: six steps before a first message
  * was a forced tour of Settings, and all three stay reachable from Settings.

@@ -21,8 +21,10 @@ fn favors_relevant_symbols_and_paths_over_unrelated_long_documents() {
     let found = rank_sources(&documents, "where is session freshness checked", 5);
     assert_eq!(found["results"][0]["path"], "src/auth/session_manager.ts");
     assert_eq!(found["results"][0]["evidence"][0]["line"], 1);
-    assert_eq!(found["results"][0]["evidence"][0]["text"],
-        "export function assertSessionFresh(session: Session) {");
+    assert_eq!(
+        found["results"][0]["evidence"][0]["text"],
+        "export function assertSessionFresh(session: Session) {"
+    );
     assert_eq!(found["ranking_kind"], "local_lexical_heuristic");
     assert_eq!(found["source_of_truth_verified"], false);
     assert_eq!(found["results"][0]["source_hash"], documents[1].source_hash);
@@ -46,7 +48,11 @@ fn path_and_camel_case_tokens_are_indexed_and_ties_are_deterministic() {
         src("a/auth_session.ts", "export const authSession = true;\n"),
     ];
     let a = rank_sources(&docs, "auth session", 5);
-    let b = rank_sources(&docs.iter().rev().cloned().collect::<Vec<_>>(), "auth session", 5);
+    let b = rank_sources(
+        &docs.iter().rev().cloned().collect::<Vec<_>>(),
+        "auth session",
+        5,
+    );
     assert_eq!(a["results"], b["results"]);
     assert_eq!(a["results"][0]["path"], "a/auth_session.ts");
 }
@@ -71,7 +77,12 @@ fn stopword_queries_are_rejected_without_fabricating_candidates() {
 fn result_is_bounded_and_excerpt_is_valid_unicode() {
     let line = format!("fn reveal() {{ {} }}", "🙂".repeat(512));
     let docs: Vec<_> = (0..32)
-        .map(|i| src(&format!("src/session_{i:02}.rs"), &format!("{line}\n{line}\n{line}\n{line}\n")))
+        .map(|i| {
+            src(
+                &format!("src/session_{i:02}.rs"),
+                &format!("{line}\n{line}\n{line}\n{line}\n"),
+            )
+        })
         .collect();
     let found = rank_sources(&docs, "reveal", 5);
     assert!(found.to_string().len() <= 26_000);
@@ -87,12 +98,28 @@ fn result_is_bounded_and_excerpt_is_valid_unicode() {
 #[test]
 fn limit_is_clamped_and_zero_cannot_be_unbounded() {
     let docs: Vec<_> = (0..32)
-        .map(|i| src(&format!("src/check_{i:02}.ts"), "export const check = true;\n"))
+        .map(|i| {
+            src(
+                &format!("src/check_{i:02}.ts"),
+                "export const check = true;\n",
+            )
+        })
         .collect();
-    assert_eq!(rank_sources(&docs, "check", 0)["results"].as_array().unwrap().len(), 1);
-    assert_eq!(rank_sources(&docs, "check", 500)["results"].as_array().unwrap().len(), 5);
+    assert_eq!(
+        rank_sources(&docs, "check", 0)["results"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        rank_sources(&docs, "check", 500)["results"]
+            .as_array()
+            .unwrap()
+            .len(),
+        5
+    );
 }
-
 
 #[test]
 fn location_excerpt_contains_the_actual_match_on_very_long_unicode_lines() {
@@ -104,12 +131,14 @@ fn location_excerpt_contains_the_actual_match_on_very_long_unicode_lines() {
         5,
     );
     let excerpt = &found["results"][0]["evidence"][0];
-    assert!(excerpt["text"].as_str().unwrap().contains("authSessionFresh"));
+    assert!(excerpt["text"]
+        .as_str()
+        .unwrap()
+        .contains("authSessionFresh"));
     assert!(excerpt["column_start"].as_u64().unwrap() > 1);
     assert_eq!(excerpt["line"], 1);
     assert!(excerpt["text"].as_str().unwrap().chars().count() <= 160);
 }
-
 
 #[test]
 fn bounded_query_keeps_late_specific_symbols_instead_of_alphabetical_prefix() {
@@ -120,12 +149,16 @@ fn bounded_query_keeps_late_specific_symbols_instead_of_alphabetical_prefix() {
     ];
     let found = rank_sources(&docs, query, 5);
     assert_eq!(found["effective_query_terms"], 16);
-    assert_eq!(found["results"][0]["path"], "src/target.rs",
-        "late user constraints must not disappear under sorted-set truncation");
-    assert!(found["results"][0]["matched_terms"].as_array().unwrap()
-        .iter().any(|value| value == "zulu" || value == "critical"));
+    assert_eq!(
+        found["results"][0]["path"], "src/target.rs",
+        "late user constraints must not disappear under sorted-set truncation"
+    );
+    assert!(found["results"][0]["matched_terms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value == "zulu" || value == "critical"));
 }
-
 
 #[test]
 fn long_source_line_excerpt_includes_the_actual_matching_symbol() {
@@ -134,8 +167,13 @@ fn long_source_line_excerpt_includes_the_actual_matching_symbol() {
     let result = rank_sources(&docs, "critical function", 5);
     let excerpt = &result["results"][0]["evidence"][0];
     assert_eq!(excerpt["line"], 1);
-    assert!(excerpt["text"].as_str().unwrap().contains("criticalFunction"),
-        "a line hit should show its matching token, not an unrelated prefix");
+    assert!(
+        excerpt["text"]
+            .as_str()
+            .unwrap()
+            .contains("criticalFunction"),
+        "a line hit should show its matching token, not an unrelated prefix"
+    );
     assert!(excerpt["column_start"].as_u64().unwrap() > 1);
     assert_eq!(excerpt["excerpt_truncated"], true);
 }
@@ -145,7 +183,9 @@ fn source_excerpt_never_splits_unicode_code_points() {
     let text = format!("{}unicodeMarker();\n", "🧠".repeat(220));
     let docs = vec![src("src/unicode.ts", &text)];
     let result = rank_sources(&docs, "unicode marker", 5);
-    let excerpt = result["results"][0]["evidence"][0]["text"].as_str().unwrap();
+    let excerpt = result["results"][0]["evidence"][0]["text"]
+        .as_str()
+        .unwrap();
     assert!(excerpt.contains("unicodeMarker"));
     assert!(excerpt.chars().count() <= 160);
     assert!(!excerpt.contains('�'));
@@ -161,7 +201,6 @@ fn first_column_excerpt_keeps_original_text_and_provenance() {
     assert_eq!(evidence["excerpt_truncated"], false);
 }
 
-
 #[test]
 fn long_line_excerpt_includes_matched_symbol_not_an_unrelated_prefix() {
     let line = format!("{} sessionVerifier() {}\n", "noisy ".repeat(180), "{}");
@@ -170,7 +209,10 @@ fn long_line_excerpt_includes_matched_symbol_not_an_unrelated_prefix() {
     assert_eq!(found["results"].as_array().unwrap().len(), 1);
     let sample = &found["results"][0]["evidence"][0];
     let snippet = sample["text"].as_str().unwrap();
-    assert!(snippet.contains("sessionVerifier"), "locator must display matching evidence: {snippet}");
+    assert!(
+        snippet.contains("sessionVerifier"),
+        "locator must display matching evidence: {snippet}"
+    );
     assert!(sample["column_start"].as_u64().unwrap() > 1);
     assert!(snippet.chars().count() <= 160);
 }

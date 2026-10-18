@@ -15,11 +15,10 @@ const MAX_LINE_CHARS: usize = 160;
 const MAX_JSON_BYTES: usize = 26_000;
 
 const STOPWORDS: &[&str] = &[
-    "a", "an", "and", "are", "as", "at", "be", "by", "can", "code",
-    "do", "does", "file", "files", "find", "for", "from", "how", "i",
-    "in", "is", "it", "me", "of", "on", "or", "please", "show", "the",
-    "this", "to", "was", "were", "what", "when", "where", "which",
-    "who", "why", "with", "would", "you",
+    "a", "an", "and", "are", "as", "at", "be", "by", "can", "code", "do", "does", "file", "files",
+    "find", "for", "from", "how", "i", "in", "is", "it", "me", "of", "on", "or", "please", "show",
+    "the", "this", "to", "was", "were", "what", "when", "where", "which", "who", "why", "with",
+    "would", "you",
 ];
 
 /// Split literal terms at word and camel-case boundaries while preserving
@@ -73,7 +72,9 @@ fn query_terms(input: &str) -> BTreeSet<String> {
     // Retain the original high-level intent AND late specific constraints.
     // Alphabetically taking the first 16 drops key requirements like a final
     // class/method name simply because they sort after generic words.
-    ordered.iter().take(MAX_TERMS / 2)
+    ordered
+        .iter()
+        .take(MAX_TERMS / 2)
         .chain(ordered.iter().skip(ordered.len() - MAX_TERMS / 2))
         .cloned()
         .collect()
@@ -87,13 +88,14 @@ fn first_matched_token_byte(line: &str, query: &BTreeSet<String>) -> Option<usiz
     let mut prior_lower = false;
     let matching = |start: usize, end: usize| {
         let value = &line[start..end];
-        (2..=64).contains(&value.chars().count())
-            && query.contains(&value.to_lowercase())
+        (2..=64).contains(&value.chars().count()) && query.contains(&value.to_lowercase())
     };
     for (byte, ch) in line.char_indices() {
         if !ch.is_alphanumeric() {
             if let Some(start) = begin {
-                if matching(start, byte) { return Some(start); }
+                if matching(start, byte) {
+                    return Some(start);
+                }
             }
             begin = None;
             prior_lower = false;
@@ -101,7 +103,9 @@ fn first_matched_token_byte(line: &str, query: &BTreeSet<String>) -> Option<usiz
         }
         if prior_lower && ch.is_uppercase() {
             if let Some(start) = begin {
-                if matching(start, byte) { return Some(start); }
+                if matching(start, byte) {
+                    return Some(start);
+                }
             }
             begin = Some(byte);
         } else if begin.is_none() {
@@ -110,7 +114,9 @@ fn first_matched_token_byte(line: &str, query: &BTreeSet<String>) -> Option<usiz
         prior_lower = ch.is_lowercase();
     }
     if let Some(start) = begin {
-        if matching(start, line.len()) { return Some(start); }
+        if matching(start, line.len()) {
+            return Some(start);
+        }
     }
     None
 }
@@ -130,9 +136,12 @@ fn evidence(doc: &SourceDocument, query: &BTreeSet<String>) -> (BTreeSet<String>
             let hit_byte = first_matched_token_byte(line, query).unwrap_or(0);
             let hit_column = line[..hit_byte].chars().count();
             let start = if line_chars > MAX_LINE_CHARS {
-                hit_column.saturating_sub(MAX_LINE_CHARS / 3)
+                hit_column
+                    .saturating_sub(MAX_LINE_CHARS / 3)
                     .min(line_chars - MAX_LINE_CHARS)
-            } else { 0 };
+            } else {
+                0
+            };
             spans.push(json!({
                 "line": line_number + 1,
                 "column_start": start + 1,
@@ -182,7 +191,8 @@ pub(super) fn rank_sources(docs: &[SourceDocument], query: &str, limit: usize) -
     }
     scores.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
     let total_candidates = scores.len();
-    let candidates: Vec<Value> = scores.into_iter()
+    let candidates: Vec<Value> = scores
+        .into_iter()
         .take(limit.clamp(1, MAX_RESULTS))
         .map(|(_, _, item)| item)
         .collect();
@@ -200,8 +210,12 @@ pub(super) fn rank_sources(docs: &[SourceDocument], query: &str, limit: usize) -
         "snapshot_atomic": false
     });
     while response.to_string().len() > MAX_JSON_BYTES {
-        let Some(items) = response["results"].as_array_mut() else { break; };
-        if items.pop().is_none() { break; }
+        let Some(items) = response["results"].as_array_mut() else {
+            break;
+        };
+        if items.pop().is_none() {
+            break;
+        }
         response["ranking_truncated"] = json!(true);
     }
     response

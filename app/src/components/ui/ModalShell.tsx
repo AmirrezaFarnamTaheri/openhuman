@@ -97,6 +97,7 @@ export function ModalShell({
       <DialogContent
         container={container}
         data-testid={testId}
+        aria-modal="true"
         aria-labelledby={labelledBy ?? titleId}
         aria-describedby={describedBy}
         className={cn('mx-4', maxWidthClassName, panelClassName)}

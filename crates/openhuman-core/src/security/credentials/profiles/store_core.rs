@@ -9,9 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize};
 #[cfg(test)]
 use std::sync::Arc;
 
-use super::{
-    is_lock_create_unwritable_fs, AuthProfile, AuthProfilesData, AuthProfilesStore,
-};
+use super::{is_lock_create_unwritable_fs, AuthProfile, AuthProfilesData, AuthProfilesStore};
 use crate::security::secret_storage::SecretStore;
 
 use super::LOCK_FILENAME;

@@ -44,12 +44,21 @@ export const TOOL_CATALOG: ToolDefinition[] = [
     description: 'Read file contents from disk.',
     category: 'Files',
     defaultEnabled: true,
-    rustToolNames: ['file_read', 'read_diff', 'csv_export'],
+    rustToolNames: [
+      'file_read',
+      'read_diff',
+      'csv_export',
+      'ast_outline',
+      'ast_symbol',
+      'chunk_search',
+      'chunk_inspect',
+    ],
   },
   {
     id: 'source_evidence',
     displayName: 'Source Evidence',
-    description: 'Find candidate source files, inspect bounded dependency evidence, and verify line excerpts by SHA-256 within the active workspace. Opt in only for projects safe to expose to the selected model.',
+    description:
+      'Find candidate source files, inspect bounded dependency evidence, and verify line excerpts by SHA-256 within the active workspace. Opt in only for projects safe to expose to the selected model.',
     category: 'Files',
     defaultEnabled: false,
     rustToolNames: ['source_evidence'],
@@ -60,7 +69,7 @@ export const TOOL_CATALOG: ToolDefinition[] = [
     description: 'Create or modify files on disk.',
     category: 'Files',
     defaultEnabled: true,
-    rustToolNames: ['file_write'],
+    rustToolNames: ['file_write', 'ast_patch', 'chunk_apply'],
   },
 
   // Vision

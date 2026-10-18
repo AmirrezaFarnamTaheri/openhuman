@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
@@ -10,6 +10,136 @@ import { ChatToolFallback } from './ChatToolParts';
 // `task` (the toolkit resolves it first regardless), so its tests below are
 // unaffected by that move.
 describe('ChatToolParts', () => {
+  it('keeps structural chunk search results and paging beside the query', async () => {
+    const receipt = {
+      query: 'fallible',
+      chunks: {
+        items: [{ id: 'rust.fallible-function.v1', summary: 'A fallible function' }],
+        offset: 0,
+        total: 2,
+        next_offset: 1,
+      },
+    };
+    render(
+      <ChatToolFallback
+        type="tool-call"
+        toolName="chunk_search"
+        toolCallId="structural-search"
+        args={{ query: 'fallible', limit: 1 } as never}
+        argsText='{"query":"fallible","limit":1}'
+        result={JSON.stringify(receipt)}
+        status={{ type: 'complete' }}
+        addResult={() => {}}
+        resume={() => {}}
+        respondToApproval={async () => {}}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Searched code/ }));
+    const output = screen.getByTestId('assistant-ui-tool-output');
+    expect(output).toHaveTextContent('rust.fallible-function.v1');
+    expect(within(output).getByText('Next offset').nextElementSibling).toHaveTextContent('1');
+    expect(within(output).getByText('Total').nextElementSibling).toHaveTextContent('2');
+    expect(screen.queryByTestId('web-search-body')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tool-body-file')).not.toBeInTheDocument();
+  });
+
+  it('keeps structural diagnostic ranges and source revisions beside their messages', async () => {
+    const receipt = {
+      path: 'src/lib.rs',
+      revision: 'a'.repeat(64),
+      diagnostics: {
+        items: [{ message: 'Missing semicolon', range: { start_line: 7, start_column: 4 } }],
+        offset: 0,
+        total: 1,
+        next_offset: null,
+      },
+      skeleton: { text: 'fn value() {}', start_line: 1, total_lines: 10, next_start_line: 2 },
+    };
+    render(
+      <ChatToolFallback
+        type="tool-call"
+        toolName="ast_outline"
+        toolCallId="structural-outline"
+        args={{ path: 'src/lib.rs' } as never}
+        argsText='{"path":"src/lib.rs"}'
+        result={JSON.stringify(receipt)}
+        status={{ type: 'complete' }}
+        addResult={() => {}}
+        resume={() => {}}
+        respondToApproval={async () => {}}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Analyzed code/ }));
+    const output = screen.getByTestId('assistant-ui-tool-output');
+    expect(output).toHaveTextContent('a'.repeat(64));
+    expect(output).toHaveTextContent('Missing semicolon');
+    expect(within(output).getByText('Range')).toBeInTheDocument();
+    expect(within(output).getByText('Start column').nextElementSibling).toHaveTextContent('4');
+    expect(within(output).getByText('Next start line').nextElementSibling).toHaveTextContent('2');
+    expect(screen.queryByTestId('tool-body-file')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['direct', 'ast_patch', { path: 'src/lib.rs', dry_run: true }],
+    [
+      'deferred',
+      'tool_call',
+      { name: 'chunk_apply', arguments: { path: 'src/lib.rs', dry_run: true } },
+    ],
+    [
+      'packed',
+      'use_skill',
+      { skill: 'coding', tool: 'ast_patch', args: { path: 'src/lib.rs', dry_run: true } },
+    ],
+    [
+      'deferred pack',
+      'tool_call',
+      {
+        name: 'use_skill',
+        arguments: {
+          skill: 'coding',
+          tool: 'chunk_apply',
+          args: { path: 'src/lib.rs', dry_run: true },
+        },
+      },
+    ],
+  ] as const)('keeps the complete structural %s preview receipt', async (kind, toolName, args) => {
+    const receipt = {
+      path: 'src/lib.rs',
+      before_revision: 'a'.repeat(64),
+      revision: 'b'.repeat(64),
+      changed: true,
+      written: false,
+      dry_run: true,
+      source: { text: 'fn changed() {}', start_line: 80, total_lines: 120, next_start_line: 81 },
+    };
+    render(
+      <ChatToolFallback
+        type="tool-call"
+        toolName={toolName}
+        toolCallId={'structural-preview-' + kind}
+        args={args as never}
+        argsText={JSON.stringify(args)}
+        result={JSON.stringify(receipt)}
+        status={{ type: 'complete' }}
+        addResult={() => {}}
+        resume={() => {}}
+        respondToApproval={async () => {}}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Read changes/ }));
+    const output = screen.getByTestId('assistant-ui-tool-output');
+    expect(within(output).getByText('Written').nextElementSibling).toHaveTextContent('No');
+    expect(within(output).getByText('Dry run').nextElementSibling).toHaveTextContent('Yes');
+    expect(within(output).getByText('Next start line').nextElementSibling).toHaveTextContent('81');
+    expect(output).toHaveTextContent('a'.repeat(64));
+    expect(output).toHaveTextContent('b'.repeat(64));
+    expect(output).toHaveTextContent('fn changed() {}');
+    expect(screen.getByTestId('assistant-ui-tool-input')).toBeInTheDocument();
+    expect(screen.queryByTestId('tool-body-file')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tool-body-file-diff')).not.toBeInTheDocument();
+  });
+
   it('does not show a success icon beside a cancelled tool', () => {
     // The adapter forwards `cancelled` now, and the card gated its non-success
     // icon on `error` alone — so the check icon sat next to the word

@@ -509,7 +509,7 @@ Capability {
         category: CapabilityCategory::Intelligence,
         description:
             "Pick which embedding provider drives semantic search across your memory: \
-             managed cloud (default, Voyage-backed via api.tinyhumans.ai), OpenAI, \
+             managed cloud (default, Voyage-backed), OpenAI, \
              Cohere, local Ollama, or a custom OpenAI-compatible endpoint. API keys \
              are stored encrypted via the local keyring under `embeddings:<slug>`; \
              model name and embedding dimensions are tunable per provider. A \
@@ -575,6 +575,16 @@ Capability {
         how_to: "Call openhuman.tool_registry_list over core JSON-RPC, or openhuman.tool_registry_get with a tool_id such as memory.recall.",
         status: CapabilityStatus::Beta,
         privacy: LOCAL_RAW,
+    },
+Capability {
+        id: "intelligence.structural_code",
+        name: "Structural Code Tools",
+        domain: "intelligence",
+        category: CapabilityCategory::Intelligence,
+        description: "Inspect declarations, page selected source, preview revision-checked edits and apply typed reusable chunks in Rust, TypeScript, TSX, JavaScript, Python, Go, JSON and TOML. Syntax and lexical references do not establish type correctness or a resolved cross-file graph.",
+        how_to: "Ask for code work in an allowed project. Discover the coding skill or search for ast_outline, ast_symbol, ast_patch, chunk_search, chunk_inspect or chunk_apply. Existing file read/write controls apply; a real edit requires the current source revision.",
+        status: CapabilityStatus::Beta,
+        privacy: RAW_TO_INFERENCE_PROVIDER,
     },
 Capability {
         id: "intelligence.orchestrator_worker_thread",

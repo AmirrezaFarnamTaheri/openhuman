@@ -4,7 +4,7 @@ import 'katex/dist/katex.min.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
-import App from './App';
+import App, { createAppDataRouter } from './App';
 import './index.css';
 import { installAutoHideScrollbars } from './lib/autoHideScrollbars';
 import { getCoreStateSnapshot } from './lib/coreState/store';
@@ -98,6 +98,11 @@ function bootRender() {
   // mounted later need no wiring. Lives for the document's lifetime.
   installAutoHideScrollbars();
 
+  // The hash and active user are ready now. Create the main window's data
+  // router once here, outside React's StrictMode render/replay lifecycle.
+  const router = isStandaloneWindow ? null : createAppDataRouter();
+  if (import.meta.hot && router) import.meta.hot.dispose(() => router.dispose());
+
   const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
   const tree = isMascotWindow ? (
     <MascotWindowApp />
@@ -106,7 +111,7 @@ function bootRender() {
   ) : isOverlayWindow ? (
     <OverlayApp />
   ) : (
-    <App />
+    <App router={router!} />
   );
   root.render(<React.StrictMode>{tree}</React.StrictMode>);
 }

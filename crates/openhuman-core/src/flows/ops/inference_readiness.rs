@@ -38,7 +38,7 @@ use super::*;
 // Two layers, cheapest and most decisive first:
 //
 // - **Layer 1 (sync)** — the desktop session itself: signed out
-//   (`scheduler_gate::is_signed_out`), or no valid `app-session` JWT
+//   (`llm_gate::is_signed_out`), or no valid `app-session` JWT
 //   (`inference::provider::factory::verify_session_active`, the exact check
 //   every custom-provider construction already gates on).
 // - **Layer 2 (async, cached)** — one cheap real probe per DISTINCT resolved
@@ -102,7 +102,7 @@ pub(super) static INFERENCE_PROBE_CACHE: LazyLock<std::sync::Mutex<InferenceProb
 /// window. Clears the whole cache rather than just the current key: a
 /// sign-out is a session-wide event, not scoped to one role.
 fn invalidate_inference_probe_cache_if_signed_out() {
-    if crate::cron::scheduler_gate::is_signed_out() {
+    if crate::platform::llm_gate::is_signed_out() {
         INFERENCE_PROBE_CACHE
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -152,12 +152,12 @@ pub(super) async fn cached_probe_inference_readiness(
 /// 1. Node `config.model` — a managed tier or `hint:*` alias, translated via
 ///    [`role_for_model_tier`](crate::inference::provider::role_for_model_tier).
 /// 2. A static (non-`=`) `agent_ref` whose custom
-///    [`AgentRegistryEntry`](crate::agent::registry::AgentRegistryEntry)
+///    [`AgentRegistryEntry`](crate::agent_registry::AgentRegistryEntry)
 ///    itself pins a `model` (e.g. `hint:reasoning`) — resolved the same way
 ///    [`OpenHumanAgentRunner::run_via_harness`](crate::flows::tinyflows::caps::OpenHumanAgentRunner)
 ///    does via `resolve_node_model(&request, entry_model)`, using the same
 ///    sync, config-only accessor
-///    ([`find_custom_in_config`](crate::agent::registry::find_custom_in_config))
+///    ([`find_custom_in_config`](crate::agent_registry::find_custom_in_config))
 ///    it calls.
 /// 3. Otherwise, caps.rs's own default role (`"summarization"`, its fallback
 ///    absent a `role` field on the completion request).
@@ -173,13 +173,13 @@ pub(super) fn agent_node_role(config: &Config, node: &tinyflows::model::Node) ->
         .map(str::trim)
         .filter(|s| !s.is_empty() && !s.starts_with('='))
     {
-        use crate::agent::harness::host_definition::AgentDefinitionRegistry;
+        use crate::agent_registry::host_definition::AgentDefinitionRegistry;
         if let Err(error) = AgentDefinitionRegistry::init_global(&config.workspace_dir) {
             tracing::debug!(target: "flows", %error,
                 "[flows] readiness: agent definition registry unavailable; using registry fallback");
         }
         let definition = AgentDefinitionRegistry::current().and_then(|r| r.get(agent_ref).cloned());
-        let custom = crate::agent::registry::find_custom_in_config(config, agent_ref);
+        let custom = crate::agent_registry::find_custom_in_config(config, agent_ref);
         if definition.is_some() || custom.is_some() {
             let entry_model = if definition.is_some() {
                 None
@@ -296,7 +296,7 @@ pub(super) async fn evaluate_inference_readiness(
 
     // Layer 1: signed-out is the cheapest, most decisive check. Session-wide
     // — checked once for the whole graph, not per node/role.
-    if needs_session && crate::cron::scheduler_gate::is_signed_out() {
+    if needs_session && crate::platform::llm_gate::is_signed_out() {
         tracing::debug!(
             target: "flows",
             node = %first_node.id,

@@ -38,6 +38,7 @@ export const CORE_RPC_METHODS = {
   memoryEnginesList: 'openhuman.memory_engines_list',
   memoryEngineGet: 'openhuman.memory_engine_get',
   memoryEngineSet: 'openhuman.memory_engine_set',
+  memoryLocalStart: 'openhuman.memory_local_start',
   memoryRecall: 'openhuman.memory_recall',
   memoryFetch: 'openhuman.memory_fetch',
   memoryLearn: 'openhuman.memory_learn',

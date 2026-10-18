@@ -16,7 +16,7 @@
  * Mocks mirror `AppRoutes.auth.test.tsx`: every leaf page is stubbed so this
  * exercises the router and nothing else.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
 import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -42,6 +42,7 @@ vi.mock('./pages/dev/AgentInsightsPreview', () => ({ default: () => <div /> }));
 vi.mock('./pages/dev/UiGallery', () => ({ default: () => <div /> }));
 vi.mock('./pages/Invites', () => ({ default: () => <div /> }));
 vi.mock('./pages/Notifications', () => ({ default: () => <div /> }));
+vi.mock('./pages/FlowsPage', () => ({ default: () => <div /> }));
 vi.mock('./pages/onboarding/Onboarding', () => ({ default: () => <div /> }));
 vi.mock('./pages/PttOverlayPage', () => ({ PttOverlayPage: () => <div /> }));
 vi.mock('./pages/Settings', () => ({ default: () => <div /> }));
@@ -74,10 +75,12 @@ function landingFor(entry: string) {
       <LocationProbe />
     </MemoryRouter>
   );
-  return {
+  // Lazy destination pages can suspend the navigation commit. Read the live
+  // probe for each assertion instead of capturing the initial location.
+  return () => ({
     pathname: screen.getByTestId('pathname').textContent,
     search: screen.getByTestId('search').textContent,
-  };
+  });
 }
 
 // Every `<Navigate>` in AppRoutes.tsx, read off the route table. If a redirect
@@ -97,16 +100,18 @@ const REDIRECTS: Array<{ from: string; pathname: string; search: string }> = [
 
 describe('AppRoutes back-compat redirects', () => {
   for (const { from, pathname, search } of REDIRECTS) {
-    it(`sends ${from} to ${pathname}${search}`, () => {
-      expect(landingFor(from)).toEqual({ pathname, search });
+    it(`sends ${from} to ${pathname}${search}`, async () => {
+      const landing = landingFor(from);
+      await waitFor(() => expect(landing()).toEqual({ pathname, search }));
     });
   }
 
-  it('carries the messaging tab through the /channels redirect', () => {
+  it('carries the messaging tab through the /channels redirect', async () => {
     // Singled out because it is the only redirect whose contract is a query
     // string. A prefix match on the path alone passes even when `?tab=messaging`
     // is dropped, which lands the user on the wrong Connections tab.
-    expect(landingFor('/channels').search).toBe('?tab=messaging');
+    const landing = landingFor('/channels');
+    await waitFor(() => expect(landing().search).toBe('?tab=messaging'));
   });
 
   it('every redirect in the route table is covered by this spec', async () => {
@@ -144,14 +149,14 @@ describe('AppRoutes redirects replace rather than push', () => {
   // dropping `replace` from a `<Navigate>` is a one-word edit that every other
   // test in the tree still passes.
   for (const { from } of REDIRECTS) {
-    it(`${from} navigates by REPLACE, not PUSH`, () => {
+    it(`${from} navigates by REPLACE, not PUSH`, async () => {
       render(
         <MemoryRouter initialEntries={[from]}>
           <AppRoutes />
           <ActionProbe />
         </MemoryRouter>
       );
-      expect(screen.getByTestId('nav-type')).toHaveTextContent('REPLACE');
+      await waitFor(() => expect(screen.getByTestId('nav-type')).toHaveTextContent('REPLACE'));
     });
   }
 });

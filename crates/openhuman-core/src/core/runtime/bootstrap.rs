@@ -99,7 +99,7 @@ pub(crate) async fn bootstrap_core_runtime(
     //
     // An installed host session store repairs itself, once; with none, the
     // workspace default store is swept.
-    let host_store = crate::agent::session_store::installed_in(ctx);
+    let host_store = crate::storage::sessions::installed_in(ctx);
     if let Some(provider) = &host_store {
         match provider.recover() {
             Ok(()) => log::info!("[runtime] host session store recovered"),
@@ -108,7 +108,7 @@ pub(crate) async fn bootstrap_core_runtime(
     }
     if host_store.is_none() {
         let now = chrono::Utc::now().to_rfc3339();
-        match crate::agent::session_store::default_turn_states_for(&workspace_dir)
+        match crate::storage::sessions::default_turn_states_for(&workspace_dir)
             .mark_all_interrupted(&now)
         {
             Ok(0) => {}
@@ -129,10 +129,9 @@ pub(crate) async fn bootstrap_core_runtime(
     // rendering as perpetual "running" timeline entries on thread reopen.
     if agent_enabled {
         if !crate::storage::installed_is_shared() {
-            match crate::agent::session_store::with_ledger(
-                &cfg.workspace_dir,
-                |ledger| async move { ledger.interrupt_orphaned_agent_runs().await },
-            ) {
+            match crate::storage::sessions::with_ledger(&cfg.workspace_dir, |ledger| async move {
+                ledger.interrupt_orphaned_agent_runs().await
+            }) {
                 Ok(0) => {}
                 Ok(count) => {
                     log::info!("[runtime] settled {count} orphaned agent run(s) on startup")
@@ -190,7 +189,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // multiple times. Uses the per-user scoped workspace_dir.
     if agent_enabled {
         if let Err(err) =
-            crate::agent::harness::host_definition::AgentDefinitionRegistry::init_global(
+            crate::agent_registry::host_definition::AgentDefinitionRegistry::init_global(
                 &workspace_dir,
             )
         {
@@ -347,6 +346,7 @@ pub(crate) async fn bootstrap_core_runtime(
         // (The approval/plan-review surface bridge is registered unconditionally
         // above — it must run even when this gate-install branch is skipped.)
         crate::web_chat::register_artifact_surface_subscriber();
+        crate::threads::artifact_rows::register_artifact_row_subscriber();
     } else {
         log::info!(
             "[runtime] approval gate DISABLED (OPENHUMAN_APPROVAL_GATE=0 honored on host={}) — \
@@ -365,6 +365,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // sets OPENHUMAN_APPROVAL_GATE=0 (CR #3328947323 on PR #3026). Idempotent
     // (OnceLock-guarded inside register_artifact_surface_subscriber).
     crate::web_chat::register_artifact_surface_subscriber();
+    crate::threads::artifact_rows::register_artifact_row_subscriber();
     // Memory-activity surface bridges DomainEvent::MemoryStored/Recalled onto
     // the web channel's `memory_activity` event (C5) — same unconditional
     // placement rationale as the bridges above. Idempotent (OnceLock-guarded).

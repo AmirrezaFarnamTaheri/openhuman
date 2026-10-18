@@ -138,6 +138,17 @@ describe('ChatComposer', () => {
     expect(screen.getByRole('button', { name: 'composer.voiceMode' })).toBeInTheDocument();
   });
 
+  it('keeps Send as the primary action and Human as a separate shortcut', () => {
+    const onOpenHumanMode = vi.fn();
+    renderComposer({ inputValue: '', onOpenHumanMode });
+
+    const send = screen.getByTestId('send-message-button');
+    expect(send).toBeDisabled();
+    fireEvent.click(screen.getByTestId('human-mode-button'));
+    expect(onOpenHumanMode).toHaveBeenCalledOnce();
+    expect(send).toBeInTheDocument();
+  });
+
   it('send button is always visible', () => {
     renderComposer({ inputValue: '' });
     expect(screen.getByTestId('send-message-button')).toBeInTheDocument();

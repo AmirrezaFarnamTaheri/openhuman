@@ -1,10 +1,32 @@
 # Loadable module boundary inventory
 
-Status: the Channels, MCP, Wallet and TinyBox host cutovers are merged, and the
-final scoped local acceptance passed. The module-boundary gate reports zero
-violations, zero exceptions and no pending contracts; TinyRuntime remains
-explicitly excluded for separate removal work. The machine-readable dependency policy is
+## Current checkpoint: 2026-10-18
+
+The host cutovers remain integrated. The current canonical source also adds
+storage-schema v2 declarations to optional bus features. The machine-readable
+policy now records **13 exact temporary contract exceptions**, with no pending
+contracts; the historical zero-exception statement does not describe this tree.
+TinyRuntime remains explicitly excluded for separate removal work. The policy is
 [`scripts/ci/module-boundaries.json`](../scripts/ci/module-boundaries.json).
+
+| Current exception | Exact scope and reason | Completion condition |
+| --- | --- | --- |
+| `anyhow`, `async-trait`, `tokio` | Three `tinychannels-bus` edges for the provider trait retained at the canonical source pin | Publish and consume an owner contract that separates provider behavior from wire vocabulary |
+| `hmac`, `sha2` | Two opt-in `tinyconnectors-bus` webhook-verification edges | Complete the owner contract-boundary review or split the helpers from the pure contract |
+| `chrono` | One `tinyflows-bus` edge for shared schedule record timestamps | Complete the owner contract-boundary review without duplicating schedule records in the host |
+| `tinystoragedrivers-core` | Seven optional schema edges from `tinyjuice-bus`, `tinyconnectors-bus`, `tinymcp-bus`, `tinychannels-bus`, `tinywallet-bus`, `tinymemes-bus`, and `tinybox-bus` | Extract declarative schema vocabulary in its owner and consume compatible bus releases |
+
+`tinystoragedrivers-core` at the pinned revision includes async ports, an
+in-memory driver and compression. It is not added to the pure serialization
+allowlist. Each temporary exception stops its contract probe at that exact
+unsafe edge; host graph traversal still checks descendants for forbidden module
+implementations. `--require-complete` continues to reject all these exceptions.
+The transitional gate therefore certifies only absence of **unlisted** boundary
+violations, not completion of the contract extraction.
+
+The sections below preserve earlier owner deliveries and their dated validation
+receipts. Historical release numbers and exception counts describe those
+checkpoints; current runtime versions and checksums are in the module registry.
 
 Every owner below is the canonical upstream under
 `https://github.com/tinyhumansai/`. Contract changes land there first. OpenHuman
@@ -526,7 +548,7 @@ The cron scheduler runtime is `tinyflows_schedule::runtime::Scheduler` (v0.8.15)
 
 Deleted from `crates/openhuman-core/src/cron/`: `scheduler/{dispatch,slot,retry}.rs`, the persistence half of `scheduler/run_record.rs`, `policy.rs` and its tests, the core `parse_human_delay`, `validate_delivery`, `check_origin_requirements` and `default_delivery`, and the `DomainEvent::FlowScheduleTick` round trip (`EVENTS_VERSION` 1.11.0). The tests of the moved behaviour (claims, concurrency, single-flight, retry budget, one-shot completion) live in `tinyflows-schedule`.
 
-The host keeps the ports in `scheduler/{host,executor,run_delivery}.rs`: `JobStore` over `CronDocuments` (with operator limits), `JobExecutor` (shell and agent attempts, failure classification, the retries-exhausted report), `RunDelivery` (delivery, completion and health events) and `TriggerSink` (the flow's schedule trigger through `FlowTriggerSubscriber::dispatch_schedule_tick`, and `system:<name>` jobs). `scheduler_gate`, system jobs, seeding and the `cron.*` RPC stay. TinyFlows is a plain library gitlink, so there is no registry record or `module-boundaries.json` entry.
+The host keeps the ports in `scheduler/{host,executor,run_delivery}.rs`: `JobStore` over `CronDocuments` (with operator limits), `JobExecutor` (shell and agent attempts, failure classification, the retries-exhausted report), `RunDelivery` (delivery, completion and health events) and `TriggerSink` (the flow's schedule trigger through `FlowTriggerSubscriber::dispatch_schedule_tick`, and `system:<name>` jobs). `platform::llm_gate` (moved out), system jobs, seeding and the `cron.*` RPC stay. TinyFlows is a plain library gitlink, so there is no registry record or `module-boundaries.json` entry.
 
 Behaviour notes: a job's policy is read from the job document (an unreadable job refuses Run Now with a credential-free message, `ops::load_job_for_run`); `CronJobCompleted` and the scheduler health signal are published from delivery, before the runtime writes the completion; `CronJobTriggered` is no longer published for `flow` rows.
 
@@ -545,3 +567,9 @@ cron scheduler keeps running agent, shell and system jobs, but `flow` schedule
 rows are answered as skipped (`COMPONENT_DISABLED:flows`, not retried) and no
 flow run starts. `cron.enabled = false` stops the whole scheduler, flow
 schedule rows included, regardless of `flows`.
+
+### TinyFlows schedule bus cutover (#7397)
+
+Supersedes the section above for who runs the scheduler. The `tinyflows` module (registry record `records_flows.rs`, contract `tinyflows_bus::schedule` v3) owns the scheduler runtime, claims, retry timing, completion, the cron job and run store (`CronDocuments`) and the schedule maths (`NextRun`, `ValidateSchedule`, `RunsCloserThan`, `NormalizeExpression`, `ParseHumanDelay`, `ValidateDelivery`, `DefaultDelivery`, `CheckOriginRequirements`, `CheckPatch`, `TruncateCronOutput`). Core links only `tinyflows-bus` (serde and chrono): `cargo tree -p openhuman -e normal -i tinyflows-schedule` is empty, and `tinyflows-drivers` is optional behind `flows` for the catalog alone.
+
+The host keeps four adapters in `crates/openhuman-core/src/cron/`: `client.rs` (typed calls and `ScheduleStore` requests), `documents_port.rs` (the scope's document store served to the module), `bus_host.rs` (the `ScheduleHost` callbacks `Execute`, `Failed`, `Deliver`, `ScheduleTrigger`, bound per scope) and `handlers.rs` (the job-kind registry that replaced the hard-coded shell/agent/flow split and absorbed the system-job handlers). Deleted: `claims.rs`, `scheduler/host.rs`, `scheduler/run_record.rs` and the `tinyflows_schedule` re-export facade. Temporary exception: `tinyflows-bus` carries `chrono` (record timestamps), recorded in `scripts/ci/module-boundaries.json`.

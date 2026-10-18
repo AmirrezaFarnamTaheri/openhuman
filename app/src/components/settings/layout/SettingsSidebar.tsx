@@ -1,10 +1,14 @@
+import { useState } from 'react';
+
 import { useT } from '../../../lib/i18n/I18nContext';
 import TwoPaneNav from '../../layout/TwoPaneNav';
+import { TextField } from '../../ui';
 import { useSettingsNavigation } from '../hooks/useSettingsNavigation';
 import {
   entryRoute,
   NAV_GROUP_LABEL_KEY,
   resolveSidebarId,
+  SETTINGS_ROUTE_REGISTRY,
   sidebarGroups,
 } from '../settingsRouteRegistry';
 import { SETTINGS_NAV_ICONS } from './settingsNavIcons';
@@ -20,16 +24,14 @@ import { SETTINGS_NAV_ICONS } from './settingsNavIcons';
  * touched: shorter rows (`py-1` vs `py-1.5`), a different group-heading inset,
  * and a grey icon left sitting on the accent fill of a selected row.
  *
- * There is no search field here any more. It filtered against the full route
- * registry rather than these top-level entries, so it was the only way to reach
- * some deep destinations (privacy, security, agent-access, …) by name; those are
- * still reachable by navigating their parent section, but nothing types them
- * now. `components/settings/search/` went with it — that directory existed
- * solely for this header and had no other importer.
+ * Search now reuses the full settings route registry and its keyword aliases,
+ * restoring access to deep destinations without recreating the old search
+ * helper directory. The default view stays the compact grouped sidebar.
  */
 const SettingsSidebar = () => {
   const { t } = useT();
   const { currentRoute, navigateToSettings } = useSettingsNavigation();
+  const [search, setSearch] = useState('');
 
   const activeSidebarId = resolveSidebarId(currentRoute);
 
@@ -52,15 +54,71 @@ const SettingsSidebar = () => {
     }),
   }));
 
+  const term = search.trim().toLocaleLowerCase();
+  const matchingRoutes = term
+    ? SETTINGS_ROUTE_REGISTRY.filter(
+        entry =>
+          !entry.hiddenDeepLink &&
+          !entry.devOnly &&
+          (t(entry.titleKey).toLocaleLowerCase().includes(term) ||
+            entry.id.toLocaleLowerCase().includes(term) ||
+            entry.searchKeywords?.some(keyword => keyword.toLocaleLowerCase().includes(term)))
+      )
+    : [];
+  const searchGroups = term
+    ? [
+        {
+          label: t('nav.settings'),
+          items: matchingRoutes.map(entry => ({
+            value: entry.id,
+            label: t(entry.titleKey),
+            testId: `settings-search-${entry.id}`,
+          })),
+        },
+      ]
+    : groups;
+  for (const entry of matchingRoutes) routeById.set(entry.id, entryRoute(entry));
+
   return (
     <TwoPaneNav
       ariaLabel={t('nav.settings')}
       walkthroughId="settings-menu"
-      groups={groups}
+      header={
+        <label className="block">
+          <span className="sr-only">{t('settings.navigation.search')}</span>
+          <TextField
+            type="search"
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Enter' && matchingRoutes.length > 0) {
+                event.preventDefault();
+                navigateToSettings(entryRoute(matchingRoutes[0]));
+                setSearch('');
+              }
+            }}
+            placeholder={t('settings.navigation.search')}
+          />
+        </label>
+      }
+      groups={searchGroups}
+      footer={
+        term && matchingRoutes.length === 0 ? (
+          <p
+            data-testid="settings-search-empty"
+            role="status"
+            className="px-2 py-4 text-sm text-content-muted">
+            {t('settings.search.noResults', 'No matching settings')}
+          </p>
+        ) : undefined
+      }
       selected={activeSidebarId ?? ''}
       onSelect={id => {
         const route = routeById.get(id);
-        if (route) navigateToSettings(route);
+        if (route) {
+          navigateToSettings(route);
+          setSearch('');
+        }
       }}
     />
   );

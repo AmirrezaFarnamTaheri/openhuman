@@ -170,6 +170,18 @@ export const EXACT_TOOL_SPECS: Record<string, ToolSpec> = {
   run_linter: spec('runLinter', ListChecksIcon, 'code'),
   run_tests: spec('runTests', ListChecksIcon, 'code'),
   lsp: spec('analyzeCode', CodeIcon, 'code', { chip: chip.path() }),
+  source_evidence: spec('analyzeCode', CodeIcon, 'code', { chip: chip.path(), body: 'generic' }),
+  // Structural tools return paged metadata and write/preview receipts. Their
+  // JSON fields must stay visible instead of becoming a plain file body.
+  ast_outline: spec('analyzeCode', CodeIcon, 'code', { chip: chip.path(), body: 'generic' }),
+  ast_symbol: spec('readFile', FileTextIcon, 'code', { chip: chip.path(), body: 'generic' }),
+  ast_patch: spec('applyEdits', FilePenIcon, 'code', { chip: chip.path(), body: 'generic' }),
+  chunk_search: spec('searchCode', TextSearchIcon, 'code', { chip: chip.query(), body: 'generic' }),
+  chunk_inspect: spec('analyzeCode', CodeIcon, 'code', {
+    chip: chip.text('id', 'manifest_path'),
+    body: 'generic',
+  }),
+  chunk_apply: spec('applyEdits', FilePenIcon, 'code', { chip: chip.path(), body: 'generic' }),
 
   // ── Shell and system ────────────────────────────────────────────────────
   shell: spec('runCommand', SquareTerminalIcon, 'shell', { chip: chip.command(), body: 'shell' }),
@@ -444,7 +456,12 @@ export const EXACT_TOOL_SPECS: Record<string, ToolSpec> = {
   workspace_update_persona: spec('updatePersona', UserRoundIcon, 'system'),
   workspace_reset_persona: spec('updatePersona', UserRoundIcon, 'system'),
   workspace_init: spec('setUpWorkspace', FolderOpenIcon, 'system'),
-  artifact_delete: spec('deleteArtifact', PackageIcon, 'system'),
+  create_artifact: spec('createArtifact', PackageIcon, 'system'),
+  update_artifact: spec('updateArtifact', PackageIcon, 'system'),
+  read_artifact: spec('checkArtifacts', PackageIcon, 'system'),
+  list_artifacts: spec('checkArtifacts', PackageIcon, 'system'),
+  delete_artifact: spec('deleteArtifact', PackageIcon, 'system'),
+  share_artifact: spec('shareArtifact', PackageIcon, 'system'),
 };
 
 /**

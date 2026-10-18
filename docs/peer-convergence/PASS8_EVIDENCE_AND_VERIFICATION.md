@@ -34,7 +34,7 @@ were not processed by these Python/TypeScript AST parsers.
 1. Source Evidence: opt-in SHA-256 evidence, per-file host authorization, bounded scans, pagination, hash-checked line retrieval, explicit partial results and JSON-safe output.
 2. Derived Source Graph: Rust module syntax, JS/TS relative imports/requires and dynamic literal imports, plus Python relative from-imports. Edges are syntactic observations, not full parser/AST or runtime dataflow. Ambiguous, unresolved and partial catalogs never justify definitive dependency impact.
 3. Root TinyAgents final-verification middleware: short consequential edits, git operations and native delegation/handoff tools now trigger a requirements check even below the previous five-round threshold. The check requires tests after the last write, latest exact commit checks and observable exit status.
-4. Four new key-only, OpenAI-compatible provider presets on both Rust and frontend catalogs: Cohere (https://api.cohere.ai/compatibility/v1), TokenRouter (https://api.tokenrouter.io/v1), BytePlus ModelArk Asia Pacific (https://ark.ap-southeast.bytepluses.com/api/v3) and Europe (https://ark.eu-west.bytepluses.com/api/v3). API keys and endpoints are region-scoped for BytePlus. No model-level quota, entitlement or pricing is implied.
+4. Four new key-only, OpenAI-compatible provider presets on both Rust and frontend catalogs: Cohere (`https://api.cohere.ai/compatibility/v1`), TokenRouter (`https://api.tokenrouter.io/v1`), BytePlus ModelArk Asia Pacific (`https://ark.ap-southeast.bytepluses.com/api/v3`) and Europe (`https://ark.eu-west.bytepluses.com/api/v3`). API keys and endpoints are region-scoped for BytePlus. No model-level quota, entitlement or pricing is implied.
 
 ### System-One context convergence
 

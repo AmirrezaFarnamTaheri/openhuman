@@ -31,7 +31,9 @@ impl ChatModel<()> for CapabilityStubModel {
     }
 
     async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
-        Err(tinyinference_llm::Error::Model("capability probe only".into()))
+        Err(tinyinference_llm::Error::Model(
+            "capability probe only".into(),
+        ))
     }
 }
 
@@ -49,26 +51,10 @@ fn fleet_reports_non_image_capabilities_of_the_model_that_receives_the_request()
         RotationStrategy::RoundRobin,
     );
 
-    assert!(fleet.supports_input(
-        InputModality::Image,
-        "image/png",
-        InputSource::Base64
-    ));
-    assert!(fleet.supports_input(
-        InputModality::Audio,
-        "audio/wav",
-        InputSource::Url
-    ));
-    assert!(!fleet.supports_input(
-        InputModality::Document,
-        "application/pdf",
-        InputSource::Url
-    ));
-    assert!(!fleet.supports_input(
-        InputModality::Video,
-        "video/mp4",
-        InputSource::Url
-    ));
+    assert!(fleet.supports_input(InputModality::Image, "image/png", InputSource::Base64));
+    assert!(fleet.supports_input(InputModality::Audio, "audio/wav", InputSource::Url));
+    assert!(!fleet.supports_input(InputModality::Document, "application/pdf", InputSource::Url));
+    assert!(!fleet.supports_input(InputModality::Video, "video/mp4", InputSource::Url));
 }
 
 struct StubStreamModel {
@@ -212,11 +198,13 @@ impl ChatModel<()> for CountingForbiddenModel {
     async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
         self.attempts
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Err(tinyinference_llm::Error::Provider(Box::new(ProviderError {
-            status: Some(403),
-            code: Some("invalid_model".into()),
-            ..Default::default()
-        })))
+        Err(tinyinference_llm::Error::Provider(Box::new(
+            ProviderError {
+                status: Some(403),
+                code: Some("invalid_model".into()),
+                ..Default::default()
+            },
+        )))
     }
 
     async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
@@ -281,7 +269,9 @@ async fn invalid_model_403_does_not_evict_api_keys_or_retry_another_credential()
     let output: Vec<ModelStreamItem> = stream.collect().await;
     assert_eq!(first.load(Ordering::SeqCst), 1);
     assert_eq!(second.load(Ordering::SeqCst), 0);
-    assert!(output.iter().any(|event| matches!(event, ModelStreamItem::ProviderFailed(_))));
+    assert!(output
+        .iter()
+        .any(|event| matches!(event, ModelStreamItem::ProviderFailed(_))));
     assert_eq!(key_pool::snapshot(scope)[0].status, "healthy");
     key_pool::forget(scope);
 }
@@ -299,9 +289,9 @@ impl ChatModel<()> for PostOutputRateLimitModel {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(ModelStream::new(Box::pin(futures::stream::iter(vec![
             ModelStreamItem::Started,
-            ModelStreamItem::MessageDelta(
-                tinyinference_llm::message::MessageDelta::text("visible output")
-            ),
+            ModelStreamItem::MessageDelta(tinyinference_llm::message::MessageDelta::text(
+                "visible output",
+            )),
             ModelStreamItem::ProviderFailed(ProviderError {
                 status: Some(429),
                 ..Default::default()
@@ -341,7 +331,10 @@ async fn post_content_upstream_429_cannot_replay_or_duplicate_visible_tool_outpu
     assert_eq!(first.load(Ordering::SeqCst), 1);
     assert_eq!(second.load(Ordering::SeqCst), 0);
     assert_eq!(
-        events.iter().filter(|item| matches!(item, ModelStreamItem::MessageDelta(_))).count(),
+        events
+            .iter()
+            .filter(|item| matches!(item, ModelStreamItem::MessageDelta(_)))
+            .count(),
         1,
         "an emitted delta is never replayed across credentials"
     );
@@ -350,7 +343,9 @@ async fn post_content_upstream_429_cannot_replay_or_duplicate_visible_tool_outpu
         "the upstream failure must remain visible"
     );
     assert_eq!(key_pool::snapshot(scope)[0].status, "cooldown");
-    assert!(key_pool::snapshot(scope).iter().all(|entry| entry.active_leases == 0));
+    assert!(key_pool::snapshot(scope)
+        .iter()
+        .all(|entry| entry.active_leases == 0));
     key_pool::forget(scope);
 }
 
@@ -363,10 +358,12 @@ impl ChatModel<()> for CountingRateLimitedModel {
     async fn invoke(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelResponse> {
         self.attempts
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Err(tinyinference_llm::Error::Provider(Box::new(ProviderError {
-            status: Some(429),
-            ..Default::default()
-        })))
+        Err(tinyinference_llm::Error::Provider(Box::new(
+            ProviderError {
+                status: Some(429),
+                ..Default::default()
+            },
+        )))
     }
 
     async fn stream(&self, _: &(), _: ModelRequest) -> tinyinference_llm::Result<ModelStream> {
@@ -388,12 +385,20 @@ async fn fleet_fails_over_at_most_the_per_call_budget_for_unary_requests() {
     let scope = "fleet-bounded-429-unary";
     let attempts = Arc::new(AtomicUsize::new(0));
     let keys: Vec<String> = (0..8).map(|index| format!("unary-key-{index}")).collect();
-    let models: Vec<Arc<dyn ChatModel<()>>> = keys.iter().map(|_| {
-        Arc::new(CountingRateLimitedModel { attempts: Arc::clone(&attempts) })
-            as Arc<dyn ChatModel<()>>
-    }).collect();
+    let models: Vec<Arc<dyn ChatModel<()>>> = keys
+        .iter()
+        .map(|_| {
+            Arc::new(CountingRateLimitedModel {
+                attempts: Arc::clone(&attempts),
+            }) as Arc<dyn ChatModel<()>>
+        })
+        .collect();
     let fleet = CredentialFleetModel::new(
-        scope.into(), keys, models, None, RotationStrategy::RoundRobin
+        scope.into(),
+        keys,
+        models,
+        None,
+        RotationStrategy::RoundRobin,
     );
     assert!(fleet.invoke(&(), ModelRequest::default()).await.is_err());
     assert_eq!(attempts.load(Ordering::SeqCst), MAX_KEY_ATTEMPTS_PER_CALL);
@@ -406,12 +411,20 @@ async fn fleet_fails_over_at_most_the_per_call_budget_for_precontent_stream_fail
     let scope = "fleet-bounded-429-stream";
     let attempts = Arc::new(AtomicUsize::new(0));
     let keys: Vec<String> = (0..8).map(|index| format!("stream-key-{index}")).collect();
-    let models: Vec<Arc<dyn ChatModel<()>>> = keys.iter().map(|_| {
-        Arc::new(CountingRateLimitedModel { attempts: Arc::clone(&attempts) })
-            as Arc<dyn ChatModel<()>>
-    }).collect();
+    let models: Vec<Arc<dyn ChatModel<()>>> = keys
+        .iter()
+        .map(|_| {
+            Arc::new(CountingRateLimitedModel {
+                attempts: Arc::clone(&attempts),
+            }) as Arc<dyn ChatModel<()>>
+        })
+        .collect();
     let fleet = CredentialFleetModel::new(
-        scope.into(), keys, models, None, RotationStrategy::RoundRobin
+        scope.into(),
+        keys,
+        models,
+        None,
+        RotationStrategy::RoundRobin,
     );
     assert!(fleet.stream(&(), ModelRequest::default()).await.is_err());
     assert_eq!(attempts.load(Ordering::SeqCst), MAX_KEY_ATTEMPTS_PER_CALL);

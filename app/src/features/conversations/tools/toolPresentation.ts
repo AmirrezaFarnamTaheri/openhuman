@@ -9,8 +9,8 @@
  *
  * Resolution order, first hit wins:
  *
- * 1. `tool_call { name, arguments }`: the harness's deferred-tool bridge is
- *    described as the tool it invokes.
+ * 1. `tool_call { name, arguments }` and named structural calls through the
+ *    `coding` pack are described as the tool they invoke.
  * 2. Named agents: `subagent:<id>`, `spawn_subagent { agent_id }`,
  *    `delegate_<id>` and custom delegate names.
  * 3. Collapsed tools switching on an argument (`memory { action }`).
@@ -103,6 +103,19 @@ export interface ToolCallPresentation {
 export type Translate = (key: string, fallback?: string) => string;
 
 const ACTIVE_STATUSES = new Set<ToolCallStatus>(['running', 'awaiting_user']);
+const STRUCTURAL_TOOL_NAMES = new Set([
+  'ast_outline',
+  'ast_symbol',
+  'ast_patch',
+  'chunk_search',
+  'chunk_inspect',
+  'chunk_apply',
+]);
+
+/** These tools return structured receipts whose sibling fields must remain visible. */
+export function isStructuralToolName(name: string): boolean {
+  return STRUCTURAL_TOOL_NAMES.has(name);
+}
 
 export function tenseForStatus(status: ToolCallStatus | undefined): ToolPhraseTense {
   return !status || ACTIVE_STATUSES.has(status) ? 'active' : 'done';
@@ -232,6 +245,16 @@ export function describeToolCall(input: DescribeToolCallInput): ToolCallPresenta
       serverLabel: undefined,
     });
   }
+  // Pack disclosure keeps its skill label; a bound structural target uses
+  // the pack's `args` field for its path and literal preview presentation.
+  if (
+    baseName === 'use_skill' &&
+    args.skill === 'coding' &&
+    typeof args.tool === 'string' &&
+    isStructuralToolName(args.tool)
+  ) {
+    return describeToolCall({ ...input, name: args.tool, args: args.args, serverLabel: undefined });
+  }
 
   // 2. Named agents.
   if (rawName.startsWith('subagent:') || baseName === INTEGRATIONS_AGENT_ID) {
@@ -299,6 +322,10 @@ export function describeToolCall(input: DescribeToolCallInput): ToolCallPresenta
   const exact = EXACT_TOOL_SPECS[baseName];
   if (exact) {
     const presentation = fromSpec(exact, 'exact', baseName, args, tense, serverDetail);
+    if ((baseName === 'ast_patch' || baseName === 'chunk_apply') && args.dry_run === true) {
+      presentation.phrase = 'readChanges';
+      presentation.icon = EXACT_TOOL_SPECS.read_diff.icon;
+    }
     if (baseName === 'mcp_call_tool' || baseName === 'mcp_registry_tool_call') {
       const tool =
         typeof args.tool === 'string'

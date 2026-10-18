@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
 import { fleetTranslationKeys, fleetTranslations } from '../fleetTranslations';
+import { modelManagementTranslations } from '../modelManagement';
 
 describe('provider fleet localization', () => {
   it('provides every provider-control translation in each supported locale', () => {
@@ -16,6 +18,20 @@ describe('provider fleet localization', () => {
     for (const messages of Object.values(fleetTranslations)) {
       expect(messages['settings.ai.modelTransportOverridesHelp']).toContain('Responses');
       expect(messages['settings.ai.modelTransportOverridesHelp']).toContain('Auto');
+    }
+  });
+
+  it('translates every model-management message without silently using English', () => {
+    const english = modelManagementTranslations.en;
+    for (const [locale, messages] of Object.entries(modelManagementTranslations)) {
+      expect(Object.keys(messages).sort(), locale).toEqual(Object.keys(english).sort());
+      for (const [key, value] of Object.entries(messages)) {
+        expect(value.trim(), `${locale}: ${key}`).toBeTruthy();
+        // "vision" is also the French word; it is not an untranslated label.
+        if (locale !== 'en' && !(locale === 'fr' && key === 'fleet.visionLabel')) {
+          expect(value, `${locale}: ${key}`).not.toBe(english[key as keyof typeof english]);
+        }
+      }
     }
   });
   it('localizes suitability browsing and destructive-sync consent across supported locales', () => {
@@ -39,5 +55,4 @@ describe('provider fleet localization', () => {
       fleetTranslations.en['settings.ai.feasibility.filter']
     );
   });
-
 });

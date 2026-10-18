@@ -53,7 +53,7 @@ fn shutdown_token_stops_axum_listener_within_timeout() {
 }
 
 async fn shutdown_token_stops_listener() {
-    openhuman_core::cron::scheduler_gate::set_signed_out(false);
+    openhuman_core::platform::llm_gate::set_signed_out(false);
 
     let workspace = tempfile::tempdir().expect("workspace tempdir");
     // Pin the scheduler-gate policy so the bootstrap's `init_global` snapshot
