@@ -47,25 +47,33 @@ jobs:
             echo "Already caught up with canonical upstream"
             exit 0
           fi
-          if git -c merge.renameLimit=10000 merge --no-edit --no-commit --no-ff "$incoming"; then
-            # This workflow is temporary: its merge commit removes the trigger.
-            git rm -- .github/workflows/pr14-upstream-sync-once.yml
-            git diff --cached --check
-            git commit -m "merge: integrate latest canonical OpenHuman main ($incoming)"
-            git push origin "HEAD:refs/heads/$branch"
-            echo "Merged canonical upstream $incoming into PR #14"
-          else
-            echo "Merge has source conflicts; refusing a blind ours/theirs resolution"
+          status=0
+          git -c merge.renameLimit=10000 merge --no-edit --no-commit --no-ff "$incoming" || status=$?
+          if [ "$status" -ne 0 ]; then
             git diff --name-only --diff-filter=U | tee upstream-sync-report/conflicts.txt
-            git status --short > upstream-sync-report/status.txt
             git ls-files -u > upstream-sync-report/unmerged-stages.txt
             git diff --cc > upstream-sync-report/combined-conflicts.diff
-            count="$(wc -l < upstream-sync-report/conflicts.txt)"
-            echo "::error::Unresolved conflict paths: $count"
-            echo "Conflict categories:"
-            git status --short | awk '$1 ~ /U|AA|DD/ {print $1}' | sort | uniq -c
+            git status --short > upstream-sync-report/status.txt
+            echo "Merge requires explicit resolution of $(wc -l < upstream-sync-report/conflicts.txt) paths"
+            python3 -m py_compile scripts/ci/pr14-upstream-resolution-once.py
+            python3 scripts/ci/pr14-upstream-resolution-once.py
+          fi
+          # The token can merge source content but cannot update workflow files.
+          # Preserve the branch's workflows here, then apply reviewed upstream
+          # workflow updates with the GitHub connector after the merge.
+          git restore --source=HEAD --staged --worktree -- .github/workflows
+          if git diff --name-only --diff-filter=U | grep .; then
+            echo "::error::Unresolved index stages remain"
             exit 2
           fi
+          node --check scripts/ci/storage-bypass-debt.mjs
+          node --check scripts/ci/check-openhuman-rust-layout.mjs
+          git diff --cached --check
+          echo "Staged source changes:"
+          git diff --cached --stat | tail -n 55
+          git commit -m "merge: integrate latest canonical OpenHuman main ($incoming)"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "Merged canonical upstream $incoming into PR #14"
       - name: Upload merge-conflict details
         if: failure()
         uses: actions/upload-artifact@v4
