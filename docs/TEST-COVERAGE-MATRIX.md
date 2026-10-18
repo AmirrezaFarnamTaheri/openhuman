@@ -214,6 +214,8 @@ Local inference runs against a runtime the user installs, starts, and pulls mode
 | 4.3.7 | Mascot Avatar Animation       | VU    | `app/src/features/human/Mascot/RiveMascot.test.tsx`, `app/src/features/human/Mascot/useMascotClock.test.tsx`, `app/src/features/human/Mascot/riveMaps.test.ts`            | ✅     | Rive `MascotSM` state machine: face→pose mapping, Oculus→`visme_codes` viseme normalization, idle random pose rotation, hidden/reduced-motion suspension, and preserved active elapsed time |
 | 4.3.8 | Tool rules (allow / deny / hide / approval patterns) | RU | `crates/openhuman-core/src/tools/rules/ops_tests.rs`, `crates/openhuman-core/src/agent/session_host/runtime_session/tool_rules_tests.rs`, `crates/openhuman-core/src/agent/tinyagents/turn_plan_tests.rs`, `crates/openhuman-core/src/agent/tinyagents/host/definition_registry_tests.rs`, `crates/openhuman-embed/src/agent/definition_tests.rs`, `vendor/tinyagents/crates/tinyagents-harness/src/agent_loop/tool_rules_tests.rs` | ✅ | `[tool_rules]` config, definition `disallowed_tools`/`tool_rules`, registry entries and `AgentDefinitionSpec::tool_rules` compose into rule layers; sub-agents inherit operator layers only; the turn harness carries them as `RunPolicy::tool_rules`, which the TinyAgents loop applies to the catalogue, `tool_search` and every call (loop behaviour covered upstream) |
 
+| 4.3.9 | Structural tool receipts and packed previews | VU | `app/src/features/conversations/components/ChatToolParts.test.tsx`, `app/src/features/conversations/tools/toolPresentation.test.ts`, `app/src/utils/toolDefinitions.test.ts` | ✅ | All six tools retain revision, source, pagination and preview fields; packed `use_skill.args.args` and direct calls use the same read/write presentation. |
+
 ### 4.4 Agent Harness Behaviors
 
 End-to-end coverage of the agent harness via the web-chat RPC surface against an in-test scripted upstream (`tests/agent_harness_e2e.rs`) plus browser-level Redux/DOM assertions (`app/test/e2e/specs/agent-harness-behaviors.spec.ts`). Added for #3471.
@@ -238,6 +240,8 @@ End-to-end coverage of the agent harness via the web-chat RPC surface against an
 | 4.4.16 | Builder-supplied session definition (library host) | RU | `crates/openhuman-core/src/agent/session_host/builder/builder_tests_session_definition_tests.rs` | ✅ | `SessionHostBuilder::agent_definition` stamps a caller's own `AgentDefinition` on the session, so a hosted root invocation resolves an id the process registry never held; it outranks a registry entry sharing its id, it carries the turn's tool allow-list, the session is stamped with the definition's own id, a contradicting `agent_definition_name` fails the build, and without it the same id stays unknown |
 | 4.4.17 | Chat failure presentation | RU+VU | `crates/openhuman-core/src/web_chat/web_tests_rate_limit_classification_tests.rs`, `app/src/providers/__tests__/assistantUiMessages.test.ts`, `app/src/features/conversations/aui/ChatErrorNotice.test.tsx`, `app/src/components/assistant-ui/thread.reloadCapability.test.tsx` | ✅ | Failed turns use assistant-ui's error card; old custom link markup is removed from saved errors (#6609); uncommitted failures and guardrail notices hide invalid regenerate controls while completed replies retain Refresh (#6613) |
 | 4.4.18 | Agent trace export | RU | `crates/openhuman-core/src/agent/progress_tracing/otlp_tests.rs`, `crates/openhuman-core/src/agent/progress_tracing/progress_tracing_content_gate_tests.rs`, `crates/openhuman-core/src/agent/session_host/runtime_session_tests.rs` | 🟡 | OTLP projection covers turn IO, role-labeled model messages, subagent grouping, tool-search summaries and usage de-duplication; live proxy canary follows backend deployment |
+
+| 4.4.19 | Actual execution and dynamic side-effect finish policy | RI+RU | `tests/structural_code.rs`, `crates/openhuman-core/src/agent/tinyagents/verify_before_finish_tests.rs`, `vendor/tinyagents/crates/tinyagents-harness/src/middleware/library/verify_before_finish/middleware_execution_boundary_tests.rs` | ✅ | The real host policy uses admitted executor observations; readonly previews do not become write activity, packed/shared tools retain concrete permissions, and missing named targets keep the dangerous fallback. Observed attempt does not imply successful verification. |
 
 ---
 
@@ -275,6 +279,8 @@ End-to-end coverage of the agent harness via the web-chat RPC surface against an
 | 6.1.3 | Path Restriction Enforcement | RU+WD | `crates/openhuman-core/src/tools/impl/filesystem/gate_tests.rs`, `app/test/e2e/specs/tool-filesystem-flow.spec.ts`  | ✅     | Was 🟡 — WDIO asserts traversal + absolute-path denial envelope      |
 | 6.1.4 | Agent deliverables in the visible Files folder | RU+VU | `crates/openhuman-core/src/agent/artifacts/files_tests.rs`, `crates/openhuman-core/src/agent/artifacts/migrate_tests.rs`, `crates/openhuman-core/src/agent/artifacts/ops_tests.rs`, `crates/openhuman-app/src/artifact_commands_tests.rs`, `app/src/services/__tests__/artifactDownloadService.test.ts`, `crates/openhuman-core/src/config/ops_files_dir_tests.rs`, `app/src/components/settings/panels/__tests__/FilesFolderSection.test.tsx`, `app/src/features/conversations/aui/MessageArtifactCards.test.tsx`, `app/src/features/conversations/aui/ArtifactPreviewPanel.refresh.test.tsx` | ✅ | Files land in `~/OpenHuman/projects/Files` with human names (`create_new`, ` (2)` on collision, shared across accounts without clobbering; per-account listing); escape guard on the recorded file; "file missing" for a file removed outside OpenHuman; crash-safe idempotent migration of legacy files; Download resolves an artifact id through the core; the folder is chosen in Settings → Agent OS access and validated (absolute, not protected, not inside the data folder); Show in folder on the settings row (#5505); in chat, each ready file is a card in the reply that made it and opens in the preview panel, whose Download saves it through the OS save dialog (the chat Files panel was removed in #7888) |
 
+| 6.1.5 | Bounded structural analysis and reusable code chunks | RI+RU+VU+MS | `tests/structural_code.rs`, `vendor/tinyagents/vendor/tinytools/crates/tinytools-code/`, `vendor/tinyagents/vendor/tinytools/crates/tinytools-std/src/code/`, `docs/RELEASE-MANUAL-SMOKE.md` | ✅ | Eight language modes, bounded source paging, explicit catalog manifests, shared parser/publication state, revision checks, preview parity and filesystem admission. Syntax validation does not establish semantic or behavioral correctness. |
+
 ### 6.2 Shell & Git
 
 | ID    | Feature                      | Layer | Test path(s)                                                                                                    | Status | Notes                                                                                            |
@@ -302,6 +308,8 @@ End-to-end coverage of the agent harness via the web-chat RPC surface against an
 | 6.3.17 | Host-authored turns run on the thread's cached session (no competing root transcript) | RU | `crates/openhuman-core/src/web_chat/session_checkout_tests.rs::{checkout_cold_boots_from_the_thread_transcript_and_checkin_keeps_it_warm,checkin_if_vacant_yields_to_a_turn_that_re_cached_meanwhile,a_system_turn_adopts_the_cached_agent_and_its_fingerprint,a_fork_never_takes_or_returns_the_cached_agent}` | ✅ | Background delivery and goal continuation go through `web_chat::run_system_turn_on_thread` → `checkout_session_agent`, so they see the conversation and append to the thread's transcript. A throwaway host bound to the thread used to write a competing root transcript that the next cold-boot resume preferred (newest `created`), dropping every earlier turn after a restart. `checkin_session_agent_if_vacant` never clobbers a user turn that re-cached meanwhile; forks stay isolated. |
 | 6.3.18 | Mid-conversation availability notes are status, not instructions | RU | `crates/openhuman-core/src/agent/session_host/runtime_adapter_tests.rs::availability_notes_are_status_not_instructions` | ✅ | `[integration update]` / `[MCP update]` / `[skills update]` prepended to the next user message no longer say "act on them immediately" (which sent the orchestrator to the integrations agent mid-conversation); they defer to the user's message and only forbid the "reconnect/restart" reply. |
 | 6.3.19 | `use_skill` dispatches packed delegates with the live parent | RU | `crates/openhuman-core/src/agent/tinyagents/use_skill_dispatch_tests.rs::use_skill_dispatch_reaches_live_parent_for_packed_archetype_delegate` | ✅ | `use_skill {skill, tool:"create_image"}` routes through the typed delegation dispatch with the real parent `RunContext` instead of failing with "delegation requires a live harness run context"; disclosure and not-found paths unchanged. |
+
+| 6.3.20 | Bounded untrusted coding handoffs | RI+RU | `tests/coding_handoff.rs`, `crates/openhuman-core/src/agent/orchestration/coding_handoff/mod_tests.rs` | ✅ | Strict versioned JSON and byte/count/path bounds; malformed packets fail before async reuse/cancellation or partial parallel staging; direct and async consumers receive normalized context. Legacy unmarked bytes are preserved and reported checks remain unverified. |
 
 ### 6.4 Managed Cloud File Storage
 
@@ -608,6 +616,8 @@ The thread JSONL store moved to `tinyagents_session::threads` (`vendor/tinyagent
 | 13.3.10 | Composer model pick is the global default | RU+RI+VU+PW | `app/test/playwright/specs/chat-model-managed-catalog.spec.ts` (`Managed OpenRouter catalog in the model picker`), `crates/openhuman-core/src/web_chat/session_routing_tests.rs`, `tests/json_rpc_e2e.rs`, `app/src/features/conversations/Conversations.processSourceCommand.test.tsx` | 🟡 | The managed catalog suite is active and covers catalog display and selection. Its individual `a composer pick is the global default and survives a fresh page` case remains `test.skip` under #6395, so persistence across a fresh page is not asserted by Playwright. Backend provider/model routing is covered by `web_chat::session::session_routing_tests` and `tests/json_rpc_e2e.rs`; composer send defaults, picker overrides, delayed clears, rejected clears, and draft restoration are covered by `Conversations.processSourceCommand.test.tsx`. |
 | 13.3.11 | Skills page (Installed → Registry) with run/edit/remove controls | VU | `app/src/components/skills/__tests__/SkillsExplorerTab.test.tsx` | ✅ | Page-owned header + tabs in the MCP page's shape: installed rows with Run / Edit / Remove icon controls, Install from URL and New skill; registry rows with search, source filter and Install |
 
+| 13.3.14 | Unsaved provider credential probes and retry recovery | RU+VU | `crates/openhuman-core/src/inference/provider/ops/models/catalog_listing_tests.rs`, `app/src/components/settings/panels/__tests__/AIPanel.test.tsx` | ✅ | Candidate keys use a private scoped config snapshot and admitted endpoint; saved/managed credentials are not substituted. Failed probing performs no key write; a later keyring failure removes the stale bypass action. |
+
 ### 13.4 Developer Options
 
 | ID     | Feature            | Layer | Test path(s)                                      | Status | Notes |
@@ -719,11 +729,11 @@ The thread JSONL store moved to `tinyagents_session::threads` (`vendor/tinyagent
 
 | Status           | Count                                            |
 | ---------------- | ------------------------------------------------ |
-| ✅ Covered | 241 |
-| 🟡 Partial | 33 |
-| ❌ Missing | 14 |
-| 🚫 Manual smoke | 26 |
-| **Explicit feature rows** | **314** |
+| ✅ Covered | 246  |
+| 🟡 Partial | 33  |
+| ❌ Missing | 14  |
+| 🚫 Manual smoke | 26  |
+| **Explicit feature rows** | **319**  |
 
 Counts above include each explicitly numbered row once, including retired/manual rows.
 
