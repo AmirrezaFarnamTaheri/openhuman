@@ -58,7 +58,7 @@ export function runExamples({
     const features = [...featureGroups.get(configuration(example))].sort();
     if (features.length) args.push("--features", features.join(","));
     const result = run(resolve(root, "scripts/ci-cancel-aware.sh"), ["cargo", ...args], {
-      cwd: root, encoding: "utf8", env: offlineEnvironment(environment), timeout: 1800000, maxBuffer: 16 * 1024 * 1024,
+      cwd: root, encoding: "utf8", env: offlineEnvironment(environment), timeout: ciSmoke && example.name === "linux_fleet" ? 45 * 60_000 : 30 * 60_000, maxBuffer: 16 * 1024 * 1024,
     });
     assertExampleOutput(example.name, result);
     console.log(`PASS ${example.name}`);

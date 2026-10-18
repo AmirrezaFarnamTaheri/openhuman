@@ -4,14 +4,14 @@ import { spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
-const TRANSIENT_HTTP_STATUSES = new Set(["429", "500", "502", "503", "504"]);
+const TRANSIENT_LINK_STATUSES = new Set(["429", "500", "502", "503", "504", "TIMEOUT"]);
 
-/** Extract URLs only when every reported link failure is a transient HTTP 429 or 5xx. */
+/** Extract URLs only when every reported failure is transient (HTTP 429/5xx or timeout). */
 export function serviceUnavailableUrls(report) {
   const failures = [...report.matchAll(/^\*\s+\[([^\]]+)\]\s+<([^>]+)>/gm)];
   if (
     !failures.length ||
-    failures.some(([, status]) => !TRANSIENT_HTTP_STATUSES.has(status))
+    failures.some(([, status]) => !TRANSIENT_LINK_STATUSES.has(status))
   )
     return null;
   return [...new Set(failures.map(([, , url]) => url))];

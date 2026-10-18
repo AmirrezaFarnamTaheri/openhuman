@@ -1148,11 +1148,13 @@ test("hosted CI runs all embed examples without cold release LTO; private CI ret
     const lint = plan.lanes.find((lane) => lane.name === "rust-lint");
     const examples = lint.checks.find((check) => check.name === "embed-offline-examples");
     assert.equal(examples.when, true);
+    assert.deepEqual(examples.needs, ["test-modules"]);
     assert.equal(
       examples.run,
-      plan.profile === "hosted"
-        ? "node scripts/run-embed-examples.mjs --ci-smoke"
-        : "node scripts/run-embed-examples.mjs",
+      "set -a && . ci-out/test-modules-rust-lint.env && set +a || exit $?; " +
+        (plan.profile === "hosted"
+          ? "node scripts/run-embed-examples.mjs --ci-smoke"
+          : "node scripts/run-embed-examples.mjs"),
     );
   }
 });
