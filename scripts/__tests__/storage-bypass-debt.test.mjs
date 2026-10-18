@@ -348,7 +348,12 @@ test("a Git-recorded move preserves only the original writer and allowance", () 
     git("mv", oldPath, newPath);
     writeFileSync(join(root, newPath), source + "tokio::fs::write(other, bytes);\n");
     git("add", ".");
-    const previous = historicalFindings(root, scanner);
+    // The fixture already records upstream/main; inherited fork CI variables
+    // must not force this self-contained fixture to fetch the network.
+    const previous = historicalFindings(root, scanner, {
+      GITHUB_REPOSITORY: 'tinyhumansai/openhuman',
+      GITHUB_BASE_REF: '',
+    });
     assert.deepEqual(validateCoverageDebt([moved], [moved], [], previous), []);
     assert.deepEqual(validateAllowances([moved], [{ ...moved, site: moved.text }], previous), []);
     const added = { ...moved, text: "tokio::fs::write(other, bytes);" };

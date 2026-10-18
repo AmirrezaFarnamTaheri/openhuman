@@ -5,7 +5,7 @@
 if (typeof File !== 'undefined' && typeof File.prototype.text !== 'function') {
   Object.defineProperty(File.prototype, 'text', {
     configurable: true,
-    value: function (this: File): Promise<string> {
+    value(this: File): Promise<string> {
       return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result ?? ''));

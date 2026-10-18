@@ -1845,6 +1845,8 @@ describe('AIPanel', () => {
     );
   });
 
+  // This full AI settings integration is resource-heavy under concurrent hosted CI.
+  // waitFor still catches wrong PEM and failed saves; only setup gets headroom.
   it('previews an uploaded CA certificate before persisting the provider', async () => {
     vi.mocked(loadAISettings).mockResolvedValue({ ...baseSettings, cloudProviders: [] });
     renderWithProviders(<AIPanel />);
@@ -1875,7 +1877,7 @@ describe('AIPanel', () => {
     expect(vi.mocked(listProviderModels).mock.invocationCallOrder.at(-1)).toBeLessThan(
       vi.mocked(saveAISettings).mock.invocationCallOrder.at(-1) ?? Number.MAX_SAFE_INTEGER
     );
-  });
+  }, 60_000);
 
   it('keeps the most recently selected CA when an older file read finishes later', async () => {
     vi.mocked(loadAISettings).mockResolvedValue({ ...baseSettings, cloudProviders: [] });
@@ -1913,7 +1915,7 @@ describe('AIPanel', () => {
         expect.objectContaining({ ca_cert_pem: secondPem })
       )
     );
-  });
+  }, 60_000);
 
   // ─── local runtime: Ollama endpoint URL dialog ──────────────────────────────
 

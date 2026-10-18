@@ -1,7 +1,7 @@
 //! OpenHuman spawn-hierarchy admission policy.
 
-use crate::agent_registry::host_definition::AgentDefinition;
 use crate::agent::subagent_host::SubagentRunError;
+use crate::agent_registry::host_definition::AgentDefinition;
 use tinyagents_definition::{validate_tier_transition, AgentTier};
 
 /// Runtime spawn-hierarchy gate decision for one delegation hop.
