@@ -106,6 +106,14 @@ for file, policy in RULES.items():
             "Some(router_for_workspace(&workspace))",
             "Some(super::router_for_workspace_ctx(ctx, &workspace))",
         )
+    if file.endswith("/triage/decision_tests.rs"):
+        # The shared attribute before the conflict covers the first fork test.
+        # The canonical regression appended after it needs its own #[test].
+        text = text.replace(
+            "fn owner_relaxed_json_recovery_preserves_action_normalization()",
+            "#[test]\\nfn owner_relaxed_json_recovery_preserves_action_normalization()",
+            1,
+        )
     if file.endswith("/system/shell.rs"):
         original = "use super::shell_support::{append_verification_receipt, exec_result, python_utf8_env};"
         expanded = (
