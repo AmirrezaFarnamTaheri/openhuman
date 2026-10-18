@@ -92,6 +92,16 @@
   {
     "file": "crates/openhuman-core/src/cron/handlers.rs",
     "scope": "",
+    "name": "KIND_REGISTRY_TEST_LOCK",
+    "type": "tokio::sync::Mutex<()>",
+    "count": 1,
+    "category": "A",
+    "reason": "cfg(test) only: serializes tests that read, replace and use the process-wide job-kind handler registry. The mutex contains only unit and is held until the temporary registration has dropped; it stores no tenant state and is absent from shipped builds.",
+    "verification": "cron/handlers.rs: cfg(test) declaration; cron/handlers_tests.rs: a_later_registration_wins_and_dropping_restores_in_order, the_registered_handler_decides_the_outcome; cron/bus_host_tests.rs: execute_runs_the_registered_handler_and_reports_a_retryable_failure, a_permanent_handler_outcome_stops_the_retry_loop, an_agent_only_scheduler_refuses_shell_jobs_before_running_anything"
+  },
+  {
+    "file": "crates/openhuman-core/src/cron/handlers.rs",
+    "scope": "",
     "name": "REGISTRY",
     "type": "LazyLock<RwLock<Registry>>",
     "count": 1,

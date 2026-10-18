@@ -78,7 +78,6 @@
   - [Storage](developing/architecture/storage.md)
   - [Flows on TinyAgents](developing/architecture/flows-on-tinyagents.md)
   - [Memory](developing/architecture/memory.md)
-  - [Storage](developing/architecture/storage.md)
   - [Process state in shared cores](developing/architecture/process-state.md)
   - [MCP Registry](developing/architecture/mcp-registry.md)
   - [Security](developing/architecture/security.md)

@@ -170,6 +170,7 @@ export const EXACT_TOOL_SPECS: Record<string, ToolSpec> = {
   run_linter: spec('runLinter', ListChecksIcon, 'code'),
   run_tests: spec('runTests', ListChecksIcon, 'code'),
   lsp: spec('analyzeCode', CodeIcon, 'code', { chip: chip.path() }),
+  source_evidence: spec('analyzeCode', CodeIcon, 'code', { chip: chip.path(), body: 'generic' }),
   // Structural tools return paged metadata and write/preview receipts. Their
   // JSON fields must stay visible instead of becoming a plain file body.
   ast_outline: spec('analyzeCode', CodeIcon, 'code', { chip: chip.path(), body: 'generic' }),

@@ -22,6 +22,8 @@ use openhuman_core::HostKind;
 use serde_json::json;
 use tinyflows_bus::schedule;
 
+const RELEASED_MODULE_VERSION: &str = "0.1.0";
+
 async fn assert_released_module(config: &Config) {
     assert_eq!(schedule::CONTRACT_VERSION, 4, "review the source contract");
     let record = modules::registry::find("tinyflows").unwrap();
@@ -35,6 +37,7 @@ async fn assert_released_module(config: &Config) {
         .unwrap();
     assert_eq!(status.state, ModuleState::Ready);
     assert_eq!(status.source, Some(ModuleSource::Release));
+    assert_eq!(status.version, record.version);
     let info = modules::runtime::runtime()
         .await
         .unwrap()
@@ -43,16 +46,21 @@ async fn assert_released_module(config: &Config) {
         .into_iter()
         .find(|info| info.manifest.bus_name.as_str() == record.bus_name)
         .expect("the real module is loaded on the host bus");
-    assert_eq!(info.version, record.version);
-    assert_eq!(info.manifest.module.version.to_string(), record.version);
-    // This release advertises its package version for each interface, not a
-    // separate Schedule contract number. v0.8.23 is the pinned v3 artifact.
+    // v0.8.23's tinyflows-module/Cargo.toml declares 0.1.0. Its exports.rs
+    // uses that crate version for the ABI, module manifest and interfaces,
+    // separately from the release archive's version and Schedule contract.
+    assert_eq!(info.version, RELEASED_MODULE_VERSION);
+    assert_eq!(
+        info.manifest.module.version.to_string(),
+        RELEASED_MODULE_VERSION
+    );
     let provided = info
         .manifest
         .provides
         .iter()
         .find(|provided| provided.version.interface.as_str() == schedule::INTERFACE)
         .expect("the release advertises Schedule");
+    assert_eq!(provided.version.speaks.to_string(), RELEASED_MODULE_VERSION);
     let actual: BTreeSet<_> = provided
         .methods
         .iter()
