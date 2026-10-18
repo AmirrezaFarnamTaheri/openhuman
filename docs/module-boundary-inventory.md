@@ -1,10 +1,32 @@
 # Loadable module boundary inventory
 
-Status: the Channels, MCP, Wallet and TinyBox host cutovers are merged, and the
-final scoped local acceptance passed. The module-boundary gate reports zero
-violations, zero exceptions and no pending contracts; TinyRuntime remains
-explicitly excluded for separate removal work. The machine-readable dependency policy is
+## Current checkpoint: 2026-10-18
+
+The host cutovers remain integrated. The current canonical source also adds
+storage-schema v2 declarations to optional bus features. The machine-readable
+policy now records **13 exact temporary contract exceptions**, with no pending
+contracts; the historical zero-exception statement does not describe this tree.
+TinyRuntime remains explicitly excluded for separate removal work. The policy is
 [`scripts/ci/module-boundaries.json`](../scripts/ci/module-boundaries.json).
+
+| Current exception | Exact scope and reason | Completion condition |
+| --- | --- | --- |
+| `anyhow`, `async-trait`, `tokio` | Three `tinychannels-bus` edges for the provider trait retained at the canonical source pin | Publish and consume an owner contract that separates provider behavior from wire vocabulary |
+| `hmac`, `sha2` | Two opt-in `tinyconnectors-bus` webhook-verification edges | Complete the owner contract-boundary review or split the helpers from the pure contract |
+| `chrono` | One `tinyflows-bus` edge for shared schedule record timestamps | Complete the owner contract-boundary review without duplicating schedule records in the host |
+| `tinystoragedrivers-core` | Seven optional schema edges from `tinyjuice-bus`, `tinyconnectors-bus`, `tinymcp-bus`, `tinychannels-bus`, `tinywallet-bus`, `tinymemes-bus`, and `tinybox-bus` | Extract declarative schema vocabulary in its owner and consume compatible bus releases |
+
+`tinystoragedrivers-core` at the pinned revision includes async ports, an
+in-memory driver and compression. It is not added to the pure serialization
+allowlist. Each temporary exception stops its contract probe at that exact
+unsafe edge; host graph traversal still checks descendants for forbidden module
+implementations. `--require-complete` continues to reject all these exceptions.
+The transitional gate therefore certifies only absence of **unlisted** boundary
+violations, not completion of the contract extraction.
+
+The sections below preserve earlier owner deliveries and their dated validation
+receipts. Historical release numbers and exception counts describe those
+checkpoints; current runtime versions and checksums are in the module registry.
 
 Every owner below is the canonical upstream under
 `https://github.com/tinyhumansai/`. Contract changes land there first. OpenHuman

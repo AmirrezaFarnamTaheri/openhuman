@@ -5573,6 +5573,7 @@ dependencies = [
  "tinychannels",
  "tinycomputer-bus",
  "tinydocs-bus",
+ "tinyflows-bus",
  "tinyinference-core 0.4.1",
  "tinyinference-llm 0.4.1",
  "tinyinference-local",

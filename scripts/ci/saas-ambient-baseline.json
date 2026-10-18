@@ -504,13 +504,6 @@
     "occurrence": 1
   },
   {
-    "rule": "ambient-config",
-    "path": "crates/openhuman-core/src/inference/provider/ops/models/catalog_listing.rs",
-    "line": 84,
-    "text": "let config = crate::config::Config::load_or_init()",
-    "occurrence": 1
-  },
-  {
     "rule": "bare-spawn",
     "path": "crates/openhuman-core/src/inference/schemas/claude_code_handlers.rs",
     "line": 24,

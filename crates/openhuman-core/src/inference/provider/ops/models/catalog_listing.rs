@@ -147,9 +147,7 @@ fn no_managed_catalog() -> crate::core::Outcome<serde_json::Value> {
 pub async fn list_configured_models(
     provider_id: &str,
 ) -> Result<crate::core::Outcome<serde_json::Value>, String> {
-    let config = crate::config::Config::load_or_init()
-        .await
-        .map_err(|e| e.to_string())?;
+    let config = crate::config::ops::load_config_with_timeout().await?;
 
     list_configured_models_from_config(provider_id, &config).await
 }
@@ -214,9 +212,9 @@ pub async fn list_configured_models_with_candidate_key(
     preview: Option<crate::config::schema::cloud_providers::CloudProviderCreds>,
     preview_ca_cert_pem: Option<String>,
 ) -> Result<crate::core::Outcome<serde_json::Value>, String> {
-    let mut config = crate::config::Config::load_or_init()
-        .await
-        .map_err(|e| e.to_string())?;
+    // Preserve the dispatch's embedded/tenant config and the normal load
+    // timeout before applying an unsaved candidate to this private snapshot.
+    let mut config = crate::config::ops::load_config_with_timeout().await?;
     if let Some(entry) = preview {
         apply_candidate_provider_preview(&mut config, provider_id, entry, preview_ca_cert_pem)?;
     } else if preview_ca_cert_pem.is_some() {

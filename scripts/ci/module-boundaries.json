@@ -149,6 +149,41 @@
       "scope": "tinyflows-bus",
       "package": "chrono",
       "reason": "tinyflows-bus schedule contract v3 carries the job, run and schedule records (CronJob, CronRun, Schedule, DeliveryConfig, ...) with their DateTime<Utc> fields so hosts redeclare none of them. chrono is time arithmetic and RFC3339 serde only, with no I/O or runtime; the schedule maths themselves (cron expressions, time zones) run in the module. Recorded for contract-boundary review (tinyflows#143, openhuman cron cutover #7397)."
+    },
+    {
+      "scope": "tinyjuice-bus",
+      "package": "tinystoragedrivers-core",
+      "reason": "The upstream storage-schema v2 migration (#7973) exposes tinyjuice-bus's owner schema through its opt-in storage feature. The pinned tinystoragedrivers-core v1.0.0 also contains async ports, an in-memory driver and compression; it is not pure wire vocabulary. Retain this exact temporary edge until the schema owner is extracted upstream. --require-complete must continue to reject it; this exception does not admit module implementation packages under hosts."
+    },
+    {
+      "scope": "tinyconnectors-bus",
+      "package": "tinystoragedrivers-core",
+      "reason": "The upstream storage-schema v2 migration (#7973) exposes tinyconnectors-bus's owner schema through its opt-in storage feature. The pinned tinystoragedrivers-core v1.0.0 also contains async ports, an in-memory driver and compression; it is not pure wire vocabulary. Retain this exact temporary edge until the schema owner is extracted upstream. --require-complete must continue to reject it; this exception does not admit module implementation packages under hosts."
+    },
+    {
+      "scope": "tinymcp-bus",
+      "package": "tinystoragedrivers-core",
+      "reason": "The upstream storage-schema v2 migration (#7973) exposes tinymcp-bus's owner schema through its opt-in storage feature. The pinned tinystoragedrivers-core v1.0.0 also contains async ports, an in-memory driver and compression; it is not pure wire vocabulary. Retain this exact temporary edge until the schema owner is extracted upstream. --require-complete must continue to reject it; this exception does not admit module implementation packages under hosts."
+    },
+    {
+      "scope": "tinychannels-bus",
+      "package": "tinystoragedrivers-core",
+      "reason": "The upstream storage-schema v2 migration (#7973) exposes tinychannels-bus's owner schema through its opt-in storage feature. The pinned tinystoragedrivers-core v1.0.0 also contains async ports, an in-memory driver and compression; it is not pure wire vocabulary. Retain this exact temporary edge until the schema owner is extracted upstream. --require-complete must continue to reject it; this exception does not admit module implementation packages under hosts."
+    },
+    {
+      "scope": "tinywallet-bus",
+      "package": "tinystoragedrivers-core",
+      "reason": "The upstream storage-schema v2 migration (#7973) exposes tinywallet-bus's owner schema through its opt-in storage feature. The pinned tinystoragedrivers-core v1.0.0 also contains async ports, an in-memory driver and compression; it is not pure wire vocabulary. Retain this exact temporary edge until the schema owner is extracted upstream. --require-complete must continue to reject it; this exception does not admit module implementation packages under hosts."
+    },
+    {
+      "scope": "tinymemes-bus",
+      "package": "tinystoragedrivers-core",
+      "reason": "The upstream storage-schema v2 migration (#7973) exposes tinymemes-bus's owner schema through its opt-in storage feature. The pinned tinystoragedrivers-core v1.0.0 also contains async ports, an in-memory driver and compression; it is not pure wire vocabulary. Retain this exact temporary edge until the schema owner is extracted upstream. --require-complete must continue to reject it; this exception does not admit module implementation packages under hosts."
+    },
+    {
+      "scope": "tinybox-bus",
+      "package": "tinystoragedrivers-core",
+      "reason": "The upstream storage-schema v2 migration (#7973) exposes tinybox-bus's owner schema through its opt-in storage feature. The pinned tinystoragedrivers-core v1.0.0 also contains async ports, an in-memory driver and compression; it is not pure wire vocabulary. Retain this exact temporary edge until the schema owner is extracted upstream. --require-complete must continue to reject it; this exception does not admit module implementation packages under hosts."
     }
   ],
   "excludedSubsystems": [

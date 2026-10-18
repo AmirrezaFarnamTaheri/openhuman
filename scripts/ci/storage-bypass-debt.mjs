@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 const CORE = "crates/openhuman-core/src/";
 const BASELINE = "scripts/ci/storage-bypass-baseline.json";
 const EXTENSION = "scripts/ci/storage-bypass-extension.json";
+const CANONICAL_REPOSITORY = "tinyhumansai/openhuman";
 const key = (x) => JSON.stringify([x.rule, x.path, x.text, x.occurrence]);
 const original = (x) =>
   x.path.startsWith(CORE) && ["sqlite-open", "json-write"].includes(x.rule);
@@ -77,6 +78,40 @@ export function validateCoverageDebt(findings, baseline, extension, history) {
   return errors;
 }
 
+/** A fork's integration branch is not the source of canonical storage debt. */
+export function canonicalMergeBase(git, env = process.env) {
+  // Refuse an empty checkout before any network operation (including fixtures).
+  try {
+    git(["rev-parse", "--verify", "HEAD^{commit}"]);
+  } catch {
+    throw new Error("Canonical merge-base requires a committed checkout");
+  }
+  let ref = env.GITHUB_BASE_REF
+    ? `origin/${env.GITHUB_BASE_REF}`
+    : "upstream/main";
+  if (env.GITHUB_REPOSITORY && env.GITHUB_REPOSITORY !== CANONICAL_REPOSITORY) {
+    // Resolve only a fixed canonical URL and supported branch names. The
+    // merge base excludes upstream commits not yet integrated into this head,
+    // and can never turn a fork-only writer into canonical existing debt.
+    const branch = env.GITHUB_BASE_REF === "release" ? "release" : "main";
+    ref = `refs/remotes/openhuman-canonical/${branch}`;
+    git([
+      "fetch",
+      "--no-tags",
+      "--no-recurse-submodules",
+      `https://github.com/${CANONICAL_REPOSITORY}.git`,
+      `refs/heads/${branch}:${ref}`,
+    ]);
+  } else if (!env.GITHUB_BASE_REF) {
+    try {
+      git(["rev-parse", "--verify", ref]);
+    } catch {
+      ref = "origin/main";
+    }
+  }
+  return git(["merge-base", ref, "HEAD"]).trim();
+}
+
 /** Re-scan canonical merge-base source, including the recorded curated gitlinks. */
 export function historicalFindings(root, scanner) {
   const git = (args, cwd = root) =>
@@ -85,17 +120,7 @@ export function historicalFindings(root, scanner) {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-  let ref = process.env.GITHUB_BASE_REF
-    ? `origin/${process.env.GITHUB_BASE_REF}`
-    : "upstream/main";
-  if (!process.env.GITHUB_BASE_REF) {
-    try {
-      git(["rev-parse", "--verify", ref]);
-    } catch {
-      ref = "origin/main";
-    }
-  }
-  const base = git(["merge-base", ref, "HEAD"]).trim();
+  const base = canonicalMergeBase(git);
   const files = git([
     "ls-tree",
     "-r",

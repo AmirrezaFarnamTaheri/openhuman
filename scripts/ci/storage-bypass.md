@@ -56,13 +56,20 @@ source line. New rules mask Rust comments and quoted fixtures; original core
 identities retain their existing lexical behavior.
 
 Real checkouts require canonical history, the original baseline, and recorded
-vendor sources. Missing/empty curated roots, invalid/duplicate records, and stale
+vendor sources. In fork CI, the guard fetches only the selected `main` or
+`release` branch from the fixed `tinyhumansai/openhuman` repository and compares
+against its merge base with the tested head. The fork's own default branch is
+not canonical history. A later upstream commit outside that merge base cannot
+legitimize a newly introduced writer. Canonical CI uses its selected base ref;
+local runs prefer `upstream/main` when available. A failed canonical fetch fails
+the check instead of silently substituting fork history. Missing/empty curated roots, invalid/duplicate records, and stale
 allowances fail closed. `--root` enforces history for real checkouts, including
 symlink spellings; isolated fixtures exercise source and debt policy separately.
 A fixture pass is not proof of host storage isolation.
 
-The focused scanner/debt/lane suite has 78 passing controls. It covers initial
-branch writers, copied/moved identities, later growth, missing history and
+The focused scanner/debt/lane suite covers initial
+branch writers, copied/moved identities, later growth, divergent fork history,
+unintegrated upstream changes, failed canonical fetches, missing history and
 baselines, absent/empty curated roots, symlink spellings, comments/fixtures,
 current owner paths, and cancellation supervision in both CI profiles. Policy
 JSON/Markdown, scanner, debt-helper, and shared comment-masker changes arm the

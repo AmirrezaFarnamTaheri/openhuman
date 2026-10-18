@@ -519,7 +519,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             " core::all:: core::cli:: core::invoke:: core::session_expiry:: core::legacy_aliases:: core::runtime::" +
             " agent::registry::agents::loader:: commands::ops::tests:: memory::people::contacts_gate_tests::" +
             " memory::layout_migration::" +
-            " openhuman::config:: openhuman::platform::socket::event_handlers:: tools::schemas:: tools::ops::tests::",
+            " openhuman::config:: openhuman::platform::socket::event_handlers:: tools::schemas:: tools::ops::tests::" +
+            " tools::sources::tests:: web_chat::run_task::tests::",
         },
         {
           // Share one build for these disjoint test surfaces. Enable the
