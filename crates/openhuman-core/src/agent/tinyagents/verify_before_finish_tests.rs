@@ -14,6 +14,8 @@ fn activity(rounds: usize, tools: &[&str]) -> FinishActivity {
     FinishActivity {
         tool_rounds: rounds,
         tools_called: tools.iter().map(|t| (*t).to_string()).collect(),
+        tools_executed: tools.iter().map(|t| (*t).to_string()).collect(),
+        ..Default::default()
     }
 }
 
@@ -315,6 +317,7 @@ async fn an_unlinked_wrap_up_does_not_silence_the_check() {
 fn single_round_mutations_and_delegations_require_finish_verification() {
     for tool in [
         "file_write",
+        "edit",
         "edit_file",
         "apply_patch",
         "delegate_coding",
@@ -339,6 +342,35 @@ fn single_round_mutations_and_delegations_require_finish_verification() {
             !should_check(&activity(1, &[tool])),
             "read-only {tool} should not force a costly extra check"
         );
+    }
+}
+
+#[test]
+fn requested_or_previewed_structural_writes_do_not_count_as_started_mutations() {
+    for tool in ["ast_patch", "chunk_apply"] {
+        let mut activity = FinishActivity {
+            tool_rounds: 1,
+            tools_called: [tool.to_string()].into_iter().collect(),
+            ..Default::default()
+        };
+        assert!(
+            !should_check(&activity),
+            "a refused request did not execute"
+        );
+        activity.tools_executed.insert(tool.into());
+        assert!(!should_check(&activity), "a preview did not start a write");
+        activity.tools_with_side_effects.insert(tool.into());
+        assert!(
+            should_check(&activity),
+            "a started write attempt needs a check"
+        );
+    }
+    for tool in ["file_write", "edit", TODO_TOOL, "delegate_coding"] {
+        assert!(!should_check(&FinishActivity {
+            tool_rounds: 1,
+            tools_called: [tool.to_string()].into_iter().collect(),
+            ..Default::default()
+        }));
     }
 }
 

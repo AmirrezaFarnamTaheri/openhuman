@@ -18,4 +18,4 @@ omit_safety_preamble = true
 hint = "agentic"
 
 [tools]
-named = ["read_diff", "run_linter", "run_tests", "file_read"]
+named = ["read_diff", "run_linter", "run_tests", "file_read", "ast_outline", "ast_symbol", "chunk_search", "chunk_inspect"]

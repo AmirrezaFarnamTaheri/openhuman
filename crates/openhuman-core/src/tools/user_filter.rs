@@ -47,7 +47,15 @@ const TOOL_FAMILIES: &[ToolFamily] = &[
     },
     ToolFamily {
         id: "file_read",
-        rust_names: &["file_read", "read_diff", "csv_export"],
+        rust_names: &[
+            "file_read",
+            "read_diff",
+            "csv_export",
+            "ast_outline",
+            "ast_symbol",
+            "chunk_search",
+            "chunk_inspect",
+        ],
         default_enabled: true,
     },
     ToolFamily {
@@ -57,7 +65,7 @@ const TOOL_FAMILIES: &[ToolFamily] = &[
     },
     ToolFamily {
         id: "file_write",
-        rust_names: &["file_write"],
+        rust_names: &["file_write", "ast_patch", "chunk_apply"],
         default_enabled: true,
     },
     ToolFamily {

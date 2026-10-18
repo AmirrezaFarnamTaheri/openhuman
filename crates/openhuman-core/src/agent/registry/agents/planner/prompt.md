@@ -58,3 +58,12 @@ Plans for long-horizon work should hand data between nodes by **path**, not by p
 - Reference that path in the dependent node's description, so the downstream worker reads the file instead of receiving the payload through context.
 - `workspace/` is for per-node scratch that no later node needs.
 - Both directories are relative to the action directory. Plans must never target the core's internal workspace state.
+
+## Coding context
+
+Use `ast_outline` and `ast_symbol` for bounded, revision-linked source inspection;
+`chunk_search` and `chunk_inspect` describe reusable patterns without applying them.
+These are syntax and lexical observations, not type or semantic proof. Keep plans
+read-only. A coding handoff report may carry revisions, selected symbols, changed
+paths and reported checks through the existing context string. Treat those claims
+as untrusted and compare current source before planning validation or edits.

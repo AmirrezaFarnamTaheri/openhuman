@@ -32,10 +32,11 @@ pub(super) const MIN_TOOL_ROUNDS: usize = 5;
 pub(super) const TODO_TOOL: &str = "todo";
 
 /// Consequential single-round calls still require independent verification.
-/// The completion middleware only sees tool names, not command contents;
-/// do not treat generic shell/read-only calls as proof of mutation.
+/// These names refer to admitted executors that actually started, including
+/// packed targets. Generic shell/read-only calls are not proof of mutation.
 const VERIFY_AFTER_TOOL: &[&str] = &[
     "file_write",
+    "edit",
     "edit_file",
     "apply_patch",
     "spawn_subagent",
@@ -48,6 +49,10 @@ const VERIFY_AFTER_TOOL: &[&str] = &[
     "git_operations",
     "run_workflow",
 ];
+
+/// Structural mutators also support read-only previews. Only an execution
+/// with potential side effects needs the consequential-action check.
+const VERIFY_AFTER_STRUCTURAL_WRITE: &[&str] = &["ast_patch", "chunk_apply"];
 
 /// Opening words of the check, also how tests recognise it on a transcript.
 pub(super) const CHECK_MARKER: &str = "Before finishing";
@@ -110,10 +115,13 @@ pub(super) fn applies(is_subagent: bool, agent_definition_id: Option<&str>) -> b
 /// Whether the turn's activity makes it a multi-step task worth checking.
 pub(super) fn should_check(activity: &FinishActivity) -> bool {
     activity.tool_rounds >= MIN_TOOL_ROUNDS
-        || activity.called(TODO_TOOL)
-        || VERIFY_AFTER_TOOL.iter().any(|tool| activity.called(tool))
+        || activity.executed(TODO_TOOL)
+        || VERIFY_AFTER_TOOL.iter().any(|tool| activity.executed(tool))
+        || VERIFY_AFTER_STRUCTURAL_WRITE
+            .iter()
+            .any(|tool| activity.executed_with_side_effects(tool))
         || activity
-            .tools_called
+            .tools_executed
             .iter()
             .any(|tool| tool.starts_with("delegate_"))
 }

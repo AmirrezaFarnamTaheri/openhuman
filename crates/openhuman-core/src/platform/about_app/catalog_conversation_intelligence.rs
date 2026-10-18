@@ -577,6 +577,16 @@ Capability {
         privacy: LOCAL_RAW,
     },
 Capability {
+        id: "intelligence.structural_code",
+        name: "Structural Code Tools",
+        domain: "intelligence",
+        category: CapabilityCategory::Intelligence,
+        description: "Inspect declarations, page selected source, preview revision-checked edits and apply typed reusable chunks in Rust, TypeScript, TSX, JavaScript, Python, Go, JSON and TOML. Syntax and lexical references do not establish type correctness or a resolved cross-file graph.",
+        how_to: "Ask for code work in an allowed project. Discover the coding skill or search for ast_outline, ast_symbol, ast_patch, chunk_search, chunk_inspect or chunk_apply. Existing file read/write controls apply; a real edit requires the current source revision.",
+        status: CapabilityStatus::Beta,
+        privacy: RAW_TO_INFERENCE_PROVIDER,
+    },
+Capability {
         id: "intelligence.orchestrator_worker_thread",
         name: "Worker Thread Delegation",
         domain: "intelligence",

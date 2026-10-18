@@ -1,6 +1,6 @@
 [submodule "vendor/tinyagents"]
 	path = vendor/tinyagents
-	url = https://github.com/tinyhumansai/tinyagents
+	url = https://github.com/AmirrezaFarnamTaheri/tinyagents
 [submodule "vendor/tinyflows"]
 	path = vendor/tinyflows
 	url = https://github.com/tinyhumansai/tinyflows
