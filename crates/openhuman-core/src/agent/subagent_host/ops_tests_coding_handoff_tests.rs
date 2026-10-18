@@ -73,8 +73,8 @@ async fn invalid_coding_context_refuses_before_lifecycle_files_or_provider_calls
 }
 
 #[tokio::test]
-async fn direct_runner_leaf_also_rejects_invalid_coding_context_before_parent_lookup() {
-    let result = super::super::runner::run_subagent_direct(
+async fn subagent_entry_rejects_invalid_coding_context_before_parent_lookup() {
+    let result = run_subagent(
         &make_def_named_tools(&[]),
         "must not run",
         SubagentRunOptions {

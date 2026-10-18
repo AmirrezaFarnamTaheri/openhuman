@@ -12,6 +12,12 @@ tool-call loop and its dialects, sub-agent dispatch and archetypes, sessions
 and resume, triage, hooks, interrupts and cost accounting, all wrapped around
 the TinyAgents harness rather than reimplementing it.
 
+Sub-agent execution is implemented in the local
+[runner](../../../../../crates/openhuman-core/src/agent/subagent_host/ops/runner.rs).
+Agent definitions and registry resolution live in the local
+[agent registry](../../../../../crates/openhuman-core/src/agent_registry/host_definition.rs).
+These links point at this checkout rather than upstream main.
+
 ## Embedding OpenHuman as a library
 
 `openhuman_embed` exposes a two-step API. `Runtime::builder()` boots one

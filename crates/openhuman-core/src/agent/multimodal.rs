@@ -298,7 +298,7 @@ pub(crate) fn attachments_dir() -> PathBuf {
 /// `tinyagents_harness::multimodal::BlobAttachmentStash`; the cap and TTL are
 /// this host's policy (none: references stay resolvable).
 fn stash() -> Option<BlobAttachmentStash> {
-    match ATTACHMENTS_WORKSPACE.get() {
+    match ATTACHMENTS_DIR.get().and_then(|dir| dir.parent()) {
         Some(workspace) => crate::storage::sessions::attachment_stash_for(workspace),
         None => Some(memory_stash().clone()),
     }

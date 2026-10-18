@@ -72,3 +72,14 @@ fn decode_async_spawn_args(args: &serde_json::Value) -> Result<AsyncSpawnArgs, S
         force_fresh,
     })
 }
+
+#[cfg(test)]
+#[test]
+fn async_spawn_decode_rejects_malformed_coding_handoff() {
+    let result = decode_async_spawn_args(&serde_json::json!({
+        "agent_id": "task_manager_agent",
+        "prompt": "investigate",
+        "context": "[coding_handoff]\\nnot JSON",
+    }));
+    assert!(result.is_err(), "invalid marked handoff must fail closed");
+}

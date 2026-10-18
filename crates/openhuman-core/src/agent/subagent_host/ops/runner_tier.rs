@@ -1,6 +1,6 @@
 //! OpenHuman spawn-hierarchy admission policy.
 
-use crate::agent::harness::host_definition::AgentDefinition;
+use crate::agent_registry::host_definition::AgentDefinition;
 use crate::agent::subagent_host::SubagentRunError;
 use tinyagents_definition::{validate_tier_transition, AgentTier};
 

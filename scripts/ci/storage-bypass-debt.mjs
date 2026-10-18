@@ -113,24 +113,14 @@ export function canonicalMergeBase(git, env = process.env) {
 }
 
 /** Re-scan canonical merge-base source, including the recorded curated gitlinks. */
-export function historicalFindings(root, scanner) {
+export function historicalFindings(root, scanner, env = process.env) {
   const git = (args, cwd = root) =>
     execFileSync("git", args, {
       cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-  let ref = process.env.GITHUB_BASE_REF
-    ? `origin/${process.env.GITHUB_BASE_REF}`
-    : "upstream/main";
-  if (!process.env.GITHUB_BASE_REF) {
-    try {
-      git(["rev-parse", "--verify", ref]);
-    } catch {
-      ref = "origin/main";
-    }
-  }
-  const base = canonicalMergeBase(git);
+  const base = canonicalMergeBase(git, env);
   // Git must identify a rename (the original path disappears). Copies and
   // new files retain their own identity. Only the path changes: exact writer
   // text and occurrence remain part of every debt/allowance key.

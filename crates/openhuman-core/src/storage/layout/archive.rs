@@ -428,4 +428,3 @@ pub fn verify(_archive: &Path) -> Result<Manifest, LayoutError> {
 pub fn restore(_archive: &Path, _profile_dir: &Path) -> Result<Manifest, LayoutError> {
     sqlite_layout_unavailable()
 }
-

@@ -10,8 +10,8 @@ const docPath = resolve(root, "docs/gitbooks/en/developing/architecture/agent-ha
 test("agent harness code links resolve against this checkout, not upstream main", () => {
   const markdown = readFileSync(docPath, "utf8");
   const targets = [
-    "../../../../../crates/openhuman-core/src/agent/tinyagents/stop_hooks.rs",
-    "../../../../../crates/openhuman-core/src/agent/registry/agents/loader.rs",
+    "../../../../../crates/openhuman-core/src/agent/subagent_host/ops/runner.rs",
+    "../../../../../crates/openhuman-core/src/agent_registry/host_definition.rs",
   ];
   for (const href of targets) {
     assert.ok(markdown.includes(`](${href})`), `missing relative link: ${href}`);
