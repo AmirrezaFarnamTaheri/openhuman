@@ -32,6 +32,7 @@ fn full_product_features_enabled() -> bool {
         ("documents", cfg!(feature = "documents")),
         ("modules", cfg!(feature = "modules")),
         ("flows", cfg!(feature = "flows")),
+        ("structural-code", cfg!(feature = "structural-code")),
         ("skills", cfg!(feature = "skills")),
         ("mcp", cfg!(feature = "mcp")),
         ("crash-reporting", cfg!(feature = "crash-reporting")),

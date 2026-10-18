@@ -65,6 +65,7 @@ storage-s3 = ["openhuman-tinyhumans/storage-s3"]
 storage-file = ["openhuman-tinyhumans/storage-file"]
 media = ["openhuman-tinyhumans/media"]
 flows = ["openhuman-tinyhumans/flows"]
+structural-code = ["openhuman-tinyhumans/structural-code"]
 skills = ["openhuman-tinyhumans/skills"]
 mcp = ["openhuman-tinyhumans/mcp"]
 # Also lets the server's Sentry-routing tests run against a core that reports

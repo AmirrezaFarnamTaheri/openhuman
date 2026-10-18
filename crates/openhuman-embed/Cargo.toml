@@ -33,6 +33,7 @@ storage-s3 = ["openhuman-core/storage-s3"]
 storage-file = ["openhuman-core/storage-file"]
 media = ["openhuman-core/media"]
 flows = ["openhuman-core/flows"]
+structural-code = ["openhuman-core/structural-code"]
 skills = ["openhuman-core/skills"]
 mcp = ["openhuman-core/mcp"]
 # Also carries `process::sentry`, the shared Sentry options + before_send chain.

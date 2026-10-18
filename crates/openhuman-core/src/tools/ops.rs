@@ -119,6 +119,7 @@ pub fn all_tools_with_runtime(
     // Build one shared parser/cache and publication lock behind the same
     // filesystem policy as ordinary file tools. User/group filters below
     // apply to these tools too; the lightweight three-tool registry stays small.
+    #[cfg(feature = "structural-code")]
     tools.extend(
         tinytools_std::code_tools(security.clone())
             .expect("built-in structural tools have valid bounds and catalog"),

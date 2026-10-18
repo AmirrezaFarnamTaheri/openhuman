@@ -146,6 +146,7 @@ fn every_packed_tool_name_resolves_to_a_registered_tool() {
     // signal here.
     if !cfg!(all(
         feature = "flows",
+        feature = "structural-code",
         feature = "mcp",
         feature = "skills",
         feature = "web3",

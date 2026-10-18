@@ -219,6 +219,7 @@ path = "../../tests/agent_harness_e2e.rs"
 # installed root finish policy; no external services or model calls.
 name = "structural_code"
 path = "../../tests/structural_code.rs"
+required-features = ["structural-code"]
 
 [[test]]
 # A separate process owns the module/storage slots and loads the registry release.
@@ -433,6 +434,7 @@ default = [
     "media",
     "skills",
     "flows",
+    "structural-code",
     "mcp",
     "channels",
     "http-server",
@@ -462,6 +464,7 @@ storage-s3 = ["openhuman-rpc/storage-s3"]
 storage-file = ["openhuman-rpc/storage-file"]
 media = ["openhuman-rpc/media"]
 flows = ["openhuman-rpc/flows"]
+structural-code = ["openhuman-rpc/structural-code"]
 skills = ["openhuman-rpc/skills"]
 mcp = ["openhuman-rpc/mcp"]
 channels = ["openhuman-rpc/channels"]

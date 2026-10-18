@@ -83,6 +83,7 @@ openhuman-rpc = { path = "../openhuman-rpc", default-features = false, features 
     "documents",
     "modules",
     "flows",
+    "structural-code",
     "skills",
     "mcp",
     "crash-reporting",

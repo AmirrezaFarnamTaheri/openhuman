@@ -18,6 +18,7 @@ pub fn compiled_features() -> std::collections::BTreeMap<String, bool> {
         ("web3", cfg!(feature = "web3")),
         ("media", cfg!(feature = "media")),
         ("flows", cfg!(feature = "flows")),
+        ("structural-code", cfg!(feature = "structural-code")),
         ("skills", cfg!(feature = "skills")),
         ("mcp", cfg!(feature = "mcp")),
         ("crash-reporting", cfg!(feature = "crash-reporting")),
