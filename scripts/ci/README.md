@@ -1,8 +1,10 @@
 # `scripts/ci/`
 
-Merge-gate scripts run by `.github/workflows/ci-lite.yml` (the PR lane), plus
-the data files some of them read. Each script's header comment is the
-authoritative spec; this is an index so a CI failure log points somewhere.
+PR checks run through [CI Lanes](../../.github/workflows/ci-lanes.yml), shared
+by `ci-fast.yml` and `ci-fast-hosted.yml`. The
+[lane plan](self-hosted/lanes-plan.mjs) defines each command and its environment.
+This directory also contains the data files those commands read; each script's
+header documents its own contract.
 
 | File | Checks |
 | --- | --- |
@@ -16,12 +18,17 @@ authoritative spec; this is an index so a CI failure log points somewhere.
 | [`check-toolchain-image.mjs`](check-toolchain-image.mjs) | The CI image's toolchain, the version-pinned `dtolnay/rust-toolchain@<version>` workflow steps, and [`.github/Dockerfile`](../../.github/Dockerfile) all match the channel pinned in [`rust-toolchain.toml`](../../rust-toolchain.toml). |
 | [`rust-coverage.sh`](rust-coverage.sh) | Runs the complete product-feature Rust suite under `cargo-llvm-cov`, including every core integration target and the root Rust support crates. |
 | [`assert-coverage-presence.sh`](assert-coverage-presence.sh) + [`coverage-presence-allowlist.txt`](coverage-presence-allowlist.txt) | Fails when an eligible Rust source file produced no lcov records at all, meaning the full product suite never compiled it (openhuman#5593). Allowlist entries must document, inline, which gate excludes the file and why that's intended. |
-| [`list-feature-gated-rust-tests.mjs`](list-feature-gated-rust-tests.mjs) | Prints every file under `crates/openhuman-core/src` that carries tests behind a product feature gate (`voice`, `media`, `web3`, `meet`, `mcp`, `skills`, `flows`, `channels`, `contacts`). `ci-lite.yml`'s `rust-feature-gate-smoke` job diffs the output against a checked-in EXPECTED list so a new gated test file forces the gate-contract test filters to be reviewed (#5022). |
+| [`list-feature-gated-rust-tests.mjs`](list-feature-gated-rust-tests.mjs) | Prints every file under `crates/openhuman-core/src` that carries tests behind a product feature gate (`voice`, `media`, `web3`, `meet`, `mcp`, `skills`, `flows`, `channels`, `contacts`). The lane plan's `gated-test-allowlist` check runs `check-gated-test-allowlist.sh`, which compares that output with its checked-in EXPECTED list so a new gated test file forces the gate-contract test filters to be reviewed (#5022). |
 | [`check-saas-ambient.mjs`](check-saas-ambient.mjs) + [`saas-ambient-baseline.json`](saas-ambient-baseline.json) (`pnpm saas:ambient`) | Ratchets code in `crates/openhuman-core/src` that reaches past a SaaS user agent's `CoreContext`: bare `tokio::spawn` / `spawn_blocking` / `std::thread::spawn` (use `DispatchCtx::spawn` / `spawn_blocking`), direct `Config::load_or_init`, `env::set_var` / `remove_var`, and `home_dir()`. Each existing site is baselined exactly; a new one fails, and a fixed one must be removed with `--write-baseline`. |
 | [`orch-ip-gate.sh`](orch-ip-gate.sh) | Blocks the server-side orchestration "brain" (reasoning/wake graph, its prompts, per-agent model-selection metadata) from re-entering this open client repo. |
 
-The complete Rust and frontend coverage suites feed the PR CI Gate's
-changed-line diff-cover check (>= 80%) in `ci-lite.yml`.
+The complete frontend, core Rust, and desktop Rust coverage suites selected by
+the PR's changed areas feed CI Lanes' combined changed-line check (>= 80%).
+[The diff-cover wrapper](self-hosted/diff-cover.sh) reads every LCOV `.info` file
+from the lane outputs. CI checks out the PR merge commit with full history and
+compares it with `origin/<PR base branch>`; a previous fix checkpoint is not the
+base of the whole PR's coverage requirement. Frontend-only results do not satisfy
+the combined gate when the PR also selects Rust coverage.
 
 ## Running locally
 
@@ -41,11 +48,10 @@ Generated probes and lockfiles stay in the checkout's `target/module-boundaries/
 and the ambient-access ratchet runs through `pnpm saas:ambient`. Other gates
 are invoked directly, e.g.
 `node scripts/ci/check-feature-forwarding.mjs` or
-`bash scripts/ci/orch-ip-gate.sh`, and can be run the same way locally. Every
-gate here runs from `.github/workflows/ci-lite.yml`; `ci-full.yml` does not
-call any of them, and only reaches `product-features.sh` indirectly through
-`test-reusable.yml`. Grep `ci-lite.yml` for a script's name to see its exact
-invocation and any required environment.
+`bash scripts/ci/orch-ip-gate.sh`, and can be run the same way locally. Consult
+`scripts/ci/self-hosted/lanes-plan.mjs` for a PR check's exact invocation and
+required environment, and `.github/workflows/ci-lanes.yml` for area selection,
+artifact collection, and the final coverage comparison.
 
 Long-running CI commands (the coverage lanes) go through
 [`scripts/ci-cancel-aware.sh`](../ci-cancel-aware.sh), which lives directly under `scripts/`, not here.

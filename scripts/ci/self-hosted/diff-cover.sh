@@ -3,8 +3,8 @@
 #
 # Usage: diff-cover.sh <lcov-dir> <compare-ref> [<report-dir>]
 #
-# The same gate as ci-lite.yml's `PR CI Gate`, for the lane-runner flow: the
-# ex63 job runs it in place, the hosted flow over the lanes' artifacts.
+# Called by ci-lanes.yml: the ex63 job runs it in place, while the hosted
+# gate reads the successful lanes' downloaded artifacts.
 set -euo pipefail
 
 lcov_dir="${1:?usage: diff-cover.sh <lcov-dir> <compare-ref> [<report-dir>]}"
