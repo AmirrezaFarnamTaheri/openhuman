@@ -169,15 +169,15 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
   const withModules = (cmd, lane) =>
     `set -a && . ${laneModuleEnv(lane)} && set +a && ${cmd}`;
 
-  // Not run on pull requests: the core doctests (an uninstrumented core build
+  // Not in this PR lane plan: the core doctests (an uninstrumented core build
   // of their own) and the TinyJuice host-module regression (one test against
-  // the downloaded module). CI Lite runs both on every push to `main` that
-  // touches the Rust core (rust-coverage.sh and its rust-core-coverage job).
+  // the downloaded module). CI Lite was removed; do not infer a post-merge
+  // fallback for these checks from the retired workflow.
   // openhuman-tui's tests DO run on pull requests: the rust-core path filter
   // arms this job for any change under core, embed, tinyhumans, rpc, cli or
   // tui, which is every crate the TUI depends on.
   //
-  // Also left to those pushes, as duplicates of what runs here:
+  // These variants also have no separate check in this PR plan:
   //  - `cargo test -p openhuman-embed` / `-p openhuman-tinyhumans` (default
   //    features): rust-core-coverage already runs both crates' tests, with the
   //    product features;

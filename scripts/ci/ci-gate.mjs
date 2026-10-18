@@ -31,6 +31,7 @@ export const SOURCES = [
     workflow: "ci-fast-hosted.yml",
     name: "CI Fast (hosted)",
     job: "Lanes / CI Fast (hosted) Gate",
+    // Keep recognizing runs started before the caller name was stabilized.
     alternateJobs: ["Fork PR lanes (hosted) / CI Fast (hosted) Gate"],
     hosted: true,
   },
@@ -40,15 +41,15 @@ const PR_EVENTS = new Set(["pull_request", "pull_request_target"]);
 
 /**
  * Reusable workflows inherit a caller-job prefix in the Checks API. The
- * upstream "Lanes" caller and the fork's "Fork PR lanes (hosted)" caller
- * both require the same gate; neither a successful routing job nor an
+ * current "Lanes" caller and the historical "Fork PR lanes (hosted)" caller
+ * require the same gate; neither a successful routing job nor an
  * unrelated job may stand in for it.
  */
 export function findDecisiveJob(source, jobs) {
   const names = new Set([source.job, ...(source.alternateJobs ?? [])]);
   const matches = jobs.filter(job => names.has(job.name));
-  // The fork and upstream callers are mutually exclusive. If GitHub includes
-  // the inactive caller's skipped gate, it must not hide the one that ran.
+  // Older workflow versions had mutually exclusive fork/upstream callers.
+  // An inactive caller's skipped gate must not hide the one that ran.
   return matches.find(job => job.conclusion !== "skipped") ?? matches[0] ?? null;
 }
 

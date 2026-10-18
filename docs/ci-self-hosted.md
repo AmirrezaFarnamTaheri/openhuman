@@ -14,6 +14,12 @@ On `AmirrezaFarnamTaheri/openhuman`, hosted PR lanes run directly; the
 upstream-only organization-membership routing job is skipped. The external
 runner gate in `ci-fast.yml` likewise never runs for a fork.
 
+Both upstream and fork hosted runs use one reusable caller named `Lanes`.
+That name is a compatibility contract: the CI Gate evaluator runs from the
+default branch and must recognize a PR before its updated matcher is merged.
+An explicit `!cancelled()` condition lets a fork proceed after the skipped
+membership job; upstream proceeds only after successful outsider routing.
+
 Both call `.github/workflows/ci-lanes.yml`, which runs
 `scripts/ci/self-hosted/lanes.mjs`. The plan itself is in
 `scripts/ci/self-hosted/lanes-plan.mjs`, and
@@ -40,7 +46,7 @@ provisioning, deploys and the runner token.
 How lanes behave:
 
 - **Selection is by area only.** The changed-area filters in
-  `.github/ci-paths-filter.yml`, which CI Lite also uses, decide whether a
+  `.github/ci-paths-filter.yml` decide whether a
   whole suite runs. Nothing narrows a suite to the changed files.
 - **Nothing stops early.** A failed check never stops the checks after it
   in its lane, and never stops other lanes. Inside the coverage check,
@@ -53,61 +59,56 @@ How lanes behave:
   own lane's log live, with one folded group per check, and passes or fails
   on that lane alone. `Lane summary` carries the overall result.
 - **Changed-line coverage** must be at least 80% through
-  `scripts/ci/self-hosted/diff-cover.sh`, the same gate as `PR CI Gate`.
+  `scripts/ci/self-hosted/diff-cover.sh` in the reusable lane workflow.
 
-Some checks do not run on pull requests. CI Lite runs them on every push to
-`main` that touches the Rust core:
-
-- the core doctests, and the coverage of `openhuman-tui` (each a core build of
-  its own);
-- the TinyJuice host-module regression;
-- `cargo test -p openhuman-embed` / `-p openhuman-tinyhumans` with default
-  features, since the coverage lane already runs both crates' tests with the
-  product features;
-- `cargo check -p openhuman --no-default-features`, which
-  `embed-check-no-default` already covers: it builds the core with the same
-  (empty) feature set;
-- `cargo check -p openhuman --no-default-features --features
-e2e-test-support`: `rust-gates-off` already compiles that feature set for
-  its tests, in one build together with `mcp`.
+The executable plan in `scripts/ci/self-hosted/lanes-plan.mjs` defines the
+checks each lane runs. The retired CI Lite workflow no longer supplies
+post-merge coverage; a legacy reference to that workflow is not evidence that
+an omitted check runs elsewhere.
 
 ## CI Gate
 
 `.github/workflows/ci-gate.yml` posts one commit status, `CI Gate`, on each PR
 head commit. It is the check branch protection should require, whichever flow
-ran the PR. It is re-evaluated whenever CI Fast, CI Fast (hosted) or CI Lite
-starts or finishes, from the decisive job of each:
+ran the PR. It is re-evaluated when CI Fast or CI Fast (hosted) finishes,
+from the decisive job of each:
 
 | Flow             | Decisive job                    |
 | ---------------- | ------------------------------- |
-| CI Fast          | `Lanes / CI Fast (EX63)`        |
-| CI Fast (hosted) | `Lanes / CI Fast (hosted) Gate` |
-| CI Lite          | `PR CI Gate`                    |
+| CI Fast          | `Lanes / CI Fast (EX63)`         |
+| CI Fast (hosted)  | `Lanes / CI Fast (hosted) Gate`  |
 
-- **success** as soon as one of those jobs passes. The GitHub-hosted runs
-  still working on that commit are then cancelled. The EX63 run is never
-  cancelled.
+- **success** at the next workflow-completion evaluation if one of those
+  jobs has passed. The GitHub-hosted runs still working on that commit are
+  then cancelled. The EX63 run is never cancelled.
 - **pending** while nothing has passed and a flow is still running. An EX63
-  failure does not fail the gate while CI Lite is still running.
+  failure does not fail the gate while hosted lanes are still running. A
+  successful routing-only completion waits for hosted CI to start.
 - **failure** once every flow has finished without a pass.
 
-A skipped job is never a pass. That is why CI Lite skips `PR CI Gate` along
-with everything else when the EX63 runs the commit.
+A skipped job is never a pass. Failed or cancelled routing is a terminal
+failure when no other flow is still running or has passed.
 
 Who runs what:
 
-- **Org members:** `ci-fast.yml` on `pull_request_target`, routed by
-  `scripts/ci/ci-fast-route.sh` (shared with `ci-fast-hosted.yml`). The route
-  decision falls back to the hosted lanes when no EX63 run starts within three
-  minutes, or when routing errors.
-- **Outsiders:** CI Lite and CI Fast (hosted) both run, and the first to pass
-  cancels the other.
-- **Pushes to `main`:** CI Lite runs, and the gate ignores them.
+- **Org members:** `ci-fast.yml` on `pull_request_target` uses its inline
+  membership gate to select EX63. The hosted workflow follows that decision
+  through `scripts/ci/ci-fast-route.sh`. If no decision is available within
+  three minutes, the script falls back to the PR author's association and
+  the triggering actor. `OWNER` or `MEMBER` with the author also acting as
+  the pusher still skips hosted lanes; other associations or actors use
+  hosted lanes. This fallback does not guarantee hosted coverage after an
+  EX63 routing failure.
+- **Outsiders and PRs on contributor forks:** CI Fast (hosted) runs the
+  required lanes. Contributor forks skip organization-membership lookup.
+- **Pushes:** the CI Gate ignores non-PR workflow events.
 
 The workflow runs from the default branch through `workflow_run`, with
 `statuses: write` and `actions: write`. It never checks out PR code; the
 decision (`scripts/ci/ci-gate.mjs`, tested in
 `scripts/__tests__/ci-gate.test.mjs`) reads run and job state from the API.
+The matcher also accepts the historical fork caller name for runs that were
+already queued before the stable name was restored.
 `CI_GATE_DRY_RUN=1` with `GH_TOKEN`, `REPO` and `HEAD_SHA` prints the verdict
 for any commit without posting it.
 

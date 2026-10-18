@@ -53,18 +53,16 @@ jobs:
         run: bash scripts/ci/ci-fast-route.sh
 
   lanes:
+    # CI Gate runs from the default branch. Keep this caller name stable so
+    # the already-deployed evaluator can recognize an unmerged PR's gate.
     name: Lanes
     needs: route
-    if: github.repository == 'tinyhumansai/openhuman' && needs.route.outputs.outsider == 'true'
-    uses: ./.github/workflows/ci-lanes.yml
-    with:
-      profile: hosted
-      pr-number: ${{ github.event.pull_request.number }}
-      base-ref: ${{ github.base_ref }}
-
-  fork-lanes:
-    name: Fork PR lanes (hosted)
-    if: github.repository != 'tinyhumansai/openhuman'
+    # Forks skip route, so an explicit status function must override the
+    # implicit success() dependency gate without ignoring cancellation.
+    if: >-
+      !cancelled() &&
+      (github.repository != 'tinyhumansai/openhuman' ||
+       (needs.route.result == 'success' && needs.route.outputs.outsider == 'true'))
     uses: ./.github/workflows/ci-lanes.yml
     with:
       profile: hosted

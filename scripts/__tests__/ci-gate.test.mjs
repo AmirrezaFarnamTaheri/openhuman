@@ -149,7 +149,7 @@ test("every CI Gate source references a tracked workflow", () => {
   }
 });
 
-test("fork hosted lane passes through the decisive job under its own caller name", () => {
+test("historical fork hosted runs remain recognized under their earlier caller name", () => {
   const job = findDecisiveJob(HOSTED, [
     { name: "Route (outsiders → GitHub-hosted)", conclusion: "skipped" },
     { name: "Fork PR lanes (hosted) / CI Fast (hosted) Gate", conclusion: "success" },
@@ -178,7 +178,6 @@ test("decisive job names follow the actual workflow callers and reusable gates",
   const cases = [
     [EX63, "lanes", "ex63"],
     [HOSTED, "lanes", "gate"],
-    [HOSTED, "fork-lanes", "gate"],
   ];
   for (const [source, callerId, gateId] of cases) {
     const caller = workflow(source.workflow).jobs[callerId];
