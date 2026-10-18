@@ -246,19 +246,14 @@ export function describeToolCall(input: DescribeToolCallInput): ToolCallPresenta
     });
   }
   // Pack disclosure keeps its skill label; a bound structural target uses
-  // that target's arguments for its path and literal preview presentation.
+  // the pack's `args` field for its path and literal preview presentation.
   if (
     baseName === 'use_skill' &&
     args.skill === 'coding' &&
     typeof args.tool === 'string' &&
     isStructuralToolName(args.tool)
   ) {
-    return describeToolCall({
-      ...input,
-      name: args.tool,
-      args: args.arguments,
-      serverLabel: undefined,
-    });
+    return describeToolCall({ ...input, name: args.tool, args: args.args, serverLabel: undefined });
   }
 
   // 2. Named agents.

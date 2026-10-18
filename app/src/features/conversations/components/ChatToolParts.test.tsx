@@ -89,7 +89,7 @@ describe('ChatToolParts', () => {
     [
       'packed',
       'use_skill',
-      { skill: 'coding', tool: 'ast_patch', arguments: { path: 'src/lib.rs', dry_run: true } },
+      { skill: 'coding', tool: 'ast_patch', args: { path: 'src/lib.rs', dry_run: true } },
     ],
     [
       'deferred pack',
@@ -99,7 +99,7 @@ describe('ChatToolParts', () => {
         arguments: {
           skill: 'coding',
           tool: 'chunk_apply',
-          arguments: { path: 'src/lib.rs', dry_run: true },
+          args: { path: 'src/lib.rs', dry_run: true },
         },
       },
     ],

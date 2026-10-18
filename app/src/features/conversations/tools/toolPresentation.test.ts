@@ -234,7 +234,7 @@ describe('structural tool presentation', () => {
     'preserves literal preview semantics for packed and deferred %s calls',
     name => {
       for (const dry_run of [true, false, 'true']) {
-        const packed = { skill: 'coding', tool: name, arguments: { path: 'src/lib.rs', dry_run } };
+        const packed = { skill: 'coding', tool: name, args: { path: 'src/lib.rs', dry_run } };
         const expected = dry_run === true ? 'Read changes' : 'Applied edits';
         expect(done('use_skill', packed)).toBe(expected);
         const deferred = describeToolCall({
@@ -253,9 +253,9 @@ describe('structural tool presentation', () => {
   it('keeps pack disclosure skill-labeled and translates structural labels through existing keys', () => {
     expect(done('use_skill', { skill: 'coding' })).toBe('Used skill');
     expect(done('use_skill', { skill: 'coding', tool: 'unknown' })).toBe('Used skill');
-    expect(
-      done('use_skill', { skill: 'code', tool: 'ast_patch', arguments: { dry_run: true } })
-    ).toBe('Used skill');
+    expect(done('use_skill', { skill: 'code', tool: 'ast_patch', args: { dry_run: true } })).toBe(
+      'Used skill'
+    );
     const presentation = describeToolCall({
       name: 'ast_patch',
       args: { dry_run: true },
