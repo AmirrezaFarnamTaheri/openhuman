@@ -1,12 +1,12 @@
 # PR 14: implementation review and roadmap disposition
 
-This review covers PR [#14](https://github.com/AmirrezaFarnamTaheri/openhuman/pull/14), its three review comments, and the supplied **AST and Boilerplate Engine Roadmap** dated 2026-10-17. It distinguishes working code from architectural proposals and benchmark targets. The original PR included a large upstream merge; neither a filename count nor the number of workflow YAML files measures duplicated runtime work.
+This review covers PR [#14](https://github.com/AmirrezaFarnamTaheri/openhuman/pull/14), its review discussion, and the supplied **AST and Boilerplate Engine Roadmap** dated 2026-10-17. The [CodeRabbit reconciliation](pr14-coderabbit-review.md) maps all 18 unique bot findings to their fixes and validation evidence. This review distinguishes working code from architectural proposals and benchmark targets. The original PR included a large upstream merge; neither a filename count nor the number of workflow YAML files measures duplicated runtime work.
 
 ## Concrete review findings
 
 | Finding | Change and expected behavior |
 | --- | --- |
-| Fork CI could remain pending or select an inactive caller | `scripts/ci/ci-gate.mjs` resolves the actual hosted/fork caller and propagates routing failures. Workflow tests derive names from YAML rather than matching unrelated text. |
+| Fork CI could remain pending or select an inactive caller | The hosted workflow preserves the stable `Lanes` caller recognized by the gate already running on the default branch. `scripts/ci/ci-gate.mjs` also recognizes historical caller names and propagates routing failures. Workflow tests derive names from YAML and evaluate the actual routing predicates. |
 | Fork audit confused transport failures with request-budget exhaustion | `scripts/ci/upstream_fork_audit.py` checkpoints failed work, continues independent forks, and resumes incomplete enumeration without reporting a false complete census. |
 | Preview regression checked any matching YAML line | The test parses `jobs['ui-preview'].if` using a direct, pinned `yaml` dependency. |
 | Every push paid for unrelated application checks | `.husky/pre-push` scopes application and Rust gates to the pushed paths, retains conservative behavior for unresolved ranges, and keeps `PRE_PUSH_FORCE_FRONTEND=1` / `PRE_PUSH_FORCE_CLIPPY=1`. Hooks do not rewrite source files. |
