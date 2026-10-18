@@ -174,7 +174,11 @@ fn the_flows_record_serves_the_schedule_object() {
     assert_ne!(record.object_path, schedule::OBJECT_PATH);
     assert_ne!(schedule::INTERFACE, schedule::CALLBACK_INTERFACE);
     assert_ne!(schedule::INTERFACE, schedule::DOCUMENT_INTERFACE);
-    assert_eq!(schedule::CONTRACT_VERSION, 3, "the host speaks contract v3");
+    // Source v4 adds only optional StartScheduler.config.now. The host does
+    // not send it, so the released v0.8.23 Schedule v3 remains supported.
+    // Keep this exact: a later source contract needs a fresh wire review and
+    // the real release test in tests/tinyflows_release_compatibility.rs.
+    assert_eq!(schedule::CONTRACT_VERSION, 4, "review the source contract");
     assert_eq!(component_for("tinyflows"), Some("tinyflows"));
 }
 

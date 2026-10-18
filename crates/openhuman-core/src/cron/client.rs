@@ -1,7 +1,8 @@
 //! Typed calls to the `tinyflows` module's `Schedule` object.
 //!
 //! The scheduler runtime, the cron job and run store and the schedule maths
-//! all run in the module (`tinyflows_bus::schedule`, contract v3). This file is
+//! all run in the module (the Schedule v3 subset of `tinyflows_bus::schedule`
+//! source contract v4, served by the pinned v0.8.23 release). This file is
 //! the only place core builds those requests: it turns a [`Config`] and a
 //! [`StoreOperation`] into a `ScheduleStore` request bound to the acting
 //! scope's document port ([`super::documents_port`]), and wraps every pure

@@ -119,6 +119,11 @@ pub(crate) fn try_acquire_run(job_id: &str) -> Option<RunGuard> {
 }
 
 /// The module's retry settings from the operator's reliability config.
+///
+/// Keep the Schedule v3 subset served by the pinned v0.8.23 release. Source
+/// contract v4 adds optional `now` for fixed-clock manual schedulers, which
+/// this host does not request. See the release compatibility integration test
+/// before adopting any newer field or scheduler member.
 pub(crate) fn scheduler_config(config: &Config) -> Value {
     json!({
         "poll_secs": config.reliability.scheduler_poll_secs,

@@ -45,7 +45,7 @@
     {
       "id": "tinyflows",
       "expect": "v0.8.23-92-gcad43f97",
-      "reason": "Storage schema v2 (epic #7973): the gitlink sits past the registry's released tag on the merged upstream commit carrying the uniform storage schema. Re-pin both once a release carrying it is cut; retire this entry then."
+      "reason": "Keep cad43f97 for the upstream storage schema v2 declarations while serving the registry's immutable v0.8.23 Schedule v3 release. Source Schedule v4 adds only optional StartScheduler.config.now; OpenHuman omits it and uses the unchanged v3 requests, callbacks and records. The exact source version and v3 config subset are checked in core, and tinyflows_release_compatibility exercises the actual installed v0.8.23 module through host scheduling, document and policy adapters. Schedule v5/v6 remove ExecuteJob and require a separate host migration, so they are not drop-in artifact updates. Reconcile both pins and retire this exact exemption after a compatible release or reviewed migration."
     },
     {
       "id": "tinymemes",

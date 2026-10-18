@@ -13,6 +13,25 @@ use {
     tinyflows_bus::schedule::types::DeliveryConfig,
 };
 
+#[test]
+fn scheduler_config_stays_within_the_released_schedule_v3_subset() {
+    let mut config = Config::default();
+    config.reliability.scheduler_poll_secs = 17;
+    config.scheduler.max_concurrent = 3;
+    config.reliability.scheduler_retries = 2;
+    config.reliability.provider_backoff_ms = 700;
+    let wire = scheduler_config(&config);
+    assert_eq!(wire["poll_secs"], 17);
+    assert_eq!(wire["max_concurrent"], 3);
+    assert_eq!(wire["retries"], 2);
+    assert_eq!(wire["backoff_ms"], 700);
+    assert_eq!(wire.as_object().unwrap().len(), 4);
+    assert!(
+        wire.get("now").is_none(),
+        "fixed-clock mode needs Schedule v4"
+    );
+}
+
 async fn test_config(tmp: &TempDir) -> Config {
     let ws = tmp.path().join("workspace");
     let config = Config {

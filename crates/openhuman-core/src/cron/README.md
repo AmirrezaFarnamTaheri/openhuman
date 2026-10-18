@@ -13,12 +13,26 @@ scheduler runtime (poll pass, process-wide run claims, retry with backoff,
 completion and rescheduling), the cron job and run store, and the schedule
 maths (cron expressions, one-shot instants, intervals, active hours, the
 agent-job cadence floor). Core reaches it only through the `tinyflows-bus`
-contract (`tinyflows_bus::schedule`, v3), and keeps what is policy and what is
+contract (`tinyflows_bus::schedule`), and keeps what is policy and what is
 pluggable: the callbacks the module runs jobs through, the document port it
 persists through, the job-kind handler registry, delivery, the operator limits
 and the RPC and tool surface. Core links neither `tinyflows-schedule` nor
 `tinyflows-drivers`' schedule store (`cargo tree -p openhuman -e normal -i
 tinyflows-schedule` is empty).
+
+The runtime pin is v0.8.23, which serves Schedule contract v3. The vendored
+source at `cad43f97` declares v4; its sole Schedule wire addition is the optional
+`StartScheduler.config.now` fixed-clock setting. The host sends only the v3
+retry and concurrency settings, so it supports that released subset while
+retaining the newer source's storage schema declarations. The exact source
+version and omitted fixed-clock field are checked in the registry and scheduler
+tests. `tinyflows_release_compatibility` also loads the installed release through
+the ordinary module resolver, verifies its manifest and advertised methods,
+then exercises manual and scheduled execution, scoped document persistence,
+handler results and operator refusal through the real host adapters. It has no
+linked-module fixture or network fallback. A later contract or runtime release
+requires a new compatibility review; the existing exact pin exemption is not a
+general version range.
 
 ## How it works
 

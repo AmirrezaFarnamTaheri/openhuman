@@ -221,6 +221,12 @@ name = "structural_code"
 path = "../../tests/structural_code.rs"
 
 [[test]]
+# A separate process owns the module/storage slots and loads the registry release.
+name = "tinyflows_release_compatibility"
+path = "../../tests/tinyflows_release_compatibility.rs"
+required-features = ["modules"]
+
+[[test]]
 name = "cli_model_overrides_e2e"
 path = "../../tests/cli_model_overrides_e2e.rs"
 
@@ -396,6 +402,8 @@ tinyagents-definition = { path = "../../vendor/tinyagents/crates/tinyagents-defi
 tinyagents-session = { path = "../../vendor/tinyagents/crates/tinyagents-session" }
 tinydocs-bus = { path = "../../vendor/tinydocs/crates/tinydocs-bus" }
 tinysearch-bus = { path = "../../vendor/tinysearch/crates/tinysearch-bus" }
+# Release-bound Schedule compatibility uses only the contract crate.
+tinyflows-bus = { path = "../../vendor/tinyflows/crates/tinyflows-bus" }
 tinybus = { path = "../../vendor/tinybus/crates/tinybus", default-features = false, features = ["macros", "uds"] }
 tinychannels = { version = "0.1", features = ["relay-websocket", "email"] }
 tinyinference-core = { path = "../../vendor/tinyagents/vendor/tinyinference/crates/tinyinference-core" }
