@@ -112,6 +112,8 @@ fn action_specific_target_agent_ids_remain_valid() {
             Some(target),
         );
     }
+}
+
 #[test]
 fn owner_relaxed_json_recovery_preserves_action_normalization() {
     let reply = "{action: \"DROP\", reason: \"recovered\",}";
