@@ -18,8 +18,9 @@
  *        - IN_FLIGHT clears (Rust side).
  *        - The DOM never accumulates the final two chunks.
  *        - Send button becomes enabled again.
- *   5. The early partial remains visible and persisted, while the late
- *      chunks never land.
+ *   5. The user's prompt remains persisted and late chunks never land.
+ *      The cancelled partial is UI-only, because the core persists only
+ *      successfully delivered assistant replies.
  *
  * This is the second hardest scenario in the chat pipeline — the first
  * being the streaming reply itself. If cancel breaks, in-flight chats
@@ -259,9 +260,10 @@ describe('Chat harness — mid-stream cancel', () => {
     const contents = (response.result?.result?.data?.messages ?? [])
       .map(message => message.content)
       .join('\n');
-    if (sawEarlyDelta) {
-      expect(contents.includes(EARLY_PIECES[0])).toBe(true);
-    }
+    // A cancelled turn is not a delivered reply: the core only persists an
+    // assistant message after successful completion. The user's original
+    // request must remain durable, while no post-cancel chunks can appear.
+    expect(contents.includes(PROMPT)).toBe(true);
     for (const piece of LATE_PIECES) {
       expect(contents.includes(piece)).toBe(false);
     }
