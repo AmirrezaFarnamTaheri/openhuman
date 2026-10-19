@@ -139,12 +139,9 @@ impl LegacyUiBridge {
                         == Some(ext.clone())
                 });
                 if let Some(owned) = owned {
-                    let source = Path::new(&file.path);
-                    let size = if same_file(owned, source) {
-                        tokio::fs::metadata(source).await?.len()
-                    } else {
-                        tokio::fs::copy(source, owned).await?
-                    };
+                    let bytes = version_file_bytes(&self.workspace_dir, &self.files, &file.key).await?;
+                    let size = bytes.len() as u64;
+                    tokio::fs::write(owned, bytes).await?;
                     super::store::finalize_artifact(
                         &self.workspace_dir,
                         &record.id,
@@ -170,15 +167,11 @@ impl LegacyUiBridge {
         .await
         .map_err(anyhow::Error::msg)?;
         let size = if record.holds_file() {
-            let source = latest
-                .file
-                .as_ref()
-                .map_or_else(|| PathBuf::from(&latest.body), |f| PathBuf::from(&f.path));
-            if same_file(&source, &dest) {
-                tokio::fs::metadata(&dest).await?.len()
-            } else {
-                tokio::fs::copy(&source, &dest).await?
-            }
+            let key = latest.file.as_ref().map_or(latest.body.as_str(), |f| f.key.as_str());
+            let bytes = version_file_bytes(&self.workspace_dir, &self.files, key).await?;
+            let size = bytes.len() as u64;
+            tokio::fs::write(&dest, bytes).await?;
+            size
         } else {
             tokio::fs::write(&dest, latest.body.as_bytes()).await?;
             latest.body.len() as u64
@@ -190,11 +183,24 @@ impl LegacyUiBridge {
     }
 }
 
-fn same_file(a: &Path, b: &Path) -> bool {
-    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => false,
+/// Resolve durable file keys through TinyArtifacts' traversal/symlink-safe
+/// store. Older records held paths instead; only read those through the
+/// existing trusted-root and protected-path guard.
+async fn version_file_bytes(
+    workspace_dir: &Path,
+    files: &FileRoots,
+    key: &str,
+) -> anyhow::Result<Vec<u8>> {
+    if key.starts_with("artifacts/files/") {
+        use tiny_artifacts::FileStore;
+        return tiny_artifacts::FsFileStore::new(version_files_dir(workspace_dir))
+            .read(key)
+            .await;
     }
+    let checked = guarded_roots(file_roots(workspace_dir, files, None))
+        .resolve(key)
+        .await?;
+    Ok(tokio::fs::read(checked.path).await?)
 }
 
 #[async_trait]

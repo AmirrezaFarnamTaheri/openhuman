@@ -126,6 +126,8 @@ impl Drop for RuntimeProxyRestore {
     }
 }
 
+// The channel host adapter is only compiled with the channels feature.
+#[cfg(feature = "channels")]
 #[tokio::test]
 async fn channel_allowlist_store_loads_a_versioned_document_before_saving() {
     let tmp = tempfile::tempdir().unwrap();
