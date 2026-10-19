@@ -39,6 +39,8 @@ use tempfile::tempdir;
 
 use openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry;
 use openhuman_core::core::auth::{init_rpc_token, CORE_TOKEN_ENV_VAR};
+use openhuman_core::inference::registry::{register_chat_model, ChatModelEntry};
+use tinyinference_llm::providers::openai::{AuthStyle as MockAuthStyle, OpenAiModel};
 use openhuman_rpc::server::build_core_http_router;
 
 const TEST_RPC_TOKEN: &str = "json-rpc-e2e-local-token";
@@ -52,6 +54,42 @@ static AGENT_HARNESS_E2E_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 /// calls are safe even though the underlying registry uses its own OnceLock
 /// (`init_global_builtins` silently ignores a second set).
 static AGENT_DEF_REGISTRY_INIT: OnceLock<()> = OnceLock::new();
+
+/// The core no longer constructs a managed provider internally: the embedding
+/// host must register one. These CLI integration tests boot only the core RPC
+/// router, so install a real OpenAI-compatible model pointed at the in-process
+/// scripted HTTP upstream, not an always-successful mock ChatModel.
+///
+/// Per-turn config supplies the endpoint, which is different for each boot.
+/// This makes every scripted completion, error and SSE assertion exercise the
+/// actual provider transport while keeping the production provider registry
+/// unchanged. E2E cases serialize their global environment via env_lock.
+fn install_scripted_hosted_provider() {
+    static SCRIPTED_PROVIDER: OnceLock<()> = OnceLock::new();
+    SCRIPTED_PROVIDER.get_or_init(|| {
+        register_chat_model(
+            "openhuman",
+            ChatModelEntry {
+                build: std::sync::Arc::new(|request| {
+                    let endpoint = request
+                        .config
+                        .api_url
+                        .as_deref()
+                        .filter(|value| !value.trim().is_empty())
+                        .ok_or_else(|| anyhow::anyhow!("agent E2E missing local scripted API URL"))?;
+                    let base = format!("{}/openai/v1", endpoint.trim_end_matches('/'));
+                    let model = OpenAiModel::new("e2e-scripted-provider-key")
+                        .with_provider("openhuman")
+                        .with_base_url(&base)
+                        .with_auth_style(MockAuthStyle::Bearer);
+                    let model_id = request.model_override.unwrap_or("e2e-mock-model").to_owned();
+                    Ok((std::sync::Arc::new(model), model_id))
+                }),
+                probe: None,
+            },
+        );
+    });
+}
 
 fn init_agent_def_registry() {
     AGENT_DEF_REGISTRY_INIT.get_or_init(|| {
@@ -701,6 +739,7 @@ async fn boot_stack_with_config(extra_config: &str) -> Stack {
     // delegation tools and every `analyze_image`/`spawn_subagent` call becomes
     // "Unknown tool: …", making delegation tests vacuous.
     init_agent_def_registry();
+    install_scripted_hosted_provider();
 
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path().to_path_buf();
@@ -839,6 +878,38 @@ where
         .expect("spawn agent harness e2e thread")
         .join()
         .expect("agent harness e2e thread should not panic");
+}
+
+// Regression for the split hosted-provider registry: booting a core-only RPC
+// router must still connect the agent's managed route to the scripted upstream.
+#[test]
+fn managed_inference_is_served_by_the_local_scripted_provider() {
+    run_on_agent_stack(
+        "managed_inference_is_served_by_the_local_scripted_provider",
+        async {
+            let _lock = env_lock();
+            reset_script(vec![text_completion("MANAGED_PROVIDER_E2E_CANARY")]);
+            let stack = boot_stack().await;
+
+            let response = post_json_rpc(
+                &stack.rpc_base,
+                799,
+                "openhuman.inference_agent_chat",
+                json!({ "message": "Reply with the scripted canary", "model_override": "e2e-mock-model" }),
+            )
+            .await;
+            let result = assert_no_jsonrpc_error(&response, "managed provider routing");
+            assert!(
+                result.to_string().contains("MANAGED_PROVIDER_E2E_CANARY"),
+                "managed provider must return the in-process response: {result}"
+            );
+            assert!(
+                with_captured(|requests| !requests.is_empty()),
+                "the model must call the local scripted HTTP endpoint"
+            );
+            stack.shutdown();
+        },
+    );
 }
 
 // ─── Task 2: Multi-turn state persistence ────────────────────────────────────
