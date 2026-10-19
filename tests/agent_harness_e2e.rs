@@ -891,7 +891,11 @@ where
 fn managed_inference_is_served_by_the_local_scripted_provider() {
     run_on_agent_stack(
         "managed_inference_is_served_by_the_local_scripted_provider",
-        async {
+        managed_inference_is_served_by_the_local_scripted_provider_inner,
+    );
+}
+
+async fn managed_inference_is_served_by_the_local_scripted_provider_inner() {
             let _lock = env_lock();
             reset_script(vec![text_completion("MANAGED_PROVIDER_E2E_CANARY")]);
             let stack = boot_stack().await;
@@ -913,8 +917,6 @@ fn managed_inference_is_served_by_the_local_scripted_provider() {
                 "the model must call the local scripted HTTP endpoint"
             );
             stack.shutdown();
-        },
-    );
 }
 
 // ─── Task 2: Multi-turn state persistence ────────────────────────────────────
