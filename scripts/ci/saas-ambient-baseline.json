@@ -120,15 +120,15 @@
   },
   {
     "rule": "home-dir",
-    "path": "crates/openhuman-core/src/config/ops/agent.rs",
-    "line": 312,
+    "path": "crates/openhuman-core/src/config/ops/agent_paths.rs",
+    "line": 19,
     "text": "let Some(home) = dirs::home_dir() else {",
     "occurrence": 1
   },
   {
     "rule": "home-dir",
-    "path": "crates/openhuman-core/src/config/ops/agent.rs",
-    "line": 330,
+    "path": "crates/openhuman-core/src/config/ops/agent_paths.rs",
+    "line": 37,
     "text": "if let Some(home) = dirs::home_dir() {",
     "occurrence": 1
   },
@@ -176,8 +176,8 @@
   },
   {
     "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/config/schema/load/impl_load.rs",
-    "line": 258,
+    "path": "crates/openhuman-core/src/config/schema/load/config_file_read.rs",
+    "line": 93,
     "text": "match tokio::task::spawn_blocking(move || {",
     "occurrence": 1
   },

@@ -36,13 +36,6 @@
   },
   {
     "rule": "openhuman-task-local",
-    "path": "crates/openhuman-core/src/agent/orchestration/tools/spawn_async_subagent_execute.rs",
-    "line": 396,
-    "text": "let join = dispatch.spawn(crate::agent::turn_origin::propagate(",
-    "occurrence": 1
-  },
-  {
-    "rule": "openhuman-task-local",
     "path": "crates/openhuman-core/src/agent/orchestration/workflow_runs/engine/lifecycle.rs",
     "line": 141,
     "text": "let inherited_origin = crate::security::turn_origin::capture();",

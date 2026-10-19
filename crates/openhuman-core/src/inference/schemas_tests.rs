@@ -62,7 +62,11 @@ fn inference_list_models_schema_accepts_ephemeral_candidate_probe_params() {
     assert_eq!(schema.inputs.len(), 4);
     assert_eq!(schema.inputs[0].name, "provider_id");
     assert!(schema.inputs[0].required);
-    for name in ["candidate_api_key", "candidate_provider", "candidate_ca_cert_pem"] {
+    for name in [
+        "candidate_api_key",
+        "candidate_provider",
+        "candidate_ca_cert_pem",
+    ] {
         let field = schema
             .inputs
             .iter()

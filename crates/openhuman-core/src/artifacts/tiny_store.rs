@@ -139,7 +139,8 @@ impl LegacyUiBridge {
                         == Some(ext.clone())
                 });
                 if let Some(owned) = owned {
-                    let bytes = version_file_bytes(&self.workspace_dir, &self.files, &file.key).await?;
+                    let bytes =
+                        version_file_bytes(&self.workspace_dir, &self.files, &file.key).await?;
                     let size = bytes.len() as u64;
                     tokio::fs::write(owned, bytes).await?;
                     super::store::finalize_artifact(
@@ -167,7 +168,10 @@ impl LegacyUiBridge {
         .await
         .map_err(anyhow::Error::msg)?;
         let size = if record.holds_file() {
-            let key = latest.file.as_ref().map_or(latest.body.as_str(), |f| f.key.as_str());
+            let key = latest
+                .file
+                .as_ref()
+                .map_or(latest.body.as_str(), |f| f.key.as_str());
             let bytes = version_file_bytes(&self.workspace_dir, &self.files, key).await?;
             let size = bytes.len() as u64;
             tokio::fs::write(&dest, bytes).await?;
