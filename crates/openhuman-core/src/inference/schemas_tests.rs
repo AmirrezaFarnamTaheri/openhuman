@@ -54,6 +54,32 @@ fn inference_schema_function_names_are_stable() {
 }
 
 #[test]
+fn inference_list_models_schema_accepts_ephemeral_candidate_probe_params() {
+    // The provider editor sends these through RPC before persisting credentials.
+    // The handler already accepts them, so the schema must not reject them
+    // as unknown params before dispatch.
+    let schema = schemas("list_models");
+    assert_eq!(schema.inputs.len(), 4);
+    assert_eq!(schema.inputs[0].name, "provider_id");
+    assert!(schema.inputs[0].required);
+    for name in ["candidate_api_key", "candidate_provider", "candidate_ca_cert_pem"] {
+        let field = schema
+            .inputs
+            .iter()
+            .find(|field| field.name == name)
+            .unwrap_or_else(|| panic!("missing list_models parameter: {name}"));
+        assert!(!field.required, "{name} must remain optional");
+        match &field.ty {
+            TypeSchema::Option(inner) if name == "candidate_provider" => {
+                assert!(matches!(**inner, TypeSchema::Json));
+            }
+            TypeSchema::Option(inner) => assert!(matches!(**inner, TypeSchema::String)),
+            other => panic!("unexpected type for {name}: {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn inference_prompt_schema_reuses_local_ai_shape_with_new_namespace() {
     let schema = schemas("prompt");
     assert_eq!(schema.namespace, "inference");
