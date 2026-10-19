@@ -59,11 +59,11 @@ async function expectSelectedTab(page: import('@playwright/test').Page, tab: str
   await expect(page.locator('[data-testid^="two-pane-nav-"][aria-current="page"]')).toHaveCount(1);
 }
 
-async function expectWelcome(page: import('@playwright/test').Page) {
-  // Welcome is the Connections overview, rather than a TwoPaneNav item. It
-  // therefore intentionally has no `two-pane-nav-welcome` row to select.
-  await expect(page.getByTestId('connections-welcome')).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('[data-testid^="two-pane-nav-"][aria-current="page"]')).toHaveCount(0);
+async function expectDefaultConnectionsTab(page: import('@playwright/test').Page) {
+  // The Connections landing was simplified to the Integrations tab. Welcome
+  // remains an explicit tab, but unknown selectors and a bare /connections
+  // route must fall back to the current product default, not stale Welcome.
+  await expectSelectedTab(page, 'composio');
 }
 
 async function openConnections(
@@ -113,8 +113,14 @@ test('Connections aliases, fallback, and /channels resolve to the correct pane',
     await page.evaluate(target => {
       window.location.hash = target;
     }, route);
-    await expectWelcome(page);
+    await expectDefaultConnectionsTab(page);
   }
+
+  // Welcome is still reachable intentionally; it is just no longer default.
+  await page.evaluate(() => {
+    window.location.hash = '/connections?tab=welcome';
+  });
+  await expect(page.getByTestId('connections-welcome')).toBeVisible({ timeout: 15_000 });
 
   await page.evaluate(() => {
     window.location.hash = '/channels';

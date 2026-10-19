@@ -33,7 +33,6 @@ import {
   clickByTitle,
   clickSend,
   getSelectedThreadId,
-  hexEncodeThreadId,
   typeIntoComposer,
   waitForSocketConnected,
 } from '../helpers/chat-harness';
