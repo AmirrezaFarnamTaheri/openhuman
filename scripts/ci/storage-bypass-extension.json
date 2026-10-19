@@ -111,26 +111,6 @@
   },
   {
     "rule": "file-mutation",
-    "path": "crates/openhuman-core/src/artifacts/tiny_store.rs",
-    "line": 146,
-    "text": "tokio::fs::copy(source, owned).await?",
-    "occurrence": 1,
-    "classification": "external-export",
-    "reason": "Materializes versioned artifact bytes in the user-visible artifact file; the versioned record and native blob storage remain separate from this local deliverable.",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
-  },
-  {
-    "rule": "file-mutation",
-    "path": "crates/openhuman-core/src/artifacts/tiny_store.rs",
-    "line": 180,
-    "text": "tokio::fs::copy(&source, &dest).await?",
-    "occurrence": 1,
-    "classification": "external-export",
-    "reason": "Materializes versioned artifact bytes in the user-visible artifact file; the versioned record and native blob storage remain separate from this local deliverable.",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
-  },
-  {
-    "rule": "file-mutation",
     "path": "crates/openhuman-core/src/attachments/legacy.rs",
     "line": 156,
     "text": "let linked = tokio::fs::hard_link(&temp, &path).await;",

@@ -75,7 +75,7 @@ pub fn artifact_publisher(config: &Config) -> Option<Arc<dyn ArtifactPublisher>>
         &config.workspace_dir,
         &config.action_dir,
     ));
-    Some(Arc::new(StorageArtifactPublisher::new(client, security).with_workspace_dir(&config.workspace_dir)))
+    Some(Arc::new(StorageArtifactPublisher::new(client, security).with_workspace_dir(config.workspace_dir.clone())))
 }
 
 /// The bytes, file name and media type a version uploads as.

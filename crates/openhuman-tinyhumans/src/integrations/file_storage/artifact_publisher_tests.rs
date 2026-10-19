@@ -148,7 +148,7 @@ async fn a_managed_file_key_is_read_through_the_scoped_version_store() {
     Mock::given(method("POST"))
         .and(path("/agent-integrations/file-storage/files"))
         .and(body_string_contains("MANAGED-KEY-BYTES"))
-        .and(body_string_contains("filename=\\"Chart.png\\""))
+        .and(body_string_contains("filename=\"Chart.png\""))
         .respond_with(uploaded(Some("https://api.example/public/file-1")))
         .expect(1)
         .mount(&server)
