@@ -56,6 +56,7 @@ test("fleet measurements retain their declared release and minimal-feature invoc
   assert.ok(calls.get("linux_fleet").includes("--release"));
   assert.ok(calls.get("linux_fleet").includes("--no-default-features"));
   assert.equal(calls.get("linux_fleet").includes("--features"), false);
+  assert.equal(calls.get("linux_fleet").includes("4"), false, "release measurement still uses its default 100 agents");
   assert.equal(calls.get("mcp").includes("--release"), false);
   assert.equal(calls.get("mcp").includes("--no-default-features"), false);
   assert.ok(calls.get("mcp").includes("mcp"));
@@ -80,6 +81,8 @@ test("cold hosted fleet smoke retains execution with an extended compile budget"
   assert.equal(observed.get("linux_fleet").timeout, 45 * 60_000);
   assert.equal(observed.get("ordinary").timeout, 30 * 60_000);
   assert.ok(observed.get("linux_fleet").args.includes("--no-default-features"));
+  assert.deepEqual(observed.get("linux_fleet").args.slice(-2), ["--", "4"]);
+  assert.equal(observed.get("ordinary").args.includes("4"), false);
 });
 
 test("hosted CI smoke executes fleet behavior in debug without changing its minimal features", () => {

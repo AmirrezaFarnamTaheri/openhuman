@@ -134,6 +134,31 @@ async fn the_current_embedder_config_can_be_read_without_cloning_it() {
     assert_eq!(none, None::<()>);
 }
 
+#[tokio::test]
+async fn live_embedder_snapshot_takes_precedence_over_initial_configuration() {
+    let mut initial = crate::config::Config::default();
+    initial.default_model = Some("initial-model".into());
+    let mut live = initial.clone();
+    live.default_model = Some("updated-model".into());
+
+    let mut context = ctx_with_config(initial);
+    Arc::get_mut(&mut context)
+        .expect("exclusive test context")
+        .latest_embedder_config = Some(Arc::new(std::sync::Mutex::new(live)));
+
+    let (cloned, borrowed) = CoreContext::scope(context, async {
+        (
+            CoreContext::current_embedder_config()
+                .and_then(|config| config.default_model),
+            CoreContext::with_current_embedder_config(|config| config.default_model.clone())
+                .flatten(),
+        )
+    })
+    .await;
+    assert_eq!(cloned.as_deref(), Some("updated-model"));
+    assert_eq!(borrowed.as_deref(), Some("updated-model"));
+}
+
 // ---- derived per-agent contexts (the multi-agent library seam) -----------
 //
 // `derive_with` is how one booted runtime hosts many independently configured

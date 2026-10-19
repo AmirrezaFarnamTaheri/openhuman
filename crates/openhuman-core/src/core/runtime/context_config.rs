@@ -47,7 +47,12 @@ impl CoreContext {
     }
 
     pub(crate) fn latest_embedder_config(&self) -> Option<crate::config::Config> {
-        let snapshot = self.latest_embedder_config.as_ref()?;
+        // The library embedder's initial config exists even before its mutable
+        // snapshot is installed. Do not lose the caller's configuration just
+        // because it did not ask for live profile refresh.
+        let Some(snapshot) = self.latest_embedder_config.as_ref() else {
+            return self.embedder_config.clone();
+        };
         let mut config = snapshot.lock().ok()?.clone();
         config.runtime_state.context_snapshot = Some(Arc::downgrade(snapshot));
         Some(config)
@@ -60,9 +65,12 @@ impl CoreContext {
         f: impl FnOnce(&crate::config::Config) -> R,
     ) -> Option<R> {
         Self::current().and_then(|ctx| {
-            let snapshot = ctx.latest_embedder_config.as_ref()?;
-            let config = snapshot.lock().ok()?;
-            Some(f(&config))
+            if let Some(snapshot) = &ctx.latest_embedder_config {
+                let config = snapshot.lock().ok()?;
+                Some(f(&config))
+            } else {
+                ctx.embedder_config.as_ref().map(f)
+            }
         })
     }
 }
