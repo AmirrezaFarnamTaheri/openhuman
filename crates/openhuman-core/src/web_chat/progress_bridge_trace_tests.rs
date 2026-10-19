@@ -2,7 +2,11 @@ use super::*;
 
 #[test]
 fn disabled_export_does_not_create_a_trace_context() {
-    let config = crate::config::Config::default();
+    // Usage spans are enabled by default. Disable both independent exporters
+    // to exercise the genuinely disabled state, not the shipping default.
+    let mut config = crate::config::Config::default();
+    config.observability.share_usage_data = false;
+    config.observability.agent_tracing.enabled = false;
     let context = trace_context(
         &config,
         &ChatRequestMetadata::default(),
@@ -11,6 +15,21 @@ fn disabled_export_does_not_create_a_trace_context() {
         "request-456",
     );
     assert!(context.is_none());
+}
+
+#[test]
+fn usage_export_without_local_tracing_still_creates_a_trace_context() {
+    let mut config = crate::config::Config::default();
+    config.observability.share_usage_data = true;
+    config.observability.agent_tracing.enabled = false;
+    assert!(trace_context(
+        &config,
+        &ChatRequestMetadata::default(),
+        "socket-client",
+        "thread-123",
+        "request-456",
+    )
+    .is_some());
 }
 
 #[test]

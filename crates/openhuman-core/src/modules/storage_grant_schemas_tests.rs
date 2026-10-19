@@ -115,9 +115,23 @@ fn tinyconnectors_grant_matches_its_published_v2_preference_schema() {
 }
 
 #[test]
-fn tinyjuice_reaches_only_its_blob_prefix() {
+fn tinyjuice_reaches_only_its_declared_savings_collection_and_blob_prefix() {
     let grant = declared("tinyjuice").unwrap();
-    assert!(grant.collections.is_empty());
+    // TinyJuice's pinned bus schema declares exactly one module collection:
+    // juice.savings. Deny unrelated collections rather than granting all.
+    assert_eq!(grant.collections.len(), 1);
+    assert!(allowed(
+        &grant,
+        Object::Documents,
+        "Get",
+        json!({"collection": "juice.savings", "id": "totals"})
+    ));
+    assert!(!allowed(
+        &grant,
+        Object::Documents,
+        "Get",
+        json!({"collection": "juice.other", "id": "totals"})
+    ));
     assert!(allowed(
         &grant,
         Object::Blobs,
