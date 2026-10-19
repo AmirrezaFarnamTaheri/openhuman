@@ -227,9 +227,7 @@ describe('Login flow — complete with mock data (Linux)', () => {
       console.log(`[LoginFlow] Onboarding visible: "${foundOnboarding}"`);
     }
 
-    const foundHome = !foundOnboarding
-      ? await waitForAnyText(homeCandidates, 5_000)
-      : null;
+    const foundHome = !foundOnboarding ? await waitForAnyText(homeCandidates, 5_000) : null;
     if (foundHome) {
       console.log(
         `[LoginFlow] Home page visible: "${foundHome}" (onboarding may be deferred/completed)`

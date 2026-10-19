@@ -242,7 +242,9 @@ describe('Chat harness — mid-stream cancel', () => {
 
   it('the persisted thread messages do NOT contain chunks streamed after cancellation', async () => {
     if (!cancelAttempted) {
-      console.warn('[chat-harness-cancel] cancellation was not attempted; no persisted-chunk assertion');
+      console.warn(
+        '[chat-harness-cancel] cancellation was not attempted; no persisted-chunk assertion'
+      );
       return;
     }
     const threadId = await getSelectedThreadId();
