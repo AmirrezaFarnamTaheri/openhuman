@@ -227,7 +227,9 @@ describe('Login flow — complete with mock data (Linux)', () => {
       console.log(`[LoginFlow] Onboarding visible: "${foundOnboarding}"`);
     }
 
-    const foundHome = !foundOnboarding ? await waitForAnyText(homeCandidates, 5_000) : null;
+    const foundHome = !foundOnboarding
+      ? await waitForAnyText(homeCandidates, 5_000)
+      : null;
     if (foundHome) {
       console.log(
         `[LoginFlow] Home page visible: "${foundHome}" (onboarding may be deferred/completed)`
@@ -241,7 +243,11 @@ describe('Login flow — complete with mock data (Linux)', () => {
       const hash = window.location.hash;
       const onboarding =
         hash.startsWith('#/onboarding') &&
-        Boolean(document.querySelector('[data-testid="onboarding-layout"], [data-testid="onboarding-next-button"]'));
+        Boolean(
+          document.querySelector(
+            '[data-testid="onboarding-layout"], [data-testid="onboarding-next-button"]'
+          )
+        );
       const home =
         (hash.startsWith('#/chat') || hash.startsWith('#/home')) &&
         Boolean(document.querySelector('[data-testid="root-shell-sidebar"]'));

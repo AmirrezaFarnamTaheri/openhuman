@@ -59,7 +59,6 @@ const SLOW_SCRIPT = [
 const EARLY_PIECES = ['one ', 'two '];
 const LATE_PIECES = ['five ', 'six.'];
 let cancelAttempted = false;
-let sawEarlyDelta = false;
 
 /**
  * Click the composer's mid-stream cancel control. In the text composer the Send
@@ -117,7 +116,6 @@ describe('Chat harness — mid-stream cancel', () => {
 
   it('sends → IN_FLIGHT populates → Cancel clears it before late chunks land', async () => {
     cancelAttempted = false;
-    sawEarlyDelta = false;
     setMockBehavior('llmStreamScript', JSON.stringify(SLOW_SCRIPT));
     setMockBehavior('llmStreamChunkDelayMs', '500');
 
@@ -184,7 +182,6 @@ describe('Chat harness — mid-stream cancel', () => {
         timeoutMsg: 'first delta never landed before cancel attempt',
       })
       .catch(() => false);
-    sawEarlyDelta = sawFirstDelta;
     if (!sawFirstDelta) {
       console.warn(
         '[chat-harness-cancel] first delta was not visible before cancel; attempting cancel from in-flight state'
