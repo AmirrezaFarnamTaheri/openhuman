@@ -474,6 +474,12 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           when: core,
           run: "cargo check -p openhuman-embed --no-default-features",
         },
+        // Consumers such as TinySweeper enable tracing without native modules.
+        {
+          name: "embed-check-no-default-langfuse",
+          when: core,
+          run: "bash scripts/ci-cancel-aware.sh cargo check -p openhuman-embed --no-default-features --features langfuse",
+        },
         {
           name: "embed-doctests",
           when: core,
