@@ -96,31 +96,6 @@ pub fn legacy_versioned_dir(workspace_dir: &Path) -> PathBuf {
     workspace_dir.join("artifacts").join(VERSIONED_SUBDIR)
 }
 
-/// Resolve durable artifact file keys and legacy host paths without
-/// trusting a storage key as a filesystem path. The file store validates
-/// relative keys; guarded roots enforce workspace containment on all reads.
-pub(crate) async fn referenced_path(
-    workspace_dir: &Path,
-    file: &tiny_artifacts::FileRef,
-    roots: &tiny_artifacts::FileRoots,
-) -> anyhow::Result<PathBuf> {
-    let candidate = if file.key.starts_with("artifacts/files/") {
-        let root = version_files_dir(workspace_dir);
-        let store = tiny_artifacts::FsFileStore::new(&root);
-        anyhow::ensure!(
-            tiny_artifacts::FileStore::metadata(&store, &file.key).await?.is_some(),
-            "stored artifact file is missing"
-        );
-        root.join(&file.key)
-    } else {
-        PathBuf::from(&file.key)
-    };
-    let path = candidate
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("artifact file path is not valid UTF-8"))?;
-    Ok(roots.resolve(path).await?.path)
-}
-
 /// Shows versioned artifacts in the desktop UI through the legacy pipeline.
 pub struct LegacyUiBridge {
     workspace_dir: PathBuf,
@@ -151,7 +126,6 @@ impl LegacyUiBridge {
         else {
             return Ok(());
         };
-        let guarded = guarded_roots(file_roots(&self.workspace_dir, &self.files, None));
         // A file version lands in the file its card already owns: copy it there
         // (a producer has usually written that file itself) and mark the card
         // ready. Re-reserving would flash the card back to "generating".
