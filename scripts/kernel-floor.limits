@@ -727,4 +727,14 @@
 # 321/301/2 2026-10-16 Re-measure after the upstream/main merge at ba83482245.
 #                      CI (Linux, EX63) reports five fewer packages and two
 #                      fewer unique crate names; native builds remain at two.
-flows:321:301:2
+# 333/310/3 2026-10-19 Audited the upstream storage contract after merge
+#                      PR #14. Linux hosted CI run 39169657050 (rust-lint)
+#                      measured 333 packages / 310 names / 3 native:
+#                      libsqlite3-sys, ring, zstd-sys. TinyStorageDrivers'
+#                      core unconditionally compresses sealed streams with
+#                      zstd, and its SQLite driver compresses large records.
+#                      Flows links the core even with defaults disabled.
+#                      Preserve the durable storage format rather than falsely
+#                      gate away zstd; any further dependency growth fails.
+#                      Investigate native-free compression upstream separately.
+flows:333:310:3
