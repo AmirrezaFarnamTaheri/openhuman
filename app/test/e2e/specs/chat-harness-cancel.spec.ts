@@ -243,31 +243,28 @@ describe('Chat harness — mid-stream cancel', () => {
     expect(sendEnabled).toBe(true);
   });
 
-  it('the persisted thread file does NOT contain the late chunks', async () => {
+  it('the persisted thread messages do NOT contain chunks streamed after cancellation', async () => {
     if (!cancelAttempted) {
-      console.warn(
-        '[chat-harness-cancel] cancel was not attempted; skipping late-chunk persistence assertion'
-      );
+      console.warn('[chat-harness-cancel] cancellation was not attempted; no persisted-chunk assertion');
       return;
     }
-
     const threadId = await getSelectedThreadId();
     expect(typeof threadId).toBe('string');
-    const relPath = `memory/conversations/threads/${hexEncodeThreadId(threadId as string)}.jsonl`;
 
-    // The stopped reply should be durable, with no chunks after Stop.
-    const read = await callOpenhumanRpc<{ result: { content_utf8: string } }>(
-      'openhuman.test_support_read_workspace_file',
-      { rel_path: relPath, max_bytes: 131_072 }
-    );
-    if (sawEarlyDelta) expect(read.ok).toBe(true);
-    if (!read.ok) return;
-    const content = read.result?.result?.content_utf8 ?? '';
+    // The canonical store moved away from memory/conversations/threads/*.jsonl.
+    // Read via the same RPC as the application, not by relying on a file path.
+    const response = await callOpenhumanRpc<{
+      result: { data: { messages: Array<{ content: string }> } };
+    }>('openhuman.threads_messages_list', { thread_id: threadId });
+    expect(response.ok).toBe(true);
+    const contents = (response.result?.result?.data?.messages ?? [])
+      .map(message => message.content)
+      .join('\n');
     if (sawEarlyDelta) {
-      expect(content.includes(EARLY_PIECES[0])).toBe(true);
+      expect(contents.includes(EARLY_PIECES[0])).toBe(true);
     }
     for (const piece of LATE_PIECES) {
-      expect(content.includes(piece)).toBe(false);
+      expect(contents.includes(piece)).toBe(false);
     }
   });
 });

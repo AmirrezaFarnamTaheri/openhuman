@@ -14,9 +14,9 @@
  *   Rust core (verified through new test_support introspection RPCs):
  *     - `IN_FLIGHT` map gains an entry for `<client_id>::<thread_id>`
  *       while the stream is active, then clears after `chat_done`.
- *     - The conversation persists to disk under
- *       `<workspace>/memory/conversations/threads/<hex(thread_id)>.jsonl`
- *       and contains the user message + the assistant reply.
+ *     - The conversation persists in the threads store. We read it through
+ *       `threads_messages_list`, the same API the product uses, so a storage
+ *       migration cannot make this test silently inspect stale JSONL files.
  *
  *   Mock backend:
  *     - The mock LLM is configured via `llmStreamScript` to stream a
@@ -193,43 +193,42 @@ describe('Chat harness — send + stream', () => {
     expect(llm).toBeDefined();
   });
 
-  it('conversation persists to the workspace JSONL on disk', async () => {
+  it('persists user and assistant messages through the threads storage RPC', async () => {
     const threadId = await getSelectedThreadId();
     expect(typeof threadId).toBe('string');
-    const relPath = `memory/conversations/threads/${hexEncodeThreadId(threadId as string)}.jsonl`;
 
-    // Poll briefly — the store flushes after chat_done emits, which
-    // races with the UI seeing the final text.
-    let content = '';
+    // This is the supported read contract. The legacy workspace JSONL path
+    // was removed when the thread store moved into TinyAgents storage drivers.
+    // Poll because chat_done and the persistence flush can briefly race.
+    let messages: Array<{ content: string; type: string; sender: string }> = [];
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
-      const read = await callOpenhumanRpc<{ result: { content_utf8: string } }>(
-        'openhuman.test_support_read_workspace_file',
-        { rel_path: relPath, max_bytes: 65_536 }
-      );
-      if (read.ok && read.result?.result?.content_utf8) {
-        content = read.result.result.content_utf8;
-        if (content.includes(CANARY)) break;
+      const response = await callOpenhumanRpc<{
+        result: { data: { messages: typeof messages; count: number } };
+      }>('openhuman.threads_messages_list', { thread_id: threadId });
+      expect(response.ok).toBe(true);
+      messages = response.result?.result?.data?.messages ?? [];
+      if (
+        messages.some(message => message.content.includes(CANARY)) &&
+        messages.some(message => message.content.includes(PROMPT))
+      ) {
+        break;
       }
       await browser.pause(300);
     }
-    expect(content).toContain(CANARY);
-    // User message must also be recorded — that's the prompt text.
-    expect(content).toContain(PROMPT);
+    expect(messages.some(message => message.content.includes(CANARY))).toBe(true);
+    expect(messages.some(message => message.content.includes(PROMPT))).toBe(true);
   });
 
-  it('reads thread state from the workspace via list_workspace_files', async () => {
-    const list = await callOpenhumanRpc<{
-      result: { entries: Array<{ rel_path: string; size: number; is_dir: boolean }> };
-    }>('openhuman.test_support_list_workspace_files', {
-      rel_root: 'memory/conversations/threads',
-      max_depth: 1,
-    });
-    expect(list.ok).toBe(true);
-    const entries = list.result?.result?.entries ?? [];
-    const jsonl = entries.filter(e => !e.is_dir && e.rel_path.endsWith('.jsonl'));
-    expect(jsonl.length).toBeGreaterThan(0);
-    // Every persisted thread file must be non-empty.
-    expect(jsonl.every(e => e.size > 0)).toBe(true);
+  it('lists real persisted thread messages rather than legacy JSONL paths', async () => {
+    const threadId = await getSelectedThreadId();
+    expect(typeof threadId).toBe('string');
+    const response = await callOpenhumanRpc<{
+      result: { data: { messages: Array<{ content: string }>; count: number } };
+    }>('openhuman.threads_messages_list', { thread_id: threadId });
+    expect(response.ok).toBe(true);
+    const data = response.result?.result?.data;
+    expect((data?.count ?? 0) > 0).toBe(true);
+    expect(data?.messages.every(message => message.content.trim().length > 0)).toBe(true);
   });
 });
