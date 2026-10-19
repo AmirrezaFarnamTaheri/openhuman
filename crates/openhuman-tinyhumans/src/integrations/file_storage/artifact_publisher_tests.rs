@@ -158,9 +158,8 @@ async fn a_managed_file_key_is_read_through_the_scoped_version_store() {
     let stored = root.join("img-1").join("v1.png");
     std::fs::create_dir_all(stored.parent().unwrap()).unwrap();
     std::fs::write(&stored, b"MANAGED-KEY-BYTES").unwrap();
-    let mut version = ArtifactVersion::new(
-        1, "", tiny_artifacts::ArtifactAuthor::Agent, "agent", 1,
-    );
+    let mut version =
+        ArtifactVersion::new(1, "", tiny_artifacts::ArtifactAuthor::Agent, "agent", 1);
     version.file = Some(FileRef {
         key: "artifacts/files/img-1/v1.png".to_string(),
         size_bytes: 17,
@@ -168,7 +167,10 @@ async fn a_managed_file_key_is_read_through_the_scoped_version_store() {
     });
     let mut record = ArtifactRecord::pending("img-1", "Chart", ArtifactKind::Image, 1);
     record.versions.push(version.clone());
-    let options = PublishOptions { public: true, ..PublishOptions::default() };
+    let options = PublishOptions {
+        public: true,
+        ..PublishOptions::default()
+    };
     let published = publisher(server.uri(), AutonomyLevel::Full)
         .with_workspace_dir(workspace.path())
         .publish(&record, &version, &options)
@@ -180,9 +182,8 @@ async fn a_managed_file_key_is_read_through_the_scoped_version_store() {
 
 #[tokio::test]
 async fn a_managed_key_without_workspace_is_refused_before_upload() {
-    let mut version = ArtifactVersion::new(
-        1, "", tiny_artifacts::ArtifactAuthor::Agent, "agent", 1,
-    );
+    let mut version =
+        ArtifactVersion::new(1, "", tiny_artifacts::ArtifactAuthor::Agent, "agent", 1);
     version.file = Some(FileRef {
         key: "artifacts/files/img-1/v1.png".to_string(),
         size_bytes: 7,

@@ -148,8 +148,7 @@ async fn live_embedder_snapshot_takes_precedence_over_initial_configuration() {
 
     let (cloned, borrowed) = CoreContext::scope(context, async {
         (
-            CoreContext::current_embedder_config()
-                .and_then(|config| config.default_model),
+            CoreContext::current_embedder_config().and_then(|config| config.default_model),
             CoreContext::with_current_embedder_config(|config| config.default_model.clone())
                 .flatten(),
         )

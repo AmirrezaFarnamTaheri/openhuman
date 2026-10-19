@@ -75,7 +75,10 @@ pub fn artifact_publisher(config: &Config) -> Option<Arc<dyn ArtifactPublisher>>
         &config.workspace_dir,
         &config.action_dir,
     ));
-    Some(Arc::new(StorageArtifactPublisher::new(client, security).with_workspace_dir(config.workspace_dir.clone())))
+    Some(Arc::new(
+        StorageArtifactPublisher::new(client, security)
+            .with_workspace_dir(config.workspace_dir.clone()),
+    ))
 }
 
 /// The bytes, file name and media type a version uploads as.
@@ -107,7 +110,9 @@ async fn upload_body(
             let resolved = tokio::fs::canonicalize(path)
                 .await
                 .map_err(|e| anyhow::anyhow!("cannot read the artifact's file: {e}"))?;
-            if let Some(reason) = openhuman_embed::__host::artifact_publisher::refused_path(&resolved) {
+            if let Some(reason) =
+                openhuman_embed::__host::artifact_publisher::refused_path(&resolved)
+            {
                 anyhow::bail!("[policy-blocked] cannot share this artifact: {reason}");
             }
             tokio::fs::read(&resolved)
@@ -242,7 +247,8 @@ impl ArtifactPublisher for StorageArtifactPublisher {
         if !self.security.can_act() {
             anyhow::bail!("[policy-blocked] Action blocked: autonomy is read-only");
         }
-        let (bytes, filename, mime) = upload_body(record, version, self.workspace_dir.as_deref()).await?;
+        let (bytes, filename, mime) =
+            upload_body(record, version, self.workspace_dir.as_deref()).await?;
         tracing::debug!(
             artifact_id = %record.id,
             version = version.version,
