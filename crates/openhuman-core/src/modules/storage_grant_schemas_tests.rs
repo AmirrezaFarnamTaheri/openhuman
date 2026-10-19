@@ -83,6 +83,38 @@ fn tinymcp_reaches_its_v2_collections_stream_and_secrets() {
 }
 
 #[test]
+fn tinyconnectors_grant_matches_its_published_v2_preference_schema() {
+    // The host and the loaded TinyConnectors release must use the same
+    // collection. The old v0.19.3 binary requested "composio-user-scopes"
+    // and every Composio list/execute call failed target-not-granted.
+    let grant = declared("tinyconnectors").expect("connectors module must have a grant");
+    let collection = tinyconnectors_bus::storage::PREFS_NAMESPACE;
+    assert_eq!(collection, "connectors.user_scopes");
+    assert!(allowed(
+        &grant,
+        Object::Documents,
+        "Get",
+        json!({"collection": collection, "id": "github"})
+    ));
+    assert!(allowed(
+        &grant,
+        Object::Documents,
+        "Put",
+        json!({"collection": collection, "id": "github"})
+    ));
+    assert_eq!(
+        authorize(
+            &grant,
+            Object::Documents,
+            "Get",
+            &json!({"collection": "composio-user-scopes", "id": "github"})
+        ),
+        Err(Denied::Target),
+        "the old collection remains migration-only, not an active grant"
+    );
+}
+
+#[test]
 fn tinyjuice_reaches_only_its_blob_prefix() {
     let grant = declared("tinyjuice").unwrap();
     assert!(grant.collections.is_empty());
