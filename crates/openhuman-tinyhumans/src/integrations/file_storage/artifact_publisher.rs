@@ -12,18 +12,20 @@
 //! autonomy, and the publisher only exists when the integration client does
 //! (a backend is configured and the user is signed in).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::json;
 use tiny_artifacts::{
-    ArtifactKind, ArtifactPublisher, ArtifactRecord, ArtifactVersion, PublishOptions, PublishedLink,
+    ArtifactKind, ArtifactPublisher, ArtifactRecord, ArtifactVersion, FileStore, PublishOptions,
+    PublishedLink,
 };
 
 use super::tools::helpers::{file_path, mime_for_path, FILES_PATH};
 use super::types::{LinkResponse, UploadResponse};
 use crate::integrations::IntegrationClient;
+use openhuman_embed::__host::artifact_publisher::version_files_dir;
 use openhuman_embed::__host::config::Config;
 use openhuman_embed::__host::security::approval::ApprovalTurnContext;
 use openhuman_embed::__host::security::SecurityPolicy;
@@ -39,6 +41,7 @@ pub struct StorageArtifactPublisher {
     /// The turn the backend requests are reported to. A publisher is built
     /// once per tool set, not per call, so it reports outside any chat.
     approval: ApprovalTurnContext,
+    workspace_dir: Option<PathBuf>,
 }
 
 impl StorageArtifactPublisher {
@@ -49,7 +52,16 @@ impl StorageArtifactPublisher {
             client,
             security,
             approval: ApprovalTurnContext::default(),
+            workspace_dir: None,
         }
+    }
+
+    /// Use the same durable version-file store as the artifact service.
+    /// A publisher constructed without a workspace may still share guarded
+    /// legacy files, but may not guess the root of an opaque managed file key.
+    pub fn with_workspace_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.workspace_dir = Some(dir.into());
+        self
     }
 }
 
@@ -63,33 +75,46 @@ pub fn artifact_publisher(config: &Config) -> Option<Arc<dyn ArtifactPublisher>>
         &config.workspace_dir,
         &config.action_dir,
     ));
-    Some(Arc::new(StorageArtifactPublisher::new(client, security)))
+    Some(Arc::new(StorageArtifactPublisher::new(client, security).with_workspace_dir(&config.workspace_dir)))
 }
 
 /// The bytes, file name and media type a version uploads as.
 async fn upload_body(
     record: &ArtifactRecord,
     version: &ArtifactVersion,
+    workspace_dir: Option<&Path>,
 ) -> anyhow::Result<(Vec<u8>, String, &'static str)> {
     if record.holds_file() {
-        let path = version
+        let key = version
             .file
             .as_ref()
-            .map_or(version.body.as_str(), |f| f.path.as_str());
-        let path = Path::new(path);
-        // The record was checked when written; check again on what the path
-        // resolves to now, so nothing protected leaves the machine.
-        let resolved = tokio::fs::canonicalize(path)
-            .await
-            .map_err(|e| anyhow::anyhow!("cannot read the artifact's file: {e}"))?;
-        if let Some(reason) = openhuman_embed::__host::artifact_publisher::refused_path(&resolved) {
-            anyhow::bail!("[policy-blocked] cannot share this artifact: {reason}");
-        }
-        let bytes = tokio::fs::read(&resolved)
-            .await
-            .map_err(|e| anyhow::anyhow!("cannot read the artifact's file: {e}"))?;
-        // Named after the artifact: the file read may be a kept version copy
-        // (`v2.pptx`), whose name means nothing to whoever opens the link.
+            .map_or(version.body.as_str(), |f| f.key.as_str());
+        let path = Path::new(key);
+        // Managed file versions are addressed by opaque keys, not filesystem
+        // paths. Their directory is scoped to the publishing workspace and
+        // FileStore::read enforces traversal and symlink protections.
+        let bytes = if key.starts_with("artifacts/files/") {
+            let root = workspace_dir.ok_or_else(|| {
+                anyhow::anyhow!("cannot share a managed artifact without its workspace")
+            })?;
+            tiny_artifacts::FsFileStore::new(version_files_dir(root))
+                .read(key)
+                .await
+                .map_err(|e| anyhow::anyhow!("cannot read the artifact's file: {e}"))?
+        } else {
+            // Imported pre-key versions still reference a path. Resolve it
+            // afresh and refuse protected locations before reading any bytes.
+            let resolved = tokio::fs::canonicalize(path)
+                .await
+                .map_err(|e| anyhow::anyhow!("cannot read the artifact's file: {e}"))?;
+            if let Some(reason) = openhuman_embed::__host::artifact_publisher::refused_path(&resolved) {
+                anyhow::bail!("[policy-blocked] cannot share this artifact: {reason}");
+            }
+            tokio::fs::read(&resolved)
+                .await
+                .map_err(|e| anyhow::anyhow!("cannot read the artifact's file: {e}"))?
+        };
+        // Name uploaded content after the artifact, not its internal version.
         let name = match path.extension().and_then(|e| e.to_str()) {
             Some(ext) => format!("{}.{ext}", file_stem(&record.title)),
             None => file_stem(&record.title),
@@ -217,7 +242,7 @@ impl ArtifactPublisher for StorageArtifactPublisher {
         if !self.security.can_act() {
             anyhow::bail!("[policy-blocked] Action blocked: autonomy is read-only");
         }
-        let (bytes, filename, mime) = upload_body(record, version).await?;
+        let (bytes, filename, mime) = upload_body(record, version, self.workspace_dir.as_deref()).await?;
         tracing::debug!(
             artifact_id = %record.id,
             version = version.version,

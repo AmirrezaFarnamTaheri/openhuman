@@ -123,7 +123,7 @@ async fn a_public_file_share_uses_the_public_url_and_makes_no_link() {
         1,
     );
     version.file = Some(FileRef {
-        path: file.display().to_string(),
+        key: file.display().to_string(),
         size_bytes: 9,
         media_type: Some("image/png".into()),
     });
@@ -140,6 +140,61 @@ async fn a_public_file_share_uses_the_public_url_and_makes_no_link() {
         .unwrap();
     assert_eq!(link.url, "https://api.example/public/file-1");
     assert!(link.public);
+}
+
+#[tokio::test]
+async fn a_managed_file_key_is_read_through_the_scoped_version_store() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/agent-integrations/file-storage/files"))
+        .and(body_string_contains("MANAGED-KEY-BYTES"))
+        .and(body_string_contains("filename=\\"Chart.png\\""))
+        .respond_with(uploaded(Some("https://api.example/public/file-1")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let workspace = tempfile::tempdir().unwrap();
+    let root = version_files_dir(workspace.path());
+    let stored = root.join("img-1").join("v1.png");
+    std::fs::create_dir_all(stored.parent().unwrap()).unwrap();
+    std::fs::write(&stored, b"MANAGED-KEY-BYTES").unwrap();
+    let mut version = ArtifactVersion::new(
+        1, "", tiny_artifacts::ArtifactAuthor::Agent, "agent", 1,
+    );
+    version.file = Some(FileRef {
+        key: "artifacts/files/img-1/v1.png".to_string(),
+        size_bytes: 17,
+        media_type: Some("image/png".into()),
+    });
+    let mut record = ArtifactRecord::pending("img-1", "Chart", ArtifactKind::Image, 1);
+    record.versions.push(version.clone());
+    let options = PublishOptions { public: true, ..PublishOptions::default() };
+    let published = publisher(server.uri(), AutonomyLevel::Full)
+        .with_workspace_dir(workspace.path())
+        .publish(&record, &version, &options)
+        .await
+        .unwrap();
+    assert!(published.public);
+    assert_eq!(published.url, "https://api.example/public/file-1");
+}
+
+#[tokio::test]
+async fn a_managed_key_without_workspace_is_refused_before_upload() {
+    let mut version = ArtifactVersion::new(
+        1, "", tiny_artifacts::ArtifactAuthor::Agent, "agent", 1,
+    );
+    version.file = Some(FileRef {
+        key: "artifacts/files/img-1/v1.png".to_string(),
+        size_bytes: 7,
+        media_type: Some("image/png".into()),
+    });
+    let mut record = ArtifactRecord::pending("img-1", "Chart", ArtifactKind::Image, 1);
+    record.versions.push(version.clone());
+    let err = publisher("http://127.0.0.1:9".into(), AutonomyLevel::Full)
+        .publish(&record, &version, &PublishOptions::default())
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("without its workspace"), "{err}");
 }
 
 #[tokio::test]
@@ -354,7 +409,7 @@ async fn a_file_in_a_protected_location_is_never_uploaded() {
         1,
     );
     version.file = Some(FileRef {
-        path: key.display().to_string(),
+        key: key.display().to_string(),
         size_bytes: 7,
         media_type: None,
     });
