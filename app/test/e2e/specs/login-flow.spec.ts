@@ -234,7 +234,23 @@ describe('Login flow — complete with mock data (Linux)', () => {
       );
     }
 
-    expect(foundOnboarding || foundHome).toBeTruthy();
+    // Text-only probes became stale when Home was consolidated into the Chat
+    // shell. A signed-in application can be ready without any of those old
+    // navigation labels. Check the actual route and mounted app structure.
+    const mounted = await browser.execute(() => {
+      const hash = window.location.hash;
+      const onboarding =
+        hash.startsWith('#/onboarding') &&
+        Boolean(document.querySelector('[data-testid="onboarding-layout"], [data-testid="onboarding-next-button"]'));
+      const home =
+        (hash.startsWith('#/chat') || hash.startsWith('#/home')) &&
+        Boolean(document.querySelector('[data-testid="root-shell-sidebar"]'));
+      return { onboarding, home, hash };
+    });
+    expect(
+      Boolean(foundOnboarding || foundHome || mounted.onboarding || mounted.home),
+      `Authenticated app should show onboarding or its signed-in shell: ${JSON.stringify(mounted)}`
+    ).toBe(true);
   });
 
   it('walk through onboarding steps (if overlay is visible)', async () => {
