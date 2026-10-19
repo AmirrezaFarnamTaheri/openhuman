@@ -620,3 +620,6 @@ async fn a_recovered_file_fallback_rewrites_the_bootstrap_file_too() {
 
 #[path = "concurrency_tests.rs"]
 mod concurrency_tests;
+
+#[path = "revision_loader_tests.rs"]
+mod revision_loader_tests;
