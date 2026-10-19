@@ -896,27 +896,30 @@ fn managed_inference_is_served_by_the_local_scripted_provider() {
 }
 
 async fn managed_inference_is_served_by_the_local_scripted_provider_inner() {
-            let _lock = env_lock();
-            reset_script(vec![text_completion("MANAGED_PROVIDER_E2E_CANARY")]);
-            let stack = boot_stack().await;
+    let _lock = env_lock();
+    reset_script(vec![text_completion("MANAGED_PROVIDER_E2E_CANARY")]);
+    let stack = boot_stack().await;
 
-            let response = post_json_rpc(
-                &stack.rpc_base,
-                799,
-                "openhuman.inference_agent_chat",
-                json!({ "message": "Reply with the scripted canary", "model_override": "e2e-mock-model" }),
-            )
-            .await;
-            let result = assert_no_jsonrpc_error(&response, "managed provider routing");
-            assert!(
-                result.to_string().contains("MANAGED_PROVIDER_E2E_CANARY"),
-                "managed provider must return the in-process response: {result}"
-            );
-            assert!(
-                with_captured(|requests| !requests.is_empty()),
-                "the model must call the local scripted HTTP endpoint"
-            );
-            stack.shutdown();
+    let response = post_json_rpc(
+        &stack.rpc_base,
+        799,
+        "openhuman.inference_agent_chat",
+        json!({
+            "message": "Reply with the scripted canary",
+            "model_override": "e2e-mock-model"
+        }),
+    )
+    .await;
+    let result = assert_no_jsonrpc_error(&response, "managed provider routing");
+    assert!(
+        result.to_string().contains("MANAGED_PROVIDER_E2E_CANARY"),
+        "managed provider must return the in-process response: {result}"
+    );
+    assert!(
+        with_captured(|requests| !requests.is_empty()),
+        "the model must call the local scripted HTTP endpoint"
+    );
+    stack.shutdown();
 }
 
 // ─── Task 2: Multi-turn state persistence ────────────────────────────────────
