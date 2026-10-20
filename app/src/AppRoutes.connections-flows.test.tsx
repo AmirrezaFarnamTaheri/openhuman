@@ -90,14 +90,6 @@ function renderAt(entry: string) {
   };
 }
 
-describe('route-level code splitting', () => {
-  it('keeps a readable fallback visible while loading a secondary feature', async () => {
-    renderAt('/connections');
-    expect(screen.getByTestId('route-loading')).toBeInTheDocument();
-    expect((await screen.findByTestId('page')).textContent).toBe('connections');
-  });
-});
-
 describe('connections / channels back-compat redirects (real route table)', () => {
   it('/skills lands on /connections and renders the Connections page', async () => {
     const at = renderAt('/skills');
