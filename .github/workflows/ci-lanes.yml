@@ -253,7 +253,10 @@ jobs:
     needs: plan
     if: inputs.profile == 'hosted' && fromJSON(needs.plan.outputs.matrix).include[0] != null
     runs-on: ubuntu-22.04
-    timeout-minutes: 100
+    # The complete instrumented Rust suite can exceed 100 minutes on a cold
+    # hosted runner. Keep every test and the diff-coverage gate enabled; only
+    # the coverage group needs the full-run budget used by the private lanes.
+    timeout-minutes: ${{ matrix.group == 'rust-cov' && 180 || 100 }}
     container:
       # Empty for the pester group: pwsh ships on the bare runner image.
       image: ${{ matrix.container }}
