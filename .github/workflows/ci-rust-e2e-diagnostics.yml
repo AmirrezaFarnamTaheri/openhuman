@@ -1,0 +1,26 @@
+---
+# Early, independently named E2E failures on PRs to main.
+# CI Full reuses the same shard suite for release, without duplicate execution.
+name: CI Rust E2E Diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: ci-rust-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-e2e:
+    name: Diagnose Rust E2E suites
+    uses: ./.github/workflows/rust-e2e-shards.yml
+    with:
+      ref: ${{ github.sha }}
