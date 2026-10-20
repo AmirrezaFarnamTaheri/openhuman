@@ -253,10 +253,10 @@ describe('Chat harness — mid-stream cancel', () => {
     // The canonical store moved away from memory/conversations/threads/*.jsonl.
     // Read via the same RPC as the application, not by relying on a file path.
     const response = await callOpenhumanRpc<{
-      result: { data: { messages: Array<{ content: string }> } };
+      data: { messages: Array<{ content: string }> };
     }>('openhuman.threads_messages_list', { thread_id: threadId });
     expect(response.ok).toBe(true);
-    const contents = (response.result?.result?.data?.messages ?? [])
+    const contents = (response.result?.data?.messages ?? [])
       .map(message => message.content)
       .join('\n');
     // A cancelled turn is not a delivered reply: the core only persists an
