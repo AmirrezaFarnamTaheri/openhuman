@@ -593,8 +593,10 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     #[cfg(feature = "web3")]
     {
         let wallet = module_storage(backend.as_ref(), "tinywallet");
+        // The wallet importer writes the `x402.payments` contract stream;
+        // `wallet.payments` is not a registered stream and masked valid data.
         assert_eq!(
-            wallet.streams().len("wallet.payments").await.unwrap(),
+            wallet.streams().len("x402.payments").await.unwrap(),
             fixture.x402_payments as u64
         );
     }
