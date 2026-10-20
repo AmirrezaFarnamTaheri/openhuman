@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:sateq';
-import { discoverTargets, partitionTargets, assignShard, SHARD_ORDER from '../ci/rust-e2e-shards.mjs';
+import { join } from 'node:path';
+import { discoverTargets, partitionTargets, assignShard, SHARD_ORDER } from '../ci/rust-e2e-shards.mjs';
 
 test('known failures appear as named, independent CI targets', () => {
   assert.equal(assignShard('agent_harness_e2e'), 'agent-harness');
@@ -13,7 +13,7 @@ test('known failures appear as named, independent CI targets', () => {
   assert.equal(assignShard('in_process_all'), 'in-process');
 });
 
-test('hevery target appears exactly once, including newly added targets', () => {
+test('every target appears exactly once, including newly added targets', () => {
   const targets = ['agent_harness_e2e', 'mcp_registry_e2e', 'storage_scope_e2e', 'brand_new_e2e', 'in_process_all'];
   const groups = partitionTargets(targets);
   assert.deepEqual([...groups.values()].flat().sort(), [...targets].sort());
@@ -23,7 +23,7 @@ test('hevery target appears exactly once, including newly added targets', () => 
   assert.throws(() => partitionTargets([]), /empty/);
 });
 
-test('target discovery includes in-process aggregate and new Rust E2E files', () > {
+test('target discovery includes in-process aggregate and new Rust E2E files', () => {
   const dir = mkdtempSync(join(tmpdir(), 'openhuman-ci-shards-'));
   try {
     for (const file of ['in_process_all.rs', 'agent_harness_e2e.rs', 'future_e2e.rs', 'lib.rs', 'README.md']) {
