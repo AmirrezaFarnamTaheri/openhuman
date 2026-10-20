@@ -1848,6 +1848,7 @@ async fn worker_a_controller_schemas_are_fully_exposed() {
         (
             "auth",
             vec![
+                "openhuman.auth_activate_provider_credentials",
                 "openhuman.auth_clear_credential",
                 "openhuman.auth_create_channel_link_token",
                 "openhuman.auth_get_session_token",
@@ -1897,6 +1898,7 @@ async fn worker_a_controller_schemas_are_fully_exposed() {
                 "openhuman.memory_jobs_list",
                 "openhuman.memory_jobs_run",
                 "openhuman.memory_learn",
+                "openhuman.memory_local_start",
                 "openhuman.memory_migration_retry",
                 "openhuman.memory_migration_scan",
                 "openhuman.memory_migration_start",

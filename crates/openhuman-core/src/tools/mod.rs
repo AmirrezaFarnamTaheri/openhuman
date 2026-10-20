@@ -18,6 +18,7 @@ pub(crate) mod user_filter;
 #[path = "impl/mod.rs"]
 pub(crate) mod implementations;
 
+pub use delegate::DelegateTool;
 pub use implementations::*;
 pub use schemas::{
     all_controller_schemas as all_tools_controller_schemas,

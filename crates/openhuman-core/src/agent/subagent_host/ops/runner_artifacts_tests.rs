@@ -82,10 +82,14 @@ async fn byte_policy_projects_a_parent_readable_artifact_before_the_result_cap()
     );
     assert_ne!(outcome.output, original);
     assert!(outcome.artifact_paths.contains(&"authored.txt".to_owned()));
+    // Match the dependency's real output namespace, not a stale host-local
+    // `outputs/` assumption. The assertions below still require the original
+    // bytes to exist beneath the parent's authorized action directory.
+    let offload_prefix = format!("{}/", tinyagents_harness::artifacts::OUTPUTS_DIR);
     let stored_path = outcome
         .artifact_paths
         .iter()
-        .find(|path| path.starts_with("outputs/"))
+        .find(|path| path.starts_with(&offload_prefix))
         .expect("host projection records its artifact path");
     let parent_copy = parent_action_dir.join(stored_path);
     assert!(

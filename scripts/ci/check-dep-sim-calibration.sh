@@ -128,8 +128,10 @@ cd "$(dirname "$0")/../.."
 # 304 names / 2 native on Linux). See kernel-floor.limits.
 # 304 -> 303 on 2026-10-16: CI on merge base 63c951aea7 measures the flows
 # profile at 326 packages / 303 names / 2 native. See kernel-floor.limits.
-# Upstream measured 303 names. Re-run on the integrated fork before promotion.
-# If the fork adds legitimate reachability, review the graph, not the budget alone.
-EXPECTED_NAMES=303
+# Post-merge Linux CI run 39169657050 measured 310 names, including the
+# upstream TinyStorageDrivers zstd sealed-stream closure. This calibration
+# remains independent of the 333/310/3 kernel-floor check, and future
+# graph growth must update both with explicit source and CI evidence.
+EXPECTED_NAMES=310
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"

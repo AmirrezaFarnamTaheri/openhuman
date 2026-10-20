@@ -54,7 +54,7 @@ fn the_full_registry_and_coding_catalog_resolve_all_six_tools_once() {
 
 #[test]
 fn planner_and_critic_keep_only_the_four_structural_readers_visible() {
-    let definitions = openhuman_core::agent::registry::agents::load_builtins().unwrap();
+    let definitions = openhuman_core::agent_registry::agents::load_builtins().unwrap();
     for id in ["planner", "critic"] {
         let definition = definitions
             .iter()

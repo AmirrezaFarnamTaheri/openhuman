@@ -191,6 +191,7 @@ fn a_tool_loop_ends_in_a_structured_answer() {
                 assert_eq!(body["response_format"]["type"], "json_schema", "{body}");
                 assert_eq!(body["max_tokens"], 512, "{body}");
             }
+            common::finish_runtime_agents(&runtime).await;
         })
         .await
         .expect("test task");
@@ -246,6 +247,7 @@ fn successful_turn_preserves_reported_charges_and_invalid_buyer_cost_is_unknown(
                 assert_eq!(usage.reasoning_tokens, 2);
                 assert_eq!(metered.lock().unwrap().as_ref().unwrap().cost_usd, expected);
             }
+            common::finish_runtime_agents(&runtime).await;
         })
         .await
         .expect("test task");
@@ -310,6 +312,7 @@ fn untrusted_input_passes_the_prompt_guard_only_on_a_host_only_agent() {
                 1,
                 "only the accepted turn reached the provider"
             );
+            common::finish_runtime_agents(&runtime).await;
         })
         .await
         .expect("test task");
@@ -356,6 +359,7 @@ fn terminal_schema_validation_retries_without_accepting_a_wrong_type() {
                 .unwrap();
             assert_eq!(outcome.structured, Some(json!({"summary":"incomplete"})));
             assert_eq!(chat_requests(&provider).await.len(), 2);
+            common::finish_runtime_agents(&runtime).await;
         })
         .await
         .unwrap();
@@ -401,6 +405,7 @@ fn a_complete_json_value_with_a_length_finish_is_not_a_valid_answer() {
             assert_eq!(failure.attempts, 1);
             assert!(failure.usage.is_some());
             assert_eq!(chat_requests(&provider).await.len(), 1);
+            common::finish_runtime_agents(&runtime).await;
         })
         .await
         .unwrap();
@@ -432,6 +437,7 @@ fn shared_budget_stops_the_tool_loop_before_its_next_provider_call() {
             assert_eq!(reads.load(Ordering::SeqCst),1);
             assert_eq!(chat_requests(&provider).await.len(),1);
             assert_eq!(ledger.snapshot().spent.cost_micros,100);
+            common::finish_runtime_agents(&runtime).await;
         }).await.unwrap();
     });
 }
@@ -498,6 +504,7 @@ fn empty_truncated_terminal_answers_use_only_the_explicit_repair_allowance() {
                     usize::from(retries) + 1
                 );
             }
+            common::finish_runtime_agents(&runtime).await;
         })
         .await
         .unwrap();

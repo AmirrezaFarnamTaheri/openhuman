@@ -147,10 +147,24 @@ pub fn schemas(function: &str) -> ControllerSchema {
             namespace: "inference",
             function: "list_models",
             description: "Fetch the available model list from a configured inference provider's /models API.",
-            inputs: vec![required_string(
-                "provider_id",
-                "Opaque id of the cloud provider entry to query.",
-            )],
+            inputs: vec![
+                required_string(
+                    "provider_id",
+                    "Opaque id or slug of the cloud provider entry to query.",
+                ),
+                optional_string(
+                    "candidate_api_key",
+                    "Ephemeral credential for a read-only catalog probe; never persisted.",
+                ),
+                optional_json(
+                    "candidate_provider",
+                    "Optional uncommitted provider definition for the catalog preview.",
+                ),
+                optional_string(
+                    "candidate_ca_cert_pem",
+                    "Optional CA certificate for the candidate provider preview.",
+                ),
+            ],
             outputs: vec![json_output("models", "Provider model list payload.")],
         },
         "provider_auth_errors" => ControllerSchema {

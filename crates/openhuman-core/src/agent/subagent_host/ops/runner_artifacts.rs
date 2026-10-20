@@ -29,14 +29,14 @@ pub(super) async fn apply_subagent_result_policies(
     let mut paths = extract_artifact_paths(&outcome.output);
     let mut artifact_error = None;
 
-    // Preserve an explicit worktree root as the action-dir fallback. With a
-    // live policy, the guarded writer materializes under that policy's action
-    // root so the parent can resolve the returned relative path.
+    // With a live policy, the parent's authorized action root owns the
+    // projection: a worker checkout must not override that root. An explicit
+    // worktree only serves as a fallback if no policy is installed.
     let policy = crate::security::live_policy::effective_in(&options.run_context.dispatch_ctx());
-    let action_dir = options
-        .worktree_action_dir
-        .clone()
-        .or_else(|| policy.as_ref().map(|p| p.action_dir.clone()));
+    let action_dir = policy
+        .as_ref()
+        .map(|p| p.action_dir.clone())
+        .or_else(|| options.worktree_action_dir.clone());
 
     let can_store = !policy
         .as_ref()

@@ -18,8 +18,9 @@
  *        - IN_FLIGHT clears (Rust side).
  *        - The DOM never accumulates the final two chunks.
  *        - Send button becomes enabled again.
- *   5. The early partial remains visible and persisted, while the late
- *      chunks never land.
+ *   5. The user's prompt remains persisted and late chunks never land.
+ *      The cancelled partial is UI-only, because the core persists only
+ *      successfully delivered assistant replies.
  *
  * This is the second hardest scenario in the chat pipeline — the first
  * being the streaming reply itself. If cancel breaks, in-flight chats
@@ -31,7 +32,6 @@ import {
   clickByTitle,
   clickSend,
   getSelectedThreadId,
-  hexEncodeThreadId,
   typeIntoComposer,
   waitForSocketConnected,
 } from '../helpers/chat-harness';
@@ -59,7 +59,6 @@ const SLOW_SCRIPT = [
 const EARLY_PIECES = ['one ', 'two '];
 const LATE_PIECES = ['five ', 'six.'];
 let cancelAttempted = false;
-let sawEarlyDelta = false;
 
 /**
  * Click the composer's mid-stream cancel control. In the text composer the Send
@@ -117,7 +116,6 @@ describe('Chat harness — mid-stream cancel', () => {
 
   it('sends → IN_FLIGHT populates → Cancel clears it before late chunks land', async () => {
     cancelAttempted = false;
-    sawEarlyDelta = false;
     setMockBehavior('llmStreamScript', JSON.stringify(SLOW_SCRIPT));
     setMockBehavior('llmStreamChunkDelayMs', '500');
 
@@ -184,7 +182,6 @@ describe('Chat harness — mid-stream cancel', () => {
         timeoutMsg: 'first delta never landed before cancel attempt',
       })
       .catch(() => false);
-    sawEarlyDelta = sawFirstDelta;
     if (!sawFirstDelta) {
       console.warn(
         '[chat-harness-cancel] first delta was not visible before cancel; attempting cancel from in-flight state'
@@ -243,31 +240,30 @@ describe('Chat harness — mid-stream cancel', () => {
     expect(sendEnabled).toBe(true);
   });
 
-  it('the persisted thread file does NOT contain the late chunks', async () => {
+  it('the persisted thread messages do NOT contain chunks streamed after cancellation', async () => {
     if (!cancelAttempted) {
       console.warn(
-        '[chat-harness-cancel] cancel was not attempted; skipping late-chunk persistence assertion'
+        '[chat-harness-cancel] cancellation was not attempted; no persisted-chunk assertion'
       );
       return;
     }
-
     const threadId = await getSelectedThreadId();
     expect(typeof threadId).toBe('string');
-    const relPath = `memory/conversations/threads/${hexEncodeThreadId(threadId as string)}.jsonl`;
 
-    // The stopped reply should be durable, with no chunks after Stop.
-    const read = await callOpenhumanRpc<{ result: { content_utf8: string } }>(
-      'openhuman.test_support_read_workspace_file',
-      { rel_path: relPath, max_bytes: 131_072 }
-    );
-    if (sawEarlyDelta) expect(read.ok).toBe(true);
-    if (!read.ok) return;
-    const content = read.result?.result?.content_utf8 ?? '';
-    if (sawEarlyDelta) {
-      expect(content.includes(EARLY_PIECES[0])).toBe(true);
-    }
+    // The canonical store moved away from memory/conversations/threads/*.jsonl.
+    // Read via the same RPC as the application, not by relying on a file path.
+    const response = await callOpenhumanRpc<{
+      data: { messages: Array<{ content: string; type: string; sender: string }> };
+    }>('openhuman.threads_messages_list', { thread_id: threadId });
+    expect(response.ok).toBe(true);
+    const messages = response.result?.data?.messages ?? [];
+    const contents = messages.map(message => message.content).join('\n');
+    // A cancelled turn is not a delivered reply: the core only persists an
+    // assistant message after successful completion. The user's original
+    // request must remain durable, while no post-cancel chunks can appear.
+    expect(contents.includes(PROMPT)).toBe(true);
     for (const piece of LATE_PIECES) {
-      expect(content.includes(piece)).toBe(false);
+      expect(contents.includes(piece)).toBe(false);
     }
   });
 });

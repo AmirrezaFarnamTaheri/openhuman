@@ -437,7 +437,7 @@ pub async fn apply_model_settings(
 
     complete_byok_route(config, &explicit_role_pins);
 
-    config.save().await.map_err(|e| e.to_string())?;
+    config.save().await.map_err(super::config_save_error)?;
     // Disconnected or retargeted providers must not retain an old fleet's
     // health/eviction history. Running requests already own their model Arcs.
     for previous in &previous_cloud_providers {
@@ -511,7 +511,7 @@ pub async fn apply_memory_settings(
     if let Some(dimensions) = update.embedding_dimensions {
         config.memory.embedding_dimensions = dimensions;
     }
-    config.save().await.map_err(|e| e.to_string())?;
+    config.save().await.map_err(super::config_save_error)?;
     let snapshot = snapshot_config_json(config)?;
     Ok(Outcome::new(
         snapshot,
@@ -570,7 +570,7 @@ pub async fn apply_runtime_settings(
             (None, effort) => config.runtime.reasoning_effort = effort,
         }
     }
-    config.save().await.map_err(|e| e.to_string())?;
+    config.save().await.map_err(super::config_save_error)?;
     let snapshot = snapshot_config_json(config)?;
     Ok(Outcome::new(
         snapshot,
@@ -648,7 +648,7 @@ pub async fn apply_local_ai_settings(
             }
         );
     }
-    config.save().await.map_err(|e| e.to_string())?;
+    config.save().await.map_err(super::config_save_error)?;
     let snapshot = snapshot_config_json(config)?;
     Ok(Outcome::new(
         snapshot,
@@ -687,7 +687,7 @@ pub async fn apply_composio_trigger_settings(
         );
         config.composio.triage_disabled_toolkits = toolkits;
     }
-    config.save().await.map_err(|e| e.to_string())?;
+    config.save().await.map_err(super::config_save_error)?;
     let snapshot = snapshot_config_json(config)?;
     Ok(Outcome::new(
         snapshot,

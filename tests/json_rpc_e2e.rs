@@ -1360,6 +1360,8 @@ async fn json_rpc_modules_list_reports_the_serving_source() {
 #[cfg(feature = "modules")]
 #[tokio::test]
 async fn json_rpc_modules_browser_forget_sites_removes_learned_sites() {
+    use openhuman_core::storage::state_kv::StateKv;
+
     let _env_lock = json_rpc_e2e_env_lock_async().await;
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path();
@@ -1402,7 +1404,19 @@ async fn json_rpc_modules_browser_forget_sites_removes_learned_sites() {
         Some(1),
         "{one}"
     );
-    assert!(!sites.join("shop.test.json").exists());
+    // The importer preserves legacy files; forgetting deletes managed KV records,
+    // not the original on-disk migration inputs.
+    let stored =
+        StateKv::open(&workspace, "computer", "site_memory").expect("open canonical site memory");
+    assert!(
+        stored.get::<Value>("shop.test").unwrap().is_none(),
+        "the forgotten site must be gone from canonical storage"
+    );
+    assert!(
+        stored.get::<Value>("books.test").unwrap().is_some(),
+        "forgetting one site must preserve another site's canonical record"
+    );
+    assert!(sites.join("shop.test.json").exists());
     assert!(sites.join("books.test.json").exists());
 
     let blank = post_json_rpc(
@@ -1428,7 +1442,13 @@ async fn json_rpc_modules_browser_forget_sites_removes_learned_sites() {
         Some(1),
         "{every}"
     );
-    assert!(!sites.join("books.test.json").exists());
+    assert!(
+        stored.get::<Value>("books.test").unwrap().is_none(),
+        "forgetting every site must clear canonical storage"
+    );
+    // Retaining legacy files is intentional and must not resurrect records.
+    assert!(sites.join("books.test.json").exists());
+    assert!(sites.join("shop.test.json").exists());
 
     rpc_join.abort();
 }

@@ -100,6 +100,23 @@ pub fn runtime_without_master_key() -> tokio::runtime::Runtime {
     runtime
 }
 
+/// Finish the agents created by an integration test before it releases its
+/// process-wide runtime slot. Dropping an agent may defer MCP cleanup onto a
+/// separate executor; explicit removal awaits that work so the next test
+/// cannot race the old runtime's guard.
+pub async fn finish_runtime_agents(runtime: &openhuman_embed::Runtime) {
+    for id in runtime.agent_ids() {
+        match runtime.remove_agent(&id).await {
+            Ok(()) => {}
+            // The background closer can finish between taking this snapshot
+            // and claiming its entry. Only an actually released id is benign.
+            Err(openhuman_embed::AgentError::UnknownId(ref missing))
+                if missing == &id && !runtime.agent_ids().contains(&id) => {}
+            Err(error) => panic!("agent {id:?} cleanup failed: {error}"),
+        }
+    }
+}
+
 /// A stub backend that answers every incidental non-inference call.
 pub async fn stub_backend() -> wiremock::MockServer {
     let backend = wiremock::MockServer::start().await;

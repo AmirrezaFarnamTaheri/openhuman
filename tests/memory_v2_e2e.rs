@@ -2164,6 +2164,7 @@ async fn memory_v2_registers_exactly_the_documented_methods() {
         "recall",
         "fetch",
         "learn",
+        "local_start",
         "forget",
         "erase_all",
         "items_list",

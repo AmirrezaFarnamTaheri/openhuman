@@ -90,9 +90,11 @@ async fn a_new_artifact_shares_one_id_and_one_file_between_card_and_record() {
     // The version holds its own copy; the files folder shows the newest.
     let file = record.latest().unwrap().file.clone().unwrap();
     let kept = crate::artifacts::tiny_store::version_files_dir(&workspace)
+        .join("artifacts/files")
         .join(&id)
         .join("v1.pptx");
-    assert_eq!(std::path::Path::new(&file.path), kept.as_path());
+    assert_eq!(file.key, format!("artifacts/files/{id}/v1.pptx"));
+    assert!(kept.is_file());
     assert_eq!(
         files_in(&files),
         vec!["quarterly-deck.pptx"],
@@ -120,7 +122,10 @@ async fn a_revision_reuses_the_id_and_file_and_keeps_the_history() {
         b"deck-v2!"
     );
     // Each version still holds what it was.
-    let bytes_of = |n: u32| std::fs::read(&record.version(n).unwrap().file.clone().unwrap().path);
+    let bytes_of = |n: u32| {
+        let key = &record.version(n).unwrap().file.as_ref().unwrap().key;
+        std::fs::read(crate::artifacts::tiny_store::version_files_dir(&workspace).join(key))
+    };
     assert_eq!(bytes_of(1).unwrap(), b"deck-v1");
     assert_eq!(bytes_of(2).unwrap(), b"deck-v2!");
 }

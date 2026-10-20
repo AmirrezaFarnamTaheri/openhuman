@@ -57,6 +57,10 @@ export function runExamples({
     if (example.defaultFeatures === false) args.push("--no-default-features");
     const features = [...featureGroups.get(configuration(example))].sort();
     if (features.length) args.push("--features", features.join(","));
+    // CI needs to prove real multi-agent execution, not benchmark the 100
+    // agent stress profile under a 2-vCPU hosted runner. Release measurements
+    // still exercise the exact declared 100-agent default.
+    if (ciSmoke && example.name === "linux_fleet") args.push("--", "4");
     const result = run(resolve(root, "scripts/ci-cancel-aware.sh"), ["cargo", ...args], {
       cwd: root, encoding: "utf8", env: offlineEnvironment(environment), timeout: ciSmoke && example.name === "linux_fleet" ? 45 * 60_000 : 30 * 60_000, maxBuffer: 16 * 1024 * 1024,
     });

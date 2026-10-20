@@ -13,7 +13,7 @@ fn file_record(path: &Path) -> ArtifactRecord {
         1,
     );
     version.file = Some(FileRef {
-        path: path.display().to_string(),
+        key: path.display().to_string(),
         size_bytes: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
         media_type: None,
     });
@@ -59,6 +59,26 @@ async fn a_text_file_inside_the_roots_is_read() {
     assert_eq!(body.kind, "file");
     assert_eq!(body.body, "plain notes");
     assert!(body.is_text);
+}
+
+#[tokio::test]
+async fn a_versioned_storage_key_reads_its_bytes_from_the_guarded_file_store() {
+    use tiny_artifacts::FileStore;
+    let dir = tempfile::tempdir().unwrap();
+    let key = "artifacts/files/f-1/v1.txt";
+    let store = tiny_artifacts::FsFileStore::new(dir.path());
+    store.put(key, b"durable version", None).await.unwrap();
+    let mut record = ArtifactRecord::pending("f-1", "Report", ArtifactKind::File, 1);
+    let mut version = ArtifactVersion::new(1, key, ArtifactAuthor::Agent, "agent", 1);
+    version.file = Some(FileRef {
+        key: key.to_owned(),
+        size_bytes: 15,
+        media_type: Some("text/plain".into()),
+    });
+    record.versions.push(version);
+    let body = body_of(&record, &roots(dir.path()), &DocumentConverter::none()).await;
+    assert!(body.is_text);
+    assert_eq!(body.body, "durable version");
 }
 
 #[tokio::test]

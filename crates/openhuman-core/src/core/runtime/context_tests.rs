@@ -11,6 +11,7 @@ fn ctx(dir: &str) -> Arc<CoreContext> {
         tool_groups: Default::default(),
         components: Default::default(),
         embedder_config: None,
+        latest_embedder_config: None,
         user_skill_roots: true,
         extensions: Default::default(),
         turn_origin: None,
@@ -47,6 +48,7 @@ fn ctx_with_config(config: crate::config::Config) -> Arc<CoreContext> {
         tool_groups: Default::default(),
         components: Default::default(),
         embedder_config: Some(config),
+        latest_embedder_config: None,
         user_skill_roots: true,
         extensions: Default::default(),
         turn_origin: None,
@@ -130,6 +132,30 @@ async fn the_current_embedder_config_can_be_read_without_cloning_it() {
     })
     .await;
     assert_eq!(none, None::<()>);
+}
+
+#[tokio::test]
+async fn live_embedder_snapshot_takes_precedence_over_initial_configuration() {
+    let mut initial = crate::config::Config::default();
+    initial.default_model = Some("initial-model".into());
+    let mut live = initial.clone();
+    live.default_model = Some("updated-model".into());
+
+    let mut context = ctx_with_config(initial);
+    Arc::get_mut(&mut context)
+        .expect("exclusive test context")
+        .latest_embedder_config = Some(Arc::new(std::sync::Mutex::new(live)));
+
+    let (cloned, borrowed) = CoreContext::scope(context, async {
+        (
+            CoreContext::current_embedder_config().and_then(|config| config.default_model),
+            CoreContext::with_current_embedder_config(|config| config.default_model.clone())
+                .flatten(),
+        )
+    })
+    .await;
+    assert_eq!(cloned.as_deref(), Some("updated-model"));
+    assert_eq!(borrowed.as_deref(), Some("updated-model"));
 }
 
 // ---- derived per-agent contexts (the multi-agent library seam) -----------
@@ -388,6 +414,7 @@ fn degraded_context_rejects_workspace_bound_stores() {
         tool_groups: Default::default(),
         components: Default::default(),
         embedder_config: None,
+        latest_embedder_config: None,
         user_skill_roots: true,
         extensions: Default::default(),
         turn_origin: None,
