@@ -16,6 +16,12 @@ permissions:
   contents: read
   packages: read
 
+# The container's default /bin/sh rejects pipefail; the per-target runner
+# uses Bash arrays, here-strings and strict pipeline error propagation.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   plan:
     name: Inventory Rust E2E targets
