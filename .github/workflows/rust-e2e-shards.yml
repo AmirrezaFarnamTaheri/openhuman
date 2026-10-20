@@ -108,10 +108,15 @@ jobs:
           targets="$(node scripts/ci/rust-e2e-shards.mjs --group "$RUST_E2E_SHARD")"
           test -n "$targets" || { echo '::error::Empty Rust E2E shard'; exit 2; }
           failures=0
+          executed=0
+          expected="$(grep -c . <<< "$targets")"
           while IFS= read -r target; do
             test -n "$target" || continue
+            executed=$((executed + 1))
             echo "::group::Rust E2E ${target}"
-            if bash scripts/ci-cancel-aware.sh bash scripts/test-rust-e2e.sh --suite "$target"; then
+            # Isolate the runner's stdin from the target-list reader; a test
+            # child that calls read(0) must never consume unexecuted suites.
+            if bash scripts/ci-cancel-aware.sh bash scripts/test-rust-e2e.sh --suite "$target" < /dev/null; then
               echo "- PASS: ${target}" >> "$GITHUB_STEP_SUMMARY"
             else
               status=$?
@@ -124,6 +129,10 @@ jobs:
             fi
             echo "::endgroup::"
           done <<< "$targets"
+          if [ "$executed" -ne "$expected" ]; then
+            echo "::error::Shard ${RUST_E2E_SHARD} executed ${executed}/${expected} targets"
+            exit 1
+          fi
           if [ "$failures" -gt 0 ]; then
             echo "::error::${failures} Rust E2E target(s) failed in shard ${RUST_E2E_SHARD}"
             exit 1

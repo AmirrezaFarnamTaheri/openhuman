@@ -1,6 +1,7 @@
 import test from 'node:test';
+import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
@@ -47,4 +48,57 @@ test('all Rust E2E jobs run strict shell scripts with Bash, not the container de
   assert.ok(runStep, 'the suite runner must remain in the required shard job');
   assert.match(runStep.run, /set -euo pipefail/, 'the job retains strict error reporting');
   assert.match(runStep.run, /bash scripts\/test-rust-e2e\.sh --suite/, 'every target executes the actual runner');
+});
+
+
+test('stdin-reading child cannot consume other Rust E2E targets', () => {
+  const workflow = parseYaml(
+    readFileSync(
+      new URL('../../.github/workflows/rust-e2e-shards.yml', import.meta.url),
+      'utf8',
+    ),
+  );
+  const runStep = workflow.jobs.shard.steps.find(
+    step => step.name === 'Run every suite and report its precise failure',
+  );
+  assert.ok(runStep?.run, 'shard runner must have a real shell command');
+
+  const dir = mkdtempSync(join(tmpdir(), 'openhuman-stdin-shard-'));
+  const summary = join(dir, 'summary.md');
+  const capture = join(dir, 'executed.txt');
+  try {
+    mkdirSync(join(dir, 'scripts', 'ci'), { recursive: true });
+    writeFileSync(
+      join(dir, 'scripts', 'ci', 'rust-e2e-shards.mjs'),
+      "process.stdout.write('alpha\\nbeta\\n');\n",
+    );
+    writeFileSync(
+      join(dir, 'scripts', 'ci-cancel-aware.sh'),
+      '#!/usr/bin/env bash\nexec "$@"\n',
+    );
+    // Real integration children can read stdin; the outer target-list loop
+    // must not allow them to steal its next suite.
+    writeFileSync(
+      join(dir, 'scripts', 'test-rust-e2e.sh'),
+      '#!/usr/bin/env bash\nread -r stolen || true\nprintf \'%s\\n\' "$2" >> "$CI_SHARD_CAPTURE"\n',
+    );
+    execFileSync('bash', ['-c', runStep.run], {
+      cwd: dir,
+      env: {
+        ...process.env,
+        RUST_E2E_SHARD: 'test',
+        GITHUB_STEP_SUMMARY: summary,
+        CI_SHARD_CAPTURE: capture,
+      },
+      encoding: 'utf8',
+    });
+    assert.deepEqual(readFileSync(capture, 'utf8').trim().split('\n'), [
+      'alpha',
+      'beta',
+    ]);
+    assert.match(readFileSync(summary, 'utf8'), /PASS: alpha/);
+    assert.match(readFileSync(summary, 'utf8'), /PASS: beta/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
