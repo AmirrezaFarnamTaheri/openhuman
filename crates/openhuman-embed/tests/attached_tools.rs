@@ -277,6 +277,7 @@ fn attached_tools_survive_clones_and_session_resume() {
                     );
                 }
             }
+            common::finish_runtime_agents(&runtime).await;
         })
         .await
         .unwrap();
@@ -339,6 +340,7 @@ fn attaching_before_first_turn_preserves_and_executes_native_tools() {
                     text.contains("native-wildcard-survived") && !text.contains("unknown tool"))),
                 "the native executor must actually run: {second}");
             assert!(first["messages"].to_string().contains("ORIGINAL_FRESH_HOST_PROMPT"));
+            common::finish_runtime_agents(&runtime).await;
         }).await.unwrap();
     });
 }
