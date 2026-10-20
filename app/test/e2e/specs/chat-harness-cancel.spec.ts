@@ -256,9 +256,8 @@ describe('Chat harness — mid-stream cancel', () => {
       data: { messages: Array<{ content: string }> };
     }>('openhuman.threads_messages_list', { thread_id: threadId });
     expect(response.ok).toBe(true);
-    const contents = (response.result?.data?.messages ?? [])
-      .map(message => message.content)
-      .join('\n');
+    const messages = response.result?.data?.messages ?? [];
+    const contents = messages.map(message => message.content).join('\n');
     // A cancelled turn is not a delivered reply: the core only persists an
     // assistant message after successful completion. The user's original
     // request must remain durable, while no post-cancel chunks can appear.

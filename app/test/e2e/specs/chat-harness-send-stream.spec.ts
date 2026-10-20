@@ -200,6 +200,8 @@ describe('Chat harness — send + stream', () => {
     // was removed when the thread store moved into TinyAgents storage drivers.
     // Poll because chat_done and the persistence flush can briefly race.
     let messages: Array<{ content: string; type: string; sender: string }> = [];
+    let sawPersistedUserPrompt = false;
+    let sawPersistedAssistantReply = false;
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
       const response = await callOpenhumanRpc<{
@@ -207,30 +209,21 @@ describe('Chat harness — send + stream', () => {
       }>('openhuman.threads_messages_list', { thread_id: threadId });
       expect(response.ok).toBe(true);
       messages = response.result?.data?.messages ?? [];
-      if (
-        messages.some(
-          message =>
-            (message.sender === 'agent' || message.sender === 'assistant') &&
-            message.content.includes(CANARY)
-        ) &&
-        messages.some(
-          message => message.sender === 'user' && message.content.includes(PROMPT)
-        )
-      ) {
+      sawPersistedUserPrompt = messages.some(
+        message => message.sender === 'user' && message.content.includes(PROMPT)
+      );
+      sawPersistedAssistantReply = messages.some(
+        message =>
+          (message.sender === 'agent' || message.sender === 'assistant') &&
+          message.content.includes(CANARY)
+      );
+      if (sawPersistedUserPrompt && sawPersistedAssistantReply) {
         break;
       }
       await browser.pause(300);
     }
-    expect(
-      messages.some(
-        message =>
-          (message.sender === 'agent' || message.sender === 'assistant') &&
-          message.content.includes(CANARY)
-      )
-    ).toBe(true);
-    expect(
-      messages.some(message => message.sender === 'user' && message.content.includes(PROMPT))
-    ).toBe(true);
+    expect(sawPersistedUserPrompt).toBe(true);
+    expect(sawPersistedAssistantReply).toBe(true);
   });
 
   it('lists real persisted thread messages rather than legacy JSONL paths', async () => {
