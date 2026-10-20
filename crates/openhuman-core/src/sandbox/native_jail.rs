@@ -255,6 +255,8 @@ fn jail_request(
                 .collect();
             credential_denials(stores, &policy.workspace_root, &policy.read_write_mounts)?
         },
+        // No hard resource limits are requested by the host.
+        resources: None,
     })
 }
 

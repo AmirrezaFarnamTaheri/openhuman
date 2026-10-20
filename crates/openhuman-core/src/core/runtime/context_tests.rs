@@ -9,6 +9,8 @@ fn ctx(dir: &str) -> Arc<CoreContext> {
         }))),
         domains: crate::core::runtime::DomainSet::full(),
         tool_groups: Default::default(),
+        autonomy_tier_source: AutonomyTierSource::LiveConfig,
+        autonomy_tier_ceiling: None,
         components: Default::default(),
         embedder_config: None,
         latest_embedder_config: None,
@@ -39,25 +41,7 @@ fn ctx(dir: &str) -> Arc<CoreContext> {
 // configures boot and watches its turns run somewhere else entirely.
 
 fn ctx_with_config(config: crate::config::Config) -> Arc<CoreContext> {
-    Arc::new(CoreContext {
-        host_kind: HostKind::Cli,
-        workspace_binding: RwLock::new(Arc::new(RwLock::new(WorkspaceBinding {
-            workspace_dir: Some(config.workspace_dir.clone()),
-        }))),
-        domains: crate::core::runtime::DomainSet::full(),
-        tool_groups: Default::default(),
-        components: Default::default(),
-        embedder_config: Some(config),
-        latest_embedder_config: None,
-        user_skill_roots: true,
-        extensions: Default::default(),
-        turn_origin: None,
-        channel_thread: None,
-        session_agent: None,
-        profile: None,
-        agent: Default::default(),
-        bare: false,
-    })
+    CoreContext::for_test_with_config(crate::core::runtime::DomainSet::full(), config)
 }
 
 #[test]
@@ -412,6 +396,8 @@ fn degraded_context_rejects_workspace_bound_stores() {
         }))),
         domains: crate::core::runtime::DomainSet::full(),
         tool_groups: Default::default(),
+        autonomy_tier_source: AutonomyTierSource::LiveConfig,
+        autonomy_tier_ceiling: None,
         components: Default::default(),
         embedder_config: None,
         latest_embedder_config: None,

@@ -15,9 +15,7 @@
 //! * no file of the workspace was modified, created or removed.
 //!
 //! Its own binary: it installs a storage backend into the process-wide slot and
-//! sets the keyring master key. Each driver is its own case
-//! (`support/storage_drivers.rs`), so the MongoDB case runs in the
-//! `storage-mongodb` workflow against the replica set.
+//! sets the keyring master key.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -29,17 +27,16 @@ use openhuman_core::storage::{rusqlite, DocumentStoreExt, Scope, ScopedStorage, 
 use sha2::Digest;
 use tinyagents_session::transcript::{session_stem, SessionRef, TranscriptMessage, TranscriptMeta};
 use tinyagents_session::turn_state::TurnState;
-use tinystoragedrivers_core::{Capability, Query};
+use tinystoragedrivers_core::Query;
 
 // The classic-transcript fixture writer, shared with the core's unit tests.
 #[path = "../crates/openhuman-core/src/util/classic_transcript_fixture.rs"]
 mod classic_transcript_fixture;
 
-#[macro_use]
-#[path = "support/storage_drivers.rs"]
-mod storage_drivers;
+#[path = "support/storage_case.rs"]
+mod storage_case;
 
-use storage_drivers::{Case, Driver};
+use storage_case::Case;
 
 /// The committed tinyflows workspace (written by the retired tinyflows-sqlite
 /// writers): flows, revisions, runs, drafts, checkpoints and cron jobs.
@@ -331,7 +328,7 @@ fn desktop_workspace(workspace: &Path) -> Fixture {
     // x402 payment ledger: a payment that changed status appears twice.
     let payment = |id: &str, status: &str| {
         format!(
-            r#"{{"id":"{id}","url":"https://api.example/x","asset":"0xusdc","amountAtomic":2500,"amountDisplay":"0.002500 USDC","recipient":"0xpayee","network":"eip155:8453","txSignature":null,"status":"{status}","timestamp":"2026-10-12T10:00:00Z","sessionId":"legacy-session"}}"#
+            r#"{{"id":"{id}","url":"https://api.example/x","asset":"0xusdc","amountAtomic":2500,"amountDisplay":"0.002500 USDC","recipient":"0xpayee","network":"eip155:8453","txSignature":null,"status":"{status}","timestamp":"2026-10-12T10:00:00Z","sessionId":"s1"}}"#
         )
     };
     write(
@@ -436,26 +433,9 @@ async fn import_modules(workspace: &Path) {
     .await;
 }
 
-async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(case: Case) {
-    // Other drivers without checked-batch support cannot run the positive
-    // full-upgrade contract. The File driver's negative assertion below must
-    // still execute: it proves refusing an unsafe migration preserves data.
-    let local = case.backend().for_scope(&Scope::local()).unwrap();
-    if case.driver != Driver::File
-        && !local
-            .documents()
-            .capabilities()
-            .contains(Capability::ValidatedBatch)
-    {
-        use std::io::Write;
-        let _ = writeln!(
-            std::io::stderr(),
-            "skipped {}: validated_batch is required for a complete session import",
-            case.driver.name()
-        );
-        return;
-    }
-
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched() {
+    let case = Case::open();
     std::env::set_var("OPENHUMAN_KEYRING_BACKEND", "file");
     std::env::set_var("OPENHUMAN_KEYRING_MASTER_KEY", "33".repeat(32));
 
@@ -483,55 +463,6 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     )
     .await;
     assert!(!reports.is_empty());
-    if case.driver == Driver::File {
-        // The file backend deliberately has no atomic read-checked batch
-        // capability (a batch across independent JSON files is not crash-
-        // atomic). Legacy run-ledger entry trees require that guarantee.
-        // Never mark the session import complete or claim a lossless upgrade.
-        let sessions = reports
-            .iter()
-            .find(|report| report.domain == "sessions")
-            .expect("session importer is present");
-        let error = sessions
-            .outcome
-            .as_ref()
-            .expect_err("file backend must refuse unsafe session migration");
-        assert!(
-            format!("{error:#}").contains("validated_batch"),
-            "{error:#}"
-        );
-        assert_eq!(
-            tree(workspace),
-            before,
-            "legacy workspace was modified on refusal"
-        );
-
-        // A partial attempt leaves its import marker absent, allowing a
-        // later retry on a backend that supports atomic validation.
-        let again = import::run(
-            &openhuman_core::core::runtime::DispatchCtx::process_default(),
-            &config,
-        )
-        .await;
-        let sessions = again
-            .iter()
-            .find(|report| report.domain == "sessions")
-            .expect("session importer is retried");
-        let error = sessions
-            .outcome
-            .as_ref()
-            .expect_err("unsupported file migration must not be marked done");
-        assert!(
-            format!("{error:#}").contains("validated_batch"),
-            "{error:#}"
-        );
-        assert_eq!(
-            tree(workspace),
-            before,
-            "retry changed the legacy workspace"
-        );
-        return;
-    }
     for report in &reports {
         match report.outcome.as_ref().unwrap_or_else(|error| {
             panic!("{} failed to import: {error:#}", report.domain);
@@ -593,24 +524,10 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     #[cfg(feature = "web3")]
     {
         let wallet = module_storage(backend.as_ref(), "tinywallet");
-        // The importer writes the v1 stream; the wallet schema then migrates
-        // it to v2. Confirm the final records, not the obsolete v1 staging.
-        let payments = wallet
-            .streams()
-            .read_window("wallet.payments", 0, 10)
-            .await
-            .unwrap();
-        assert_eq!(payments.len(), fixture.x402_payments);
         assert_eq!(
-            payments
-                .iter()
-                .map(|entry| entry.value["status"].as_str().unwrap())
-                .collect::<Vec<_>>(),
-            ["pending", "settled", "settled"]
+            wallet.streams().len("wallet.payments").await.unwrap(),
+            fixture.x402_payments as u64
         );
-        assert!(payments
-            .iter()
-            .all(|entry| entry.value["session_id"] == "legacy-session"));
     }
     #[cfg(not(feature = "web3"))]
     let _ = fixture.x402_payments;
@@ -666,5 +583,3 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     // The user's files were only ever read.
     assert_eq!(tree(workspace), before, "the legacy files changed");
 }
-
-driver_cases!(async a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched);

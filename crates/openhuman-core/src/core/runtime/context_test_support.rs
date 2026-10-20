@@ -20,6 +20,8 @@ impl CoreContext {
             }))),
             domains,
             tool_groups: Default::default(),
+            autonomy_tier_source: AutonomyTierSource::LiveConfig,
+            autonomy_tier_ceiling: None,
             components: Default::default(),
             embedder_config: None,
             latest_embedder_config: None,
@@ -32,6 +34,19 @@ impl CoreContext {
             agent: Default::default(),
             bare: false,
         })
+    }
+
+    /// Test-only constructor with context-local hook registrations.
+    pub(crate) fn for_test_with_extensions(
+        domains: crate::core::runtime::DomainSet,
+        workspace_dir: Option<std::path::PathBuf>,
+        extensions: crate::core::slots::Extensions,
+    ) -> Arc<CoreContext> {
+        let mut ctx = Arc::try_unwrap(Self::for_test(domains, workspace_dir))
+            .ok()
+            .unwrap();
+        ctx.extensions = extensions;
+        Arc::new(ctx)
     }
 
     /// Test-only: given `[components]` switches.
@@ -69,6 +84,8 @@ impl CoreContext {
             }))),
             domains,
             tool_groups: Default::default(),
+            autonomy_tier_source: AutonomyTierSource::Captured,
+            autonomy_tier_ceiling: None,
             components: Default::default(),
             embedder_config: Some(config),
             latest_embedder_config: Some(latest_embedder_config),

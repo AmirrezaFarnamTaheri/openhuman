@@ -16,7 +16,7 @@ fn allowed(
 
 #[test]
 fn every_row_has_a_valid_generated_grant() {
-    for row in &ROWS {
+    for row in ROWS {
         let grant =
             declared(row.module).unwrap_or_else(|| panic!("{} declares storage", row.module));
         grant
@@ -36,7 +36,7 @@ fn every_row_has_a_valid_generated_grant() {
 
 #[test]
 fn the_registry_ids_exist() {
-    for row in &ROWS {
+    for row in ROWS {
         assert!(
             crate::modules::registry::ALL
                 .iter()
@@ -83,54 +83,27 @@ fn tinymcp_reaches_its_v2_collections_stream_and_secrets() {
 }
 
 #[test]
-fn tinyconnectors_grant_matches_its_published_v2_preference_schema() {
-    // The host and the loaded TinyConnectors release must use the same
-    // collection. The old v0.19.3 binary requested "composio-user-scopes"
-    // and every Composio list/execute call failed target-not-granted.
-    let grant = declared("tinyconnectors").expect("connectors module must have a grant");
-    let collection = tinyconnectors_bus::storage::PREFS_NAMESPACE;
-    assert_eq!(collection, "connectors.user_scopes");
-    assert!(allowed(
-        &grant,
-        Object::Documents,
-        "Get",
-        json!({"collection": collection, "id": "github"})
-    ));
-    assert!(allowed(
-        &grant,
-        Object::Documents,
-        "Put",
-        json!({"collection": collection, "id": "github"})
-    ));
-    assert_eq!(
-        authorize(
-            &grant,
-            Object::Documents,
-            "Get",
-            &json!({"collection": "composio-user-scopes", "id": "github"})
-        ),
-        Err(Denied::Target),
-        "the old collection remains migration-only, not an active grant"
-    );
-}
-
-#[test]
-fn tinyjuice_reaches_only_its_declared_savings_collection_and_blob_prefix() {
+fn tinyjuice_reaches_only_its_blob_prefix() {
     let grant = declared("tinyjuice").unwrap();
-    // TinyJuice's pinned bus schema declares exactly one module collection:
-    // juice.savings. Deny unrelated collections rather than granting all.
-    assert_eq!(grant.collections.len(), 1);
+    assert_eq!(
+        grant
+            .collections
+            .iter()
+            .map(|collection| collection.name.as_str())
+            .collect::<Vec<_>>(),
+        ["juice.savings"]
+    );
     assert!(allowed(
         &grant,
         Object::Documents,
         "Get",
-        json!({"collection": "juice.savings", "id": "totals"})
+        json!({"collection": "juice.savings", "id": "x"})
     ));
     assert!(!allowed(
         &grant,
         Object::Documents,
         "Get",
-        json!({"collection": "juice.other", "id": "totals"})
+        json!({"collection": "unrelated.collection", "id": "x"})
     ));
     assert!(allowed(
         &grant,

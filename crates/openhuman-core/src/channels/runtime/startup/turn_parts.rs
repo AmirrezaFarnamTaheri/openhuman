@@ -186,7 +186,7 @@ pub(super) fn build_channel_turn_parts_with_inference(
     let skills = if capabilities.is_some() {
         Vec::new()
     } else {
-        crate::skills::load_workflow_metadata(&workspace)
+        crate::skills::load_workflow_metadata_for(dispatch, config)
     };
 
     let tool_descs: Vec<(String, String)> = if capabilities.is_some() {

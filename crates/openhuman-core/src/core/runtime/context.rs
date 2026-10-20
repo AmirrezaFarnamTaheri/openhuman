@@ -21,6 +21,9 @@ use std::sync::{Arc, OnceLock, RwLock};
 use crate::core::runtime::TokenSource;
 use crate::core::types::HostKind;
 
+#[path = "context_accessors.rs"]
+mod accessors;
+
 /// The process-wide default context — the first one built. Callers that dispatch
 /// RPC without an explicit per-call context (the desktop shell, the CLI, tests)
 /// resolve to this. Multi-tenant hosts override it per dispatch via
@@ -86,6 +89,11 @@ pub struct CoreContext {
     /// the model. Defaults to every group withheld, which is what the
     /// compiled-in pack table meant before the type existed.
     tool_groups: crate::tools::toolpacks::ToolGroups,
+    /// Whether autonomy-tier checks reload config or retain this context's
+    /// effective in-memory tier.
+    autonomy_tier_source: super::AutonomyTierSource,
+    /// A fixed maximum autonomy level inherited by derived contexts.
+    autonomy_tier_ceiling: Option<crate::security::AutonomyLevel>,
     /// Which tiny dependencies the config switched off (`[components]`). Only
     /// narrows: `domains` and `tool_groups` are already clamped by it, and this
     /// is kept so dispatch can answer `COMPONENT_DISABLED:<name>` for a method
@@ -284,6 +292,12 @@ impl CoreContext {
             }))),
             domains,
             tool_groups,
+            autonomy_tier_source: if embedder_config.is_some() {
+                super::AutonomyTierSource::Captured
+            } else {
+                super::AutonomyTierSource::LiveConfig
+            },
+            autonomy_tier_ceiling: None,
             components,
             embedder_config,
             latest_embedder_config,
@@ -435,6 +449,13 @@ impl CoreContext {
             workspace_binding: RwLock::new(shared_binding),
             domains,
             tool_groups: overlay.tool_groups,
+            autonomy_tier_source: overlay
+                .autonomy_tier_source
+                .unwrap_or(self.autonomy_tier_source),
+            autonomy_tier_ceiling: overlay::stricter_autonomy_ceiling(
+                self.autonomy_tier_ceiling,
+                overlay.autonomy_tier_ceiling,
+            ),
             components: self.components,
             embedder_config: Some(overlay.config),
             latest_embedder_config,
@@ -453,27 +474,6 @@ impl CoreContext {
     /// this context was derived for one.
     pub fn session_agent(&self) -> Option<&str> {
         self.session_agent.as_deref()
-    }
-
-    /// The hook registrations bound to this context. Shared (not copied) by
-    /// derived contexts.
-    pub fn extensions(&self) -> &crate::core::slots::Extensions {
-        &self.extensions
-    }
-
-    /// The hook registrations of the context this call runs under, for
-    /// [`HookSlot`](crate::core::slots::HookSlot) lookups.
-    ///
-    /// Outside SaaS that is the ambient context (the process default when the
-    /// task has no scope). In SaaS only the task's own scope counts: a task that
-    /// lost its scope must not read the operator's registrations.
-    pub fn current_extensions() -> Option<crate::core::slots::Extensions> {
-        let ctx = if crate::core::runtime::is_saas() {
-            Self::scoped()
-        } else {
-            Self::current()
-        };
-        ctx.map(|ctx| ctx.extensions.clone())
     }
 
     /// The resolved per-user workspace directory this context is bound to.
@@ -722,7 +722,7 @@ mod agent_parts;
 
 #[path = "context_overlay.rs"]
 mod overlay;
-pub use overlay::ContextOverlay;
+pub use overlay::{AutonomyTierSource, ContextOverlay};
 
 #[path = "context_config.rs"]
 mod config_access;

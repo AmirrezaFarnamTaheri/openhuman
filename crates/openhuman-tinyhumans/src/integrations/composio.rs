@@ -18,8 +18,7 @@ use super::build_client;
 /// The message when the backend mode has no usable credential. Wording is
 /// load-bearing: the core's session-expiry classifier recognises "no backend
 /// session token" and demotes it to an expected user-state error.
-const NO_SESSION: &str =
-    "composio backend mode unavailable: no backend session token. Sign in or set a TinyHumans API key.";
+const NO_SESSION: &str = "composio backend mode unavailable: no backend session token. Sign in or set a TinyHumans API key.";
 
 /// The proxy target for `config`: the backend origin and the credential secret.
 #[cfg(feature = "modules")]

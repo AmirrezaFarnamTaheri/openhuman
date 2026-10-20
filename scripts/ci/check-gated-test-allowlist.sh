@@ -72,8 +72,11 @@ tools/ops_tests_domain_family_tests.rs
 tools/registry/ops_tests.rs
 tools/registry/schemas_tests.rs
 tools/sources_tests.rs
+tools/ops_tests_catalog_fixture_tests.rs
 web_chat/mod.rs
 web_chat/run_task.rs
+web_chat/web_tests.rs
+web_chat/web_tests_ptt_source_tests.rs
 web3/stub.rs
 web3/wallet/stub.rs
 web3/x402/stub.rs

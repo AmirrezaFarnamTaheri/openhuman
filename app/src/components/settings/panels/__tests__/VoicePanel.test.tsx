@@ -11,22 +11,15 @@ import {
 } from '../../../../services/api/voiceSettingsApi';
 import { renderWithProviders } from '../../../../test/test-utils';
 import {
-  openhumanGetVoiceServerSettings,
-  openhumanUpdateVoiceServerSettings,
   openhumanVoiceSetProviders,
   openhumanVoiceStatus,
-  syncNotchVisibility,
-  type VoiceServerSettings,
   type VoiceStatus,
 } from '../../../../utils/tauriCommands';
 import VoicePanel from '../VoicePanel';
 
 vi.mock('../../../../utils/tauriCommands', () => ({
-  openhumanGetVoiceServerSettings: vi.fn(),
-  openhumanUpdateVoiceServerSettings: vi.fn(),
   openhumanVoiceSetProviders: vi.fn(),
   openhumanVoiceStatus: vi.fn(),
-  syncNotchVisibility: vi.fn(),
 }));
 
 vi.mock('../../../../services/api/voiceSettingsApi', async () => {
@@ -80,11 +73,7 @@ const makeVoiceSettings = (overrides: Partial<VoiceSettings> = {}): VoiceSetting
   ...overrides,
 });
 
-type RuntimeHarness = {
-  settings: VoiceServerSettings;
-  voiceStatus: VoiceStatus;
-  voiceSettings: VoiceSettings;
-};
+type RuntimeHarness = { voiceStatus: VoiceStatus; voiceSettings: VoiceSettings };
 
 describe('VoicePanel', () => {
   let runtime: RuntimeHarness;
@@ -93,17 +82,6 @@ describe('VoicePanel', () => {
     vi.clearAllMocks();
 
     runtime = {
-      settings: {
-        auto_start: false,
-        hotkey: 'Fn',
-        activation_mode: 'push',
-        skip_cleanup: true,
-        min_duration_secs: 0.3,
-        silence_threshold: 0.002,
-        custom_dictionary: [],
-        always_on_enabled: false,
-        stt_engine: 'backend',
-      },
       voiceStatus: {
         stt_available: true,
         tts_available: true,
@@ -119,18 +97,7 @@ describe('VoicePanel', () => {
       voiceSettings: makeVoiceSettings(),
     };
 
-    vi.mocked(openhumanGetVoiceServerSettings).mockImplementation(async () => ({
-      result: { ...runtime.settings },
-      logs: [],
-    }));
     vi.mocked(openhumanVoiceStatus).mockImplementation(async () => ({ ...runtime.voiceStatus }));
-    // The toggle handler ignores the resolved value (it updates React state
-    // optimistically before awaiting), so a minimal cast is enough here.
-    vi.mocked(openhumanUpdateVoiceServerSettings).mockResolvedValue({
-      result: {},
-      logs: [],
-    } as never);
-    vi.mocked(syncNotchVisibility).mockResolvedValue(undefined);
     vi.mocked(openhumanVoiceSetProviders).mockImplementation(async update => {
       if (update.stt_provider) runtime.voiceStatus.stt_engine = update.stt_provider;
       if (update.tts_provider) runtime.voiceStatus.tts_provider = update.tts_provider;
@@ -155,33 +122,15 @@ describe('VoicePanel', () => {
     vi.useRealTimers();
   });
 
-  it('persists always-on listening and syncs the notch indicator', async () => {
+  it('does not render ambient listening controls or send removed settings', async () => {
     renderWithProviders(<VoicePanel />);
 
-    const toggle = await screen.findByTestId('voice-always-on-toggle');
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-
-    fireEvent.click(toggle);
-
-    await waitFor(() =>
-      expect(openhumanUpdateVoiceServerSettings).toHaveBeenCalledWith({ always_on_enabled: true })
+    expect(screen.queryByTestId('voice-always-on-card')).not.toBeInTheDocument();
+    await waitFor(() => expect(openhumanVoiceStatus).toHaveBeenCalled());
+    const removedSettingParam = ['always', 'on', 'enabled'].join('_');
+    expect(openhumanVoiceSetProviders).not.toHaveBeenCalledWith(
+      expect.objectContaining({ [removedSettingParam]: expect.anything() })
     );
-    await waitFor(() => expect(syncNotchVisibility).toHaveBeenCalledWith(true));
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('restores the always-on toggle when persistence fails', async () => {
-    vi.mocked(openhumanUpdateVoiceServerSettings).mockRejectedValueOnce(
-      new Error('settings unavailable')
-    );
-    renderWithProviders(<VoicePanel />);
-
-    const toggle = await screen.findByTestId('voice-always-on-toggle');
-    fireEvent.click(toggle);
-
-    await screen.findByText('settings unavailable');
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    expect(syncNotchVisibility).not.toHaveBeenCalled();
   });
 
   // ─── Voice Routing Section ──────────────────────────────────────────────
@@ -309,32 +258,31 @@ describe('VoicePanel', () => {
     expect(saveBtn).toBeDisabled();
   });
 
-  it('does not mark failed voice routing as saved and keeps the change retryable', async () => {
+  it('shows an error when persistProviders fails', async () => {
     runtime.voiceSettings = makeVoiceSettings({
       voiceProviders: [ELEVENLABS_PROVIDER],
       sttProvider: { kind: 'external', providerSlug: 'elevenlabs', model: 'scribe_v1' },
       ttsProvider: { kind: 'cloud' },
     });
+
     vi.mocked(openhumanVoiceSetProviders).mockRejectedValueOnce(new Error('RPC timeout'));
 
     renderWithProviders(<VoicePanel />, { initialEntries: ['/settings/voice'] });
+
+    // Wait for the initial load to complete (elevenlabs seeded from voiceSettings).
     const sttSelect = (await screen.findByTestId('stt-provider-select')) as HTMLSelectElement;
     await waitFor(() => expect(sttSelect.value).toBe('elevenlabs'));
 
+    // Keep the saveRouting refresh pending so it does not clear the error set
+    // by the failed persistence attempt.
+    vi.mocked(openhumanVoiceStatus).mockImplementation(() => new Promise(() => {}));
+
+    // Change provider and click save to trigger the RPC error.
     fireEvent.change(sttSelect, { target: { value: 'cloud' } });
     const saveBtn = screen.getByTestId('save-voice-routing');
     fireEvent.click(saveBtn);
-    await screen.findByText('RPC timeout');
 
-    expect(screen.queryByText(/Voice providers saved/i)).not.toBeInTheDocument();
-    expect(sttSelect).toHaveValue('cloud');
-    expect(saveBtn).toBeEnabled();
-
-    // A retry after the one-shot server failure must persist successfully.
-    fireEvent.click(saveBtn);
-    await waitFor(() => expect(openhumanVoiceSetProviders).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText(/Voice providers saved/i)).toBeInTheDocument();
-    await waitFor(() => expect(saveBtn).toBeDisabled());
+    await waitFor(() => expect(screen.getByText('RPC timeout')).toBeInTheDocument());
   });
 
   it('renders a preset select and calls persistProviders when a Piper voice preset is changed', async () => {
@@ -472,8 +420,8 @@ describe('VoicePanel', () => {
 
   // ─── Error / notice display ─────────────────────────────────────────────
 
-  it('shows an error banner when openhumanGetVoiceServerSettings rejects', async () => {
-    vi.mocked(openhumanGetVoiceServerSettings).mockRejectedValueOnce(new Error('core offline'));
+  it('shows an error banner when voice status cannot be loaded', async () => {
+    vi.mocked(openhumanVoiceStatus).mockRejectedValueOnce(new Error('core offline'));
 
     renderWithProviders(<VoicePanel />, { initialEntries: ['/settings/voice'] });
 

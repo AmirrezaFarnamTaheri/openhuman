@@ -30,18 +30,16 @@ export function assertExampleOutput(name, result) {
     throw new Error(`${name}: successful exit without behavioral assertion marker\n${result.stdout}`);
   }
 }
-export function runExamples({
-  run = spawnSync,
-  examples = discoverExamples(),
-  environment = process.env,
-  ciSmoke = false,
-} = {}) {
-  // CI smoke executes every example's behavior in a debug build, avoiding a
-  // cold 30-minute release/LTO compile for a fleet benchmark on hosted runners.
-  // Normal measurements retain their declared release/minimal feature graph.
-  const profileFor = (example) =>
-    ciSmoke && example.profile === "release" ? "dev" : (example.profile ?? "dev");
-  const configuration = (example) => `${profileFor(example)}:${example.defaultFeatures !== false}`;
+export function runExamples({ run = spawnSync, examples = discoverExamples(), environment = process.env, profile = null } = {}) {
+  // `profile` forces every example into one Cargo profile (PR CI passes "dev"
+  // so a release-declared measurement shares the plain dev build instead of
+  // paying a thin-LTO build nothing else can reuse). Without it each example
+  // keeps its declared profile. Default-features-disabled stays per example:
+  // it is a distinct feature graph, not a profile choice.
+  const profileOf = (example) => profile ?? example.profile ?? "dev";
+  // Share one feature graph per build configuration. Measurements retain their
+  // minimal graph rather than inheriting other examples' features.
+  const configuration = (example) => `${profileOf(example)}:${example.defaultFeatures !== false}`;
   const featureGroups = new Map();
   for (const example of examples) {
     const key = configuration(example);
@@ -51,18 +49,14 @@ export function runExamples({
   }
   for (const example of examples) {
     const args = ["run", "--quiet", "-p", "openhuman-embed", "--example", example.name];
-    const profile = profileFor(example);
-    if (profile === "release") args.push("--release");
-    else if (profile !== "dev") args.push("--profile", profile);
+    const effective = profileOf(example);
+    if (effective === "release") args.push("--release");
+    else if (effective !== "dev") args.push("--profile", effective);
     if (example.defaultFeatures === false) args.push("--no-default-features");
     const features = [...featureGroups.get(configuration(example))].sort();
     if (features.length) args.push("--features", features.join(","));
-    // CI needs to prove real multi-agent execution, not benchmark the 100
-    // agent stress profile under a 2-vCPU hosted runner. Release measurements
-    // still exercise the exact declared 100-agent default.
-    if (ciSmoke && example.name === "linux_fleet") args.push("--", "4");
     const result = run(resolve(root, "scripts/ci-cancel-aware.sh"), ["cargo", ...args], {
-      cwd: root, encoding: "utf8", env: offlineEnvironment(environment), timeout: ciSmoke && example.name === "linux_fleet" ? 45 * 60_000 : 30 * 60_000, maxBuffer: 16 * 1024 * 1024,
+      cwd: root, encoding: "utf8", env: offlineEnvironment(environment), timeout: 1800000, maxBuffer: 16 * 1024 * 1024,
     });
     assertExampleOutput(example.name, result);
     console.log(`PASS ${example.name}`);
@@ -70,5 +64,9 @@ export function runExamples({
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes("--list")) console.log(discoverExamples().map((example) => example.name).join("\n"));
-  else runExamples({ ciSmoke: process.argv.includes("--ci-smoke") });
+  else {
+    const at = process.argv.indexOf("--profile");
+    if (at >= 0 && !process.argv[at + 1]) throw new Error("--profile needs a value");
+    runExamples({ profile: at >= 0 ? process.argv[at + 1] : null });
+  }
 }

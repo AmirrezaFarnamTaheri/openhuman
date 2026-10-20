@@ -9,11 +9,10 @@ use openhuman_core::config::Config;
 use openhuman_core::security::approval::store;
 use openhuman_core::security::approval::types::{ApprovalDecision, PendingApproval};
 
-#[macro_use]
-#[path = "support/storage_drivers.rs"]
-mod storage_drivers;
+#[path = "support/storage_case.rs"]
+mod storage_case;
 
-use storage_drivers::Case;
+use storage_case::Case;
 
 fn pending(id: &str) -> PendingApproval {
     PendingApproval::new(
@@ -25,7 +24,9 @@ fn pending(id: &str) -> PendingApproval {
     )
 }
 
-fn a_configured_backend_holds_the_approvals_instead_of_approval_db(case: Case) {
+#[test]
+fn a_configured_backend_holds_the_approvals_instead_of_approval_db() {
+    let case = Case::open();
     let workspace = tempfile::tempdir().unwrap();
     let config = Config {
         workspace_dir: workspace.path().to_path_buf(),
@@ -62,5 +63,3 @@ fn a_configured_backend_holds_the_approvals_instead_of_approval_db(case: Case) {
     assert!(store::list_pending(&config).unwrap().is_empty());
     assert!(workspace.path().join("storage").join("storage.db").exists());
 }
-
-driver_cases!(sync a_configured_backend_holds_the_approvals_instead_of_approval_db);

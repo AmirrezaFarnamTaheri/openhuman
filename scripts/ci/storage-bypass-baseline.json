@@ -135,21 +135,21 @@
   {
     "rule": "json-write",
     "path": "crates/openhuman-core/src/core/observability/progress_tracing/export.rs",
-    "line": 33,
+    "line": 87,
     "text": "let opened = std::fs::OpenOptions::new()",
     "occurrence": 1
   },
   {
     "rule": "json-write",
-    "path": "crates/openhuman-core/src/flows/tinyflows/caps/code.rs",
-    "line": 127,
+    "path": "crates/openhuman-core/src/flows/caps_host/code.rs",
+    "line": 139,
     "text": "tokio::fs::write(&script_path, script_body)",
     "occurrence": 1
   },
   {
     "rule": "json-write",
-    "path": "crates/openhuman-core/src/flows/tinyflows/caps/code.rs",
-    "line": 130,
+    "path": "crates/openhuman-core/src/flows/caps_host/code.rs",
+    "line": 142,
     "text": "tokio::fs::write(&input_path, input_json)",
     "occurrence": 1
   },
@@ -158,13 +158,6 @@
     "path": "crates/openhuman-core/src/inference/host_runtime/ops/runtime_ops.rs",
     "line": 165,
     "text": "tokio::fs::write(&file_path, audio_bytes)",
-    "occurrence": 1
-  },
-  {
-    "rule": "json-write",
-    "path": "crates/openhuman-core/src/memory/layout_migration/claim.rs",
-    "line": 106,
-    "text": "let temp = tempfile::NamedTempFile::new_in(key.marker.parent().unwrap_or(Path::new(\".\")))?;",
     "occurrence": 1
   },
   {
@@ -261,21 +254,21 @@
   {
     "rule": "json-write",
     "path": "crates/openhuman-core/src/security/credentials/http_creds.rs",
-    "line": 424,
+    "line": 429,
     "text": "fs::write(&tmp_path, &json)",
     "occurrence": 1
   },
   {
     "rule": "json-write",
     "path": "crates/openhuman-core/src/security/credentials/profiles.rs",
-    "line": 288,
+    "line": 289,
     "text": "let mut file = OpenOptions::new()",
     "occurrence": 1
   },
   {
     "rule": "json-write",
     "path": "crates/openhuman-core/src/security/credentials/profiles.rs",
-    "line": 301,
+    "line": 302,
     "text": "fs::write(path, bytes)",
     "occurrence": 1
   },

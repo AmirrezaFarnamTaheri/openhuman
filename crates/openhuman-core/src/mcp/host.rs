@@ -127,6 +127,11 @@ pub fn client_config(config: &Config) -> tinymcp_bus::McpClientConfig {
     client.client_identity.version = config.mcp_client.client_identity.version.clone();
     client.client_identity.capabilities = tinymcp_bus::ui::client_capabilities();
     client.registry_auth = config.mcp_client.registry_auth.clone();
+    // Registry-installed and `mcp.json` stdio servers are third-party code and
+    // are never `operator_trusted`: tinymcp refuses to start them unless the
+    // host supplies the jail. The toolchain grants TinyBox resolves are added
+    // when the config is opened (`module_port`), since they need an async call.
+    client.stdio_sandbox = super::host_sandbox::stdio_sandbox(config);
 
     // Registry-installed stdio servers are untrusted. TinyMCP deliberately
     // refuses to launch them without a TinyBox jail. Supply a workspace-scoped

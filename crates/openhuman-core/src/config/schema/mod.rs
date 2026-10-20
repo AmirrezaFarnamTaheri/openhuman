@@ -23,7 +23,6 @@ mod dashboard;
 mod desktop;
 pub use desktop::DesktopConfig;
 mod defaults;
-mod dictation;
 mod hooks;
 pub use hooks::HooksConfig;
 pub mod components;
@@ -60,6 +59,7 @@ pub(crate) use load::resolve_config_dir_for_workspace;
 pub(crate) use load::CONFIG_OWNER_MISMATCH_MARKER;
 pub mod claude_agent_sdk;
 pub use claude_agent_sdk::ClaudeAgentSdkConfig;
+mod inbound;
 mod local_ai;
 mod memes;
 pub(crate) mod memory;
@@ -93,16 +93,16 @@ pub(crate) use cli_overrides::set_cli_inference_overrides;
 pub use context::{CompactionSettings, CompactionStrategy, ContextConfig};
 pub use cron::CronConfig;
 pub use dashboard::{DashboardConfig, DiagramViewerConfig, EventStreamConfig, ModelHealthConfig};
-pub use dictation::{DictationActivationMode, DictationConfig};
 pub use identity_cost::{
     BudgetAction, BudgetPeriod, BudgetPolicy, BudgetScope, CostConfig, ModelPricing,
 };
+pub use inbound::InboundConfig;
 pub use local_ai::{LocalAiConfig, LocalAiUsage};
 pub use memes::MemesConfig;
 pub use memory::{
     migrate_legacy_source, MemoryAgentConfig, MemoryConfig, MemoryConversationsConfig,
-    MemoryEngineSettings, MemoryLayoutMode, MemoryRecallConfig, MemorySourceConfig,
-    MemorySourceKind, MEMORY_CORTEXDB_KEY_NAME, MEMORY_CORTEXDB_LOCAL_KEY_NAME,
+    MemoryEngineSettings, MemoryLayoutMode, MemorySourceConfig, MemorySourceKind, RecallSettings,
+    MEMORY_CORTEXDB_KEY_NAME,
 };
 pub use modules::{
     module_source_env_for, ModuleOverride, ModuleSourceMode, ModulesConfig, MODULE_SOURCE_ENV,
@@ -138,7 +138,7 @@ pub use tools::{
 pub use update::{UpdateConfig, UpdateRestartStrategy};
 pub use web_chat_config::WebChatConfig;
 mod voice_server;
-pub use voice_server::{SttEngine, VoiceActivationMode, VoiceServerConfig};
+pub use voice_server::{SttEngine, VoiceServerConfig};
 pub mod voice_live;
 pub mod voice_providers;
 pub use voice_live::LiveVoiceConfig;

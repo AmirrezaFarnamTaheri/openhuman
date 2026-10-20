@@ -440,7 +440,7 @@ impl SpawnSubagentTool {
 
                         Ok(ToolResult::success(outcome.output))
                     }
-                    SubagentRunStatus::Incomplete { reason } => {
+                    SubagentRunStatus::Incomplete { reason, failure_cause } => {
                         // The sub-agent stopped WITHOUT reaching its goal (a
                         // no-progress circuit breaker halted it, or it hit the
                         // iteration cap). Hand the orchestrator a structured
@@ -481,7 +481,7 @@ impl SpawnSubagentTool {
                                         dirty_status: None,
                                         stop: incomplete_stop(
                                             reason,
-                                            outcome.failure_cause.clone(),
+                                            failure_cause.clone(),
                                         ),
                                     })
                                     .await;
@@ -506,7 +506,7 @@ impl SpawnSubagentTool {
                             &outcome.agent_id,
                             &outcome.task_id,
                             reason,
-                            outcome.failure_cause.clone(),
+                            failure_cause.clone(),
                             envelope,
                         ))
                     }
