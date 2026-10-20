@@ -229,8 +229,7 @@ pub async fn mcp_clients_connect(
     let installed: Vec<tinymcp_bus::InstalledServer> =
         module_call(config, tinymcp_bus::names::methods::INSTALLED_LIST, ()).await?;
     if installed.iter().any(|server| {
-        server.server_id == server_id
-            && matches!(server.transport, tinymcp_bus::Transport::Stdio)
+        server.server_id == server_id && matches!(server.transport, tinymcp_bus::Transport::Stdio)
     }) {
         crate::modules::ensure_loaded(config, "tinybox")
             .await

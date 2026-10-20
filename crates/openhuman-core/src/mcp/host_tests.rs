@@ -176,8 +176,14 @@ fn installed_stdio_servers_get_an_enforced_workspace_scoped_jail() {
         .expect("untrusted stdio needs a jail");
     assert_eq!(jail_a.workspace, workspace_a.path().to_string_lossy());
     assert!(jail_a.require_process_isolation);
-    assert!(jail_a.allow_subprocess, "stdio wrappers may need a child process");
-    assert!(jail_a.allow_net, "remote MCP backends may need network access");
+    assert!(
+        jail_a.allow_subprocess,
+        "stdio wrappers may need a child process"
+    );
+    assert!(
+        jail_a.allow_net,
+        "remote MCP backends may need network access"
+    );
     assert!(jail_a.read_only.is_empty());
     assert!(jail_a.read_write.is_empty());
     assert!(jail_a.deny_read.is_empty());
@@ -187,6 +193,9 @@ fn installed_stdio_servers_get_an_enforced_workspace_scoped_jail() {
         .stdio_sandbox
         .expect("second workspace also needs a jail");
     assert_eq!(jail_b.workspace, workspace_b.path().to_string_lossy());
-    assert_ne!(jail_a.workspace, jail_b.workspace, "do not reuse another workspace's jail");
+    assert_ne!(
+        jail_a.workspace, jail_b.workspace,
+        "do not reuse another workspace's jail"
+    );
     assert!(jail_b.require_process_isolation);
 }
