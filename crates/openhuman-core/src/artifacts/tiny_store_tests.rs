@@ -32,6 +32,34 @@ async fn seeded(
 }
 
 #[tokio::test]
+async fn a_visible_projection_is_restricted_to_the_hosts_trusted_files_folder() {
+    let (workspace, files) = temp_dirs();
+    let outside = workspace.join("untrusted.md");
+    let error = write_visible_projection(&FileRoots::new(&files), &outside, b"private")
+        .await
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("trusted Files folder"),
+        "{error}"
+    );
+    assert!(!outside.exists(), "no file may be written outside approved folders");
+}
+
+#[tokio::test]
+async fn a_visible_projection_replaces_an_existing_file_in_a_trusted_previous_folder() {
+    let (workspace, files) = temp_dirs();
+    let previous = workspace.parent().unwrap().join("OldFiles");
+    std::fs::create_dir_all(&previous).unwrap();
+    let destination = previous.join("notes.md");
+    std::fs::write(&destination, b"old").unwrap();
+    let roots = FileRoots::new(&files).with_trusted([previous]);
+    write_visible_projection(&roots, &destination, b"new")
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+}
+
+#[tokio::test]
 async fn an_edit_is_appended_as_an_operator_version_and_written_to_the_file() {
     let (workspace, files) = temp_dirs();
     let store = seeded(&workspace, &files).await;

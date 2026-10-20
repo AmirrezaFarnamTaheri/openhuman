@@ -142,7 +142,7 @@ impl LegacyUiBridge {
                     let bytes =
                         version_file_bytes(&self.workspace_dir, &self.files, &file.key).await?;
                     let size = bytes.len() as u64;
-                    tokio::fs::write(owned, bytes).await?;
+                    write_visible_projection(&self.files, owned, &bytes).await?;
                     super::store::finalize_artifact(
                         &self.workspace_dir,
                         &record.id,
@@ -174,10 +174,10 @@ impl LegacyUiBridge {
                 .map_or(latest.body.as_str(), |f| f.key.as_str());
             let bytes = version_file_bytes(&self.workspace_dir, &self.files, key).await?;
             let size = bytes.len() as u64;
-            tokio::fs::write(&dest, bytes).await?;
+            write_visible_projection(&self.files, &dest, &bytes).await?;
             size
         } else {
-            tokio::fs::write(&dest, latest.body.as_bytes()).await?;
+            write_visible_projection(&self.files, &dest, latest.body.as_bytes()).await?;
             latest.body.len() as u64
         };
         super::store::finalize_artifact(&self.workspace_dir, &meta.id, size, self.chat.as_ref())
@@ -185,6 +185,39 @@ impl LegacyUiBridge {
             .map_err(anyhow::Error::msg)?;
         Ok(())
     }
+}
+
+/// Materialize a UI-only projection through the existing path-safe file port.
+/// The canonical artifact body and version history remain in the versioned
+/// store. Restrict the projection to host-vouched Files folders, including
+/// earlier user folders, rather than trusting an address in legacy metadata.
+async fn write_visible_projection(
+    files: &FileRoots,
+    target: &Path,
+    bytes: &[u8],
+) -> anyhow::Result<()> {
+    use tiny_artifacts::FileStore;
+
+    if refused_path(target).is_some() {
+        anyhow::bail!("artifact projection is in a protected location");
+    }
+    let (root, relative) = files
+        .trusted()
+        .iter()
+        .filter_map(|root| target.strip_prefix(root).ok().map(|relative| (root, relative)))
+        .max_by_key(|(root, _)| root.components().count())
+        .ok_or_else(|| anyhow::anyhow!("artifact projection destination is not in a trusted Files folder"))?;
+    let key = relative
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("artifact projection filename is not UTF-8"))?
+        .replace(std::path::MAIN_SEPARATOR, "/");
+    // FsFileStore validates each key segment and resolves the destination
+    // parent without following symlinks outside this trusted root. The put
+    // writes through a temporary file and atomically installs the new bytes.
+    tiny_artifacts::FsFileStore::new(root)
+        .put(&key, bytes, None)
+        .await?;
+    Ok(())
 }
 
 /// Resolve durable file keys through TinyArtifacts' traversal/symlink-safe

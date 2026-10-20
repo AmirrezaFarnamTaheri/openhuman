@@ -98,27 +98,6 @@
     "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
   },
   {
-    "path": "crates/openhuman-core/src/artifacts/tiny_store.rs",
-    "rule": "json-write",
-    "site": "tokio::fs::write(owned, bytes).await?;",
-    "reason": "materializes a derived user-visible file for a previously reserved artifact card; canonical version bytes remain in the guarded version-file store, and artifact metadata in the storage port. The UI projection is deliberately local and is regenerated on version changes, not an independent record store.",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
-  },
-  {
-    "path": "crates/openhuman-core/src/artifacts/tiny_store.rs",
-    "rule": "json-write",
-    "site": "tokio::fs::write(&dest, bytes).await?;",
-    "reason": "materializes a derived visible file from a managed immutable artifact version into the user-selected files folder; the canonical version is read through the guarded FileStore and stored separately. This local deliverable is not the authoritative versioned storage backend.",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
-  },
-  {
-    "path": "crates/openhuman-core/src/artifacts/tiny_store.rs",
-    "rule": "json-write",
-    "site": "tokio::fs::write(&dest, latest.body.as_bytes()).await?;",
-    "reason": "writes a text artifact's newest version into its file in the user-visible files folder; the deliverable is a user file on every backend, the versioned record itself goes through the artifact store",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
-  },
-  {
     "path": "crates/openhuman-core/src/media/generation/artifact_tool.rs",
     "rule": "json-write",
     "site": "let mut file = tokio::fs::OpenOptions::new()",
