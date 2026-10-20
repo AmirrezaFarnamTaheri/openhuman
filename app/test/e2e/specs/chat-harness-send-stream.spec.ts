@@ -203,30 +203,44 @@ describe('Chat harness — send + stream', () => {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
       const response = await callOpenhumanRpc<{
-        result: { data: { messages: typeof messages; count: number } };
+        data: { messages: typeof messages; count: number };
       }>('openhuman.threads_messages_list', { thread_id: threadId });
       expect(response.ok).toBe(true);
-      messages = response.result?.result?.data?.messages ?? [];
+      messages = response.result?.data?.messages ?? [];
       if (
-        messages.some(message => message.content.includes(CANARY)) &&
-        messages.some(message => message.content.includes(PROMPT))
+        messages.some(
+          message =>
+            (message.sender === 'agent' || message.sender === 'assistant') &&
+            message.content.includes(CANARY)
+        ) &&
+        messages.some(
+          message => message.sender === 'user' && message.content.includes(PROMPT)
+        )
       ) {
         break;
       }
       await browser.pause(300);
     }
-    expect(messages.some(message => message.content.includes(CANARY))).toBe(true);
-    expect(messages.some(message => message.content.includes(PROMPT))).toBe(true);
+    expect(
+      messages.some(
+        message =>
+          (message.sender === 'agent' || message.sender === 'assistant') &&
+          message.content.includes(CANARY)
+      )
+    ).toBe(true);
+    expect(
+      messages.some(message => message.sender === 'user' && message.content.includes(PROMPT))
+    ).toBe(true);
   });
 
   it('lists real persisted thread messages rather than legacy JSONL paths', async () => {
     const threadId = await getSelectedThreadId();
     expect(typeof threadId).toBe('string');
     const response = await callOpenhumanRpc<{
-      result: { data: { messages: Array<{ content: string }>; count: number } };
+      data: { messages: Array<{ content: string }>; count: number };
     }>('openhuman.threads_messages_list', { thread_id: threadId });
     expect(response.ok).toBe(true);
-    const data = response.result?.result?.data;
+    const data = response.result?.data;
     expect((data?.count ?? 0) > 0).toBe(true);
     expect(data?.messages.every(message => message.content.trim().length > 0)).toBe(true);
   });
