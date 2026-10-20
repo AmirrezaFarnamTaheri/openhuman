@@ -331,7 +331,7 @@ fn desktop_workspace(workspace: &Path) -> Fixture {
     // x402 payment ledger: a payment that changed status appears twice.
     let payment = |id: &str, status: &str| {
         format!(
-            r#"{{"id":"{id}","url":"https://api.example/x","asset":"0xusdc","amountAtomic":2500,"amountDisplay":"0.002500 USDC","recipient":"0xpayee","network":"eip155:8453","txSignature":null,"status":"{status}","timestamp":"2026-10-12T10:00:00Z"}}"#
+            r#"{{"id":"{id}","url":"https://api.example/x","asset":"0xusdc","amountAtomic":2500,"amountDisplay":"0.002500 USDC","recipient":"0xpayee","network":"eip155:8453","txSignature":null,"status":"{status}","timestamp":"2026-10-12T10:00:00Z","sessionId":"legacy-session"}}"#
         )
     };
     write(
@@ -593,12 +593,24 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched(cas
     #[cfg(feature = "web3")]
     {
         let wallet = module_storage(backend.as_ref(), "tinywallet");
-        // The wallet importer writes the `x402.payments` contract stream;
-        // `wallet.payments` is not a registered stream and masked valid data.
+        // The importer writes the v1 stream; the wallet schema then migrates
+        // it to v2. Confirm the final records, not the obsolete v1 staging.
+        let payments = wallet
+            .streams()
+            .read_window("wallet.payments", 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(payments.len(), fixture.x402_payments);
         assert_eq!(
-            wallet.streams().len("x402.payments").await.unwrap(),
-            fixture.x402_payments as u64
+            payments
+                .iter()
+                .map(|entry| entry.value["status"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["pending", "settled", "settled"]
         );
+        assert!(payments
+            .iter()
+            .all(|entry| entry.value["session_id"] == "legacy-session"));
     }
     #[cfg(not(feature = "web3"))]
     let _ = fixture.x402_payments;

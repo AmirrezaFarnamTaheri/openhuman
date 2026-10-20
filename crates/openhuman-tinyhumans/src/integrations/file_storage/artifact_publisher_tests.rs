@@ -155,7 +155,13 @@ async fn a_managed_file_key_is_read_through_the_scoped_version_store() {
         .await;
     let workspace = tempfile::tempdir().unwrap();
     let root = version_files_dir(workspace.path());
-    let stored = root.join("img-1").join("v1.png");
+    // FileRef keys include the artifacts/files namespace relative to the
+    // FsFileStore root; writing a shortened path masks a genuine reader bug.
+    let stored = root
+        .join("artifacts")
+        .join("files")
+        .join("img-1")
+        .join("v1.png");
     std::fs::create_dir_all(stored.parent().unwrap()).unwrap();
     std::fs::write(&stored, b"MANAGED-KEY-BYTES").unwrap();
     let mut version =

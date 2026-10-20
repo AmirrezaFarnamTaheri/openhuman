@@ -42,7 +42,10 @@ async fn a_visible_projection_is_restricted_to_the_hosts_trusted_files_folder() 
         error.to_string().contains("trusted Files folder"),
         "{error}"
     );
-    assert!(!outside.exists(), "no file may be written outside approved folders");
+    assert!(
+        !outside.exists(),
+        "no file may be written outside approved folders"
+    );
 }
 
 #[tokio::test]

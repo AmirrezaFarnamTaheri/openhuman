@@ -204,9 +204,16 @@ async fn write_visible_projection(
     let (root, relative) = files
         .trusted()
         .iter()
-        .filter_map(|root| target.strip_prefix(root).ok().map(|relative| (root, relative)))
+        .filter_map(|root| {
+            target
+                .strip_prefix(root)
+                .ok()
+                .map(|relative| (root, relative))
+        })
         .max_by_key(|(root, _)| root.components().count())
-        .ok_or_else(|| anyhow::anyhow!("artifact projection destination is not in a trusted Files folder"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("artifact projection destination is not in a trusted Files folder")
+        })?;
     let key = relative
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("artifact projection filename is not UTF-8"))?
