@@ -1406,8 +1406,8 @@ async fn json_rpc_modules_browser_forget_sites_removes_learned_sites() {
     );
     // The importer preserves legacy files; forgetting deletes managed KV records,
     // not the original on-disk migration inputs.
-    let stored = StateKv::open(&workspace, "computer", "site_memory")
-        .expect("open canonical site memory");
+    let stored =
+        StateKv::open(&workspace, "computer", "site_memory").expect("open canonical site memory");
     assert!(
         stored.get::<Value>("shop.test").unwrap().is_none(),
         "the forgotten site must be gone from canonical storage"

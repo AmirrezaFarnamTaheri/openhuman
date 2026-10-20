@@ -253,7 +253,7 @@ describe('Chat harness — mid-stream cancel', () => {
     // The canonical store moved away from memory/conversations/threads/*.jsonl.
     // Read via the same RPC as the application, not by relying on a file path.
     const response = await callOpenhumanRpc<{
-      data: { messages: Array<{ content: string }> };
+      data: { messages: Array<{ content: string; type: string; sender: string }> };
     }>('openhuman.threads_messages_list', { thread_id: threadId });
     expect(response.ok).toBe(true);
     const messages = response.result?.data?.messages ?? [];
