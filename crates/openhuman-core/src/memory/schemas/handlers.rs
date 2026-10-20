@@ -345,8 +345,8 @@ pub(super) fn sources_sync(ctx: DispatchCtx, params: Map<String, Value>) -> Cont
 }
 
 pub(super) fn import_scan(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
-    rpc::<EmptyParams, _>(ctx, params, |_, config, _| async move {
-        import::scan(&config).await
+    rpc::<EmptyParams, _>(ctx, params, |ctx, config, _| async move {
+        import::scan(&ctx, &config).await
     })
 }
 

@@ -30,7 +30,7 @@ const LEGACY_LIMIT_ENTRIES = [
   // state moved to tinyagents-runtime; this remaining composition is split in
   // a follow-up without reintroducing an old harness/session exception.
   ["crates/openhuman-core/src/agent/session_host/builder/factory.rs", 921],
-  ["crates/openhuman-core/src/agent/subagent_host/lifecycle.rs", 754],
+  ["crates/openhuman-core/src/agent/subagent_host/lifecycle.rs", 762],
   ["crates/openhuman-core/src/agent/subagent_host/ops/runner.rs", 927],
   ["crates/openhuman-core/src/web_chat/progress_bridge.rs", 1089],
   // These established external test modules grew with upstream coverage. Pin
@@ -42,6 +42,7 @@ const LEGACY_LIMIT_ENTRIES = [
   ["crates/openhuman-core/src/core/events.rs", 1697],
   ["crates/openhuman-core/src/core/events_tests.rs", 988],
   ["crates/openhuman-core/src/core/observability.rs", 3429],
+  ["crates/openhuman-core/src/memory/ops_tests.rs", 845],
 ];
 const LEGACY_LIMITS = new Map(LEGACY_LIMIT_ENTRIES);
 

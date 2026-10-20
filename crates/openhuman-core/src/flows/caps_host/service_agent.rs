@@ -22,7 +22,7 @@ pub(crate) async fn run_agent(
     }
     let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel(128);
     let progress_state = Arc::clone(&state);
-    let progress = tokio::spawn(async move {
+    let progress = binding.ctx.clone().spawn(async move {
         while let Some(event) = progress_rx.recv().await {
             if let crate::progress::AgentProgress::TurnCompleted {
                 stop: Some(stop), ..

@@ -28,7 +28,7 @@ pub fn read_workflow_resource_for(
     relative_path: &Path,
 ) -> Result<String, String> {
     let home = match ctx.resolved() {
-        Some(core) if core.user_skill_roots() => dirs::home_dir(),
+        Some(core) if core.user_skill_roots() => super::api::discovery_home_dir(),
         Some(_) => None,
         None => super::api::discovery_home_dir(),
     };

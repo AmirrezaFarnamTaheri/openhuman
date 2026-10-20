@@ -106,7 +106,7 @@ pub(crate) async fn start_selected_services(
         return;
     }
     log::debug!("[core-runtime] start_services services={services:?}");
-    super::bootstrap::start_core_runtime_services(services, config).await;
+    super::bootstrap::start_core_runtime_services(services, config, ctx).await;
     if services.login_gated {
         tasks.track(
             "login_gated",
@@ -506,11 +506,13 @@ pub(crate) async fn run_legacy_migrations(config: &Config) {
 pub fn spawn_socket_auto_connect(
     services: ServiceSet,
     socket_mgr: std::sync::Arc<crate::platform::socket::SocketManager>,
+    ctx: &std::sync::Arc<crate::core::runtime::CoreContext>,
 ) {
     if services.socketio {
-        tokio::spawn(async move {
+        let dispatch = crate::core::runtime::DispatchCtx::new(std::sync::Arc::clone(ctx));
+        dispatch.clone().spawn(async move {
             log::info!("[socket] Checking for stored session to auto-connect...");
-            let config = match Config::load_or_init().await {
+            let config = match dispatch.load_config().await {
                 Ok(c) => std::sync::Arc::new(c),
                 Err(e) => {
                     log::debug!("[socket] Config not available for auto-connect: {e}");

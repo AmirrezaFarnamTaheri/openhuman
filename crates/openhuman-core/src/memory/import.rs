@@ -103,11 +103,15 @@ fn importer(
 }
 
 /// `memory_import_scan`.
-pub async fn scan(config: &Config) -> Result<ImportScanView> {
+pub async fn scan(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+) -> Result<ImportScanView> {
     let workspace_dir = config.workspace_dir.clone();
-    let counts = tokio::task::spawn_blocking(move || {
-        tinymemory_integrations::import::count_legacy(&workspace_dir)
-    })
+    let counts = ctx
+        .spawn_blocking(move || {
+            tinymemory_integrations::import::count_legacy(&workspace_dir)
+        })
     .await
     .map_err(|error| Error::Engine(format!("import scan failed: {error}")))?;
     let counts = counts.map(|counts: LegacyImportCounts| ImportCounts {

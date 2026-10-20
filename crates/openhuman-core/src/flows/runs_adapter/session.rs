@@ -34,6 +34,7 @@ impl RunKey {
 pub(crate) struct RunSession {
     pub(super) bindings: std::sync::RwLock<Arc<RunBindings>>,
     pub(super) config: Arc<Config>,
+    pub(super) ctx: crate::core::runtime::DispatchCtx,
     pub(super) flow: tokio::sync::RwLock<Flow>,
     flow_id: String,
     pub(super) trigger: Mutex<FlowRunTrigger>,
@@ -55,6 +56,7 @@ impl RunSession {
     pub(super) fn new(
         bindings: Arc<RunBindings>,
         config: Arc<Config>,
+        ctx: crate::core::runtime::DispatchCtx,
         flow: Flow,
         trigger: FlowRunTrigger,
         cursor: u64,
@@ -65,6 +67,7 @@ impl RunSession {
             flow_id: bindings.flow_id.clone(),
             bindings: std::sync::RwLock::new(bindings),
             config,
+            ctx,
             flow: tokio::sync::RwLock::new(flow),
             trigger: Mutex::new(trigger),
             cursor: std::sync::atomic::AtomicU64::new(cursor),
@@ -203,7 +206,7 @@ impl RunSession {
             return;
         }
         let session = Arc::clone(self);
-        tokio::spawn(async move {
+        self.ctx.clone().spawn(async move {
             loop {
                 match session.drain(&proxy, true).await {
                     Ok(true) => {

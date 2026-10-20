@@ -206,7 +206,7 @@ impl CapsHostService {
         if admission.start_task {
             let task_binding = Arc::clone(&binding);
             let entry = admission.entry.clone();
-            tokio::spawn(async move {
+            task_binding.ctx.clone().spawn(async move {
                 let _ = service_agent::run_agent(
                     task_binding,
                     request,

@@ -548,5 +548,55 @@
     "category": "A",
     "reason": "The module's shipped queues.json and pipeline.json, parsed once; immutable process configuration with no tenant data.",
     "verification": "inbound/settings_tests.rs: the_defaults_resolve_to_the_shipped_files_in_storage"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/provider/factory/key_pool.rs",
+    "scope": "",
+    "name": "POOLS",
+    "type": "OnceLock<Mutex<HashMap<String,Pool>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "The provider-keyed pool registry retains connection pools for the configured inference credentials; keys are explicit provider identifiers and the registry is not a cross-tenant authority.",
+    "verification": "inference/provider/factory/key_pool.rs: pool lookup is keyed by the requested provider key"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/provider/factory/key_pool.rs",
+    "scope": "",
+    "name": "SALT",
+    "type": "OnceLock<RandomState>",
+    "count": 1,
+    "category": "A",
+    "reason": "The process-wide hash salt only randomizes internal map hashing and carries no application or tenant data.",
+    "verification": "inference/provider/factory/key_pool.rs: RandomState is used only to construct provider-keyed maps"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/provider/factory/tool_markup.rs",
+    "scope": "",
+    "name": "NEXT_QNML_CALL",
+    "type": "AtomicU64",
+    "count": 1,
+    "category": "A",
+    "reason": "This monotonic process-local identifier distinguishes tool-markup calls and stores no request or tenant content.",
+    "verification": "inference/provider/factory/tool_markup.rs: identifier is incremented for each generated call"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/provider/factory/tool_tagged_json.rs",
+    "scope": "",
+    "name": "NEXT_TAGGED_CALL",
+    "type": "AtomicU64",
+    "count": 1,
+    "category": "A",
+    "reason": "This monotonic process-local identifier distinguishes tagged tool calls and stores no request or tenant content.",
+    "verification": "inference/provider/factory/tool_tagged_json.rs: identifier is incremented for each generated call"
+  },
+  {
+    "file": "crates/openhuman-core/src/tools/impl/filesystem/source_graph.rs",
+    "scope": "",
+    "name": "PATTERN",
+    "type": "OnceLock<Regex>",
+    "count": 6,
+    "category": "A",
+    "reason": "Each source-graph parser caches an immutable regular expression; the compiled patterns contain no workspace, request, or tenant state.",
+    "verification": "tools/impl/filesystem/source_graph.rs: all six declarations cache only static parser expressions"
   }
 ]

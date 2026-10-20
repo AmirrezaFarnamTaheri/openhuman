@@ -176,7 +176,8 @@ pub async fn backend_for_async(workspace_dir: &Path) -> Result<Arc<dyn StorageBa
         return Ok(backend);
     }
     let workspace_dir = workspace_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || backend_for(&workspace_dir))
+    crate::core::runtime::DispatchCtx::ambient()
+        .spawn_blocking(move || backend_for(&workspace_dir))
         .await
         .context("join the workspace storage opener")?
 }

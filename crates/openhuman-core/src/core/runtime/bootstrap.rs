@@ -391,6 +391,7 @@ pub(crate) async fn bootstrap_core_runtime(
 pub(crate) async fn start_core_runtime_services(
     services: crate::core::runtime::ServiceSet,
     config: Option<&crate::config::Config>,
+    ctx: &std::sync::Arc<crate::core::runtime::CoreContext>,
 ) {
     let Some(cfg) = config else {
         log::error!(
@@ -408,7 +409,11 @@ pub(crate) async fn start_core_runtime_services(
 
     match crate::platform::socket::global_socket_manager() {
         Some(socket_mgr) => {
-            crate::core::runtime::services::spawn_socket_auto_connect(services, socket_mgr.clone());
+            crate::core::runtime::services::spawn_socket_auto_connect(
+                services,
+                socket_mgr.clone(),
+                ctx,
+            );
         }
         None => {
             log::warn!(

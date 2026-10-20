@@ -130,6 +130,7 @@ pub(crate) async fn start_run(
     let session = RunSession::new(
         Arc::clone(&bindings),
         Arc::new(config.clone()),
+        ctx.clone(),
         flow.clone(),
         trigger,
         0,
@@ -303,6 +304,7 @@ pub(crate) async fn resume_and_wait(
             let session = RunSession::new(
                 Arc::clone(&candidate),
                 Arc::new(config.clone()),
+                _ctx.clone(),
                 candidate.flow.clone(),
                 FlowRunTrigger::Resume,
                 0,

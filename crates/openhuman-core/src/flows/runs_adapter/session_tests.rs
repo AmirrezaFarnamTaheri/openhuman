@@ -71,7 +71,14 @@ async fn private_agent_progress_advances_cursor_without_leaking_text_or_replayin
     let bindings = super::super::register_bindings(&ctx, &config, &flow, &run_id)
         .await
         .expect("scoped run callbacks registered");
-    let session = RunSession::new(bindings, Arc::new(config), flow, FlowRunTrigger::Rpc, 0);
+    let session = RunSession::new(
+        bindings,
+        Arc::new(config),
+        ctx,
+        flow,
+        FlowRunTrigger::Rpc,
+        0,
+    );
 
     let agent_progress = RunEvent {
         seq: 1,
