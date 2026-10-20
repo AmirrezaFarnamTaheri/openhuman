@@ -192,7 +192,7 @@ fi
 # (2 MiB) overflows on that dispatch depth — a stack overflow in otherwise-correct
 # tests, not a logic failure. Mirror scripts/test-rust-with-mock.sh and give the
 # suite a larger stack unless the caller already pinned one explicitly.
-export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
+export RUST_MIN_STACK="${RUST_MIN_STACK:-67108864}"
 
 cd "$REPO_ROOT"
 source "$HOME/.cargo/env" 2>/dev/null || true

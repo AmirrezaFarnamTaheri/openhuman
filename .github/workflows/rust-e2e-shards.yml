@@ -60,8 +60,9 @@ jobs:
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       # Agent, JSON-RPC and MCP suites can spawn nested async test tasks. Keep
-      # Rust-created test threads above the 20 MiB agent worker stack.
-      RUST_MIN_STACK: "33554432"
+      # Rust-created test threads above the 64 MiB stack used by the deepest
+      # agent and provider paths.
+      RUST_MIN_STACK: "67108864"
       RUST_BACKTRACE: "1"
       GH_TOKEN: ${{ github.token }}
       NPM_CONFIG_STORE_DIR: .pnpm-store
