@@ -106,10 +106,14 @@ pub fn runtime_without_master_key() -> tokio::runtime::Runtime {
 /// cannot race the old runtime's guard.
 pub async fn finish_runtime_agents(runtime: &openhuman_embed::Runtime) {
     for id in runtime.agent_ids() {
-        runtime
-            .remove_agent(&id)
-            .await
-            .unwrap_or_else(|error| panic!("agent {id:?} cleanup failed: {error}"));
+        match runtime.remove_agent(&id).await {
+            Ok(()) => {}
+            // The background closer can finish between taking this snapshot
+            // and claiming its entry. Only an actually released id is benign.
+            Err(openhuman_embed::AgentError::UnknownId(ref missing))
+                if missing == &id && !runtime.agent_ids().contains(&id) => {}
+            Err(error) => panic!("agent {id:?} cleanup failed: {error}"),
+        }
     }
 }
 
