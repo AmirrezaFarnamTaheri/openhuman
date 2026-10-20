@@ -253,10 +253,8 @@ jobs:
     needs: plan
     if: inputs.profile == 'hosted' && fromJSON(needs.plan.outputs.matrix).include[0] != null
     runs-on: ubuntu-22.04
-    # The complete instrumented Rust suite can exceed 100 minutes on a cold
-    # hosted runner. Keep every test and the diff-coverage gate enabled; only
-    # the coverage group needs the full-run budget used by the private lanes.
-    timeout-minutes: ${{ matrix.group == 'rust-cov' && 180 || 100 }}
+    # Hosted Rust coverage shards run concurrently on independent runners.
+    timeout-minutes: ${{ startsWith(matrix.group, 'rust-cov-') && 180 || 100 }}
     container:
       # Empty for the pester group: pwsh ships on the bare runner image.
       image: ${{ matrix.container }}
@@ -313,18 +311,18 @@ jobs:
         run: bash scripts/ci/checkout-submodules.sh
 
       - name: Cache Rust build artifacts
-        if: matrix.group == 'rust-lint' || matrix.group == 'rust-cov' || matrix.group == 'tauri' || matrix.group == 'storage'
+        if: matrix.group == 'rust-lint' || startsWith(matrix.group, 'rust-cov-') || matrix.group == 'tauri' || matrix.group == 'storage'
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             . -> target
             crates/openhuman-app -> target
-          cache-on-failure: ${{ matrix.group != 'rust-cov' }}
+          cache-on-failure: ${{ !startsWith(matrix.group, 'rust-cov-') }}
           shared-key: ci-fast-${{ matrix.group }}
 
       - name: Prune stale coverage test executables
         # Instrumented test binaries in a restored cache can exhaust the disk.
-        if: matrix.group == 'rust-cov'
+        if: startsWith(matrix.group, 'rust-cov-')
         run: find target/llvm-cov-target -type f -path '*/debug/deps/*' -perm -111 -delete 2>/dev/null || true
 
       - name: Cache pnpm store
@@ -337,7 +335,7 @@ jobs:
             pnpm-store-${{ runner.os }}-
 
       - name: Install cargo-llvm-cov
-        if: matrix.group == 'rust-cov' || matrix.group == 'tauri'
+        if: startsWith(matrix.group, 'rust-cov-') || matrix.group == 'tauri'
         uses: taiki-e/install-action@cargo-llvm-cov
 
       # One step per lane: `Start lanes` launches every lane in the background
@@ -378,9 +376,17 @@ jobs:
         if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'frontend-tests') }}
         run: node scripts/ci/self-hosted/lanes.mjs --wait frontend-tests
 
-      - name: "Lane: Rust core coverage"
-        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'rust-cov') }}
-        run: node scripts/ci/self-hosted/lanes.mjs --wait rust-cov
+      - name: "Lane: Rust library coverage"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'rust-cov-core') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait rust-cov-core
+
+      - name: "Lane: Rust facade coverage"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'rust-cov-facades') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait rust-cov-facades
+
+      - name: "Lane: Rust integration coverage"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'rust-cov-integrations') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait rust-cov-integrations
 
       - name: "Lane: Rust lint + crate tests"
         if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'rust-lint') }}
@@ -408,7 +414,7 @@ jobs:
         run: node scripts/ci/self-hosted/lanes.mjs --wait-all
 
       - name: Prune coverage test executables before cache save
-        if: always() && matrix.group == 'rust-cov'
+        if: always() && startsWith(matrix.group, 'rust-cov-')
         run: find target/llvm-cov-target -type f -path '*/debug/deps/*' -perm -111 -delete 2>/dev/null || true
 
       - name: Upload lane logs, timings and coverage
@@ -464,6 +470,18 @@ jobs:
         with:
           path: ci-artifacts
           pattern: ci-out-*
+
+      - name: Assert whole-tree Rust coverage presence from all three shards
+        if: needs.plan.outputs['rust-core'] == 'true'
+        run: |
+          set -euo pipefail
+          mapfile -t reports < <(find ci-artifacts -type f -name 'lcov-core-*.info' | sort)
+          if [ "${#reports[@]}" -ne 3 ]; then
+            echo "::error::Expected all 3 Rust coverage shards; found ${#reports[@]}."
+            exit 1
+          fi
+          cat "${reports[@]}" > merged-rust-core.info
+          bash scripts/ci/assert-coverage-presence.sh merged-rust-core.info --all
 
       - name: Enforce >= 80% coverage on changed lines
         if: needs.plan.outputs.coverage == 'true'
