@@ -222,6 +222,21 @@ pub async fn mcp_clients_connect(
 ) -> Result<Outcome<Value>, String> {
     let server_id = require(&server_id, "server_id")?;
 
+    // TinyMCP's installed stdio servers are always untrusted. They need the
+    // TinyBox service online before Connect; having its signed library on the
+    // search path is not the same as loading it onto the module bus. HTTP-only
+    // connections keep working when TinyBox is disabled or unavailable.
+    let installed: Vec<tinymcp_bus::InstalledServer> =
+        module_call(config, tinymcp_bus::names::methods::INSTALLED_LIST, ()).await?;
+    if installed.iter().any(|server| {
+        server.server_id == server_id
+            && matches!(server.transport, tinymcp_bus::Transport::Stdio)
+    }) {
+        crate::modules::ensure_loaded(config, "tinybox")
+            .await
+            .map_err(|reason| format!("MCP stdio sandbox is unavailable: {reason}"))?;
+    }
+
     let outcome: tinymcp_bus::ConnectOutcome = module_call(
         config,
         tinymcp_bus::names::methods::CONNECT,
