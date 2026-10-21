@@ -115,6 +115,11 @@ fn one_runtime_hosts_independently_configured_agents() {
             let skills = skills_fixture();
             let beta_action = tempfile::tempdir().expect("beta action dir");
 
+            // Managed inference uses the host-installed chat-model registry,
+            // not the runtime's backend_url as a model endpoint. Point the
+            // managed provider at this test's mock before building the core.
+            common::PointedInference::install(&format!("{}/openai/v1", backend.uri()));
+
             let runtime = std::sync::Arc::new(
                 Runtime::builder()
                     .config(offline_config())

@@ -2905,6 +2905,7 @@ This matrix comes from the default-feature compiled capability-report example. R
 | `flows` | Yes |
 | `hosting` | No |
 | `http-server` | Yes |
+| `inbound-queues` | Yes |
 | `inference` | No |
 | `mcp` | Yes |
 | `media` | Yes |
@@ -2920,7 +2921,6 @@ This matrix comes from the default-feature compiled capability-report example. R
 | `tinymemes` | Yes |
 | `voice` | No |
 | `web3` | No |
-| `whatsapp-web` | No |
 
 <!-- Source: docs/gitbooks/en/developing/embed/builder-setters.md -->
 # RuntimeBuilder setters
@@ -3174,6 +3174,7 @@ The compiled capability report describes this build:
     "flows": true,
     "hosting": false,
     "http-server": true,
+    "inbound-queues": true,
     "inference": false,
     "mcp": true,
     "media": true,
@@ -3188,8 +3189,7 @@ The compiled capability report describes this build:
     "structural-code": true,
     "tinymemes": true,
     "voice": false,
-    "web3": false,
-    "whatsapp-web": false
+    "web3": false
   },
   "domains": [
     "agent",

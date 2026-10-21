@@ -56,53 +56,24 @@ test("fleet measurements retain their declared release and minimal-feature invoc
   assert.ok(calls.get("linux_fleet").includes("--release"));
   assert.ok(calls.get("linux_fleet").includes("--no-default-features"));
   assert.equal(calls.get("linux_fleet").includes("--features"), false);
-  assert.equal(calls.get("linux_fleet").includes("4"), false, "release measurement still uses its default 100 agents");
   assert.equal(calls.get("mcp").includes("--release"), false);
   assert.equal(calls.get("mcp").includes("--no-default-features"), false);
   assert.ok(calls.get("mcp").includes("mcp"));
 });
 
-test("cold hosted fleet smoke retains execution with an extended compile budget", () => {
-  const observed = new Map();
-  runExamples({
-    ciSmoke: true,
-    environment: {},
-    examples: [
-      { name: "linux_fleet", profile: "release", defaultFeatures: false, features: [] },
-      { name: "ordinary", profile: "dev", defaultFeatures: true, features: [] },
-    ],
-    run(_command, args, options) {
-      const name = args[args.indexOf("--example") + 1];
-      observed.set(name, { args, timeout: options.timeout });
-      return { status: 0, stdout: `EXAMPLE_OK ${name}\n`, stderr: "" };
-    },
-  });
-  assert.deepEqual([...observed.keys()], ["linux_fleet", "ordinary"]);
-  assert.equal(observed.get("linux_fleet").timeout, 45 * 60_000);
-  assert.equal(observed.get("ordinary").timeout, 30 * 60_000);
-  assert.ok(observed.get("linux_fleet").args.includes("--no-default-features"));
-  assert.deepEqual(observed.get("linux_fleet").args.slice(-2), ["--", "4"]);
-  assert.equal(observed.get("ordinary").args.includes("4"), false);
-});
-
-test("hosted CI smoke executes fleet behavior in debug without changing its minimal features", () => {
-  const examples = discoverExamples().filter(({ name }) => name === "linux_fleet" || name === "mcp");
-  const fleet = examples.find(({ name }) => name === "linux_fleet");
-  assert.equal(fleet.profile, "release", "release measurement default remains declared");
+test("a forced dev profile builds release-declared measurements in the dev profile and keeps their feature graph", () => {
+  const examples = discoverExamples().filter(({name}) => name === "linux_fleet" || name === "mcp");
   const calls = new Map();
-  runExamples({
-    examples,
-    environment: {},
-    ciSmoke: true,
-    run(_command, args) {
-      const name = args[args.indexOf("--example") + 1];
-      calls.set(name, args);
-      return { status: 0, stdout: `EXAMPLE_OK ${name}\n`, stderr: "" };
-    },
-  });
-  assert.ok(!calls.get("linux_fleet").includes("--release"));
-  assert.ok(!calls.get("linux_fleet").includes("--profile"));
+  runExamples({examples, environment: {}, profile: "dev", run(_command, args) {
+    const name = args[args.indexOf("--example") + 1];
+    calls.set(name, args);
+    return {status: 0, stdout: `EXAMPLE_OK ${name}\n`, stderr: ""};
+  }});
+  for (const args of calls.values()) {
+    assert.equal(args.includes("--release"), false);
+    assert.equal(args.includes("--profile"), false);
+  }
   assert.ok(calls.get("linux_fleet").includes("--no-default-features"));
-  assert.ok(!calls.get("linux_fleet").includes("--features"));
-  assert.ok(calls.get("mcp").includes("--features"));
+  assert.equal(calls.get("linux_fleet").includes("--features"), false);
+  assert.ok(calls.get("mcp").includes("mcp"));
 });

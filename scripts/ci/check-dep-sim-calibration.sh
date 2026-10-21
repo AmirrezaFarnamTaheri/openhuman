@@ -113,7 +113,7 @@ cd "$(dirname "$0")/../.."
 # 316 -> 317: storage-file adds the first-party file driver.
 # 317 -> 318: pre-core registry vocabulary adds the pure tinycomputer-bus.
 
-# This matches the current `flows:321:301:2` entry in
+# This matches the current `flows:334:311:3` entry in
 # scripts/kernel-floor.limits; its preceding entries are historical.
 # 318 -> 313: connector implementation cut (-8) and explicit flows loader (+3).
 # 313 -> 304: current-main runtime removal and combined released module cuts.
@@ -126,12 +126,15 @@ cd "$(dirname "$0")/../.."
 # 302 -> 304 on 2026-10-13: main already resolves 303; the direct `tinymcp`
 # (`ui`) dependency in openhuman-core adds the `tinymcp` name (329 packages /
 # 304 names / 2 native on Linux). See kernel-floor.limits.
-# 304 -> 303 on 2026-10-16: CI on merge base 63c951aea7 measures the flows
-# profile at 326 packages / 303 names / 2 native. See kernel-floor.limits.
-# Post-merge Linux CI run 39169657050 measured 310 names, including the
-# upstream TinyStorageDrivers zstd sealed-stream closure. This calibration
-# remains independent of the 333/310/3 kernel-floor check, and future
-# graph growth must update both with explicit source and CI evidence.
-EXPECTED_NAMES=310
+# 303 -> 301 on 2026-10-16: CI after the upstream/main merge at ba83482245
+# measures the flows profile at 321 packages / 301 names / 2 native.
+# 301 -> 309 on 2026-10-18: configurable storage backends make
+# `tinystoragedrivers-core` (and its zstd closure) always-on; see the
+# 332/309/3 entry in `kernel-floor.limits`.
+# 309 -> 311 on 2026-10-19: `tinyagents-hooks` and `tinystoragedrivers-schema`
+# are split out of tinyagents-harness and tinystoragedrivers-core; see the
+# 334/311/3 entry in `kernel-floor.limits`.
+# See kernel-floor.limits.
+EXPECTED_NAMES=311
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"

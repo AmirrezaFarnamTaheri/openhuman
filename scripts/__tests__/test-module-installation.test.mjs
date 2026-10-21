@@ -63,13 +63,37 @@ test("Linux container workflows stage TinyBus fixtures under the root-owned cont
     );
   }
 
-  const ciFull = readFileSync(
-    new URL("../../.github/workflows/ci-full.yml", import.meta.url),
+  const rustE2eShards = readFileSync(
+    new URL("../../.github/workflows/rust-e2e-shards.yml", import.meta.url),
     "utf8",
   );
+  // Both release and desktop validation delegate to the reusable shard
+  // workflow. Check the actual container job, not the old caller, for a
+  // root-owned, shard-isolated workspace and module directory.
+  for (const workflow of [
+    "../../.github/workflows/ci-full.yml",
+    "../../.github/workflows/e2e-reusable.yml",
+  ]) {
+    const source = readFileSync(new URL(workflow, import.meta.url), "utf8");
+    assert.match(
+      source,
+      /uses:\s+\.\/\.github\/workflows\/rust-e2e-shards\.yml/,
+      `${workflow} must retain its required Rust E2E suite`,
+    );
+  }
   assert.match(
-    ciFull,
-    /OPENHUMAN_XDG_ROOT: \/root\/openhuman-rust-e2e-xdg-\$\{\{ github\.run_id \}\}/,
+    rustE2eShards,
+    /OPENHUMAN_XDG_ROOT: \/root\/openhuman-rust-e2e-\$\{\{ matrix\.group \}\}/,
+  );
+  assert.ok(
+    rustE2eShards.includes(
+      '/root/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.group }}',
+    ),
+    "every independent shard must stage its pinned modules under its own root-owned path",
+  );
+  assert.match(
+    rustE2eShards,
+    /chmod 700 \/root\/openhuman-rust-e2e-\$\{\{ matrix\.group \}\}/,
   );
   const rustE2eRunnerSource = readFileSync(rustE2eRunner, "utf8");
   assert.match(

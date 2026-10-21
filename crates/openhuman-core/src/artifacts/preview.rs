@@ -59,7 +59,7 @@ pub async fn read_body(config: &Config, id: &str) -> Result<ArtifactBody, String
     .get(id)
     .await
     .map_err(|e| e.to_string())?;
-    let record = match versioned {
+    let mut record = match versioned {
         Some(record) => record,
         // An artifact made before versioning has only its legacy record: show
         // the file that record vouches for.
@@ -75,6 +75,13 @@ pub async fn read_body(config: &Config, id: &str) -> Result<ArtifactBody, String
             record
         }
     };
+    // A version's file is kept under a storage key inside the version files
+    // folder; show it by the path it has on disk. A legacy absolute key stays
+    // as it is, since joining an absolute path replaces the base.
+    let kept = super::tiny_store::version_files_dir(&config.workspace_dir);
+    if let Some(file) = record.versions.last_mut().and_then(|v| v.file.as_mut()) {
+        file.key = kept.join(&file.key).display().to_string();
+    }
     let converter = DocumentConverter::for_config(config);
     Ok(body_of(
         &record,
@@ -186,49 +193,21 @@ pub(crate) async fn body_of(
     if !record.holds_file() {
         return preview;
     }
-    let key = latest
+    let path = latest
         .and_then(|v| v.file.as_ref())
         .map_or(stored, |f| f.key.clone());
-    preview.body = key.clone();
-    // Versioned files are stored by a relative, validated FileStore key.
-    // Legacy versions still carry filesystem paths and must pass the trusted
-    // root/credential guard before they can be read.
-    let (bytes, extension) = if key.starts_with("artifacts/files/") {
-        use tiny_artifacts::FileStore;
-        let Some(store_root) = roots.roots().last() else {
-            return preview;
-        };
-        let store = tiny_artifacts::FsFileStore::new(store_root);
-        let Ok(Some(metadata)) = store.metadata(&key).await else {
-            return preview;
-        };
-        if metadata.size_bytes > PREVIEW_MAX_BYTES {
-            return preview;
-        }
-        let Ok(bytes) = store.read(&key).await else {
-            return preview;
-        };
-        let extension = Path::new(&key)
-            .extension()
-            .and_then(|value| value.to_str())
-            .map(str::to_ascii_lowercase);
-        (bytes, extension)
-    } else {
-        let Ok(file) = roots.resolve(&key).await else {
-            return preview;
-        };
-        if file.size_bytes > PREVIEW_MAX_BYTES {
-            return preview;
-        }
-        let Ok(bytes) = tokio::fs::read(&file.path).await else {
-            return preview;
-        };
-        (bytes, file.extension())
+    preview.body = path.clone();
+    // Inside the trusted folders, an existing regular file: anything else is
+    // shown by its path only.
+    let Ok(file) = roots.resolve(&path).await else {
+        return preview;
     };
-    // Recheck against the actual bytes even if metadata raced with a writer.
-    if bytes.len() as u64 > PREVIEW_MAX_BYTES {
+    if file.size_bytes > PREVIEW_MAX_BYTES {
         return preview;
     }
+    let Ok(bytes) = tokio::fs::read(Path::new(&file.path)).await else {
+        return preview;
+    };
     let probe = &bytes[..bytes.len().min(8192)];
     if !probe.contains(&0) && std::str::from_utf8(probe).is_ok() {
         if let Ok(text) = String::from_utf8(bytes) {
@@ -237,7 +216,7 @@ pub(crate) async fn body_of(
         }
         return preview;
     }
-    let Some(extension) = extension else {
+    let Some(extension) = file.extension() else {
         return preview;
     };
     if let Some(markdown) = converter

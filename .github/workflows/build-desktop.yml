@@ -166,7 +166,7 @@ jobs:
         with:
           node-version: 24.x
       - name: Install Rust (rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@1.96.1
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: ${{ matrix.settings.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - name: Ensure macOS cross target on the toolchain-file toolchain

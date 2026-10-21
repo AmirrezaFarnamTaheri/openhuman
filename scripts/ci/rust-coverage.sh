@@ -10,6 +10,17 @@ OUT="${OUT:-lcov-core.info}"
 PRODUCT_FEATURES="$(bash scripts/ci/product-features.sh)"
 CORE_PRODUCT_FEATURES="$(bash scripts/ci/product-features.sh --core)"
 
+# Hosted CI runs three independent instrumented jobs. The EX63 private runner
+# and local command keep the complete suite in one invocation by default.
+COV_SHARD="${OH_COV_SHARD:-full}"
+case "$COV_SHARD" in
+  full | core | facades | integrations) ;;
+  *) echo "::error::Unknown Rust coverage shard: $COV_SHARD" >&2; exit 2 ;;
+esac
+has_cov_section() {
+  [ "$COV_SHARD" = "full" ] || [ "$COV_SHARD" = "$1" ]
+}
+
 # Sandboxed acting-tool tests deliberately do not forward RUSTUP_HOME. The
 # container installs Rust outside HOME, so its rustup proxy otherwise tries
 # to create ~/.rustup inside the write-confined jail. Put the already selected
@@ -217,7 +228,7 @@ if [ "${OH_COV_RUNNER:-cargo}" = "nextest" ]; then
   export LLVM_PROFILE_FILE_NAME="${LLVM_PROFILE_FILE_NAME:-openhuman-%8m.profraw}"
 fi
 
-log "running complete instrumented Rust suite (runner: ${OH_COV_RUNNER:-cargo})"
+log "running ${COV_SHARD} instrumented Rust suite (runner: ${OH_COV_RUNNER:-cargo})"
 llvm_cov clean --workspace
 
 # The storage-host cdylib tests load a real fixture module. Left to the tests,
@@ -257,6 +268,7 @@ trap preserve_coverage EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 
+if has_cov_section core; then
 if [ "${OH_COV_RUNNER:-cargo}" = "nextest" ]; then
   # One process per test isolates process globals without separate target dirs.
   suite "openhuman lib+bins (nextest)" llvm_cov --no-report --no-fail-fast -p openhuman --lib --bins
@@ -271,10 +283,12 @@ else
   log "running isolated build-only reaper test"
   run_build_only_reaper_test
 fi
+fi # core
 
 # Run every root-workspace Rust support crate rather than only crates named by
 # changed paths. Product features are forwarded to the embedding facade; the
 # remaining crates do not expose that feature vocabulary.
+if has_cov_section facades; then
 suite "openhuman-embed" llvm_cov_embed --no-report --no-fail-fast -p openhuman-embed --all-targets
 suite "openhuman-rpc" llvm_cov_package --no-report --no-fail-fast -p openhuman-rpc --all-targets
 suite "openhuman-tinyhumans" llvm_cov_product_facade --no-report --no-fail-fast -p openhuman-tinyhumans --all-targets
@@ -292,7 +306,9 @@ if [ "${OH_COV_TUI:-1}" = "1" ]; then
 else
   log "skipping openhuman-tui (OH_COV_TUI=${OH_COV_TUI})"
 fi
+fi # facades
 
+if has_cov_section integrations; then
 if [ "${OH_COV_RUNNER:-cargo}" = "nextest" ]; then
   # Every integration target in one parallel run, one process per test: the
   # raw_coverage modules and the JSON-RPC tests are then isolated from each
@@ -332,17 +348,20 @@ else
     run_integration_target "${target}"
   done < <(integration_test_targets)
 fi
+fi # integrations
 
 # Doctests are not collected by cargo-llvm-cov, but they are still part of the
 # complete Rust test suite and must run whenever the Rust-core area changes.
 # They compile their own uninstrumented core, so a caller that runs them in a
 # parallel lane instead (CI Fast on the EX63) sets OH_COV_DOCTESTS=0.
+if has_cov_section core; then
 if [ "${OH_COV_DOCTESTS:-1}" = "1" ]; then
   suite "openhuman doctests" bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
     --doc --features "${PRODUCT_FEATURES}"
 else
   log "skipping doctests (OH_COV_DOCTESTS=${OH_COV_DOCTESTS}); the caller runs them"
 fi
+fi # core
 
 log "merging coverage into ${OUT}"
 suite "lcov report" llvm_cov report --lcov --output-path "${OUT}"
@@ -354,8 +373,14 @@ COVERAGE_REPORTED=1
 presence_skip=""
 [ "${OH_COV_TUI:-1}" = "1" ] || presence_skip="crates/openhuman-tui/src/"
 [ -z "${presence_skip}" ] || log "coverage presence: not checking ${presence_skip} (suite skipped)"
-suite "coverage presence" env COVERAGE_PRESENCE_SKIP_PREFIXES="${presence_skip}" \
-  bash scripts/ci/assert-coverage-presence.sh "${OUT}" --all
+if [ "$COV_SHARD" = "full" ]; then
+  suite "coverage presence" env COVERAGE_PRESENCE_SKIP_PREFIXES="${presence_skip}" \
+    bash scripts/ci/assert-coverage-presence.sh "${OUT}" --all
+else
+  # Partial LCOV files cannot satisfy whole-tree presence individually.
+  # The hosted CI gate concatenates all three and enforces the original --all check.
+  log "whole-tree coverage presence deferred to the hosted aggregate gate"
+fi
 
 if [ "${#FAILED_SUITES[@]}" -gt 0 ]; then
   log "${#FAILED_SUITES[@]} suite(s) failed:"

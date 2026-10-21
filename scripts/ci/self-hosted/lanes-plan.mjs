@@ -53,7 +53,11 @@ export const HOSTED_GROUPS = [
     maxParallel: 1,
     container: true,
   },
-  { group: "rust-cov", lanes: ["rust-cov"], maxParallel: 1, container: true },
+  // Hosted coverage uses separate runners for the library, facade crates and
+  // CLI integration suites. They run at once and each emits an LCOV artifact.
+  { group: "rust-cov-core", lanes: ["rust-cov-core"], maxParallel: 1, container: true },
+  { group: "rust-cov-facades", lanes: ["rust-cov-facades"], maxParallel: 1, container: true },
+  { group: "rust-cov-integrations", lanes: ["rust-cov-integrations"], maxParallel: 1, container: true },
   { group: "tauri", lanes: ["tauri"], maxParallel: 1, container: true },
   // The storage drivers build the core with features no other lane enables,
   // so they get a runner (and a `target/`) of their own.
@@ -655,6 +659,47 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
       ],
     },
   ];
+
+  // Private EX63 runs a single instrumented lane with warm shared targets.
+  // Hosted runs independently instrumented shards on parallel runners. Each
+  // shard includes every suite in its category; the gate merges all LCOV data
+  // before enforcing whole-tree presence and changed-line coverage.
+  if (!ex63) {
+    const coverageIndex = lanes.findIndex((lane) => lane.name === "rust-cov");
+    const [complete] = lanes.splice(coverageIndex, 1);
+    if (!complete) throw new Error("missing Rust coverage lane");
+    const shards = ["core", "facades", "integrations"];
+    lanes.splice(
+      coverageIndex,
+      0,
+      ...shards.map((shard) => {
+        const name = `rust-cov-${shard}`;
+        return {
+          ...complete,
+          name,
+          checks: complete.checks.map((check) => {
+            if (check.name === "test-modules") {
+              return {
+                ...check,
+                run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir(name)}" ${laneModuleEnv(name)}`,
+              };
+            }
+            if (check.name === "rust-core-coverage") {
+              return {
+                ...check,
+                env: {
+                  ...check.env,
+                  OH_COV_SHARD: shard,
+                  OUT: `ci-out/lcov/lcov-core-${shard}.info`,
+                },
+              };
+            }
+            return check;
+          }),
+        };
+      }),
+    );
+  }
 
   // Coverage replaces each existing plain suite only for the private profile.
   // Preserve the original package, features, target list, and libtest substring

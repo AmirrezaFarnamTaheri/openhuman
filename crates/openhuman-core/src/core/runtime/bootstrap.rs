@@ -34,6 +34,12 @@ pub(crate) async fn bootstrap_core_runtime(
     };
     let workspace_dir = cfg.workspace_dir.clone();
 
+    // The workflow metadata loader is synchronous. Start module-owned resource
+    // acquisition before any subscriber or session snapshots it, but keep the
+    // optional download outside the critical bootstrap path.
+    #[cfg(all(feature = "flows", feature = "skills"))]
+    crate::skills::schedule_flow_authoring_prewarm(ctx, &cfg, Some(domains));
+
     // --- Legacy store import ---------------------------------------------
     // With a storage backend installed, bring the workspace's per-domain
     // SQLite files (approvals, devices, notifications, task sources) into it
@@ -247,7 +253,7 @@ pub(crate) async fn bootstrap_core_runtime(
     // Gated on the Skills domain (#4808 review): under `harness()`/`none()` the
     // skills controllers are absent, so their trigger subscriber must not install.
     if domains.allows(crate::core::all::DomainGroup::Skills) {
-        crate::skills::bus::ensure_triggered_workflow_subscriber(&workspace_dir);
+        crate::skills::bus::ensure_triggered_workflow_subscriber_for(ctx, &cfg, Some(domains));
     } else {
         log::debug!("[boot] triggered-workflow subscriber SKIPPED — Skills domain disabled");
     }
@@ -385,6 +391,7 @@ pub(crate) async fn bootstrap_core_runtime(
 pub(crate) async fn start_core_runtime_services(
     services: crate::core::runtime::ServiceSet,
     config: Option<&crate::config::Config>,
+    ctx: &std::sync::Arc<crate::core::runtime::CoreContext>,
 ) {
     let Some(cfg) = config else {
         log::error!(
@@ -402,7 +409,11 @@ pub(crate) async fn start_core_runtime_services(
 
     match crate::platform::socket::global_socket_manager() {
         Some(socket_mgr) => {
-            crate::core::runtime::services::spawn_socket_auto_connect(services, socket_mgr.clone());
+            crate::core::runtime::services::spawn_socket_auto_connect(
+                services,
+                socket_mgr.clone(),
+                ctx,
+            );
         }
         None => {
             log::warn!(

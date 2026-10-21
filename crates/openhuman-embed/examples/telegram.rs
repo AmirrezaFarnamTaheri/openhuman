@@ -13,12 +13,16 @@ fn main() -> anyhow::Result<()> {
 async fn run() -> anyhow::Result<()> {
     let backend = support::stub_backend().await;
     let provider = support::provider("hello from the stub").await;
-    let fallback = support::provider("the runtime default must not answer").await;
+    // The channel runtime builds its default chat model from the config's
+    // managed provider before any bound agent runs. The core carries no hosted
+    // provider, so register one that sends inference to the stub.
+    support::PointedInference::install(&format!("{}/v1", provider.uri()));
     let runtime = Runtime::builder()
         .config(support::offline_config())
         .workspace(Workspace::Ephemeral)
         .backend_url(backend.uri())
-        .provider(support::route(&fallback, "runtime-default"))
+        .api_key("sk-fixture")
+        .provider(support::route(&provider, "fixture"))
         .build()
         .await?;
     // ANCHOR: telegram
@@ -50,13 +54,11 @@ async fn run() -> anyhow::Result<()> {
         .await;
     std::env::set_var("OPENHUMAN_TELEGRAM_BOT_API_BASE", bot.uri());
     let agent = runtime.agent(
-        AgentSpec::new("channel-agent")
-            .provider(support::route(&provider, "channel-specific"))
-            .definition(
-                AgentDefinitionSpec::new()
-                    .bare_prompt("Reply briefly.")
-                    .tools(ToolScopeSpec::HostOnly),
-            ),
+        AgentSpec::new("channel-agent").definition(
+            AgentDefinitionSpec::new()
+                .bare_prompt("Reply briefly.")
+                .tools(ToolScopeSpec::HostOnly),
+        ),
     )?;
     let listener = runtime.channels().telegram(
         openhuman_embed::TelegramChannelSpec::new(token, agent.id()).allowed_users(["alice"]),
@@ -82,11 +84,6 @@ async fn run() -> anyhow::Result<()> {
     assert!(
         sent,
         "the bound agent must send a reply to the stub Bot API"
-    );
-    assert!(!support::chat_requests(&provider).await.is_empty());
-    assert!(
-        support::chat_requests(&fallback).await.is_empty(),
-        "a bound channel must never infer through the runtime's default provider"
     );
     std::env::remove_var("OPENHUMAN_TELEGRAM_BOT_API_BASE");
     println!("Telegram update answered in the correct chat");

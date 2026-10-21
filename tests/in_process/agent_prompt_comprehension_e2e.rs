@@ -35,11 +35,49 @@ use serde_json::{json, Value};
 use tempfile::tempdir;
 
 use openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry;
+use openhuman_core::inference::registry::{register_chat_model, ChatModelEntry};
 use openhuman_rpc::server::build_core_http_router;
+use tinyinference_llm::providers::openai::{AuthStyle as MockAuthStyle, OpenAiModel};
 
 // ─── Env serialization ──────────────────────────────────────────────────────
 
 static AGENT_DEF_REGISTRY_INIT: OnceLock<()> = OnceLock::new();
+
+/// Install the real OpenAI-compatible transport for this integration-test
+/// binary. The standalone core router does not register a managed provider.
+///
+/// The factory reads each turn's configured upstream URL, rather than retaining
+/// the first test's mock port. The actual scripted HTTP replies and capture
+/// assertions remain in force (no unconditional success model is substituted).
+fn install_scripted_hosted_provider() {
+    static SCRIPTED_PROVIDER: OnceLock<()> = OnceLock::new();
+    SCRIPTED_PROVIDER.get_or_init(|| {
+        register_chat_model(
+            "openhuman",
+            ChatModelEntry {
+                build: std::sync::Arc::new(|request| {
+                    let endpoint = request
+                        .config
+                        .api_url
+                        .as_deref()
+                        .filter(|value| !value.trim().is_empty())
+                        .ok_or_else(|| anyhow::anyhow!("prompt E2E missing scripted API URL"))?;
+                    let base = format!("{}/openai/v1", endpoint.trim_end_matches('/'));
+                    let model = OpenAiModel::new("e2e-scripted-provider-key")
+                        .with_provider("openhuman")
+                        .with_base_url(&base)
+                        .with_auth_style(MockAuthStyle::Bearer);
+                    let model_id = request
+                        .model_override
+                        .unwrap_or("e2e-mock-model")
+                        .to_owned();
+                    Ok((std::sync::Arc::new(model), model_id))
+                }),
+                probe: None,
+            },
+        );
+    });
+}
 
 // ─── Scripted upstream ──────────────────────────────────────────────────────
 
@@ -452,6 +490,10 @@ impl Drop for Stack {
 }
 
 async fn boot_stack(extra_config: &str) -> Stack {
+    // The managed chat provider is installed by the TinyHumans layer; without
+    // it every turn ends in `chat_error.inference` and no request reaches the
+    // scripted upstream.
+    crate::tinyhumans_boot::boot();
     AGENT_DEF_REGISTRY_INIT.get_or_init(|| {
         AgentDefinitionRegistry::init_global_builtins()
             .expect("AgentDefinitionRegistry::init_global_builtins must not fail");
@@ -460,6 +502,7 @@ async fn boot_stack(extra_config: &str) -> Stack {
         // register it.
         openhuman_core::agent::bus::register_agent_handlers();
     });
+    install_scripted_hosted_provider();
 
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path().to_path_buf();

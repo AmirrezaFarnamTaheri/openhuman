@@ -34,11 +34,22 @@ test("full Rust core tests have time to finish under hosted load", () => {
   );
 });
 
-test("Linux Rust integration E2E has time to finish the complete suite", () => {
+test("independent Linux Rust integration E2E shards have time to finish the complete suite", () => {
+  // The former rust-e2e-linux runner is now a reusable workflow caller; the
+  // actual timeout belongs to each worker shard, not that caller.
+  for (const [workflow, job] of [
+    [".github/workflows/e2e-reusable.yml", "rust-e2e-linux"],
+    [".github/workflows/ci-full.yml", "rust-e2e"],
+  ]) {
+    assert.match(
+      workflowJob(workflow, job),
+      /uses:\s+\.\/\.github\/workflows\/rust-e2e-shards\.yml/,
+      `${workflow} must require the complete Rust E2E shard suite`,
+    );
+  }
   assert.ok(
-    timeoutMinutes(".github/workflows/e2e-reusable.yml", "rust-e2e-linux") >=
-      60,
-    "the full Rust integration E2E lane needs at least an hour on hosted runners",
+    timeoutMinutes(".github/workflows/rust-e2e-shards.yml", "shard") >= 60,
+    "every independent Rust integration E2E shard needs at least an hour on hosted runners",
   );
 });
 

@@ -69,6 +69,36 @@ impl McpModulePort for RegistryPort {
         _confidential: bool,
     ) -> Result<Value, ModuleCallError> {
         match member {
+            // Every transport is represented in the installed inventory. The
+            // fixture uses HTTP installs deliberately: list-tools unit tests
+            // must not require a TinyBox jail or an external MCP process.
+            tinymcp_bus::names::methods::INSTALLED_LIST => {
+                let installed = self
+                    .statuses
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .map(|status| tinymcp_bus::InstalledServer {
+                        server_id: status.server_id.clone(),
+                        qualified_name: status.qualified_name.clone(),
+                        display_name: status.display_name.clone(),
+                        description: None,
+                        icon_url: None,
+                        command_kind: tinymcp_bus::CommandKind::Binary,
+                        command: String::new(),
+                        args: Vec::new(),
+                        env_keys: Vec::new(),
+                        config: None,
+                        installed_at: 0,
+                        last_connected_at: None,
+                        transport: tinymcp_bus::Transport::HttpRemote {
+                            url: "https://example.test/mcp".to_owned(),
+                        },
+                        enabled: true,
+                    })
+                    .collect::<Vec<_>>();
+                serde_json::to_value(installed).map_err(|_| ModuleCallError::ModuleFault)
+            }
             tinymcp_bus::names::methods::STATUS => {
                 serde_json::to_value(self.statuses.lock().unwrap().clone())
                     .map_err(|_| ModuleCallError::ModuleFault)

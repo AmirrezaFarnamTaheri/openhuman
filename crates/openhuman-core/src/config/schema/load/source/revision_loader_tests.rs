@@ -126,7 +126,7 @@ impl Drop for RuntimeProxyRestore {
     }
 }
 
-// The channel host adapter is only compiled with the channels feature.
+// The allowlist store lives in `channels::host`, which the gates-off build omits.
 #[cfg(feature = "channels")]
 #[tokio::test]
 async fn channel_allowlist_store_loads_a_versioned_document_before_saving() {
@@ -202,7 +202,7 @@ async fn recovery_restores_the_bootstrap_file_when_document_cas_conflicts() {
     let external = config_at(tmp.path(), "concurrent-document-writer");
     external.save().await.unwrap();
 
-    let error = crate::config::schema::load::branches::save_recovered(&recovered, source.as_ref())
+    let error = super::super::super::super::branches::save_recovered(&recovered, source.as_ref())
         .await
         .unwrap_err();
     assert!(

@@ -40,7 +40,6 @@ vi.mock('./pages/dev/UiGallery', () => ({ default: () => <div /> }));
 vi.mock('./pages/Invites', () => ({ default: () => <div /> }));
 vi.mock('./pages/Notifications', () => ({ default: () => <div /> }));
 vi.mock('./pages/onboarding/Onboarding', () => ({ default: () => <div /> }));
-vi.mock('./pages/PttOverlayPage', () => ({ PttOverlayPage: () => <div /> }));
 vi.mock('./pages/Settings', () => ({ default: () => <div /> }));
 vi.mock('./pages/Welcome', () => ({ default: () => <div /> }));
 vi.mock('./pages/WebCallbackPage', () => ({ default: () => <div /> }));
@@ -90,14 +89,6 @@ function renderAt(entry: string) {
     page: () => screen.queryByTestId('page')?.textContent,
   };
 }
-
-describe('route-level code splitting', () => {
-  it('keeps a readable fallback visible while loading a secondary feature', async () => {
-    renderAt('/connections');
-    expect(screen.getByTestId('route-loading')).toBeInTheDocument();
-    expect((await screen.findByTestId('page')).textContent).toBe('connections');
-  });
-});
 
 describe('connections / channels back-compat redirects (real route table)', () => {
   it('/skills lands on /connections and renders the Connections page', async () => {

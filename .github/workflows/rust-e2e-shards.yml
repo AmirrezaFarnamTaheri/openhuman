@@ -1,0 +1,143 @@
+---
+# Complete Rust E2E target inventory, divided into independently labelled jobs.
+# Both CI Full and the early PR diagnostic caller use these same required suites.
+name: Rust E2E (sharded)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact ref or SHA; empty checks out caller's ref.
+        type: string
+        default: ""
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+# The container's default /bin/sh rejects pipefail; the per-target runner
+# uses Bash arrays, here-strings and strict pipeline error propagation.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Inventory Rust E2E targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.inventory.outputs.matrix }}
+    steps:
+      - name: Checkout test inventory
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests
+            scripts/ci/rust-e2e-shards.mjs
+      - name: Verify every target has exactly one shard
+        run: node scripts/ci/rust-e2e-shards.mjs --verify
+      - name: Publish matrix
+        id: inventory
+        run: echo "matrix=$(node scripts/ci/rust-e2e-shards.mjs --matrix)" >> "$GITHUB_OUTPUT"
+
+  shard:
+    name: Rust E2E / ${{ matrix.group }} (${{ matrix.count }} targets)
+    needs: plan
+    runs-on: ubuntu-22.04
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      # Agent, JSON-RPC and MCP suites can spawn nested async test tasks. Keep
+      # Rust-created test threads above the 64 MiB stack used by the deepest
+      # agent and provider paths.
+      RUST_MIN_STACK: "67108864"
+      RUST_BACKTRACE: "1"
+      GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
+    steps:
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout exact source and submodules
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: recursive
+      - name: Trust checkout and submodules
+        run: bash scripts/ci/trust-checkout.sh
+      - name: Restore pnpm store
+        uses: actions/cache@v6
+        with:
+          path: .pnpm-store
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+      - name: Restore Rust test build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+          cache-on-failure: true
+          shared-key: rust-e2e-${{ matrix.group }}
+      - name: Install test dependencies
+        run: bash scripts/ci-cancel-aware.sh pnpm install --frozen-lockfile
+      - name: Prepare test environment
+        run: |
+          touch .env app/.env
+          mkdir -p /root/openhuman-rust-e2e-${{ matrix.group }}
+          chmod 700 /root/openhuman-rust-e2e-${{ matrix.group }}
+      - name: Stage checksum-pinned native test modules
+        run: |
+          module_root="/root/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.group }}"
+          bash scripts/ci/self-hosted/install-test-modules.sh "$module_root" "$module_root/modules.env"
+          cat "$module_root/modules.env" >> "$GITHUB_ENV"
+      - name: Run every suite and report its precise failure
+        env:
+          RUST_E2E_SHARD: ${{ matrix.group }}
+          OPENHUMAN_XDG_ROOT: /root/openhuman-rust-e2e-${{ matrix.group }}
+        run: |
+          set -euo pipefail
+          targets="$(node scripts/ci/rust-e2e-shards.mjs --group "$RUST_E2E_SHARD")"
+          test -n "$targets" || { echo '::error::Empty Rust E2E shard'; exit 2; }
+          failures=0
+          executed=0
+          expected="$(grep -c . <<< "$targets")"
+          while IFS= read -r target; do
+            test -n "$target" || continue
+            executed=$((executed + 1))
+            echo "::group::Rust E2E ${target}"
+            # Isolate the runner's stdin from the target-list reader; a test
+            # child that calls read(0) must never consume unexecuted suites.
+            if bash scripts/ci-cancel-aware.sh bash scripts/test-rust-e2e.sh --suite "$target" < /dev/null; then
+              echo "- PASS: ${target}" >> "$GITHUB_STEP_SUMMARY"
+            else
+              status=$?
+              echo "::error title=Rust E2E ${target}::${target} failed (exit ${status})"
+              echo "- FAIL: ${target} (exit ${status})" >> "$GITHUB_STEP_SUMMARY"
+              failures=$((failures + 1))
+              if [ "$status" -eq 130 ] || [ "$status" -eq 143 ]; then
+                exit "$status"
+              fi
+            fi
+            echo "::endgroup::"
+          done <<< "$targets"
+          if [ "$executed" -ne "$expected" ]; then
+            echo "::error::Shard ${RUST_E2E_SHARD} executed ${executed}/${expected} targets"
+            exit 1
+          fi
+          if [ "$failures" -gt 0 ]; then
+            echo "::error::${failures} Rust E2E target(s) failed in shard ${RUST_E2E_SHARD}"
+            exit 1
+          fi

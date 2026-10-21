@@ -2,8 +2,7 @@ import * as Sentry from '@sentry/react';
 import { useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
 import {
-  createHashRouter,
-  RouterProvider,
+  HashRouter as Router,
   useLocation,
   useNavigate,
   useNavigationType,
@@ -12,12 +11,12 @@ import { PersistGate } from 'redux-persist/integration/react';
 
 import AppRoutes from './AppRoutes';
 import { AnalyticsPageTracker } from './components/analytics';
+import AnnouncementGate from './components/Announcement/AnnouncementGate';
 import AppBackground from './components/AppBackground';
 import AppUpdatePrompt from './components/AppUpdatePrompt';
 import BootCheckGate from './components/BootCheckGate/BootCheckGate';
 import CommandProvider from './components/commands/CommandProvider';
 import ServiceBlockingGate from './components/daemon/ServiceBlockingGate';
-import DictationHotkeyManager from './components/DictationHotkeyManager';
 import ErrorFallbackScreen from './components/ErrorFallbackScreen';
 import KeyringConsentOverlay from './components/keyring/KeyringConsentOverlay';
 import AppSidebar from './components/layout/shell/AppSidebar';
@@ -30,12 +29,10 @@ import WindowsWindowControls, {
 import NoticeCenter from './components/notices/NoticeCenter';
 import OpenhumanLinkModal from './components/OpenhumanLinkModal';
 import PersistRehydrationScreen from './components/PersistRehydrationScreen';
-import PttHotkeyManager from './components/PttHotkeyManager';
 import SecurityBanner from './components/SecurityBanner';
 import { Toaster } from './components/ui/Toast';
 import AppWalkthrough from './components/walkthrough/AppWalkthrough';
 import { useDevSkipOnboarding } from './hooks/useDevSkipOnboarding';
-import { useNotchBootSync } from './hooks/useNotchBootSync';
 import { I18nProvider } from './lib/i18n/I18nContext';
 import {
   startNativeNotificationsService,
@@ -72,9 +69,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose(stopBootServicesForHmr);
 }
 
-type AppDataRouterInstance = ReturnType<typeof createHashRouter>;
-
-function App({ router }: { router: AppDataRouterInstance }) {
+function App() {
   const onMobile = getIsMobile();
 
   // The desktop shell is one webview with no back button, so a link that
@@ -115,7 +110,7 @@ function App({ router }: { router: AppDataRouterInstance }) {
    * 7. CoreStateProvider — Core app snapshot: auth, session, onboarding state
    * 8. SocketProvider — Core socket.io events; desktop only (mobile uses the TunnelTransport relay)
    * 9. ChatRuntimeProvider — Chat runtime events, tool timeline, and approvals
-   * 10. AppDataRouter — Hash-based data routing that supports navigation blockers
+   * 10. Router — HashRouter navigation for all routes
    * 11. CommandProvider — Command palette context
    * 12. ServiceBlockingGate — Blocks the shell until required services are configured
    * @end-source:provider-chain
@@ -142,7 +137,18 @@ function App({ router }: { router: AppDataRouterInstance }) {
                   <CoreStateProvider>
                     {socketWrapped(
                       <ChatRuntimeProvider>
-                        <AppDataRouter router={router} />
+                        <Router>
+                          <CommandProvider>
+                            <ServiceBlockingGate>
+                              <AnalyticsPageTracker />
+                              <AppShell />
+                              <SecurityBanner />
+                              {!onMobile && <AppUpdatePrompt />}
+                              <KeyringConsentOverlay />
+                              <AnnouncementGate />
+                            </ServiceBlockingGate>
+                          </CommandProvider>
+                        </Router>
                       </ChatRuntimeProvider>
                     )}
                   </CoreStateProvider>
@@ -156,50 +162,10 @@ function App({ router }: { router: AppDataRouterInstance }) {
   );
 }
 
-/**
- * Use a hash-based data router so edited workflows can block any client-side
- * navigation, including sidebar actions, shortcuts, the command palette and
- * history navigation. A plain HashRouter does not expose useBlocker.
- *
- * main.tsx creates this once after hash and user bootstrap, before rendering
- * React. Keeping creation outside render avoids duplicate history listeners
- * during StrictMode replay and preserves direct-entry hashes.
- */
-export function createAppDataRouter(): AppDataRouterInstance {
-  return createHashRouter([{ path: '/*', element: <AppDataRoutes /> }]);
-}
-
-function AppDataRoutes() {
-  const onMobile = getIsMobile();
-  return (
-    <CommandProvider>
-      <ServiceBlockingGate>
-        <AnalyticsPageTracker />
-        <AppShell />
-        <SecurityBanner />
-        {!onMobile && <DictationHotkeyManager />}
-        {!onMobile && <PttHotkeyManager />}
-        {!onMobile && <AppUpdatePrompt />}
-        <KeyringConsentOverlay />
-        {/* Runtime notices and announcements remain available across routes on
-            desktop and mobile without interrupting the current task. */}
-        <NoticeCenter />
-      </ServiceBlockingGate>
-    </CommandProvider>
-  );
-}
-
-function AppDataRouter({ router }: { router: AppDataRouterInstance }) {
-  return <RouterProvider router={router} />;
-}
-
 /** Minimal mobile shell — renders routes only, no desktop chrome. */
 function AppShellMobile() {
   return (
-    <div
-      className="relative h-screen flex flex-col overflow-hidden bg-[#0f1117]"
-      data-app-focus-fallback
-      tabIndex={-1}>
+    <div className="relative h-screen flex flex-col overflow-hidden bg-[#0f1117]">
       <AppRoutes />
     </div>
   );
@@ -260,10 +226,6 @@ export function AppShellDesktop() {
     navigate,
   ]);
 
-  // Sync the notch indicator to the persisted always-on listening state once
-  // the core is ready (once per boot). Extracted to a hook so it's testable.
-  useNotchBootSync(isBootstrapping);
-
   const scrollRef = useRef<HTMLDivElement>(null);
   const navType = useNavigationType();
 
@@ -314,6 +276,11 @@ export function AppShellDesktop() {
           )}
         </div>
         <OpenhumanLinkModal />
+        {/* Every notice the app raises, in one bottom-left FAB: classified
+            runtime errors (#3931), the memory-embedding budget (#5324), plan
+            usage limits. Mounted outside the routes so entries survive route
+            changes and background-job completion. */}
+        <NoticeCenter />
         {/* Post-onboarding Joyride walkthrough — mounted here (outside routes) so
             it persists across tab navigations. Joyride targets span Home + the
             sidebar nav so it must stay mounted while the user moves between routes. */}

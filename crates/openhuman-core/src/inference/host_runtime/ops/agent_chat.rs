@@ -457,7 +457,18 @@ pub async fn agent_chat_reply_for(
             agent.set_workspace_descriptor(Some(tinytools::WorkspaceDescriptor::new(root.clone())));
             agent
         }
-        None => build_turn_agent(&turn_ctx, config, &target, turn_session_id, temperature)?,
+        None => {
+            let mut agent =
+                build_turn_agent(&turn_ctx, config, &target, turn_session_id, temperature)?;
+            // An ordinary turn still acts from the agent's configured action
+            // directory. Make the descriptor explicit just as for a cwd
+            // override: shell tools and tool hooks must report the same root,
+            // rather than falling back to the unrelated session workspace.
+            agent.set_workspace_descriptor(Some(tinytools::WorkspaceDescriptor::new(
+                config.action_dir.clone(),
+            )));
+            agent
+        }
     };
     // Thread-correct resume. `OpenHumanSessionHost::turn` would otherwise auto-load the
     // newest transcript for the agent *name*, which is another thread's

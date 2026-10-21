@@ -15,7 +15,7 @@ use crate::agent::prompts::{PromptContext, SubagentRenderOptions};
 use crate::agent::session_host::dedup_visible_tool_specs;
 use crate::agent::subagent_host::definition_iter_cap;
 use crate::agent::subagent_host::tool_prep::{
-    filter_tool_indices, is_subagent_spawn_tool, load_prompt_source, subagent_prompt_protocol,
+    filter_tool_indices, is_subagent_spawn_tool, subagent_prompt_protocol,
 };
 use crate::agent::subagent_host::types::{
     SubagentMode, SubagentRunError, SubagentRunOptions, SubagentRunOutcome,
@@ -23,7 +23,10 @@ use crate::agent::subagent_host::types::{
 use crate::agent::tinyagents::budget::MAX_SPAWN_DEPTH;
 use crate::agent_registry::host_definition::{AgentDefinition, AgentDefinitionRegistry};
 use crate::inference::provider::AGENT_TURN_MAX_OUTPUT_TOKENS;
-use tinyagents_definition::{IterationPolicy, PromptSource, SandboxMode as AgentSandboxMode};
+use tinyagents_definition::{
+    validate_tier_transition, AgentTier, IterationPolicy, PromptSource,
+    SandboxMode as AgentSandboxMode,
+};
 use tinyagents_harness::context::{current_run_depth, with_run_depth, RunConfig, RunDepth};
 use tinytools::{SandboxMode as TinyagentsSandboxMode, ToolSpec, WorkspaceDescriptor};
 use tinytools_std::file_state::with_file_state_agent_id;
@@ -31,9 +34,60 @@ use tinytools_std::file_state::with_file_state_agent_id;
 use super::prompt::compose_subagent_system_prompt;
 use super::provider::resolve_subagent_source;
 
-#[path = "runner_tier.rs"]
-mod tier;
-pub(super) use tier::tier_gate_decision;
+#[path = "runner_prompt.rs"]
+mod runner_prompt;
+use runner_prompt::load_typed_prompt_source;
+
+/// Runtime spawn-hierarchy gate decision for one delegation hop.
+///
+/// `parent_def` is the resolved parent agent definition (looked up from the
+/// global registry by its definition id) or `None` when the parent can't be
+/// resolved — e.g. a dynamically-named agent (model-council juror) or a custom
+/// agent absent from the registry, or any context where the registry isn't
+/// initialised. A `None` parent yields `Ok(())`: we skip rather than mask, the
+/// same defensive posture the loader takes for unknown child ids.
+///
+/// A **worker** parent is also exempted. A worker's `subagents` list holds no
+/// agent id (the loader rejects one), so any spawn it reaches at runtime is
+/// one the host dispatched for it. Re-denying it here would turn valid custom
+/// worker agents that use `{ skills = "*" }` into runtime failures. The
+/// worker-leaf authoring rule stays enforced statically at boot, and the
+/// per-parent allowlist gate blocks any other worker spawn.
+///
+/// For chat / reasoning parents the hop is checked against
+/// [`validate_tier_transition`] (the single source of truth shared with the
+/// boot loader walk); a forbidden hop is logged and becomes a
+/// [`SubagentRunError::TierViolation`]. Logging lives here (rather than at the
+/// call site) so the deny path is exercised by this fn's unit tests.
+pub(super) fn tier_gate_decision(
+    parent_def: Option<&AgentDefinition>,
+    child: &AgentDefinition,
+    parent_agent_id: &str,
+    task_id: &str,
+) -> Result<(), SubagentRunError> {
+    let Some(parent_def) = parent_def else {
+        return Ok(());
+    };
+    if parent_def.agent_tier == AgentTier::Worker {
+        return Ok(());
+    }
+    if let Err(reason) = validate_tier_transition(parent_def.agent_tier, child.agent_tier) {
+        tracing::warn!(
+            parent_agent = %parent_agent_id,
+            parent_tier = %parent_def.agent_tier,
+            child_agent = %child.id,
+            child_tier = %child.agent_tier,
+            task_id = %task_id,
+            "[subagent_host] blocked tier-violating delegation: {reason}"
+        );
+        return Err(SubagentRunError::TierViolation {
+            parent_tier: parent_def.agent_tier,
+            child_tier: child.agent_tier,
+            reason,
+        });
+    }
+    Ok(())
+}
 
 /// Run a sub-agent based on its definition and a task prompt.
 ///
@@ -149,12 +203,6 @@ pub(crate) async fn run_subagent_direct_with_native_context(
                 });
             }
         }
-
-        options.context = crate::agent::orchestration::coding_handoff::prepare_context(
-            options.context.take(),
-        )
-        .map_err(SubagentRunError::InvalidContext)?;
-
         let parent = options
             .run_context
             .parent
@@ -175,7 +223,6 @@ pub(crate) async fn run_subagent_direct_with_native_context(
         // Acts on memory as a child of its parent: same team, own definition.
         let acting = options.run_context.memory_identity.take().unwrap_or_default();
         options.run_context.memory_identity = Some(acting.child(&definition.id));
-
         // Runtime spawn-hierarchy (tier) gate — defense-in-depth alongside the
         // depth gate above. The loader validates *declared* `subagents` pairs
         // statically at boot (`validate_tier_hierarchy`), but dynamic, custom,
@@ -188,7 +235,6 @@ pub(crate) async fn run_subagent_direct_with_native_context(
             .as_deref()
             .and_then(|reg| reg.get(&parent.agent_definition_id));
         tier_gate_decision(parent_def, definition, &parent.agent_definition_id, &task_id)?;
-
         // Configured `subagentStart` hooks — the last gate before a spawn costs
         // anything. Placed after the tier gate so a spawn the graph already
         // forbids never reaches a user script, and before config load so a
@@ -296,7 +342,6 @@ pub(crate) async fn run_subagent_direct_with_native_context(
         if let Some(dispatch) = options.run_context.dispatch.as_deref() {
             dispatch.record_subagent_elapsed(started.elapsed());
         }
-
         let mut outcome = run_result?;
 
         // Commit the completed subtree before the soft, awaited artifact
@@ -378,7 +423,6 @@ fn workspace_descriptor_for_subagent(
 /// is `docs/specs/plan-agents.md` Phase 3: the sub-agent runner is slated to
 /// move into TinyAgents, and a generic runtime has no config file to load.
 type LoadedConfig = Result<std::sync::Arc<crate::config::Config>, String>;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Typed mode — narrow prompt, filtered tools, cheaper model
 // ─────────────────────────────────────────────────────────────────────────────
@@ -599,6 +643,7 @@ async fn run_typed_mode(
         workspace_dir: &parent.workspace_dir,
         model_name: &model,
         agent_id: &definition.id,
+        flow_archetype_text: None,
         tools: &prompt_tools,
         workflows: &parent.workflows,
         dispatcher_instructions: &dispatcher_instructions,
@@ -612,13 +657,11 @@ async fn run_typed_mode(
         agents_md_local: agents_md.local.clone(),
     };
 
+    let archetype_prompt_body = load_typed_prompt_source(definition, config, prompt_ctx).await?;
     let system_prompt = match &definition.system_prompt {
         // The whole prompt, with no sub-agent sections around it.
-        PromptSource::Dynamic(_) | PromptSource::Verbatim(_) => {
-            load_prompt_source(definition, &prompt_ctx)?
-        }
+        PromptSource::Dynamic(_) | PromptSource::Verbatim(_) => archetype_prompt_body,
         PromptSource::Inline(_) | PromptSource::File { .. } => {
-            let archetype_prompt_body = load_prompt_source(definition, &prompt_ctx)?;
             render_subagent_system_prompt_with_format(
                 &parent.workspace_dir,
                 &model,
@@ -815,7 +858,10 @@ async fn run_typed_mode(
             reason = %reason,
             "[subagent_host] child halted by circuit breaker; reporting Incomplete (#4466)"
         );
-        crate::agent::subagent_host::types::SubagentRunStatus::Incomplete { reason }
+        crate::agent::subagent_host::types::SubagentRunStatus::Incomplete {
+            reason,
+            failure_cause: failure_cause.clone(),
+        }
     } else if hit_cap {
         // The tinyagents run stopped at the model-call cap with work still
         // pending (graph summarized a resumable checkpoint into `output`).
@@ -824,6 +870,7 @@ async fn run_typed_mode(
         // or re-spinning the identical delegation (#4096).
         crate::agent::subagent_host::types::SubagentRunStatus::Incomplete {
             reason: tinyagents_harness::turn_stop::SUBAGENT_ITERATION_CAP_REASON.into(),
+            failure_cause: None,
         }
     } else {
         // A clean final response. (An `ask_user_clarification` early-exit is
@@ -875,3 +922,6 @@ async fn run_typed_mode(
             tinyagents_orchestration::subagent::SubagentPersistenceDisposition::TerminalExisting,
     })
 }
+#[cfg(test)]
+#[path = "runner_flow_prompt_tests.rs"]
+mod flow_prompt_tests;

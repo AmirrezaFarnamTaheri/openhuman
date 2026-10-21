@@ -68,6 +68,8 @@ pub mod flows;
 pub mod hooks;
 #[cfg(feature = "hosting")]
 pub mod hosting;
+#[cfg(feature = "inbound-queues")]
+pub mod inbound;
 pub mod inference;
 pub mod integrations;
 pub mod mcp;

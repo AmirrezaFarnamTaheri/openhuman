@@ -127,6 +127,25 @@ pub fn client_config(config: &Config) -> tinymcp_bus::McpClientConfig {
     client.client_identity.version = config.mcp_client.client_identity.version.clone();
     client.client_identity.capabilities = tinymcp_bus::ui::client_capabilities();
     client.registry_auth = config.mcp_client.registry_auth.clone();
+    // Registry-installed and `mcp.json` stdio servers are third-party code and
+    // are never `operator_trusted`: tinymcp refuses to start them unless the
+    // host supplies the jail. The toolchain grants TinyBox resolves are added
+    // when the config is opened (`module_port`), since they need an async call.
+    client.stdio_sandbox = super::host_sandbox::stdio_sandbox(config);
+
+    // Registry-installed stdio servers are untrusted. TinyMCP deliberately
+    // refuses to launch them without a TinyBox jail. Supply a workspace-scoped
+    // jail with enforced isolation; never mark installed servers trusted or
+    // downgrade an unavailable sandbox to a direct subprocess launch.
+    client.stdio_sandbox = Some(tinymcp_bus::StdioSandboxConfig {
+        workspace: config.workspace_dir.to_string_lossy().into_owned(),
+        read_only: Vec::new(),
+        read_write: Vec::new(),
+        deny_read: Vec::new(),
+        allow_net: true,
+        allow_subprocess: true,
+        require_process_isolation: true,
+    });
 
     // GitBooks uses dedicated deferred tools and is not part of the configured
     // server set, so first-turn tool assembly never dials it for a catalog.

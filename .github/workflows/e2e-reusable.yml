@@ -415,69 +415,10 @@ jobs:
   # `tests/*_e2e.rs` suite against it.
   rust-e2e-linux:
     if: inputs.run_linux && inputs.run_rust_e2e
-    name: E2E (Linux / Rust integration suite)
-    runs-on: ubuntu-22.04
-    container:
-      image: ghcr.io/tinyhumansai/openhuman_ci:latest
-    # Run every Rust integration E2E suite even when the hosted container is
-    # cold; the prior 30-minute limit cancelled this lane before completion.
-    timeout-minutes: 60
-    env:
-      CARGO_INCREMENTAL: "0"
-      RUST_BACKTRACE: "1"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 1
-          persist-credentials: false
-          submodules: recursive
-      - name: Trust container checkout and submodules
-        shell: bash
-        run: bash scripts/ci/trust-checkout.sh
-
-      - name: Cache pnpm store
-        uses: actions/cache@v6
-        with:
-          path: ~/.local/share/pnpm/store
-          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            pnpm-store-${{ runner.os }}-
-
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: . -> target
-          cache-on-failure: true
-          key: rust-e2e-linux
-
-      - name: Install JS dependencies
-        run: bash scripts/ci-cancel-aware.sh pnpm install --frozen-lockfile
-
-      - name: Ensure .env exists for tests
-        run: |
-          touch .env
-          touch app/.env
-
-      - name: Install checksum-pinned native test modules
-        run: |
-          # Keep fixtures in a trusted tree and resolve their verified releases
-          # from the same registry the product uses.
-          module_root="/root/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          bash scripts/ci/self-hosted/install-test-modules.sh \
-            "$module_root" "$module_root/modules.env"
-          cat "$module_root/modules.env" >> "$GITHUB_ENV"
-
-      - name: Run Rust E2E suite (tests/*_e2e.rs vs mock backend)
-        run: |
-          export XDG_DATA_HOME="$(mktemp -d /root/openhuman-rust-e2e-xdg.XXXXXX)"
-          chmod 700 "$XDG_DATA_HOME"
-          bash scripts/ci-cancel-aware.sh pnpm test:rust:e2e
-
-      # No artifact uploads here either — same release-workflow reuse
-      # concern as the Tauri job above. Mock-backend log lives at
-      # /tmp/openhuman-rust-e2e-mock.log for local docker repro.
+    name: Rust E2E (independent target shards)
+    uses: ./.github/workflows/rust-e2e-shards.yml
+    with:
+      ref: ${{ inputs.ref }}
 
   e2e-macos:
     if: inputs.run_macos && !inputs.full
@@ -505,7 +446,7 @@ jobs:
           cache: pnpm
 
       - name: Install Rust (rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@1.96.1
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           # macos-latest is arm64, but the vendored tauri-cli's build.rs
           # compiles a CEF helper for x86_64-apple-darwin (universal binary),
@@ -514,7 +455,7 @@ jobs:
 
       - name: Verify cargo resolves to real toolchain
         run: |
-          rustup default 1.96.1 || true
+          rustup default 1.99.1 || true
           which cargo
           # `cargo --version` in the repo root materializes the
           # rust-toolchain.toml override toolchain. The action pin and
@@ -625,7 +566,7 @@ jobs:
           cache: pnpm
 
       - name: Install Rust (rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@1.96.1
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -722,7 +663,7 @@ jobs:
           cache: pnpm
 
       - name: Install Rust (rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@1.96.1
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           # macos-latest is arm64, but the vendored tauri-cli's build.rs
           # compiles a CEF helper for x86_64-apple-darwin (universal binary),
@@ -732,7 +673,7 @@ jobs:
 
       - name: Verify cargo resolves to real toolchain
         run: |
-          rustup default 1.96.1 || true
+          rustup default 1.99.1 || true
           which cargo
           # `cargo --version` in the repo root materializes the
           # rust-toolchain.toml override toolchain. The action pin and
@@ -957,7 +898,7 @@ jobs:
           cache: pnpm
 
       - name: Install Rust (rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@1.96.1
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
