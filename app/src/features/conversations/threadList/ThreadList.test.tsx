@@ -150,6 +150,37 @@ describe('ThreadList', () => {
     expect(onRequestDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 't1' }));
   });
 
+  it('does not let a rename Enter reach the document (the composer would send)', async () => {
+    // Regression (#5141): the composer's own keydown handler submits the chat
+    // on Enter by calling `requestSubmit()` on the composer's <form>. The
+    // rename editor is a separate input, so a plain Enter there used to fire
+    // the chat send as well as committing the title. The rename input must
+    // therefore stop the event from propagating.
+    const onRenameThread = vi.fn(async () => {});
+    const documentEnter = vi.fn();
+    document.addEventListener('keydown', documentEnter);
+    try {
+      renderList({ onRenameThread });
+      await userEvent.click(
+        within(screen.getByTestId('thread-row-t1').parentElement!).getByRole('button', {
+          name: 'assistantUi.threadList.moreOptions',
+        })
+      );
+      await userEvent.click(
+        await screen.findByRole('menuitem', { name: 'assistantUi.threadList.rename' })
+      );
+      const input = screen.getByTestId('thread-title-input-t1');
+      fireEvent.change(input, { target: { value: 'Renamed once' } });
+      await userEvent.keyboard('{Enter}');
+      await waitFor(() => expect(onRenameThread).toHaveBeenCalledWith('t1', 'Renamed once'));
+      // The document never sees the Enter, so no other Enter handler (the
+      // composer's) can act on it.
+      expect(documentEnter).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', documentEnter);
+    }
+  });
+
   it('cancels a rename on Escape without committing the subsequent blur', async () => {
     const onRenameThread = vi.fn(async () => {});
     renderList({ onRenameThread });

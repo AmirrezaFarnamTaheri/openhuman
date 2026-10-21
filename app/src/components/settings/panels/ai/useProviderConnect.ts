@@ -22,6 +22,7 @@ import {
 } from '../../../../services/api/aiSettingsApi';
 import { openhumanUpdateLocalAiSettings } from '../../../../utils/tauriCommands/config';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
+import { invalidateModelCatalogCache } from './ProviderModelPickerDialog';
 import {
   type AISettings,
   authStyleForSlug,
@@ -243,6 +244,11 @@ export function useProviderConnect({
             if (!isLocalRuntime && !isCodexOAuth && !isCliLogin) {
               await setCloudProviderKey(slug, trimmed);
             }
+            // The provider's endpoint and/or credential just changed, so its
+            // cached model catalog is stale (see
+            // `ProviderModelPickerDialog`'s cache). Drop it before the next
+            // picker reads it.
+            invalidateModelCatalogCache(slug);
             const latestSettingsAfterKey = latestSettings.current;
             const latestDraftProvider = latestSettingsAfterKey.draft.cloudProviders.find(provider =>
               isProviderSlug(provider.slug, slug)

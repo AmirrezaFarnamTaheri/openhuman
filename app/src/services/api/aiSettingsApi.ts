@@ -112,6 +112,45 @@ export interface ModelInfo {
   output_per_1m?: number | null;
 }
 
+/**
+ * Split a user-entered API key field into individual keys.
+ *
+ * The user pastes or types several keys in one go ("key-a, key-b") and
+ * expects them all to be used. The core's `key_pool::parse_api_keys` already
+ * accepts a comma-, semicolon- or newline-separated group, so the STORED value
+ * is one string holding the whole group — the rotation pool splits it there.
+ *
+ * This helper mirrors that split on the UI side so the dialog can tell the
+ * user how many keys it found, and so a value that is only separators is
+ * rejected before it is stored.
+ *
+ * Deliberately the same separators as the Rust side (`key_pool.rs`): comma,
+ * semicolon, CR, LF. Duplicates are collapsed, empty segments dropped, and
+ * each key is trimmed.
+ */
+export function splitApiKeyGroup(raw: string): string[] {
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const segment of raw.split(/[,;\r\n]/)) {
+    const value = segment.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    keys.push(value);
+  }
+  return keys;
+}
+
+/**
+ * How many keys a user's API-key field holds, for the dialog's hint line.
+ *
+ * `0` for an empty field, `1` for a plain single key, `n` for a rotation
+ * group. Callers render this so the user knows a pasted group was picked up
+ * rather than stored as one broken key.
+ */
+export function countApiKeys(raw: string): number {
+  return splitApiKeyGroup(raw).length;
+}
+
 interface ProviderModelTestResult {
   reply: string;
 }

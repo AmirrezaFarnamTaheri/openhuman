@@ -12,6 +12,7 @@ import {
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
+import { invalidateModelCatalogCache } from './ProviderModelPickerDialog';
 import {
   type AISettings,
   type CloudProvider,
@@ -139,6 +140,16 @@ export function useCloudProviderEditorSubmit({
             previous.endpoint !== upserted.endpoint ||
             previous.authStyle !== upserted.authStyle ||
             (previous.caCertPem ?? '') !== (upserted.caCertPem ?? ''));
+        // The model catalog is cached per provider slug (see
+        // `ProviderModelPickerDialog`). A provider whose endpoint, slug or
+        // credential changed can serve a different model list, so the cached
+        // one has to go before the next picker reads it.
+        if (changedDestination || previous === null || previous.slug !== upserted.slug) {
+          invalidateModelCatalogCache(upserted.slug);
+          if (previous && previous.slug !== upserted.slug) {
+            invalidateModelCatalogCache(previous.slug);
+          }
+        }
         if (savedKeyExists && changedDestination && !apiKey) {
           // Even an explicit skipProbe must not route an existing saved key to a
           // newly configured endpoint or trusted CA without replacement.

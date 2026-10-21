@@ -1,12 +1,24 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { listProviderModels } from '../../../../services/api/aiSettingsApi';
-import { ProviderModelPickerDialog } from './ProviderModelPickerDialog';
+import {
+  invalidateModelCatalogCache,
+  ProviderModelPickerDialog,
+} from './ProviderModelPickerDialog';
 
 vi.mock('../../../../services/api/aiSettingsApi', () => ({ listProviderModels: vi.fn() }));
 
 describe('ProviderModelPickerDialog', () => {
+  // The model catalog cache is module-level and app-wide on purpose: a
+  // provider's model list is stable, so it is not re-fetched every time the
+  // picker opens. That makes it shared state across test cases, and each case
+  // mocks `listProviderModels` with its own catalog — so the cache has to be
+  // cleared between them, or the first case's catalog answers for all of them.
+  beforeEach(() => {
+    invalidateModelCatalogCache();
+  });
+
   it('returns the provider-reported context window with a catalog selection', async () => {
     vi.mocked(listProviderModels).mockResolvedValue([
       { id: 'gpt-4o-mini', owned_by: 'openai', context_window: 128_000 },

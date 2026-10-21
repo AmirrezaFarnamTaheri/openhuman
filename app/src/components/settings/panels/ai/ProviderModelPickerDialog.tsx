@@ -106,6 +106,31 @@ interface ProviderModelPickerDialogProps {
 const sourceKey = (source: CustomDialogSource) =>
   source.kind === 'cloud' ? `cloud:${source.providerSlug}` : source.kind;
 
+/**
+ * Per-provider model catalogs, cached for the lifetime of the app.
+ *
+ * Opening the picker and stepping through providers used to re-fetch each
+ * provider's `/models` listing every time the user moved to it, and moving
+ * back and forth re-fetched again. The catalog of a given provider changes
+ * only when the user edits that provider, so the listing is worth keeping.
+ *
+ * A cached entry holds the resolved models AND the promise, so two surfaces
+ * asking for the same provider at the same time (the composer's picker and
+ * the settings panel's) share one request instead of racing two.
+ */
+const modelCatalogCache = new Map<string, ModelInfo[]>();
+
+/** Drops a provider's cached catalog — call when that provider changes. */
+export function invalidateModelCatalogCache(providerSlug?: string): void {
+  if (providerSlug) modelCatalogCache.delete(providerSlug);
+  else modelCatalogCache.clear();
+}
+
+/** A cached catalog, or undefined when the provider has not been listed yet. */
+export function cachedModelCatalog(providerSlug: string): ModelInfo[] | undefined {
+  return modelCatalogCache.get(providerSlug);
+}
+
 const isManaged = (source: CustomDialogSource | null): boolean => source?.kind === 'managed';
 
 const sourceLabel = (source: CustomDialogSource, providers: CloudProvider[], t: TFn) =>
@@ -174,7 +199,6 @@ export function ProviderModelPickerDialog({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogRequest, setCatalogRequest] = useState(0);
   const isLocalSource = source?.kind === 'local';
-
   const selectedCloudProvider =
     source?.kind === 'cloud'
       ? cloudProviders.find(provider => provider.slug === source.providerSlug)
@@ -219,12 +243,23 @@ export function ProviderModelPickerDialog({
       return;
     }
     let active = true;
+    // A cached catalog renders immediately — no spinner, no network. The
+    // provider's model list is stable for as long as the provider is
+    // unchanged, so re-listing it on every picker open was pure latency.
+    const cached = cachedModelCatalog(fetchSlug);
+    if (cached) {
+      setCatalog(cached);
+      setLoading(false);
+      setCatalogError(null);
+      return;
+    }
     setLoading(true);
     setCatalog([]);
     setCatalogError(null);
     void listProviderModels(fetchSlug)
       .then(models => {
         if (!active) return;
+        modelCatalogCache.set(fetchSlug, models);
         setCatalog(models);
         setLoading(false);
       })
@@ -238,7 +273,6 @@ export function ProviderModelPickerDialog({
       active = false;
     };
   }, [catalogRequest, fetchSlug, isLocalSource]);
-
   // Search both provider names and the active provider's catalog. Keep the
   // selected provider visible so its model results remain usable.
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -400,7 +434,13 @@ export function ProviderModelPickerDialog({
               catalog={visibleCatalog}
               catalogLoading={loading}
               catalogError={catalogError}
-              onRetry={() => setCatalogRequest(request => request + 1)}
+              onRetry={() => {
+                // An explicit retry must actually re-list the provider, so the
+                // cache entry is dropped first — otherwise the cached catalog
+                // would be served and the retry would look like a no-op.
+                if (fetchSlug) invalidateModelCatalogCache(fetchSlug);
+                setCatalogRequest(request => request + 1);
+              }}
               label={t('settings.ai.modelLabel')}
               placeholder={t('settings.ai.picker.modelIdPlaceholder')}
               analyticsId="settings-ai-model-picker-manual-entry"
