@@ -145,6 +145,7 @@ pub fn client_config(config: &Config) -> tinymcp_bus::McpClientConfig {
         allow_net: true,
         allow_subprocess: true,
         require_process_isolation: true,
+        enforcement: tinymcp_bus::StdioSandboxEnforcement::Enforced,
     });
 
     // GitBooks uses dedicated deferred tools and is not part of the configured

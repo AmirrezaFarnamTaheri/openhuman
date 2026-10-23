@@ -418,6 +418,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': '지난 7일',
   'chat.sidebar.group.previous30Days': '지난 30일',
   'chat.sidebar.group.older': '이전',
+  'chat.sidebar.archived': '보관됨',
+  'chat.sidebar.restoreThread': '복원',
   'chat.sidebar.pinThread': '대화 고정',
   'chat.sidebar.unpinThread': '대화 고정 해제',
   'chat.sidebar.unread': '새 답장',
@@ -2369,6 +2371,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': '제공업체 그룹당 최대 128개의 API 키를 사용할 수 있습니다.',
   'settings.ai.fleet.partialKeyVerified':
     '일부 API 키는 거부되었지만 다른 키는 검증되었습니다. 키 상태를 확인하세요.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman에서 제공업체 카탈로그로 이 키 그룹을 확인하지 못했습니다. 키는 저장되었으며 모델 요청을 보낼 때 확인됩니다.',
   'settings.ai.apiKeyFieldLabel': 'API 키 필드 라벨',
   'settings.ai.apiKeyRequired': '계속하려면 API 키를 붙여넣어 주세요.',
   'settings.ai.apiKeyStoredEncrypted': 'API 키가 암호화되어 저장됨',
@@ -3752,6 +3756,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': '검색...',
   'settings.developerMenu.eventLog.column.time': '(주)',
   'settings.developerMenu.eventLog.column.event': '행사일정',
+  'settings.agentAccess.totalTimeout.label': '전체 턴 제한 시간',
+  'settings.agentAccess.totalTimeout.desc':
+    '기본적으로 전체 턴 시간 제한은 없습니다. 제한을 설정하려면 OPENHUMAN_AGENT_TURN_TIMEOUT_SECS를 지정하세요. 0은 제한을 끕니다. 개별 작업 및 멈춘 호출에 대한 보호는 계속 적용됩니다.',
   'settings.agentAccess.group.approvals': '이름 *',
   'settings.agentAccess.group.fileSystem': '파일 시스템',
   'settings.agentAccess.group.limits': '제한 사항',
@@ -5062,6 +5069,9 @@ const messages: TranslationMap = {
 
   'settings.layout.contrast.subtle': '은은하게',
   'settings.layout.contrast.default': '기본값',
+  'settings.agentAccess.hideShellWindows.label': '셸 창 숨기기',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Windows에서 새 셸 세션의 기본 터미널 창을 숨깁니다.',
 };
 
 export default messages;

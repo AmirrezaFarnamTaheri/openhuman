@@ -245,13 +245,15 @@ export function describeToolCall(input: DescribeToolCallInput): ToolCallPresenta
       serverLabel: undefined,
     });
   }
-  // Pack disclosure keeps its skill label; a bound structural target uses
-  // the pack's `args` field for its path and literal preview presentation.
+  // Show the action a skill performs whenever it has a known presentation.
+  // The call card retains the skill name separately from the action label.
   if (
     baseName === 'use_skill' &&
     args.skill === 'coding' &&
     typeof args.tool === 'string' &&
-    isStructuralToolName(args.tool)
+    args.tool !== 'use_skill' &&
+    args.tool !== 'tool_call' &&
+    (isStructuralToolName(args.tool) || Object.hasOwn(EXACT_TOOL_SPECS, args.tool))
   ) {
     return describeToolCall({ ...input, name: args.tool, args: args.args, serverLabel: undefined });
   }

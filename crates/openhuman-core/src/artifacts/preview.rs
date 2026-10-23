@@ -46,11 +46,16 @@ pub struct ArtifactBody {
 ///
 /// Returns an error when the artifact does not exist or its record cannot be
 /// read.
-pub async fn read_body(config: &Config, id: &str) -> Result<ArtifactBody, String> {
+pub async fn read_body(
+    ctx: &crate::core::runtime::DispatchCtx,
+    config: &Config,
+    id: &str,
+) -> Result<ArtifactBody, String> {
     let files = super::files::FileRoots::from_config(config);
     let mut roots =
         super::tiny_store::file_roots(&config.workspace_dir, &files, Some(&config.action_dir));
     let versioned = super::tiny_store::artifacts_service(
+        ctx,
         &config.workspace_dir,
         files.clone(),
         Some(&config.action_dir),

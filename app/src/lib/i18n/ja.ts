@@ -349,6 +349,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': '過去7日間',
   'chat.sidebar.group.previous30Days': '過去30日間',
   'chat.sidebar.group.older': 'それ以前',
+  'chat.sidebar.archived': 'アーカイブ済み',
+  'chat.sidebar.restoreThread': '復元',
   'chat.sidebar.pinThread': '会話をピン留め',
   'chat.sidebar.unpinThread': '会話のピン留めを解除',
   'chat.sidebar.unread': '新しい返信',
@@ -2818,6 +2820,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'プロバイダーグループでは最大 128 個の API キーを設定できます。',
   'settings.ai.fleet.partialKeyVerified':
     '一部の API キーは拒否されましたが、別のキーは確認できました。キーの状態を確認してください。',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman はプロバイダーのカタログからこのキーグループを確認できませんでした。キーは保存され、モデルへのリクエスト送信時に検証されます。',
   'settings.ai.apiKeyFieldLabel': 'APIキー',
   'settings.ai.apiKeyRequired': '続行するにはAPIキーを貼り付けてください。',
   'settings.ai.apiKeyStoredEncrypted': 'APIキーはこのデバイス上で暗号化されて保存されます。',
@@ -3401,6 +3405,9 @@ const messages: TranslationMap = {
   'settings.agentAccess.timeout.invalid': '許容範囲内の整数秒を入力してください',
   'settings.agentAccess.timeout.envOverride':
     'OPENHUMAN_TOOL_TIMEOUT_SECS 環境変数がこの設定を上書きしているため、解除されるまでここでの変更は反映されません。',
+  'settings.agentAccess.totalTimeout.label': 'ターン全体の時間制限',
+  'settings.agentAccess.totalTimeout.desc':
+    '既定ではターン全体の時間制限はありません。制限を設定するには OPENHUMAN_AGENT_TURN_TIMEOUT_SECS を指定します。0 を指定すると無効になります。個々のアクションと停止した呼び出しに対する保護は引き続き有効です。',
   'settings.agentAccess.group.approvals': '承認',
   'settings.agentAccess.group.fileSystem': 'ファイルシステム',
   'settings.agentAccess.group.limits': '制限',
@@ -5468,6 +5475,9 @@ const messages: TranslationMap = {
   'settings.layout.corners.round': '丸み',
 
   'settings.layout.contrast.strong': '強',
+  'settings.agentAccess.hideShellWindows.label': 'シェルのウィンドウを非表示',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Windowsで新しいシェルセッションのターミナルウィンドウを非表示にします。',
 };
 
 export default messages;

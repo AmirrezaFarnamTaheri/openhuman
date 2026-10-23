@@ -84,31 +84,57 @@ pub(crate) fn local_openai_endpoint(config: &crate::config::Config) -> Option<St
         })
 }
 
-/// Resolve the per-turn wall-clock ceiling in milliseconds for a turn on a
-/// local provider when `local`. `OPENHUMAN_AGENT_TURN_TIMEOUT_SECS` still wins;
-/// `0` means "no ceiling" and yields `None`.
+/// Resolve the per-turn wall-clock ceiling in milliseconds for a turn.
+/// `OPENHUMAN_AGENT_TURN_TIMEOUT_SECS` opts into a total turn cap; `0` disables
+/// it. The web-specific override remains supported for compatibility. With no
+/// override, steady progress has no total wall-clock deadline.
 pub(crate) fn agent_turn_wall_clock_ms_for(local: bool) -> Option<u64> {
-    turn_wall_clock_ms(
-        env_str("OPENHUMAN_AGENT_TURN_TIMEOUT_SECS").as_deref(),
-        local,
-    )
+    let timeout = turn_timeout_override();
+    turn_wall_clock_ms(Some(timeout.as_deref().unwrap_or("0")), local)
 }
 
 /// Outer web-turn backstop for a turn on a local provider (#6042): the local
 /// turn ceiling plus the harness grace, or `None` when the ceiling is disabled.
 pub(crate) fn local_web_turn_backstop_secs() -> Option<u64> {
-    local_turn_backstop_secs(env_str("OPENHUMAN_AGENT_TURN_TIMEOUT_SECS").as_deref())
+    let timeout = turn_timeout_override();
+    local_turn_backstop_secs(Some(timeout.as_deref().unwrap_or("0")))
+}
+
+/// A concise per-turn explanation placed in the model-visible user context.
+pub(crate) fn turn_budget_guidance(max_wall_clock_ms: Option<u64>) -> String {
+    match max_wall_clock_ms {
+        Some(milliseconds) => format!(
+            "Overall turn time limit: {} seconds. Prioritize completing the requested work and leave time for a clear final response.",
+            milliseconds / 1_000
+        ),
+        None => "No overall wall-clock time limit is configured. Continue while making progress; do not end the turn just because a customary time allowance has passed. Individual model-call and action safeguards still apply.".to_string(),
+    }
 }
 
 fn env_str(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
 
+fn turn_timeout_override() -> Option<String> {
+    selected_turn_timeout(
+        env_str("OPENHUMAN_AGENT_TURN_TIMEOUT_SECS").as_deref(),
+        env_str("OPENHUMAN_WEB_TURN_TIMEOUT_SECS").as_deref(),
+    )
+}
+
+fn selected_turn_timeout(agent: Option<&str>, web: Option<&str>) -> Option<String> {
+    [agent, web]
+        .into_iter()
+        .flatten()
+        .find(|value| value.trim().parse::<u64>().is_ok())
+        .map(str::to_string)
+}
+
 /// The `OPENHUMAN_*` overrides for the harness ceilings, read from the process
 /// environment.
 fn env_overrides() -> TurnPolicyOverrides {
     TurnPolicyOverrides {
-        turn_timeout_secs: env_str("OPENHUMAN_AGENT_TURN_TIMEOUT_SECS"),
+        turn_timeout_secs: turn_timeout_override().or_else(|| Some("0".to_string())),
         model_call_timeout_secs: env_str("OPENHUMAN_MODEL_CALL_TIMEOUT_SECS"),
         stream_idle_timeout_secs: env_str("OPENHUMAN_STREAM_IDLE_TIMEOUT_SECS"),
         stream_first_event_timeout_secs: env_str("OPENHUMAN_STREAM_FIRST_EVENT_TIMEOUT_SECS"),
@@ -124,8 +150,8 @@ pub(crate) fn run_policy_for(max_iterations: usize, response_cache_enabled: bool
 }
 
 /// [`run_policy_for`] with the turn's provider locality: a local / self-hosted
-/// provider gets the longer per-call and per-turn ceilings (#6042); hosted
-/// providers keep the tight defaults so a wedged call is still caught fast.
+/// provider gets the longer model-call ceiling (#6042); total turn ceilings
+/// are opt-in for both local and hosted providers.
 ///
 /// Cross-route fallback (`RunPolicy.fallback`) is orthogonal and populated
 /// per-turn by [`turn_run_policy`](super::turn_plan::turn_run_policy).

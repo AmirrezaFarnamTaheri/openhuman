@@ -93,8 +93,8 @@
   {
     "path": "crates/openhuman-core/src/artifacts/files.rs",
     "rule": "json-write",
-    "site": "match tokio::fs::OpenOptions::new()",
-    "reason": "Historical local artifact content reservation; a native BlobStore now exists, so this is migration debt, not a missing blob capability.",
+    "site": "let mut options = cap_std::fs::OpenOptions::new();",
+    "reason": "Shared exclusive creation policy for operator-visible artifact reservations and fresh staging in host-trusted Files directories. Publication replaces directory entries through an anchored handle instead of truncating linked inodes; artifact records and versions remain in native storage.",
     "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
   },
   {

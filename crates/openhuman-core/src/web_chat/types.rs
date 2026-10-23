@@ -65,6 +65,8 @@ pub(crate) struct SessionCacheFingerprint {
     pub(super) temperature: Option<f64>,
     pub(super) target_agent_id: String,
     pub(super) provider_binding: String,
+    /// Digest of persisted configuration and resolved runtime directories.
+    /// The legacy name is kept for diagnostics; raw secrets are never retained here.
     pub(super) autonomy_signature: String,
     /// Signature of `config.model_registry`. The cached `Agent` stores a
     /// build-time `model_vision` bool; toggling a model's "Supports vision" flag

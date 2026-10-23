@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { isThreadArchived } from '../../../features/conversations/threadList/groupThreads';
 import {
   GENERAL_TAB_VALUE,
   isThreadVisibleInTab,
@@ -67,6 +68,7 @@ export function useNewChat(): () => void {
     const empty = threads.find(
       thr =>
         isThreadVisibleInTab(thr, GENERAL_TAB_VALUE) &&
+        !isThreadArchived(thr) &&
         (thr.messageCount ?? 0) === 0 &&
         (messagesByThreadId[thr.id]?.length ?? 0) === 0 &&
         !streamingByThread?.[thr.id] &&

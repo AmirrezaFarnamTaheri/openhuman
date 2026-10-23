@@ -194,7 +194,7 @@ fn is_local_reference(source: &str) -> bool {
     windows_drive_path || url::Url::parse(source).is_err()
 }
 
-#[cfg(any(test, windows))]
+#[cfg(test)]
 use crate::security::secure_open::normalize_windows_path_for_comparison;
 use crate::security::secure_open::secure_open;
 

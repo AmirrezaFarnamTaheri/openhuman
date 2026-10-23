@@ -46,7 +46,7 @@ pub use tinymemory_integrations::{
     BearerSource, Binding, BoundEngine, EngineBinder, EngineCredential, EngineSettings,
 };
 
-use crate::config::schema::MEMORY_CORTEXDB_KEY_NAME;
+use crate::config::schema::{MEMORY_CORTEXDB_KEY_NAME, MEMORY_CORTEXDB_LOCAL_KEY_NAME};
 use crate::config::Config;
 use crate::security::credentials::{AuthService, DEFAULT_AUTH_PROFILE_NAME};
 
@@ -459,9 +459,37 @@ pub fn invalidate() {
     super::lifecycle::prefetch::invalidate_all();
 }
 
-/// The stored CortexDB API key, if any.
+/// Whether the configured CortexDB endpoint was provisioned by OpenHuman.
+/// An endpoint alone is insufficient: a manually operated local server may
+/// use the same loopback URL.
+#[must_use]
+pub(crate) fn is_managed_cortexdb(config: &Config) -> bool {
+    config
+        .memory
+        .engines
+        .get(CORTEXDB_ENGINE)
+        .is_some_and(|settings| {
+            settings.managed_local
+                && settings.endpoint.as_deref() == Some(super::local_cortex::MANAGED_ENDPOINT)
+        })
+}
+
+fn cortexdb_key_name(config: &Config) -> &'static str {
+    if is_managed_cortexdb(config) {
+        MEMORY_CORTEXDB_LOCAL_KEY_NAME
+    } else {
+        MEMORY_CORTEXDB_KEY_NAME
+    }
+}
+
+/// The stored CortexDB API key for the selected connection, if any.
 pub fn read_cortexdb_key(config: &Config) -> anyhow::Result<Option<String>> {
-    AuthService::from_config(config).get_provider_bearer_token(MEMORY_CORTEXDB_KEY_NAME, None)
+    AuthService::from_config(config).get_provider_bearer_token(cortexdb_key_name(config), None)
+}
+
+/// The separately stored credential for OpenHuman's managed local CortexDB.
+pub fn read_managed_cortexdb_key(config: &Config) -> anyhow::Result<Option<String>> {
+    AuthService::from_config(config).get_provider_bearer_token(MEMORY_CORTEXDB_LOCAL_KEY_NAME, None)
 }
 
 /// Stores the CortexDB API key in the credential store (never in config).
@@ -472,7 +500,7 @@ pub fn store_cortexdb_key(config: &Config, key: &str) -> Result<()> {
     }
     AuthService::from_config(config)
         .store_provider_token(
-            MEMORY_CORTEXDB_KEY_NAME,
+            cortexdb_key_name(config),
             DEFAULT_AUTH_PROFILE_NAME,
             key,
             HashMap::new(),
@@ -483,10 +511,30 @@ pub fn store_cortexdb_key(config: &Config, key: &str) -> Result<()> {
     Ok(())
 }
 
+/// Stores the credential for OpenHuman's managed local CortexDB separately
+/// from a user's cloud or manually configured CortexDB key.
+pub(crate) fn store_managed_cortexdb_key(config: &Config, key: &str) -> Result<()> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err(Error::InvalidRequest("the API key is blank".into()));
+    }
+    AuthService::from_config(config)
+        .store_provider_token(
+            MEMORY_CORTEXDB_LOCAL_KEY_NAME,
+            DEFAULT_AUTH_PROFILE_NAME,
+            key,
+            HashMap::new(),
+            true,
+        )
+        .map_err(|error| Error::Engine(format!("storing the local API key failed: {error}")))?;
+    tracing::debug!("[memory:engine] managed local cortexdb key stored");
+    Ok(())
+}
+
 /// Removes the stored CortexDB API key.
 pub fn clear_cortexdb_key(config: &Config) -> Result<bool> {
     AuthService::from_config(config)
-        .remove_profile(MEMORY_CORTEXDB_KEY_NAME, DEFAULT_AUTH_PROFILE_NAME)
+        .remove_profile(cortexdb_key_name(config), DEFAULT_AUTH_PROFILE_NAME)
         .map_err(|error| Error::Engine(format!("removing the API key failed: {error}")))
 }
 

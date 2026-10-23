@@ -115,13 +115,13 @@ pub(super) fn applies(is_subagent: bool, agent_definition_id: Option<&str>) -> b
 /// Whether the turn's activity makes it a multi-step task worth checking.
 pub(super) fn should_check(activity: &FinishActivity) -> bool {
     activity.tool_rounds >= MIN_TOOL_ROUNDS
-        || activity.executed(TODO_TOOL)
-        || VERIFY_AFTER_TOOL.iter().any(|tool| activity.executed(tool))
+        || activity.called(TODO_TOOL)
+        || VERIFY_AFTER_TOOL.iter().any(|tool| activity.called(tool))
         || VERIFY_AFTER_STRUCTURAL_WRITE
             .iter()
-            .any(|tool| activity.executed_with_side_effects(tool))
+            .any(|tool| activity.called(tool))
         || activity
-            .tools_executed
+            .tools_called
             .iter()
             .any(|tool| tool.starts_with("delegate_"))
 }

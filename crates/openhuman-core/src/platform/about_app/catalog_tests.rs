@@ -1,6 +1,18 @@
 use super::*;
 
 #[test]
+fn conversation_organization_and_archive_are_discoverable() {
+    for id in ["conversation.organization", "conversation.archive"] {
+        let capability = lookup(id).expect("implemented conversation capability");
+        assert_eq!(capability.category, CapabilityCategory::Conversation);
+        assert_eq!(capability.status, CapabilityStatus::Beta);
+        assert!(!capability.how_to.is_empty());
+    }
+    let tools = lookup("security.always_allow_tool").unwrap();
+    assert!(tools.how_to.contains("add a tool name"));
+}
+
+#[test]
 fn lookup_returns_expected_capability() {
     let capability = lookup("local_ai.configure_provider").expect("capability should exist");
     assert_eq!(capability.category, CapabilityCategory::LocalAI);

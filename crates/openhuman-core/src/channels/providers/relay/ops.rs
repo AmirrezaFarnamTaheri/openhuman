@@ -192,6 +192,7 @@ pub(crate) async fn run_relay_turn(
     let mut runtime = runtime_context(
         &dispatch_ctx,
         &config,
+        &config,
         parts,
         Arc::new(channels_by_name),
         message_timeout_secs,

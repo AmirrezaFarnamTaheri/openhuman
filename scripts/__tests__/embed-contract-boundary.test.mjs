@@ -51,6 +51,8 @@ test('the same native contract remains forbidden outside its owning adapter', ()
   const result = check({ 'crates/openhuman-core/src/other/mod.rs': contracts['crates/openhuman-embed/src/stream.rs'] });
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /openhuman-upstream-reexport/);
+  assert.match(result.output, /crates\/openhuman-core\/src\/other\/mod\.rs/);
+  assert.doesNotMatch(result.output, /crates\\openhuman-core/);
 });
 
 test('Embed preserves its existing native tool, session and budget injection contracts', () => {

@@ -11,7 +11,6 @@ import { PersistGate } from 'redux-persist/integration/react';
 
 import AppRoutes from './AppRoutes';
 import { AnalyticsPageTracker } from './components/analytics';
-import AnnouncementGate from './components/Announcement/AnnouncementGate';
 import AppBackground from './components/AppBackground';
 import AppUpdatePrompt from './components/AppUpdatePrompt';
 import BootCheckGate from './components/BootCheckGate/BootCheckGate';
@@ -145,7 +144,6 @@ function App() {
                               <SecurityBanner />
                               {!onMobile && <AppUpdatePrompt />}
                               <KeyringConsentOverlay />
-                              <AnnouncementGate />
                             </ServiceBlockingGate>
                           </CommandProvider>
                         </Router>

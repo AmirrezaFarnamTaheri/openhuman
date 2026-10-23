@@ -476,10 +476,8 @@ jobs:
   # to the GitHub Release. Operators on Linux servers without Docker pull a
   # plain tarball + sha256 from the release page; cloud-deploy.md links here.
   #
-  # arm64 uses GitHub-hosted ubuntu-24.04-arm to avoid QEMU emulation
-  # (matches release-packages.yml). If that runner is unavailable for the
-  # repo's plan, fall back to ubuntu-22.04 + cross-rs (see comment in
-  # release-packages.yml `build-cli-linux-arm64`).
+  # arm64 uses GitHub-hosted ubuntu-24.04-arm to avoid QEMU emulation.
+  # If that runner is unavailable, use ubuntu-22.04 with cross-rs.
   # =========================================================================
   build-cli-linux:
     name: "CLI: ${{ matrix.target }}"

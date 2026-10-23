@@ -16,6 +16,7 @@ fn open_directory(path: &Path) -> std::fs::File {
     use std::os::windows::fs::OpenOptionsExt;
     std::fs::File::options()
         .read(true)
+        .access_mode(windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES)
         .custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)
         .unwrap()

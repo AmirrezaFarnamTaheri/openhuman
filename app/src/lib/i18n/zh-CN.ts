@@ -396,6 +396,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': '过去 7 天',
   'chat.sidebar.group.previous30Days': '过去 30 天',
   'chat.sidebar.group.older': '更早',
+  'chat.sidebar.archived': '已归档',
+  'chat.sidebar.restoreThread': '恢复',
   'chat.sidebar.pinThread': '置顶对话',
   'chat.sidebar.unpinThread': '取消置顶对话',
   'chat.sidebar.unread': '新回复',
@@ -2255,6 +2257,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': '每个提供商组最多支持 128 个 API 密钥。',
   'settings.ai.fleet.partialKeyVerified':
     '部分 API 密钥被拒绝，但至少有一个密钥已通过验证。请检查提供商密钥状态。',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman 无法通过提供商目录确认此密钥组。密钥已保存，并会在发送模型请求时检查。',
   'settings.ai.apiKeyFieldLabel': 'API 密钥',
   'settings.ai.apiKeyRequired': '请粘贴你的 API 密钥以继续。',
   'settings.ai.apiKeyStoredEncrypted': 'API 密钥已加密存储',
@@ -3585,6 +3589,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': '搜索任务...',
   'settings.developerMenu.eventLog.column.time': '时间',
   'settings.developerMenu.eventLog.column.event': '活动',
+  'settings.agentAccess.totalTimeout.label': '单轮总时限',
+  'settings.agentAccess.totalTimeout.desc':
+    '默认不限制单轮总时长。设置 OPENHUMAN_AGENT_TURN_TIMEOUT_SECS 可指定时限；设为 0 可禁用。单项操作和卡住的调用仍受保护。',
   'settings.agentAccess.group.approvals': '核准',
   'settings.agentAccess.group.fileSystem': '文件系统',
   'settings.agentAccess.group.limits': '限制',
@@ -4830,6 +4837,8 @@ const messages: TranslationMap = {
 
   'settings.layout.corners.round': '圆角',
   'settings.layout.contrast.subtle': '微妙',
+  'settings.agentAccess.hideShellWindows.label': '隐藏终端窗口',
+  'settings.agentAccess.hideShellWindows.desc': '在 Windows 上隐藏新建 Shell 会话的原生终端窗口。',
 };
 
 export default messages;

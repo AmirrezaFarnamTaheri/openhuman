@@ -69,13 +69,12 @@ pub struct MemorySettingsPatch {
 
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeSettingsPatch {
+    pub shell_hide_window: Option<bool>,
     pub kind: Option<String>,
     pub reasoning_enabled: Option<bool>,
     /// `Some("")` clears the effort back to the provider default.
     pub reasoning_effort: Option<String>,
-    /// When set, `reasoning_effort` is saved as this model's own level
-    /// (`runtime.reasoning_effort_by_model`) instead of the global one, and
-    /// `Some("")` removes the model's entry.
+    /// Model-specific effort override; an empty effort removes its entry.
     pub reasoning_effort_model: Option<String>,
 }
 
@@ -538,6 +537,9 @@ pub async fn apply_runtime_settings(
 ) -> Result<Outcome<serde_json::Value>, String> {
     if let Some(kind) = update.kind {
         config.runtime.kind = kind;
+    }
+    if let Some(hide_window) = update.shell_hide_window {
+        config.shell.hide_window = hide_window;
     }
     if let Some(reasoning_enabled) = update.reasoning_enabled {
         config.runtime.reasoning_enabled = Some(reasoning_enabled);

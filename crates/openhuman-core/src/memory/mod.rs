@@ -36,7 +36,6 @@ pub mod layout_migration;
 pub mod lifecycle;
 pub(crate) mod local_cortex;
 pub mod local_root;
-pub(crate) mod local_cortex;
 pub mod ops;
 pub(crate) mod run_slots;
 pub mod schemas;

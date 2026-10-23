@@ -180,15 +180,28 @@ async fn migrate_one(
     // Step 1: copy to a hidden partial and flush it.
     let partial = files_dir.join(format!(".{}{PARTIAL_SUFFIX}", meta.id));
     let _ = tokio::fs::remove_file(&partial).await;
-    tokio::fs::copy(src, &partial)
+    let mut source = tokio::fs::File::open(src)
+        .await
+        .map_err(|e| format!("open legacy bytes: {e}"))?;
+    let mut output = files::open_artifact_file(&partial)
+        .await
+        .map_err(|e| format!("create partial: {e}"))?;
+    tokio::io::copy(&mut source, &mut output)
         .await
         .map_err(|e| format!("copy: {e}"))?;
-    tokio::fs::File::open(&partial)
+    use tokio::io::AsyncWriteExt;
+    output
+        .flush()
         .await
-        .map_err(|e| format!("reopen partial: {e}"))?
+        .map_err(|e| format!("write partial: {e}"))?;
+    // FlushFileBuffers on Windows requires the writable handle that received
+    // the copy. A read-only reopen fails before any record can be migrated.
+    output
         .sync_all()
         .await
         .map_err(|e| format!("flush partial: {e}"))?;
+    drop(output.into_std().await);
+    drop(source);
     if crash_after == Some(CrashAfter::Copy) {
         return Ok(false);
     }

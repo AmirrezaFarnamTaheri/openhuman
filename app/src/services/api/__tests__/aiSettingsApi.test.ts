@@ -1415,13 +1415,30 @@ describe('credential-group model catalogue verification', () => {
     await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);
   });
 
+  it('keeps a key group when the keyed catalogue succeeds but the anonymous check is inconclusive', async () => {
+    mockCallCoreRpc.mockResolvedValue({
+      result: {
+        models: [{ id: 'nvidia/model' }],
+        fleet_probe: {
+          authenticated: false,
+          public_catalogue: false,
+          checked_keys: 1,
+          rejected_keys: 0,
+        },
+      },
+    });
+    await expect(probeProviderModelFleet('nvidia')).resolves.toEqual({
+      rejectedKeys: 0,
+      verification: 'inconclusive_catalogue',
+    });
+  });
+
   it('rejects malformed fleet verification metadata', async () => {
     for (const fleet_probe of [
       { authenticated: true, checked_keys: 0, rejected_keys: 0 },
       { authenticated: true, checked_keys: 2, rejected_keys: 2 },
       { authenticated: true, checked_keys: 2, rejected_keys: -1 },
       { authenticated: true, checked_keys: undefined, rejected_keys: 1 },
-      { authenticated: false, checked_keys: 2, rejected_keys: 0 },
     ]) {
       mockCallCoreRpc.mockResolvedValueOnce({ result: { models: [], fleet_probe } });
       await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);

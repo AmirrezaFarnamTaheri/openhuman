@@ -434,6 +434,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Últimos 7 días',
   'chat.sidebar.group.previous30Days': 'Últimos 30 días',
   'chat.sidebar.group.older': 'Anteriores',
+  'chat.sidebar.archived': 'Archivadas',
+  'chat.sidebar.restoreThread': 'Restaurar',
   'chat.sidebar.pinThread': 'Fijar conversación',
   'chat.sidebar.unpinThread': 'Desfijar conversación',
   'chat.sidebar.unread': 'Respuesta nueva',
@@ -2432,6 +2434,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Un grupo de proveedores admite como máximo 128 claves de API.',
   'settings.ai.fleet.partialKeyVerified':
     'Se rechazaron algunas claves de API, pero se verificó otra. Comprueba el estado de las claves.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman no pudo confirmar este grupo de claves mediante el catálogo del proveedor. Las claves se guardaron y se comprobarán al enviar una solicitud al modelo.',
   'settings.ai.apiKeyFieldLabel': 'Etiqueta de campo de clave API',
   'settings.ai.apiKeyRequired': 'Pega tu clave API para continuar.',
   'settings.ai.apiKeyStoredEncrypted': 'Clave API almacenada cifrada',
@@ -3878,6 +3882,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Trabajos de búsqueda...',
   'settings.developerMenu.eventLog.column.time': 'Hora',
   'settings.developerMenu.eventLog.column.event': 'Evento',
+  'settings.agentAccess.totalTimeout.label': 'Límite total del turno',
+  'settings.agentAccess.totalTimeout.desc':
+    'De forma predeterminada, no se aplica un límite de tiempo total. Define OPENHUMAN_AGENT_TURN_TIMEOUT_SECS para establecerlo; 0 lo desactiva. Siguen activas las protecciones de acciones individuales y llamadas bloqueadas.',
   'settings.agentAccess.group.approvals': 'Aprobaciónes',
   'settings.agentAccess.group.fileSystem': 'Sistema de archivos',
   'settings.agentAccess.group.limits': 'Límites',
@@ -5215,6 +5222,9 @@ const messages: TranslationMap = {
   'flows.nodeKind.dedup': 'Omitir duplicados',
 
   'settings.layout.corners.round': 'Redondeado',
+  'settings.agentAccess.hideShellWindows.label': 'Ocultar ventanas de terminal',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Oculta las ventanas de terminal nativas en Windows para nuevas sesiones.',
 };
 
 export default messages;

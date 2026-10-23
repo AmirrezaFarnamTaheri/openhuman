@@ -190,6 +190,38 @@ fn provider_failures_are_rerouted_conservatively() {
     }
 }
 
+#[test]
+fn typed_transient_failures_can_try_another_key_without_marking_it_invalid() {
+    for status in [None, Some(408), Some(503)] {
+        let error = ProviderError {
+            status,
+            retryable: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            provider_decision(&error).unwrap().failure,
+            KeyFailure::Other
+        );
+    }
+    let permanent = ProviderError {
+        status: Some(503),
+        retryable: false,
+        ..Default::default()
+    };
+    assert!(provider_decision(&permanent).is_none());
+}
+
+#[test]
+fn a_partial_answer_is_never_rerouted_to_another_credential() {
+    let error = ProviderError {
+        status: Some(429),
+        retryable: true,
+        partial_message: Some(ModelResponse::assistant("partial answer").message),
+        ..Default::default()
+    };
+    assert!(provider_decision(&error).is_none());
+}
+
 struct CountingForbiddenModel {
     attempts: Arc<std::sync::atomic::AtomicUsize>,
 }

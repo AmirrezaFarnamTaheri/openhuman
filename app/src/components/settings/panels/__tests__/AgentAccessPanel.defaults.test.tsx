@@ -87,6 +87,11 @@ vi.mock('../../../../utils/tauriCommands', async () => {
   );
   return {
     ...actual,
+    openhumanGetConfig: vi.fn(async () => ({
+      result: { config: { shell: { hide_window: false } } },
+      logs: [],
+    })),
+    openhumanUpdateRuntimeSettings: vi.fn(async () => ({ result: { config: {} }, logs: [] })),
     isTauri: vi.fn(() => true),
     openhumanGetAutonomySettings: vi.fn(),
     openhumanUpdateAutonomySettings: vi.fn(),

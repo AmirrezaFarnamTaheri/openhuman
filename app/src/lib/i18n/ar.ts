@@ -414,6 +414,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'آخر 7 أيام',
   'chat.sidebar.group.previous30Days': 'آخر 30 يومًا',
   'chat.sidebar.group.older': 'أقدم',
+  'chat.sidebar.archived': 'المؤرشفة',
+  'chat.sidebar.restoreThread': 'استعادة',
   'chat.sidebar.pinThread': 'تثبيت المحادثة',
   'chat.sidebar.unpinThread': 'إلغاء تثبيت المحادثة',
   'chat.sidebar.unread': 'رد جديد',
@@ -2345,6 +2347,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'يمكن أن تضم مجموعة المزوّد 128 مفتاح API كحد أقصى.',
   'settings.ai.fleet.partialKeyVerified':
     'رُفضت بعض مفاتيح API، لكن تم التحقق من مفتاح آخر. راجع حالة مفاتيح المزوّد.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'تعذّر على OpenHuman تأكيد مجموعة المفاتيح من خلال قائمة نماذج المزوّد. تم حفظ المفاتيح وسيتم فحصها عند إرسال طلب إلى نموذج.',
   'settings.ai.apiKeyFieldLabel': 'تسمية حقل مفتاح API',
   'settings.ai.apiKeyRequired': 'يرجى لصق مفتاح API للمتابعة.',
   'settings.ai.apiKeyStoredEncrypted': 'مفتاح API محفوظ مشفّرًا',
@@ -3720,6 +3724,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'وظائف البحث...',
   'settings.developerMenu.eventLog.column.time': 'الوقت',
   'settings.developerMenu.eventLog.column.event': 'الحدث',
+  'settings.agentAccess.totalTimeout.label': 'الحد الإجمالي لمدة التشغيل',
+  'settings.agentAccess.totalTimeout.desc':
+    'لا يوجد حد زمني إجمالي للتشغيل افتراضيًا. عيّن OPENHUMAN_AGENT_TURN_TIMEOUT_SECS لتحديد حد؛ القيمة 0 تعطّله. تظل ضمانات الإجراءات الفردية والطلبات المتوقفة سارية.',
   'settings.agentAccess.group.approvals': 'الموافقات',
   'settings.agentAccess.group.fileSystem': 'نظام الملفات',
   'settings.agentAccess.group.limits': 'الحدود',
@@ -5015,6 +5022,9 @@ const messages: TranslationMap = {
   'settings.layout.corners.subtle': 'خفيف',
 
   'settings.layout.corners.round': 'مستدير',
+  'settings.agentAccess.hideShellWindows.label': 'إخفاء نوافذ الطرفية',
+  'settings.agentAccess.hideShellWindows.desc':
+    'إخفاء نوافذ الطرفية الأصلية في Windows لجلسات الأوامر الجديدة.',
 };
 
 export default messages;

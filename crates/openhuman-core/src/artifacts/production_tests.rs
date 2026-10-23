@@ -32,6 +32,7 @@ async fn produce(
     revise: Option<&str>,
 ) -> String {
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         workspace,
         FileRoots::new(files),
         ArtifactKind::File,
@@ -52,6 +53,7 @@ async fn produce(
 async fn a_new_artifact_shares_one_id_and_one_file_between_card_and_record() {
     let (workspace, files) = temp_dirs();
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::File,
@@ -137,6 +139,7 @@ async fn a_revision_reuses_the_id_and_file_and_keeps_the_history() {
 async fn a_failed_production_fails_card_and_record() {
     let (workspace, files) = temp_dirs();
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::Image,
@@ -168,6 +171,7 @@ async fn a_failed_revision_keeps_the_artifact_and_shows_its_newest_version() {
     let id = produce(&workspace, &files, b"deck-v1", None, None).await;
 
     let revision = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::File,
@@ -200,6 +204,7 @@ async fn a_failed_revision_keeps_the_artifact_and_shows_its_newest_version() {
 async fn a_completion_that_records_nothing_fails_the_record_too() {
     let (workspace, files) = temp_dirs();
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::File,
@@ -239,6 +244,7 @@ async fn a_saved_version_the_card_cannot_show_succeeds_and_says_so() {
 
     let (workspace, files) = temp_dirs();
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::File,

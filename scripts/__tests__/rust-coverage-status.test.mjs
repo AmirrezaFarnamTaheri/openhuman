@@ -23,6 +23,9 @@ function extractFunction(name, scriptPath = runner) {
 }
 
 function withRunnerFunctions(functions, preamble, body) {
+  if (functions.includes("suite") && !functions.includes("explain_rebuilds")) {
+    functions = ["explain_rebuilds", ...functions];
+  }
   const script = [
     "set -euo pipefail",
     "exec 2>&1",
@@ -81,6 +84,27 @@ test("a cancelled raw coverage module stops the run at once", () => {
   assert.doesNotMatch(result.output, /running raw coverage module: second/);
   assert.doesNotMatch(result.output, /RAN-LATER/);
 });
+
+for (const runnerStatus of [7, 143]) {
+  test(`runner status ${runnerStatus} takes precedence over a failed diagnostic filter`, () => {
+    const result = withRunnerFunctions(["suite"], [
+      "FAILED_SUITES=()",
+      "log() { printf '%s\\n' \"$*\"; }",
+      `run() { printf 'runner output\\n'; return ${runnerStatus}; }`,
+    ].join("\n"), [
+      "explain_rebuilds() { cat >/dev/null; return 9; }",
+      "suite probe run",
+      "printf 'LATER %s\\n' \"${FAILED_SUITES[*]}\"",
+    ].join("\n"));
+    if (runnerStatus === 143) {
+      assert.equal(result.status, 143, result.output);
+      assert.doesNotMatch(result.output, /LATER/);
+    } else {
+      assert.equal(result.status, 0, result.output);
+      assert.match(result.output, /probe \(exit 7\)/);
+    }
+  });
+}
 
 test("an integration target missing a required product feature is skipped", () => {
   const result = withRunnerFunctions(
@@ -218,7 +242,7 @@ test("coverage finalizer retains interrupted reports and the cancellation status
   );
 });
 
-function runMockedCoverage(exitCode) {
+function runMockedCoverage(exitCode, shard = "full") {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rust-coverage-runner-"));
   try {
     for (const folder of [
@@ -274,6 +298,7 @@ JS
           PATH: `${dir}/bin:${process.env.PATH}`,
           MOCK_CALLS: `${dir}/calls`,
           OH_COV_RUNNER: "nextest",
+          OH_COV_SHARD: shard,
           OH_COV_DOCTESTS: "0",
         },
         stdio: "pipe",
@@ -336,6 +361,17 @@ test("private coverage passes when all five selected configurations report tests
   const { status } = runMockedCoverage(0);
   assert.equal(status, 0);
 });
+
+for (const [shard, count] of [["core", 1], ["facades", 6], ["integrations", 1]]) {
+  test(`hosted ${shard} coverage retains its separate package selection`, () => {
+    const { status, calls } = runMockedCoverage(0, shard);
+    assert.equal(status, 0);
+    const runs = calls.filter(line => line.includes("llvm-cov nextest"));
+    assert.equal(runs.length, count);
+    assert.ok(runs.every(line => !line.includes("-E package(=openhuman) | ")));
+    assert.equal(calls.filter(line => line.includes("llvm-cov report")).length, 1);
+  });
+}
 
 test("instrumented CLI inventory is cancellation-aware and reuses llvm-cov's environment", () => {
   const source = fs.readFileSync(runner, "utf8");
@@ -464,10 +500,11 @@ test("nextest product suites are one build and one run over the union of their f
     'FILTER_PRODUCT="${FILTER_CORE} | ${FILTER_EMBED} | ${FILTER_TINYHUMANS} | (${FILTER_CLI_TESTS})"',
   ])
     assert.ok(source.includes(value), value);
-  // No per-package product suites remain; rpc, tui and the default feature
-  // suites keep their own resolutions.
-  assert.doesNotMatch(source, /-p openhuman-cli --tests/);
-  assert.doesNotMatch(source, /-E "\$\{FILTER_(CORE|EMBED|TINYHUMANS|CLI_TESTS)\}"/);
+  // The full nextest branch uses one graph. Dedicated hosted shards retain
+  // their narrower package selections outside this branch.
+  const full = source.slice(source.indexOf('if [ "$UNIFIED_NEXTEST" = 1 ]; then'), source.indexOf('if has_cov_section core &&'));
+  assert.doesNotMatch(full, /-p openhuman-cli --tests/);
+  assert.doesNotMatch(full, /-E "\$\{FILTER_(CORE|EMBED|TINYHUMANS|CLI_TESTS)\}"/);
   assert.match(source, /suite "openhuman-rpc" llvm_cov_package .*-p openhuman-rpc --all-targets/);
   assert.match(source, /suite "openhuman-tui" llvm_cov_package .*-p openhuman-tui --all-targets/);
   assert.match(source, /suite "openhuman-embed \(default\)" llvm_cov_package .*-p openhuman-embed --all-targets/);

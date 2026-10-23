@@ -426,6 +426,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Последние 7 дней',
   'chat.sidebar.group.previous30Days': 'Последние 30 дней',
   'chat.sidebar.group.older': 'Ранее',
+  'chat.sidebar.archived': 'Архив',
+  'chat.sidebar.restoreThread': 'Восстановить',
   'chat.sidebar.pinThread': 'Закрепить разговор',
   'chat.sidebar.unpinThread': 'Открепить разговор',
   'chat.sidebar.unread': 'Новый ответ',
@@ -2414,6 +2416,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'В группе провайдера может быть не более 128 ключей API.',
   'settings.ai.fleet.partialKeyVerified':
     'Некоторые ключи API отклонены, но другой ключ успешно проверен. Проверьте состояние ключей.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman не удалось подтвердить эту группу ключей по каталогу провайдера. Ключи сохранены и будут проверены при отправке запроса к модели.',
   'settings.ai.apiKeyFieldLabel': 'Поле API-ключа',
   'settings.ai.apiKeyRequired': 'Вставь свой API-ключ для продолжения.',
   'settings.ai.apiKeyStoredEncrypted': 'API-ключ хранится в зашифрованном виде',
@@ -3838,6 +3842,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Поиск рабочих мест...',
   'settings.developerMenu.eventLog.column.time': 'Время',
   'settings.developerMenu.eventLog.column.event': 'Событие',
+  'settings.agentAccess.totalTimeout.label': 'Общий лимит времени хода',
+  'settings.agentAccess.totalTimeout.desc':
+    'По умолчанию общий лимит времени хода не задан. Укажите OPENHUMAN_AGENT_TURN_TIMEOUT_SECS, чтобы задать лимит; значение 0 отключает его. Защита для отдельных действий и зависших вызовов продолжает действовать.',
   'settings.agentAccess.group.approvals': 'Утверждение',
   'settings.agentAccess.group.fileSystem': 'Файловая система',
   'settings.agentAccess.group.limits': 'пределы',
@@ -5168,6 +5175,9 @@ const messages: TranslationMap = {
   'settings.layout.contrast.subtle': 'Незаметный',
 
   'settings.layout.contrast.strong': 'Высокий',
+  'settings.agentAccess.hideShellWindows.label': 'Скрывать окна терминала',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Скрывает окна терминала Windows для новых сеансов оболочки.',
 };
 
 export default messages;

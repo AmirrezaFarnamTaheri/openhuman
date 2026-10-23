@@ -887,36 +887,46 @@ export async function listProviderModels(
   return res?.result?.models ?? [];
 }
 
-/** Confirm a multi-token credential group has at least one working key.
- * Unlike the normal picker, connection onboarding requires explicit backend
- * proof that /models authenticated, even if an earlier key was rejected.
+/** Probe a multi-token credential group against the provider catalogue.
+ * Authentication is confirmed when the endpoint requires a key. A public
+ * catalogue is reported separately because it cannot verify the credentials.
  * A missing fleet_probe marker is not evidence of successful authentication.
  */
 export async function probeProviderModelFleet(
   providerId: string
-): Promise<{ rejectedKeys: number }> {
+): Promise<{ rejectedKeys: number; verification?: 'public_catalogue' | 'inconclusive_catalogue' }> {
   const response = await callCoreRpc<{
     result?: {
       models?: ModelInfo[];
-      fleet_probe?: { authenticated?: boolean; checked_keys?: number; rejected_keys?: number };
+      fleet_probe?: {
+        authenticated?: boolean;
+        public_catalogue?: boolean;
+        checked_keys?: number;
+        rejected_keys?: number;
+      };
     };
   }>({ method: 'openhuman.inference_list_models', params: { provider_id: providerId } });
   const verified = response?.result?.fleet_probe;
   const checkedKeys = verified?.checked_keys;
   const rejectedKeys = verified?.rejected_keys;
-  if (
-    !verified?.authenticated ||
+  const invalidProbeCounts =
     typeof checkedKeys !== 'number' ||
     !Number.isInteger(checkedKeys) ||
     checkedKeys < 1 ||
     typeof rejectedKeys !== 'number' ||
     !Number.isInteger(rejectedKeys) ||
     rejectedKeys < 0 ||
-    rejectedKeys >= checkedKeys
-  ) {
+    rejectedKeys >= checkedKeys;
+  if (invalidProbeCounts) {
     throw new Error('Credential group authentication was not confirmed by the provider catalogue.');
   }
-  return { rejectedKeys };
+  if (verified?.authenticated) return { rejectedKeys };
+  if (verified?.public_catalogue) return { rejectedKeys, verification: 'public_catalogue' };
+  // The core only returns fleet_probe after a successful /models response.
+  // If the anonymous control request failed for a non-auth reason, the
+  // catalogue cannot prove that the key is required, but it also did not
+  // reject the key. Preserve it and let an actual model request verify it.
+  return { rejectedKeys, verification: 'inconclusive_catalogue' };
 }
 
 /** Sanitized model-fleet health snapshot: never contains raw API keys. */

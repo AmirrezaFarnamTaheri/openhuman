@@ -361,6 +361,7 @@ impl PresentationTool {
         // of `artifact_id` / the regenerate target (same id, same file,
         // history kept).
         let production = Production::start(
+            ctx,
             &self.workspace_dir,
             self.files_dir.clone(),
             tiny_artifacts::ArtifactKind::File,

@@ -339,6 +339,7 @@ async fn keeps_source_blob_when_artifact_finalization_fails() {
 
     // An artifact whose file is gone cannot be completed.
     let production = crate::artifacts::production::Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &tool.workspace_dir,
         tool.files_dir.clone(),
         tiny_artifacts::ArtifactKind::Image,

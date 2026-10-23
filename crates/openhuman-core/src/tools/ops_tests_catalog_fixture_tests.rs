@@ -32,7 +32,6 @@ fn full_product_features_enabled() -> bool {
         ("documents", cfg!(feature = "documents")),
         ("modules", cfg!(feature = "modules")),
         ("flows", cfg!(feature = "flows")),
-        ("structural-code", cfg!(feature = "structural-code")),
         ("skills", cfg!(feature = "skills")),
         ("mcp", cfg!(feature = "mcp")),
         ("crash-reporting", cfg!(feature = "crash-reporting")),
@@ -254,6 +253,10 @@ fn tool_catalog_matches_frontend_fixture() {
         Vec::new()
     };
     if !added.is_empty() || !removed.is_empty() {
+        // A loaded module can install a sanitized process panic hook. Emit
+        // these content-free tool identifiers separately so CI retains the
+        // catalogue mismatch even when that hook hides the panic payload.
+        eprintln!("[tool-catalog] added: {added:?}; removed: {removed:?}");
         panic!(
             "core tool catalog drifted from the frontend fixture at {} (product features compiled: {full_product}).\n\
              added:   {added:?}\n\

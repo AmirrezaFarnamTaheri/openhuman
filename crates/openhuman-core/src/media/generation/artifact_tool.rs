@@ -182,6 +182,7 @@ impl<T: Tool> MediaArtifactTool<T> {
     /// `artifacts` array) is returned unmodified.
     async fn attach_artifacts(
         &self,
+        ctx: &crate::core::runtime::DispatchCtx,
         mut result: ToolResult,
         args: &Value,
         call_id: Option<String>,
@@ -205,6 +206,7 @@ impl<T: Tool> MediaArtifactTool<T> {
             };
             if let Some(filed_path) = self
                 .file_one(
+                    ctx,
                     entry,
                     &src_path,
                     args,
@@ -228,6 +230,7 @@ impl<T: Tool> MediaArtifactTool<T> {
 
     async fn file_one(
         &self,
+        ctx: &crate::core::runtime::DispatchCtx,
         entry: &mut Value,
         src: &Path,
         args: &Value,
@@ -250,6 +253,7 @@ impl<T: Tool> MediaArtifactTool<T> {
         // "generating…", tied to this tool call's bubble) and open the
         // versioned artifact under the same id.
         let production = match Production::start(
+            ctx,
             &self.workspace_dir,
             self.files_dir.clone(),
             kind,
@@ -584,8 +588,9 @@ impl<T: Tool> Tool for MediaArtifactTool<T> {
             return Ok(result);
         }
         let call_id = tool_call_id(context);
+        let ctx = crate::agent::tinyagents::host::run_context::dispatch_ctx_for_tool(context);
         Ok(self
-            .attach_artifacts(result, &args, call_id, approval.chat.as_ref())
+            .attach_artifacts(&ctx, result, &args, call_id, approval.chat.as_ref())
             .await)
     }
 }

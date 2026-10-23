@@ -33,8 +33,9 @@ use tiny_artifacts::{
     Author, Content,
 };
 
-use super::files::FileRoots;
+use super::files::{copy_visible_projection, write_visible_projection, FileRoots};
 use super::types::ArtifactKind as LegacyArtifactKind;
+use crate::core::runtime::DispatchCtx;
 use crate::security::approval::ApprovalChatContext;
 use crate::tools::per_call::PerCallTool;
 
@@ -98,6 +99,7 @@ pub fn legacy_versioned_dir(workspace_dir: &Path) -> PathBuf {
 
 /// Shows versioned artifacts in the desktop UI through the legacy pipeline.
 pub struct LegacyUiBridge {
+    ctx: DispatchCtx,
     workspace_dir: PathBuf,
     files: FileRoots,
     chat: Option<ApprovalChatContext>,
@@ -107,11 +109,13 @@ impl LegacyUiBridge {
     /// A bridge writing into `files` (the visible files folder), announcing
     /// cards to `chat` (`None` outside a chat turn).
     pub fn new(
+        ctx: &DispatchCtx,
         workspace_dir: impl Into<PathBuf>,
         files: FileRoots,
         chat: Option<&ApprovalChatContext>,
     ) -> Self {
         Self {
+            ctx: ctx.clone(),
             workspace_dir: workspace_dir.into(),
             files,
             chat: chat.cloned(),
@@ -144,7 +148,9 @@ impl LegacyUiBridge {
                     let size = if same_file(owned, source) {
                         tokio::fs::metadata(source).await?.len()
                     } else {
-                        tokio::fs::copy(source, owned).await?
+                        copy_visible_projection(&self.ctx, &self.files, owned, source)
+                            .await
+                            .map_err(anyhow::Error::msg)?
                     };
                     super::store::finalize_artifact(
                         &self.workspace_dir,
@@ -178,11 +184,14 @@ impl LegacyUiBridge {
             if same_file(&source, &dest) {
                 tokio::fs::metadata(&dest).await?.len()
             } else {
-                tokio::fs::copy(&source, &dest).await?
+                copy_visible_projection(&self.ctx, &self.files, &dest, &source)
+                    .await
+                    .map_err(anyhow::Error::msg)?
             }
         } else {
-            tokio::fs::write(&dest, latest.body.as_bytes()).await?;
-            latest.body.len() as u64
+            write_visible_projection(&self.ctx, &self.files, &dest, latest.body.as_bytes())
+                .await
+                .map_err(anyhow::Error::msg)?
         };
         super::store::finalize_artifact(&self.workspace_dir, &meta.id, size, self.chat.as_ref())
             .await
@@ -296,6 +305,7 @@ pub fn guarded_roots(roots: Vec<PathBuf>) -> tiny_artifacts::FileRoots {
 /// with file artifacts allowed from [`file_roots`]. Cards are announced to
 /// `chat`, the turn making the change (`None` outside a chat turn).
 pub fn artifacts_service(
+    ctx: &DispatchCtx,
     workspace_dir: &Path,
     files: FileRoots,
     action_dir: Option<&Path>,
@@ -303,7 +313,12 @@ pub fn artifacts_service(
 ) -> Artifacts {
     let roots = file_roots(workspace_dir, &files, action_dir);
     Artifacts::new(Arc::new(versioned_store(workspace_dir)))
-        .with_observer(Arc::new(LegacyUiBridge::new(workspace_dir, files, chat)))
+        .with_observer(Arc::new(LegacyUiBridge::new(
+            ctx,
+            workspace_dir,
+            files,
+            chat,
+        )))
         .with_file_roots(guarded_roots(roots))
         .with_version_files(version_files_dir(workspace_dir))
 }
@@ -344,44 +359,48 @@ pub fn registered_tools(
     let service = {
         let workspace_dir = workspace_dir.to_path_buf();
         let action_dir = action_dir.to_path_buf();
-        Arc::new(move |chat: Option<&ApprovalChatContext>| {
-            let mut service =
-                artifacts_service(&workspace_dir, files.clone(), Some(&action_dir), chat);
-            if let Some(publisher) = &publisher {
-                service = service.with_publisher(publisher.clone());
-            }
-            Arc::new(service)
-        })
+        Arc::new(
+            move |chat: Option<&ApprovalChatContext>, ctx: &DispatchCtx| {
+                let mut service =
+                    artifacts_service(ctx, &workspace_dir, files.clone(), Some(&action_dir), chat);
+                if let Some(publisher) = &publisher {
+                    service = service.with_publisher(publisher.clone());
+                }
+                Arc::new(service)
+            },
+        )
     };
     let author = Author::agent(AGENT_AUTHOR_ID);
     let mut tools: Vec<Box<dyn tinytools::Tool>> = Vec::new();
     {
         let (service, author) = (service.clone(), author.clone());
-        tools.push(Box::new(PerCallTool::new(move |chat, _| {
-            tiny_artifacts::CreateArtifactTool::new(service(chat), author.clone())
+        tools.push(Box::new(PerCallTool::new(move |chat, ctx| {
+            tiny_artifacts::CreateArtifactTool::new(service(chat, ctx), author.clone())
         })));
     }
     tools.push(Box::new(tiny_artifacts::ReadArtifactTool::new(service(
         None,
+        &DispatchCtx::unbound(),
     ))));
     {
         let (service, author) = (service.clone(), author.clone());
-        tools.push(Box::new(PerCallTool::new(move |chat, _| {
-            tiny_artifacts::UpdateArtifactTool::new(service(chat), author.clone())
+        tools.push(Box::new(PerCallTool::new(move |chat, ctx| {
+            tiny_artifacts::UpdateArtifactTool::new(service(chat, ctx), author.clone())
         })));
     }
     tools.push(Box::new(tiny_artifacts::ListArtifactsTool::new(service(
         None,
+        &DispatchCtx::unbound(),
     ))));
     {
         let service = service.clone();
-        tools.push(Box::new(PerCallTool::new(move |chat, _| {
-            tiny_artifacts::DeleteArtifactTool::new(service(chat))
+        tools.push(Box::new(PerCallTool::new(move |chat, ctx| {
+            tiny_artifacts::DeleteArtifactTool::new(service(chat, ctx))
         })));
     }
     if can_publish {
-        tools.push(Box::new(PerCallTool::new(move |chat, _| {
-            tiny_artifacts::ShareArtifactTool::new(service(chat))
+        tools.push(Box::new(PerCallTool::new(move |chat, ctx| {
+            tiny_artifacts::ShareArtifactTool::new(service(chat, ctx))
         })));
     }
     tools
@@ -400,12 +419,13 @@ pub const AGENT_AUTHOR_ID: &str = "openhuman";
 /// and updates the card. A body identical to the newest version appends
 /// nothing.
 pub async fn save_operator_version(
+    ctx: &DispatchCtx,
     workspace_dir: &Path,
     files: FileRoots,
     id: &str,
     body: &str,
 ) -> Result<SavedVersion, String> {
-    let saved = artifacts_service(workspace_dir, files, None, None)
+    let saved = artifacts_service(ctx, workspace_dir, files, None, None)
         .revise(
             id,
             Content::Text(body.to_string()),

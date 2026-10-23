@@ -71,16 +71,15 @@ fn text_delta() -> crate::progress::AgentProgress {
 }
 
 const IDLE: Option<Duration> = Some(Duration::from_secs(900));
-const CEILING: Option<Duration> = Some(Duration::from_secs(3_600));
+const CONFIGURED_CEILING: Option<Duration> = Some(Duration::from_secs(3_600));
 
-/// A turn that keeps emitting progress runs past the old 900s backstop: the
-/// idle guard restarts on every event and the backstop is now the 3600s
-/// ceiling.
+/// A progressing turn runs longer than the idle window under an explicit
+/// configured ceiling.
 #[tokio::test(start_paused = true)]
 async fn a_turn_that_keeps_progressing_outlives_the_idle_window() {
     let res = drive_turn_with_deadline(
         &crate::core::runtime::DispatchCtx::host_default(),
-        CEILING,
+        CONFIGURED_CEILING,
         IDLE,
         None,
         |activity| async move {
@@ -97,13 +96,13 @@ async fn a_turn_that_keeps_progressing_outlives_the_idle_window() {
 }
 
 /// A turn that goes silent with nothing in flight ends after the idle window,
-/// long before the ceiling, with the classified `turn_timeout` error.
+/// long before an explicit configured ceiling, with the classified timeout.
 #[tokio::test(start_paused = true)]
 async fn a_silent_turn_ends_after_the_idle_window() {
     let started = tokio::time::Instant::now();
     let err = drive_turn_with_deadline(
         &crate::core::runtime::DispatchCtx::host_default(),
-        CEILING,
+        CONFIGURED_CEILING,
         IDLE,
         None,
         |_| async {
@@ -123,12 +122,13 @@ async fn a_silent_turn_ends_after_the_idle_window() {
     assert_eq!(classified.error_type, "turn_timeout");
 }
 
-/// A turn that stays busy forever is still bounded by the fixed ceiling.
+/// A turn that stays busy forever is bounded when the user configured a total
+/// wall-clock ceiling.
 #[tokio::test(start_paused = true)]
 async fn a_turn_busy_past_the_ceiling_hits_the_backstop() {
     let err = drive_turn_with_deadline(
         &crate::core::runtime::DispatchCtx::host_default(),
-        CEILING,
+        CONFIGURED_CEILING,
         IDLE,
         None,
         |activity| async move {

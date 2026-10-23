@@ -436,6 +436,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': '7 derniers jours',
   'chat.sidebar.group.previous30Days': '30 derniers jours',
   'chat.sidebar.group.older': 'Plus anciennes',
+  'chat.sidebar.archived': 'Archivées',
+  'chat.sidebar.restoreThread': 'Restaurer',
   'chat.sidebar.pinThread': 'Épingler la conversation',
   'chat.sidebar.unpinThread': 'Désépingler la conversation',
   'chat.sidebar.unread': 'Nouvelle réponse',
@@ -2445,6 +2447,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Un groupe de fournisseurs accepte au maximum 128 clés API.',
   'settings.ai.fleet.partialKeyVerified':
     'Certaines clés API ont été refusées, mais une autre a été vérifiée. Vérifiez leur état.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman n’a pas pu confirmer ce groupe de clés à partir du catalogue du fournisseur. Les clés ont été enregistrées et seront vérifiées lors de l’envoi d’une requête au modèle.',
   'settings.ai.apiKeyFieldLabel': 'Libellé du champ clé API',
   'settings.ai.apiKeyRequired': 'Colle ta clé API pour continuer.',
   'settings.ai.apiKeyStoredEncrypted': 'Clé API stockée chiffrée',
@@ -3887,6 +3891,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Rechercher des emplois...',
   'settings.developerMenu.eventLog.column.time': 'Heure',
   'settings.developerMenu.eventLog.column.event': 'Événement',
+  'settings.agentAccess.totalTimeout.label': 'Limite total du tour',
+  'settings.agentAccess.totalTimeout.desc':
+    'Aucune durée maximale totale n’est appliquée par défaut. Définissez OPENHUMAN_AGENT_TURN_TIMEOUT_SECS pour en choisir une ; 0 la désactive. Les protections des actions individuelles et des appels bloqués restent actives.',
   'settings.agentAccess.group.approvals': 'Approbations',
   'settings.agentAccess.group.fileSystem': 'Système de fichiers',
   'settings.agentAccess.group.limits': 'Limites',
@@ -5237,6 +5244,9 @@ const messages: TranslationMap = {
   'settings.layout.corners.subtle': 'Discret',
 
   'settings.layout.contrast.subtle': 'Discret',
+  'settings.agentAccess.hideShellWindows.label': 'Masquer les fenêtres du terminal',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Masque les fenêtres de terminal natives sous Windows pour les nouvelles sessions.',
 };
 
 export default messages;

@@ -312,6 +312,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Önceki 7 gün',
   'chat.sidebar.group.previous30Days': 'Önceki 30 gün',
   'chat.sidebar.group.older': 'Daha eski',
+  'chat.sidebar.archived': 'Arşivlenenler',
+  'chat.sidebar.restoreThread': 'Geri yükle',
   'chat.sidebar.pinThread': 'Sohbeti sabitle',
   'chat.sidebar.unpinThread': 'Sohbetin sabitlemesini kaldır',
   'chat.sidebar.unread': 'Yeni yanıt',
@@ -2507,6 +2509,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Bir sağlayıcı grubu en fazla 128 API anahtarını destekler.',
   'settings.ai.fleet.partialKeyVerified':
     'Bazı API anahtarları reddedildi ancak başka bir anahtar doğrulandı. Sağlayıcı anahtarlarının durumunu kontrol edin.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman bu anahtar grubunu sağlayıcının kataloğundan doğrulayamadı. Anahtarlar kaydedildi ve bir model isteği gönderildiğinde denetlenecek.',
   'settings.ai.apiKeyFieldLabel': 'API anahtarı',
   'settings.ai.apiKeyRequired': 'Devam etmek için lütfen API anahtarınızı yapıştırın.',
   'settings.ai.apiKeyStoredEncrypted': 'API anahtarınız bu cihazda şifrelenmiş olarak saklanır.',
@@ -3086,6 +3090,9 @@ const messages: TranslationMap = {
   'settings.agentAccess.timeout.invalid': 'İzin verilen aralıkta tam sayı olarak saniye girin',
   'settings.agentAccess.timeout.envOverride':
     'OPENHUMAN_TOOL_TIMEOUT_SECS ortam değişkeni bu ayarı geçersiz kılıyor; bu nedenle değişken kaldırılana kadar buradaki değişikliklerin etkisi olmaz.',
+  'settings.agentAccess.totalTimeout.label': 'Toplam tur süresi sınırı',
+  'settings.agentAccess.totalTimeout.desc':
+    'Varsayılan olarak tur için toplam süre sınırı yoktur. Bir sınır belirlemek için OPENHUMAN_AGENT_TURN_TIMEOUT_SECS ayarlayın; 0 sınırı devre dışı bırakır. Tekil işlemler ve takılan çağrılar için korumalar geçerliliğini korur.',
   'settings.agentAccess.group.approvals': 'Onaylar',
   'settings.agentAccess.group.fileSystem': 'Dosya sistemi',
   'settings.agentAccess.group.limits': 'Sınırlar',
@@ -5114,6 +5121,9 @@ const messages: TranslationMap = {
   'settings.appearance.showChatMascot': "Tiny'yi mesaj kutusunda göster",
   'onboarding.custom.localDefaultDisabledReason':
     'Yönetilen kurulum için bir OpenHuman hesabı gerekir. Yerel oturumda her hizmeti kendiniz yapılandırırsınız.',
+  'settings.agentAccess.hideShellWindows.label': 'Kabuk pencerelerini gizle',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Windows üzerinde yeni kabuk oturumlarının terminal pencerelerini gizler.',
 };
 
 export default messages;

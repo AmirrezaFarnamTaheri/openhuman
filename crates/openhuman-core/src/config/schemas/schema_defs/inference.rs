@@ -121,6 +121,7 @@ pub(super) fn lookup(function: &str) -> Option<ControllerSchema> {
             function: "update_runtime_settings",
             description: "Update runtime execution strategy settings.",
             inputs: vec![
+                optional_bool("shell_hide_window", "Hide native shell child windows on Windows."),
                 optional_string("kind", "Runtime kind."),
                 optional_bool("reasoning_enabled", "Enable reasoning mode."),
                 optional_string(

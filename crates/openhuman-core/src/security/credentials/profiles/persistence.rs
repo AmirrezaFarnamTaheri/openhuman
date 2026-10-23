@@ -25,6 +25,11 @@ pub(crate) const STORAGE_SECRET_NAME: &str = "file:auth-profiles.json";
 
 impl AuthProfilesStore {
     pub(super) fn save_locked(&self, data: &AuthProfilesData) -> Result<()> {
+        let _mutation = super::revision::ProfileMutation(
+            self.path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new(".")),
+        );
         let mut persisted = PersistedAuthProfiles {
             schema_version: CURRENT_SCHEMA_VERSION,
             updated_at: data.updated_at.to_rfc3339(),

@@ -57,24 +57,34 @@ fn should_try_next_catalog_key(status: u16, has_more: bool) -> bool {
     has_more && matches!(status, 401 | 403)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CatalogueCredentialRequirement {
+    Required,
+    Public,
+    Inconclusive,
+}
+
 /// A 200 response to /models is proof of catalogue reachability, NOT proof
 /// of an accepted API key: some vendors intentionally expose a public model
 /// catalogue. Check whether an otherwise identical request with no credential
 /// is rejected. This is only an authentication-evidence probe; it cannot prove
-/// billable inference access and must never send the candidate secret.
-async fn catalogue_requires_credential(
+/// inference access and must never send the candidate secret.
+async fn catalogue_credential_requirement(
     client: &reqwest::Client,
     models_url: &str,
     auth_style: AuthStyle,
-) -> bool {
+) -> CatalogueCredentialRequirement {
     let mut request = client.get(models_url);
     if auth_style == AuthStyle::Anthropic {
         request = request.header("anthropic-version", "2023-06-01");
     }
-    matches!(
-        request.send().await,
-        Ok(response) if matches!(response.status().as_u16(), 401 | 403)
-    )
+    match request.send().await {
+        Ok(response) if matches!(response.status().as_u16(), 401 | 403) => {
+            CatalogueCredentialRequirement::Required
+        }
+        Ok(response) if response.status().is_success() => CatalogueCredentialRequirement::Public,
+        _ => CatalogueCredentialRequirement::Inconclusive,
+    }
 }
 
 /// OpenRouter's /key preflight returns a sanitized error string. Only
@@ -476,6 +486,7 @@ async fn list_configured_models_inner(
     let mut rejected_keys: usize = 0;
     let mut checked_keys: usize = 0;
     let mut authenticated = false;
+    let mut public_catalogue = false;
     let mut successful_response = None;
 
     for (position, candidate_key) in candidates.iter().enumerate() {
@@ -541,11 +552,23 @@ async fn list_configured_models_inner(
             continue;
         }
 
-        authenticated = matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        let credential_requirement = if using_key_preflight {
+            CatalogueCredentialRequirement::Required
+        } else if attempt.status().is_success() && !candidate_key.is_empty() {
+            catalogue_credential_requirement(&client, &models_url, entry.auth_style).await
+        } else {
+            CatalogueCredentialRequirement::Inconclusive
+        };
+        let supports_key_auth =
+            matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic);
+        authenticated = supports_key_auth
             && !candidate_key.is_empty()
             && attempt.status().is_success()
-            && (using_key_preflight
-                || catalogue_requires_credential(&client, &models_url, entry.auth_style).await);
+            && credential_requirement == CatalogueCredentialRequirement::Required;
+        public_catalogue = supports_key_auth
+            && !candidate_key.is_empty()
+            && attempt.status().is_success()
+            && credential_requirement == CatalogueCredentialRequirement::Public;
         successful_response = Some(attempt);
         break;
     }
@@ -645,6 +668,7 @@ async fn list_configured_models_inner(
             "models": models,
             "fleet_probe": {
                 "authenticated": authenticated,
+                "public_catalogue": public_catalogue,
                 "checked_keys": checked_keys,
                 "rejected_keys": rejected_keys,
             }

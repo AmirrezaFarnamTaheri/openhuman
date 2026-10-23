@@ -296,6 +296,14 @@ impl OpenHumanTurnPrelude {
         } else {
             format!("{context}{original_user_message}")
         };
+        let turn_wall_clock_ms = crate::agent::tinyagents::agent_turn_wall_clock_ms_for(
+            self.runtime_config
+                .as_deref()
+                .is_some_and(crate::agent::tinyagents::chat_provider_is_local),
+        );
+        let turn_budget_guidance =
+            crate::agent::tinyagents::turn_policy::turn_budget_guidance(turn_wall_clock_ms);
+        enriched = format!("{turn_budget_guidance}\n\n{enriched}");
         {
             let mut mutable = self
                 .mutable
@@ -310,12 +318,7 @@ impl OpenHumanTurnPrelude {
             Arc::new(extract_image_placeholders_in_text(original_user_message));
         run_context.dispatch = Some(Arc::new(
             crate::agent::tinyagents::host::TurnDispatchState::new(
-                crate::agent::tinyagents::agent_turn_wall_clock_ms_for(
-                    self.runtime_config
-                        .as_deref()
-                        .is_some_and(crate::agent::tinyagents::chat_provider_is_local),
-                )
-                .map(std::time::Duration::from_millis),
+                turn_wall_clock_ms.map(std::time::Duration::from_millis),
             ),
         ));
         run_context.sandbox_mode = Some(self.sandbox_mode);

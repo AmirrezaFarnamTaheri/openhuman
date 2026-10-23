@@ -154,14 +154,17 @@ cp "${built}" "${artifact}"
 `,
   );
   chmodSync(cargo, 0o755);
-  return { root, log, cargo };
+  const rustc = join(root, "fake-rustc");
+  writeFileSync(rustc, `#!/usr/bin/env bash\nprintf '%s' '${BASE.rustc}'\n`);
+  chmodSync(rustc, 0o755);
+  return { root, log, cargo, rustc };
 }
 
 test("a build stages the artifact with its digest, and the second run is a cache hit", () => {
-  const { root, log, cargo } = fakeRepo();
+  const { root, log, cargo, rustc } = fakeRepo();
   try {
     const out = join(root, "out");
-    const env = { ...process.env, CARGO: cargo, CI_CACHE_DIR: "", OPENHUMAN_MODULE_PATH: "" };
+    const env = { ...process.env, CARGO: cargo, RUSTC: rustc, CI_CACHE_DIR: "", OPENHUMAN_MODULE_PATH: "" };
     const first = main(["tinyx", "--out", out], env, root);
     const name = artifactFilename(SPEC);
     assert.equal(readFileSync(join(out, "tinyx", name), "utf8"), "native bytes");

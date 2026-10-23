@@ -14,7 +14,6 @@ fn activity(rounds: usize, tools: &[&str]) -> FinishActivity {
     FinishActivity {
         tool_rounds: rounds,
         tools_called: tools.iter().map(|t| (*t).to_string()).collect(),
-        tools_executed: tools.iter().map(|t| (*t).to_string()).collect(),
         ..Default::default()
     }
 }
@@ -310,9 +309,9 @@ async fn an_unlinked_wrap_up_does_not_silence_the_check() {
     );
 }
 
-/// Peer convergence: a one-round code edit or single child handoff still needs
-/// a final independent requirement/verification pass; five-round threshold
-/// alone misses short but consequential coding missions.
+/// Peer convergence: one-round code edits and child handoffs still need a final
+/// independent requirements/verification pass; the harness records requested
+/// tool names, so consequential attempts are checked even if execution fails.
 #[test]
 fn single_round_mutations_and_delegations_require_finish_verification() {
     for tool in [
@@ -346,31 +345,27 @@ fn single_round_mutations_and_delegations_require_finish_verification() {
 }
 
 #[test]
-fn requested_or_previewed_structural_writes_do_not_count_as_started_mutations() {
+fn structural_write_requests_require_finish_verification() {
     for tool in ["ast_patch", "chunk_apply"] {
-        let mut activity = FinishActivity {
+        let activity = FinishActivity {
             tool_rounds: 1,
             tools_called: [tool.to_string()].into_iter().collect(),
             ..Default::default()
         };
         assert!(
-            !should_check(&activity),
-            "a refused request did not execute"
-        );
-        activity.tools_executed.insert(tool.into());
-        assert!(!should_check(&activity), "a preview did not start a write");
-        activity.tools_with_side_effects.insert(tool.into());
-        assert!(
             should_check(&activity),
-            "a started write attempt needs a check"
+            "a requested structural write needs a check"
         );
     }
-    for tool in ["file_write", "edit", TODO_TOOL, "delegate_coding"] {
-        assert!(!should_check(&FinishActivity {
-            tool_rounds: 1,
-            tools_called: [tool.to_string()].into_iter().collect(),
-            ..Default::default()
-        }));
+    for tool in ["file_read", "grep", "glob", "current_time"] {
+        assert!(
+            !should_check(&FinishActivity {
+                tool_rounds: 1,
+                tools_called: [tool.to_string()].into_iter().collect(),
+                ..Default::default()
+            }),
+            "read-only {tool} should not force an extra check"
+        );
     }
 }
 

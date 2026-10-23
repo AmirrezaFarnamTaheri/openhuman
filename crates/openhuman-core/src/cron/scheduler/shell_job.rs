@@ -41,7 +41,7 @@ pub(crate) async fn authorize_shell_command(
                     return Ok(());
                 }
                 #[cfg(not(test))]
-                return Err("Command analysis is unavailable.".to_owned());
+                return Err(format!("Command analysis is unavailable: {e}"));
             }
         };
         security

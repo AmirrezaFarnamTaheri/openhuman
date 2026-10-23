@@ -74,6 +74,7 @@ import {
   type ToolTimelineEntry,
 } from '../../store/chatRuntimeSlice';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { togglePanelGroup } from '../../store/layoutSlice';
 import { pendingFollowupAdded } from '../../store/queueSlice';
 import { selectSocketStatus } from '../../store/socketSelectors';
 import {
@@ -92,7 +93,7 @@ import {
   updateThreadTitle,
 } from '../../store/threadSlice';
 import type { ConfirmationModal as ConfirmationModalType } from '../../types/intelligence';
-import type { ThreadMessage } from '../../types/thread';
+import type { Thread, ThreadMessage } from '../../types/thread';
 import { chatThreadPath } from '../../utils/chatRoutes';
 import { CHAT_ATTACHMENTS_ENABLED } from '../../utils/config';
 import {
@@ -111,6 +112,11 @@ import { ThreadWorkspaceChip } from './aui/ThreadWorkspaceChip';
 import { useChatSurfaceRegistration } from './hooks/useChatSurfaceRegistration';
 import { useThreadArtifactsHydration } from './hooks/useThreadArtifactsHydration';
 import { useThreadDraft } from './hooks/useThreadDraft';
+import {
+  isThreadArchived,
+  labelsWithArchived,
+  labelsWithCategory,
+} from './threadList/groupThreads';
 import { ThreadList } from './threadList/ThreadList';
 import { useThreadPins } from './threadList/useThreadPins';
 import { useUnreadThreads } from './threadList/useUnreadThreads';
@@ -265,6 +271,9 @@ const Conversations = ({
   const composer = composerOverride ?? composerProp;
   const { t } = useT();
   const dispatch = useAppDispatch();
+  const collapsedConversationGroups = useAppSelector(
+    state => state.layout?.panels['conversation-dock']?.collapsedGroups
+  );
   const store = useStore<RootState>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -821,7 +830,9 @@ const Conversations = ({
         }
         // Match the sidebar's default General filter here so initial/resume
         // selection can't auto-pick a thread hidden by the selected tab.
-        const visibleThreads = data.threads.filter(t => isThreadVisibleInTab(t, GENERAL_TAB_VALUE));
+        const visibleThreads = data.threads.filter(
+          t => isThreadVisibleInTab(t, GENERAL_TAB_VALUE) && !isThreadArchived(t)
+        );
         // An explicit "open this session" intent (e.g. View work from the Agent
         // Tasks board) wins over passive resume — and bypasses the General-tab
         // visibility filter so a task-labelled session thread can actually be
@@ -853,7 +864,7 @@ const Conversations = ({
         // unrelated General thread or spawn a fresh chat — losing the
         // conversation the user was in (#chat-tab-active-thread).
         const persistedThread = selectedThreadId
-          ? data.threads.find(t => t.id === selectedThreadId)
+          ? data.threads.find(t => t.id === selectedThreadId && !isThreadArchived(t))
           : undefined;
         if (persistedThread) {
           dispatch(setSelectedThread(persistedThread.id));
@@ -1687,14 +1698,7 @@ const Conversations = ({
       }
     }
     return true;
-  }, [
-    handleStopGeneration,
-    inputValue,
-    lastVisibleUserPrompt,
-    selectedThreadActive,
-    selectedThreadId,
-    setInputValue,
-  ]);
+  }, [inputValue, lastVisibleUserPrompt, selectedThreadActive, selectedThreadId, setInputValue]);
 
   // ArrowUp in an empty composer recalls this thread's last prompt for a
   // quick resend or tweak. Returns whether it did, so the caret key otherwise
@@ -1871,13 +1875,39 @@ const Conversations = ({
     [threads, isThreadRunning]
   );
   const unreadThreadIds = useUnreadThreads(runningThreadIds, selectedThreadId ?? null);
-  const { isPinned: isThreadPinnedNow, togglePin: toggleThreadPin } = useThreadPins();
+  const threadLabelWritesRef = useRef(new Map<string, Promise<void>>());
+  const persistThreadLabels = useCallback(
+    (thread: Thread, update: (labels: readonly string[] | undefined) => string[]) => {
+      const writes = threadLabelWritesRef.current;
+      const previous = writes.get(thread.id) ?? Promise.resolve();
+      const operation = previous
+        .catch(() => {})
+        .then(async () => {
+          const latest =
+            store.getState().thread.threads.find(item => item.id === thread.id) ?? thread;
+          await threadApi.updateLabels(thread.id, update(latest.labels));
+          await dispatch(loadThreads()).unwrap();
+        });
+      writes.set(thread.id, operation);
+      const clear = () => {
+        if (writes.get(thread.id) === operation) writes.delete(thread.id);
+      };
+      void operation.then(clear, clear);
+      return operation;
+    },
+    [dispatch, store]
+  );
+  const { isPinned: isThreadPinnedNow, togglePin: toggleThreadPin } =
+    useThreadPins(persistThreadLabels);
 
   // Thread list (left pane). Rendered through `TwoPanelLayout` below in page
   // mode; the embedded `variant="sidebar"` mode shows no thread list at all.
   const threadSidebar = (
     <ThreadList
       threads={sortedThreads}
+      childThreads={threads.filter(thread => Boolean(thread.parentThreadId))}
+      collapsedGroups={collapsedConversationGroups}
+      onToggleGroup={group => dispatch(togglePanelGroup({ id: 'conversation-dock', group }))}
       selectedThreadId={selectedThreadId ?? null}
       onCreateThread={() => handleCreateNewThread()}
       onSelectThread={id => {
@@ -1892,6 +1922,12 @@ const Conversations = ({
       unreadThreadIds={unreadThreadIds}
       isPinned={isThreadPinnedNow}
       onTogglePin={toggleThreadPin}
+      onArchiveThread={(thread, archived) =>
+        persistThreadLabels(thread, labels => labelsWithArchived(labels, archived))
+      }
+      onSetThreadCategory={(thread, category) =>
+        persistThreadLabels(thread, labels => labelsWithCategory(labels, category))
+      }
       onRequestDelete={thread =>
         setDeleteModal({
           isOpen: true,

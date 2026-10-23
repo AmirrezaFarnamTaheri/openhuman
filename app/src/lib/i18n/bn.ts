@@ -421,6 +421,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'গত ৭ দিন',
   'chat.sidebar.group.previous30Days': 'গত ৩০ দিন',
   'chat.sidebar.group.older': 'পুরোনো',
+  'chat.sidebar.archived': 'আর্কাইভ করা',
+  'chat.sidebar.restoreThread': 'পুনরুদ্ধার',
   'chat.sidebar.pinThread': 'কথোপকথন পিন করুন',
   'chat.sidebar.unpinThread': 'কথোপকথন আনপিন করুন',
   'chat.sidebar.unread': 'নতুন উত্তর',
@@ -2390,6 +2392,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'প্রতি প্রদানকারী গ্রুপে সর্বোচ্চ ১২৮টি API কী রাখা যায়।',
   'settings.ai.fleet.partialKeyVerified':
     'কিছু API কী প্রত্যাখ্যাত হয়েছে, তবে অন্য একটি কী যাচাই হয়েছে। কী-এর অবস্থা পরীক্ষা করুন।',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman প্রদানকারীর মডেল তালিকা দিয়ে এই কী-গুলোর গ্রুপ নিশ্চিত করতে পারেনি। কী-গুলো সংরক্ষণ করা হয়েছে; মডেল অনুরোধ পাঠালে পরীক্ষা করা হবে।',
   'settings.ai.apiKeyFieldLabel': 'API কী ফিল্ড লেবেল',
   'settings.ai.apiKeyRequired': 'চালিয়ে যেতে আপনার API কী পেস্ট করুন।',
   'settings.ai.apiKeyStoredEncrypted': 'API কী এনক্রিপ্ট করে সংরক্ষিত',
@@ -3792,6 +3796,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'অনুসন্ধান কর্ম...',
   'settings.developerMenu.eventLog.column.time': 'সময়',
   'settings.developerMenu.eventLog.column.event': 'ইভেন্ট',
+  'settings.agentAccess.totalTimeout.label': 'টার্নের মোট সময়সীমা',
+  'settings.agentAccess.totalTimeout.desc':
+    'ডিফল্টভাবে একটি টার্নের মোট সময়সীমা নেই। সীমা নির্ধারণ করতে OPENHUMAN_AGENT_TURN_TIMEOUT_SECS সেট করুন; 0 দিলে এটি বন্ধ থাকে। পৃথক অ্যাকশন ও আটকে থাকা কলের সুরক্ষা চালু থাকে।',
   'settings.agentAccess.group.approvals': 'বিবিধ বৈশিষ্ট্য',
   'settings.agentAccess.group.fileSystem': 'ফাইল-সিস্টেম',
   'settings.agentAccess.group.limits': 'সীমা',
@@ -5112,6 +5119,8 @@ const messages: TranslationMap = {
   'settings.layout.corners.none': 'কোনোটিই নয়',
 
   'settings.layout.corners.round': 'গোলাকার',
+  'settings.agentAccess.hideShellWindows.label': 'শেল উইন্ডো লুকান',
+  'settings.agentAccess.hideShellWindows.desc': 'Windows-এ নতুন শেল সেশনের টার্মিনাল উইন্ডো লুকান।',
 };
 
 export default messages;

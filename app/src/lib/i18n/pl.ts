@@ -429,6 +429,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Ostatnie 7 dni',
   'chat.sidebar.group.previous30Days': 'Ostatnie 30 dni',
   'chat.sidebar.group.older': 'Starsze',
+  'chat.sidebar.archived': 'Zarchiwizowane',
+  'chat.sidebar.restoreThread': 'Przywróć',
   'chat.sidebar.pinThread': 'Przypnij rozmowę',
   'chat.sidebar.unpinThread': 'Odepnij rozmowę',
   'chat.sidebar.unread': 'Nowa odpowiedź',
@@ -2425,6 +2427,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Grupa dostawcy obsługuje maksymalnie 128 kluczy API.',
   'settings.ai.fleet.partialKeyVerified':
     'Niektóre klucze API odrzucono, ale inny został zweryfikowany. Sprawdź stan kluczy dostawcy.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman nie mógł potwierdzić tej grupy kluczy na podstawie katalogu dostawcy. Klucze zostały zapisane i zostaną sprawdzone przy wysłaniu żądania do modelu.',
   'settings.ai.apiKeyFieldLabel': 'Klucz API',
   'settings.ai.apiKeyRequired': 'Wklej swój klucz API, aby kontynuować.',
   'settings.ai.apiKeyStoredEncrypted': 'Klucz API przechowywany w postaci zaszyfrowanej',
@@ -3850,6 +3854,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Poszukiwania...',
   'settings.developerMenu.eventLog.column.time': 'Czas',
   'settings.developerMenu.eventLog.column.event': 'Zdarzenie',
+  'settings.agentAccess.totalTimeout.label': 'Łączny limit czasu tury',
+  'settings.agentAccess.totalTimeout.desc':
+    'Domyślnie nie ma łącznego limitu czasu tury. Ustaw OPENHUMAN_AGENT_TURN_TIMEOUT_SECS, aby go określić; wartość 0 go wyłącza. Nadal działają zabezpieczenia dla pojedynczych działań i zablokowanych wywołań.',
   'settings.agentAccess.group.approvals': 'Zatwierdzenia',
   'settings.agentAccess.group.fileSystem': 'System plików',
   'settings.agentAccess.group.limits': 'Granice',
@@ -5183,6 +5190,9 @@ const messages: TranslationMap = {
   'settings.layout.corners.round': 'Zaokrąglone',
   'settings.layout.contrast.subtle': 'Subtelny',
   'settings.layout.contrast.default': 'Domyślne',
+  'settings.agentAccess.hideShellWindows.label': 'Ukryj okna terminala',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Ukrywa natywne okna terminala w systemie Windows dla nowych sesji powłoki.',
 };
 
 export default messages;
