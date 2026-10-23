@@ -1,5 +1,5 @@
-//! Qualifies the source Schedule v4 contract against the pinned v0.8.23
-//! Schedule v3 artifact. This target owns a process so the existing module and
+//! Qualifies the source Schedule v7 contract against the pinned v0.8.28
+//! artifact. This target owns a process so the existing module and
 //! storage slots cannot affect another suite. Install the registry releases
 //! with scripts/ci/self-hosted/install-test-modules.sh before running; no linked factory,
 //! source override, missing-artifact skip or network fallback is used here.
@@ -25,12 +25,12 @@ use tinyflows_bus::schedule;
 const RELEASED_MODULE_VERSION: &str = "0.1.0";
 
 async fn assert_released_module(config: &Config) {
-    assert_eq!(schedule::CONTRACT_VERSION, 4, "review the source contract");
+    assert_eq!(schedule::CONTRACT_VERSION, 7, "review the source contract");
     let record = modules::registry::find("tinyflows").unwrap();
-    assert_eq!(record.version, "0.8.23");
+    assert_eq!(record.version, "0.8.28");
     modules::ops::ensure_loaded(config, record.id)
         .await
-        .expect("install the registry-pinned v0.8.23 TinyFlows release before this test");
+        .expect("install the registry-pinned v0.8.28 TinyFlows release before this test");
     let status = modules::ops::list(config)
         .into_iter()
         .find(|status| status.id == record.id)
@@ -46,7 +46,7 @@ async fn assert_released_module(config: &Config) {
         .into_iter()
         .find(|info| info.manifest.bus_name.as_str() == record.bus_name)
         .expect("the real module is loaded on the host bus");
-    // v0.8.23's tinyflows-module/Cargo.toml declares 0.1.0. Its exports.rs
+    // v0.8.28's tinyflows-module/Cargo.toml declares 0.1.0. Its exports.rs
     // uses that crate version for the ABI, module manifest and interfaces,
     // separately from the release archive's version and Schedule contract.
     assert_eq!(info.version, RELEASED_MODULE_VERSION);
@@ -74,7 +74,7 @@ async fn assert_released_module(config: &Config) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn released_schedule_v3_serves_the_host_v4_subset_and_keeps_policy() {
+async fn released_schedule_v7_serves_the_host_contract_and_keeps_policy() {
     let workspace = tempfile::tempdir().unwrap();
     let mut config = Config {
         workspace_dir: workspace.path().join("workspace"),
@@ -157,24 +157,20 @@ async fn released_schedule_v3_serves_the_host_v4_subset_and_keeps_policy() {
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].status, "error");
 
-        // The v0.8.23 release owns cron_jobs and keeps all three instant
-        // fields. The newer source uses cron.jobs and milliseconds alone;
-        // the host document port deliberately admits both layouts. Make the
-        // released fixture due without sleeping or requesting v4's clock.
+        // The pinned release uses schedule storage schema v2: one namespaced
+        // job document with millisecond instants. Make it due without sleeping.
         fail.store(false, Ordering::SeqCst);
         let docs = storage::current_scoped().unwrap().unwrap();
         let mut stored = docs
             .documents()
-            .get("cron_jobs", &job.id)
+            .get("cron.jobs", &job.id)
             .await
             .unwrap()
             .unwrap();
         let due = chrono::Utc::now() - chrono::Duration::seconds(1);
-        stored.doc["next_run"] = json!(due.to_rfc3339());
         stored.doc["next_run_ms"] = json!(due.timestamp_millis());
-        stored.doc["next_run_ns"] = json!(due.timestamp_nanos_opt().unwrap());
         docs.documents()
-            .put("cron_jobs", &job.id, stored.doc, Precondition::None)
+            .put("cron.jobs", &job.id, stored.doc, Precondition::None)
             .await
             .unwrap();
         cron::scheduler::run_live_agent_pass(1).await;

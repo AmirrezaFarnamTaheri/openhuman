@@ -61,10 +61,13 @@ The installed OpenHuman application has not been replaced.
 - Local commit `76ef8501ee` adds approval fixture diagnostics and a reachable
   release-security reference. It is waiting for the current CI run to finish
   before the next push, avoiding cancellation of unfinished verification.
-- Local documentation regeneration failed with disk error 112 while building
-  the capability-report example. D: had approximately 0.8 GB free. Automatic
-  approval review rejected generated-cache deletion; a user request to free
-  space is pending. The generated documentation drift remains unresolved.
+- The full documentation generator initially failed with disk error 112. A
+  source-backed candidate was regenerated with the existing capability snapshot,
+  correcting the default autonomy flag and the removed structural-code feature.
+  Snapshot checking passes; compiled capability validation is still required.
+- Cargo's package-specific cleanup (`cargo clean --package openhuman --profile
+  dev`) subsequently removed 11.1 GiB of generated build files. Local Rust
+  test-target checking has resumed; no user cleanup is needed for this blocker.
 - The fork CI image build `39954844471` succeeded and published to
   `ghcr.io/amirrezafarnamtaheri/openhuman_ci`. A desktop release has not been
   published. The approved run-panel scope remains incomplete.

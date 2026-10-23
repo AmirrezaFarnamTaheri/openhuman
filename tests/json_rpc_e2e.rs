@@ -8582,12 +8582,12 @@ async fn public_paths_accessible_without_token() {
     // headers, etc.). The invariant here is that the auth middleware does NOT
     // reject them with 401.
     //
-    // NOTE: `/events` and `/ws/dictation` enforce their own credential inside
+    // NOTE: `/events` and `/ws/live-voice` enforce their own credential inside
     // the handler (bind token / bearer / `?token=`), so an unauthenticated GET
-    // to those returns 401 from the HANDLER (not the middleware). `/events`
+    // to those returns 401 at the route boundary. `/events`
     // requires a `client_id` query param, so an empty request is rejected by
     // Axum's extractor (400) before the handler's own auth runs — it stays in
-    // this `!= 401` group. `/ws/dictation` is asserted separately below now
+    // this `!= 401` group. `/ws/live-voice` is asserted separately below now
     // that it is authenticated at the upgrade boundary (C4 / issue #1924).
     for path in ["/events"] {
         let resp = client
@@ -8603,18 +8603,18 @@ async fn public_paths_accessible_without_token() {
         );
     }
 
-    // `/ws/dictation` is now authenticated at the upgrade boundary (C4 /
+    // `/ws/live-voice` is now authenticated at the upgrade boundary (C4 /
     // issue #1924): an unauthenticated request (no bearer header, no
-    // `?token=`) must be rejected with 401 by the handler before any upgrade.
+    // `?token=`) must be rejected with 401 before any upgrade.
     let resp = client
-        .get(format!("{base}/ws/dictation"))
+        .get(format!("{base}/ws/live-voice"))
         .send()
         .await
-        .unwrap_or_else(|e| panic!("GET /ws/dictation: {e}"));
+        .unwrap_or_else(|e| panic!("GET /ws/live-voice: {e}"));
     assert_eq!(
         resp.status(),
         StatusCode::UNAUTHORIZED,
-        "/ws/dictation must reject unauthenticated upgrades with 401 (got {})",
+        "/ws/live-voice must reject unauthenticated upgrades with 401 (got {})",
         resp.status()
     );
 
