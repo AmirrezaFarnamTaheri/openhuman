@@ -77,3 +77,17 @@ test("a forced dev profile builds release-declared measurements in the dev profi
   assert.equal(calls.get("linux_fleet").includes("--features"), false);
   assert.ok(calls.get("mcp").includes("mcp"));
 });
+
+test("CI smoke runs every example in dev and bounds the fleet size", () => {
+  const examples = discoverExamples();
+  const calls = new Map();
+  runExamples({examples, environment: {}, ciSmoke: true, run(_command, args) {
+    const name = args[args.indexOf("--example") + 1];
+    calls.set(name, args);
+    return {status: 0, stdout: `EXAMPLE_OK ${name}\n`, stderr: ""};
+  }});
+  assert.equal(calls.size, examples.length);
+  for (const args of calls.values()) assert.equal(args.includes("--release"), false);
+  assert.deepEqual(calls.get("linux_fleet").slice(-2), ["--", "2"]);
+  assert.ok(calls.get("linux_fleet").includes("--no-default-features"));
+});
