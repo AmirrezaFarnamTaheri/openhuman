@@ -31,7 +31,8 @@ pub(super) fn autonomy_signature(config: &Config) -> String {
         profile_binding,
         crate::security::credentials::profiles::profile_revision(
             &crate::security::credentials::state_dir_from_config(config),
-        ),
+        )
+        .map(|revision| revision.to_string()),
     )) {
         Ok(value) => value,
         Err(_) => {
