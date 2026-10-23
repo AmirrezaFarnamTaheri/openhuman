@@ -60,6 +60,17 @@ async fn install_server(config: &Config, name: &str, server: Value) -> String {
         .expect("applied server appears in module status")
 }
 
+async fn connect_fixture(config: &Config, server_id: &str) {
+    if let Err(error) =
+        openhuman_core::mcp::registry::ops::mcp_clients_connect(config, server_id.to_owned()).await
+    {
+        let status = openhuman_core::mcp::registry::ops::mcp_clients_status(config)
+            .await
+            .map(|outcome| outcome.value);
+        panic!("connect stdio fixture through TinyBus: {error}; module status: {status:?}");
+    }
+}
+
 fn stdio_server() -> Value {
     json!({
         "command": env!("CARGO_BIN_EXE_test-mcp-stub"),
@@ -80,9 +91,7 @@ async fn module_tool_call_reports_unknown_tool_as_error() {
     openhuman_core::mcp::registry::ops::mcp_clients_set_enabled(&config, server_id.clone(), true)
         .await
         .expect("enable server");
-    openhuman_core::mcp::registry::ops::mcp_clients_connect(&config, server_id.clone())
-        .await
-        .expect("connect stdio fixture through TinyBus");
+    connect_fixture(&config, &server_id).await;
 
     let result = openhuman_core::mcp::registry::ops::mcp_clients_tool_call(
         &config,
@@ -107,9 +116,7 @@ async fn disabling_server_drops_its_live_module_connection() {
     openhuman_core::mcp::registry::ops::mcp_clients_set_enabled(&config, server_id.clone(), true)
         .await
         .expect("enable server");
-    openhuman_core::mcp::registry::ops::mcp_clients_connect(&config, server_id.clone())
-        .await
-        .expect("connect stdio fixture through TinyBus");
+    connect_fixture(&config, &server_id).await;
     assert!(
         openhuman_core::mcp::registry::connections::is_connected_for_config(&config, &server_id)
             .await
@@ -158,9 +165,7 @@ async fn per_config_lookups_are_isolated_by_workspace() {
     ops::mcp_clients_set_enabled(&config_a, server_id.clone(), true)
         .await
         .expect("enable server");
-    ops::mcp_clients_connect(&config_a, server_id.clone())
-        .await
-        .expect("connect server in workspace A");
+    connect_fixture(&config_a, &server_id).await;
 
     assert!(connections::is_connected_for_config(&config_a, &server_id).await);
     assert!(!connections::is_connected_for_config(&config_b, &server_id).await);
