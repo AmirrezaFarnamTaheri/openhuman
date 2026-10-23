@@ -384,13 +384,18 @@ fn an_invalid_flow_record_keeps_the_import_open_for_retry() {
             panic!("retry should remain incomplete without new writes: {first:?} / {retry:?}")
         }
     }
-    assert!(legacy_flow_import_pending(&backend, &config, &Scope::local()).unwrap());
-    assert!(!legacy_flow_import_pending(
-        &backend,
-        &config,
-        &crate::storage::scope_for_profile("another-profile"),
-    )
-    .unwrap());
+    let pending = |scope| {
+        let backend = Arc::clone(&backend);
+        let config = config.clone();
+        crate::storage::block_on_anyhow(async move {
+            legacy_flow_import_pending(&backend, &config, &scope).await
+        })
+        .unwrap()
+    };
+    assert!(pending(Scope::local()));
+    assert!(!pending(crate::storage::scope_for_profile(
+        "another-profile"
+    )));
     assert_eq!(tree(dir.path()), before, "the legacy files were modified");
 }
 
