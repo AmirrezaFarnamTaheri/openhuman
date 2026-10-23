@@ -154,7 +154,7 @@ async fn a_managed_file_key_is_read_through_the_scoped_version_store() {
         .mount(&server)
         .await;
     let workspace = tempfile::tempdir().unwrap();
-    let root = version_files_dir(workspace.path());
+    let root = openhuman_embed::__host::artifact_publisher::version_files_dir(workspace.path());
     // FileRef keys include the artifacts/files namespace relative to the
     // FsFileStore root; writing a shortened path masks a genuine reader bug.
     let stored = root
@@ -178,7 +178,7 @@ async fn a_managed_file_key_is_read_through_the_scoped_version_store() {
         ..PublishOptions::default()
     };
     let published = publisher(server.uri(), AutonomyLevel::Full)
-        .with_workspace_dir(workspace.path())
+        .with_version_files(&root)
         .publish(&record, &version, &options)
         .await
         .unwrap();

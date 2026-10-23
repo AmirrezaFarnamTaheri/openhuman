@@ -187,7 +187,7 @@ fn the_flows_record_serves_the_schedule_object() {
     assert_ne!(record.object_path, schedule::OBJECT_PATH);
     assert_ne!(schedule::INTERFACE, schedule::CALLBACK_INTERFACE);
     assert_ne!(schedule::INTERFACE, schedule::DOCUMENT_INTERFACE);
-    assert_eq!(schedule::CONTRACT_VERSION, 6, "the host speaks contract v6");
+    assert_eq!(schedule::CONTRACT_VERSION, 7, "the host speaks contract v7");
     assert_eq!(component_for("tinyflows"), Some("tinyflows"));
 }
 

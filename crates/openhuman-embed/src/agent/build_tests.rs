@@ -33,6 +33,7 @@ fn config_fn_final_autonomy_is_captured_on_the_built_agent_context() {
         .build()
         .unwrap();
     let test = tokio.spawn(async {
+        let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
         use openhuman_core::config::{AutonomyConfig, Config};
         use openhuman_core::core::runtime::AutonomyTierSource;
         use openhuman_core::security::AutonomyLevel;

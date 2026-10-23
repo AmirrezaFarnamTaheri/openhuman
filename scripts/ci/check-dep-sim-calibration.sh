@@ -39,6 +39,8 @@
 # 286 -> 283 on 2026-09-29: the merged dependency graph now resolves three
 # fewer unique crate names in the flows profile; keep calibration aligned
 # with the lowered kernel floor.
+# 311 -> 298 on 2026-10-23: CI run 39955579476 measured the refreshed
+# flows graph at 318 packages and 298 names, with three native builds.
 # See the kernel-floor history for prior raises. The current
 # macOS graph resolves three more names than CI Linux; this calibrates against
 # the Linux target used by CI.
@@ -135,6 +137,6 @@ cd "$(dirname "$0")/../.."
 # are split out of tinyagents-harness and tinystoragedrivers-core; see the
 # 334/311/3 entry in `kernel-floor.limits`.
 # See kernel-floor.limits.
-EXPECTED_NAMES=311
+EXPECTED_NAMES=298
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"

@@ -159,6 +159,11 @@ test("linked TinyDocs E2E enables its required local feature", () => {
     e2eBranch >= 0,
     "the Rust E2E runner gives linked TinyDocs an explicit branch",
   );
+  assert.match(
+    e2eSource.slice(e2eBranch, e2eSource.indexOf("\n  fi\n", e2eBranch)),
+    /\[ "\$suite" = "inbound_linked_e2e" \]/,
+    "the inbound linked suite receives its required features too",
+  );
   const e2eEnd = e2eSource.indexOf("\n  fi\n", e2eBranch);
   assert.ok(
     e2eEnd > e2eBranch,
@@ -166,7 +171,7 @@ test("linked TinyDocs E2E enables its required local feature", () => {
   );
   assert.match(
     e2eSource.slice(e2eBranch, e2eEnd),
-    /--features "\$PRODUCT_FEATURES,linked-modules"/,
+    /--features "\$PRODUCT_FEATURES,linked-modules,inbound-queues"/,
     "the E2E target runs with linked-modules in addition to product features",
   );
 });
