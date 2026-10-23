@@ -209,7 +209,6 @@ The compiled capability report describes this build:
     "storage-mongodb": false,
     "storage-s3": false,
     "storage-sqlite": true,
-    "structural-code": true,
     "tinymemes": true,
     "voice": false,
     "web3": false
@@ -265,7 +264,7 @@ The compiled capability report describes this build:
     "templates": []
   },
   "configuration": {
-    "autonomy_enabled": true,
+    "autonomy_enabled": false,
     "privacy": "Standard",
     "secrets_encrypted": true,
     "cron_enabled": true,
