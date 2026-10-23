@@ -1603,7 +1603,8 @@ async fn approval_gate_approve_flow_inner() {
         .unwrap_or_else(|| panic!("chat_done missing full_response: {done}"));
     assert!(
         full_response.contains("APPROVED_WRITE_CANARY"),
-        "full_response must contain APPROVED_WRITE_CANARY; got: {full_response}"
+        "full_response must contain APPROVED_WRITE_CANARY; got: {full_response}; captured upstream requests: {}",
+        serde_json::to_string(&with_captured(|requests| requests.clone())).unwrap()
     );
 
     // The file was actually written under the temp HOME (action_dir = $HOME/OpenHuman/projects/).
@@ -1693,7 +1694,8 @@ async fn approval_gate_deny_flow_inner() {
         .unwrap_or_else(|| panic!("chat_done missing full_response: {done}"));
     assert!(
         full_response.contains("DENIAL_ACK_CANARY"),
-        "full_response must contain DENIAL_ACK_CANARY; got: {full_response}"
+        "full_response must contain DENIAL_ACK_CANARY; got: {full_response}; captured upstream requests: {}",
+        serde_json::to_string(&with_captured(|requests| requests.clone())).unwrap()
     );
     assert_model_saw_the_refusal(&with_captured(|c| c.clone()));
 
@@ -1774,7 +1776,8 @@ async fn approval_gate_timeout_inner() {
         .unwrap_or_else(|| panic!("chat_done missing full_response: {done}"));
     assert!(
         full_response.contains("TIMEOUT_ACK_CANARY"),
-        "full_response must contain TIMEOUT_ACK_CANARY after TTL auto-deny; got: {full_response}"
+        "full_response must contain TIMEOUT_ACK_CANARY after TTL auto-deny; got: {full_response}; captured upstream requests: {}",
+        serde_json::to_string(&with_captured(|requests| requests.clone())).unwrap()
     );
     assert_model_saw_the_expiry(&with_captured(|c| c.clone()));
 
