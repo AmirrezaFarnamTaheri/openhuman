@@ -143,11 +143,14 @@ fn legacy_voice_settings_boot_without_starting_retired_listeners() {
     );
     assert!(
         credential.get("error").is_none(),
-        "installing the local test credential failed"
+        "installing the local test credential failed: {credential}"
     );
     let status = rpc(&base, "openhuman.voice_status", json!({}));
     let voice_enabled = status.get("error").is_none();
-    assert!(voice_enabled, "the voice RPC component must remain enabled");
+    assert!(
+        voice_enabled,
+        "the voice RPC component must remain enabled: {status}"
+    );
     let observed_engine = status
         .pointer("/result/stt_engine")
         .and_then(Value::as_str)
@@ -157,8 +160,16 @@ fn legacy_voice_settings_boot_without_starting_retired_listeners() {
         "legacy non-default engine must survive host configuration load"
     );
 
-    std::thread::sleep(Duration::from_millis(500));
-    let logs = std::fs::read_to_string(log_path).unwrap();
+    let startup_deadline = Instant::now() + Duration::from_secs(10);
+    let logs = loop {
+        let logs = std::fs::read_to_string(&log_path).unwrap();
+        if logs.contains("login-gated services started concurrently")
+            || Instant::now() >= startup_deadline
+        {
+            break logs;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
     let gated_startup_completed = logs.contains("login-gated services started concurrently");
     assert!(
         gated_startup_completed,
