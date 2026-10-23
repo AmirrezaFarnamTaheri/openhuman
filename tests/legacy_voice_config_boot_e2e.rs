@@ -124,7 +124,11 @@ fn legacy_voice_settings_boot_without_starting_retired_listeners() {
         .env("OPENHUMAN_WORKSPACE", &workspace)
         .env("OPENHUMAN_DOTENV_PATH", &dotenv_path)
         .env("OPENHUMAN_CORE_TOKEN", TOKEN)
-        .env("OPENHUMAN_KEYRING_BACKEND", "file")
+        .env("OPENHUMAN_KEYRING_BACKEND", "encrypted_file")
+        // This child owns a scratch keychain; no OS keychain or operator key
+        // participates in the boot regression.
+        .env("OPENHUMAN_KEYRING_MASTER_KEY", "11".repeat(32))
+        .env_remove("OPENHUMAN_KEYRING_MASTER_KEY_FILE")
         .env("RUST_LOG", "info")
         .env("BACKEND_URL", backend_url)
         .env_remove("OPENHUMAN_BACKEND_API_KEY")
