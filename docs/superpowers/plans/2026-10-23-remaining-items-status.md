@@ -1,7 +1,8 @@
 # Remaining OpenHuman work
 
-This is a working status, not a completion report. Source changes are local and
-the installed OpenHuman application has not been replaced.
+This is a working status, not a completion report. Changes are published in
+[the personal fork PR #17](https://github.com/AmirrezaFarnamTaheri/openhuman/pull/17).
+The installed OpenHuman application has not been replaced.
 
 ## Current local progress
 
@@ -52,8 +53,21 @@ the installed OpenHuman application has not been replaced.
 
 ## Publication and latest verification
 
-- User requested a new PR in `AmirrezaFarnamTaheri/openhuman`, with push conditional
-  on green checks. No PR or push yet.
+- The user's OpenHuman fork PR #17 is open. Published head `deeaec453d` includes
+  CI compilation fixes, current release expectations, runtime test isolation,
+  asynchronous workflow import readiness, current live-voice RPC coverage, and
+  preservation of MCP sandbox grants. CI run `39979564208` and Rust E2E run
+  `39979564425` are still running; no all-green claim is supported.
+- Local commit `76ef8501ee` adds approval fixture diagnostics and a reachable
+  release-security reference. It is waiting for the current CI run to finish
+  before the next push, avoiding cancellation of unfinished verification.
+- Local documentation regeneration failed with disk error 112 while building
+  the capability-report example. D: had approximately 0.8 GB free. Automatic
+  approval review rejected generated-cache deletion; a user request to free
+  space is pending. The generated documentation drift remains unresolved.
+- The fork CI image build `39954844471` succeeded and published to
+  `ghcr.io/amirrezafarnamtaheri/openhuman_ci`. A desktop release has not been
+  published. The approved run-panel scope remains incomplete.
 - Published the explicitly approved TinyAgents dependency draft PR:
   https://github.com/tinyhumansai/tinyagents/pull/567. Its current-upstream branch
   passed 72 ledger tests, 26 queue tests, formatting and scoped Clippy. All
