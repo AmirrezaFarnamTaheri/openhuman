@@ -12239,13 +12239,10 @@ async fn json_rpc_channel_web_chat_with_speak_reply_invokes_reply_speech_inner()
 
 // ── Model resolution and voice settings ─────────────────────────────────
 
-/// E2E: voice-server settings round-trip over JSON-RPC — Phase 2 always-on
-/// toggle + "Hey Tiny" wake word. Regression guard for the bug where the
-/// Settings toggle silently did nothing because `always_on_enabled` was absent
-/// from the `update_voice_server_settings` controller param schema (rejected as
-/// "unknown param 'always_on_enabled'" before reaching the handler).
+/// Live voice settings persist partial patches and explicit null overrides
+/// across JSON-RPC requests without opening a microphone.
 #[tokio::test]
-async fn json_rpc_voice_server_settings_roundtrip_always_on_and_wake_word() {
+async fn json_rpc_live_voice_settings_roundtrip_preserves_and_clears_overrides() {
     let _env_lock = json_rpc_e2e_env_lock_async().await;
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path();
@@ -12262,64 +12259,47 @@ async fn json_rpc_voice_server_settings_roundtrip_always_on_and_wake_word() {
     let rpc_base = format!("http://{}", rpc_addr);
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // GET defaults — wake_word "Hey Tiny", always-on off.
     let initial = post_json_rpc(
         &rpc_base,
         7401,
-        "openhuman.config_get_voice_server_settings",
+        "openhuman.voice_live_settings_get",
         json!({}),
     )
     .await;
-    let initial_outer = assert_no_jsonrpc_error(&initial, "get_voice_server_settings initial");
-    assert_eq!(
-        initial_outer
-            .get("result")
-            .and_then(|r| r.get("always_on_enabled"))
-            .and_then(Value::as_bool),
-        Some(false),
-        "default always_on_enabled should be false, envelope: {initial_outer}"
-    );
-    assert_eq!(
-        initial_outer
-            .get("result")
-            .and_then(|r| r.get("wake_word"))
-            .and_then(Value::as_str),
-        Some("Hey Tiny"),
-        "default wake_word should be 'Hey Tiny', envelope: {initial_outer}"
-    );
-
-    // UPDATE — change the wake word and pass `always_on_enabled` (the param that
-    // used to be rejected). Kept false so the test never opens a real mic.
+    let initial = assert_no_jsonrpc_error(&initial, "live voice defaults");
+    assert_eq!(initial["result"]["default_provider"], "gemini-hosted");
     let update = post_json_rpc(
         &rpc_base,
         7402,
-        "openhuman.config_update_voice_server_settings",
-        json!({ "always_on_enabled": false, "wake_word": "Computer" }),
+        "openhuman.voice_live_settings_set",
+        json!({ "gemini": { "voice": "Kore", "language": "en-US" } }),
     )
     .await;
-    assert_no_jsonrpc_error(
-        &update,
-        "update_voice_server_settings (always_on_enabled + wake_word)",
-    );
-
-    // GET again — wake word persisted, no error.
-    let after = post_json_rpc(
+    let updated = assert_no_jsonrpc_error(&update, "persist live voice overrides");
+    assert_eq!(updated["result"]["gemini"]["voice"], "Kore");
+    assert_eq!(updated["result"]["gemini"]["language"], "en-US");
+    let patch = post_json_rpc(
         &rpc_base,
         7403,
-        "openhuman.config_get_voice_server_settings",
+        "openhuman.voice_live_settings_set",
+        json!({ "gemini": { "voice": null } }),
+    )
+    .await;
+    assert_no_jsonrpc_error(&patch, "clear one live voice override");
+    let after = post_json_rpc(
+        &rpc_base,
+        7404,
+        "openhuman.voice_live_settings_get",
         json!({}),
     )
     .await;
-    let after_outer = assert_no_jsonrpc_error(&after, "get_voice_server_settings after update");
+    let after = assert_no_jsonrpc_error(&after, "read persisted live voice overrides");
+    assert!(after["result"]["gemini"]["voice"].is_null());
+    assert_eq!(after["result"]["gemini"]["language"], "en-US");
     assert_eq!(
-        after_outer
-            .get("result")
-            .and_then(|r| r.get("wake_word"))
-            .and_then(Value::as_str),
-        Some("Computer"),
-        "wake_word should persist, envelope: {after_outer}"
+        after["result"]["default_provider"],
+        initial["result"]["default_provider"]
     );
-
     rpc_join.abort();
 }
 
