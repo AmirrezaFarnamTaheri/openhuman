@@ -569,12 +569,15 @@ fn one_runtime_hosts_independently_configured_agents() {
                 .agent(AgentSpec::new("unnamed").memory(MemoryBinding::new("  ")))
                 .expect_err("a blank memory agent id");
             assert!(matches!(err, AgentError::Invalid(_)), "{err:?}");
-            drop(bound);
-
-            // Dropping every handle releases the id.
-            drop(withholding_agent);
-            drop(gamma);
-            drop(budget_agent);
+            // Await cleanup while the handles are live so asynchronous drop
+            // cleanup cannot race id reuse or workspace removal.
+            for id in ["employee", "withholding", "gamma", "budget"] {
+                runtime
+                    .remove_agent(id)
+                    .await
+                    .expect("cleanup acknowledged");
+            }
+            drop((bound, withholding_agent, gamma, budget_agent));
             assert_eq!(
                 runtime.agent_ids(),
                 vec!["alpha".to_string(), "beta".to_string()]
@@ -583,9 +586,13 @@ fn one_runtime_hosts_independently_configured_agents() {
                 .agent(AgentSpec::new("gamma"))
                 .expect("id reusable after drop");
 
-            drop(alpha);
-            drop(beta);
-            drop(_gamma_again);
+            for id in ["alpha", "beta", "gamma"] {
+                runtime
+                    .remove_agent(id)
+                    .await
+                    .expect("final cleanup acknowledged");
+            }
+            drop((alpha, beta, _gamma_again));
             let Ok(runtime) = std::sync::Arc::try_unwrap(runtime) else {
                 panic!("the test is the runtime's sole owner once every agent is dropped");
             };
