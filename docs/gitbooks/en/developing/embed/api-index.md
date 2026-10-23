@@ -264,7 +264,7 @@ The compiled capability report describes this build:
     "templates": []
   },
   "configuration": {
-    "autonomy_enabled": false,
+    "autonomy_enabled": true,
     "privacy": "Standard",
     "secrets_encrypted": true,
     "cron_enabled": true,

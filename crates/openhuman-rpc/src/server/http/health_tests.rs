@@ -31,14 +31,28 @@ async fn get_schema_memory_entries_match_the_pre_refactor_raw_bytes() {
         .filter_map(|method| {
             let value: serde_json::Value =
                 serde_json::from_str(method.get()).expect("parse raw schema method");
-            (value["namespace"] == "memory").then_some(method.get())
+            (value["namespace"] == "memory" && value["function"] != "local_start")
+                .then_some(method.get())
         })
         .collect();
     assert_eq!(
         memory_methods.len(),
         35,
-        "all memory controller schemas appear"
+        "all historical memory controller schemas appear"
     );
+
+    // The later provisioning RPC is additive; keep the original byte snapshot
+    // for the existing methods and check the new declaration independently.
+    let local_start = dump
+        .methods
+        .iter()
+        .find_map(|method| {
+            let value: serde_json::Value = serde_json::from_str(method.get()).unwrap();
+            (value["namespace"] == "memory" && value["function"] == "local_start").then_some(value)
+        })
+        .expect("local memory provisioning schema is exposed");
+    assert_eq!(local_start["method"], "openhuman.memory_local_start");
+    assert_eq!(local_start["inputs"], serde_json::json!([]));
 
     let mut memory_bytes = Vec::new();
     for method in &memory_methods {
