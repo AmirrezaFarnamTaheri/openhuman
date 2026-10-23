@@ -12,7 +12,6 @@ import {
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
-import { invalidateModelCatalogCache } from './ProviderModelPickerDialog';
 import {
   type AISettings,
   type CloudProvider,
@@ -20,6 +19,7 @@ import {
   ProviderProbeError,
 } from './aiPanelTypes';
 import { validModelFleetImageEndpoint } from './modelFleetOps';
+import { invalidateModelCatalogCache } from './ProviderModelPickerDialog';
 
 /**
  * Compare only provider configuration, excluding encrypted-key presence and

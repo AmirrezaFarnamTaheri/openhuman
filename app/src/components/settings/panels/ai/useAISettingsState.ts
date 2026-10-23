@@ -75,10 +75,7 @@ function providerSignature(provider: CloudProvider): string {
 
 /** Signature of the provider list, order-independent (the list is a set). */
 function providerListSignature(providers: CloudProvider[]): string {
-  return providers
-    .map(providerSignature)
-    .sort()
-    .join('\u0001');
+  return providers.map(providerSignature).sort().join('\u0001');
 }
 
 function toPanelProvider(p: CloudProviderView): CloudProvider {
@@ -299,7 +296,19 @@ export function useAISettings() {
 
   const discard = useCallback(() => setDraft(saved), [saved]);
 
-  return { saved, draft, setDraft, isDirty, save, persist, discard, loading, error, reload, refreshSaved };
+  return {
+    saved,
+    draft,
+    setDraft,
+    isDirty,
+    save,
+    persist,
+    discard,
+    loading,
+    error,
+    reload,
+    refreshSaved,
+  };
 }
 
 /**

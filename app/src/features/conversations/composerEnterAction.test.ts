@@ -49,9 +49,9 @@ describe('isComposerImeComposing', () => {
 
 describe('resolveComposerEnterLane', () => {
   it('sends on a plain Enter by default', () => {
-    expect(
-      resolveComposerEnterLane(enter(), { enterAction: 'send', isRunning: false })
-    ).toBe('send');
+    expect(resolveComposerEnterLane(enter(), { enterAction: 'send', isRunning: false })).toBe(
+      'send'
+    );
   });
 
   it('sends on a plain Enter while a turn is running (a follow-up)', () => {
@@ -108,26 +108,30 @@ describe('resolveComposerEnterLane', () => {
       })
     ).toBeNull();
     expect(
-      resolveComposerEnterLane(enter(), { enterAction: 'send', isRunning: false, compositionActive: true })
+      resolveComposerEnterLane(enter(), {
+        enterAction: 'send',
+        isRunning: false,
+        compositionActive: true,
+      })
     ).toBeNull();
   });
 
   it('queues on plain Enter when the action is queue', () => {
-    expect(
-      resolveComposerEnterLane(enter(), { enterAction: 'queue', isRunning: false })
-    ).toBe('queue');
-    expect(
-      resolveComposerEnterLane(enter(), { enterAction: 'queue', isRunning: true })
-    ).toBe('queue');
+    expect(resolveComposerEnterLane(enter(), { enterAction: 'queue', isRunning: false })).toBe(
+      'queue'
+    );
+    expect(resolveComposerEnterLane(enter(), { enterAction: 'queue', isRunning: true })).toBe(
+      'queue'
+    );
   });
 
   it('steers on plain Enter while running, and degrades to a send when idle', () => {
-    expect(
-      resolveComposerEnterLane(enter(), { enterAction: 'steer', isRunning: true })
-    ).toBe('steer');
-    expect(
-      resolveComposerEnterLane(enter(), { enterAction: 'steer', isRunning: false })
-    ).toBe('send');
+    expect(resolveComposerEnterLane(enter(), { enterAction: 'steer', isRunning: true })).toBe(
+      'steer'
+    );
+    expect(resolveComposerEnterLane(enter(), { enterAction: 'steer', isRunning: false })).toBe(
+      'send'
+    );
   });
 
   it('never sends when plain Enter is set to newline', () => {
@@ -164,8 +168,8 @@ describe('shouldInsertNewline', () => {
   });
 
   it('does not insert a newline mid-composition', () => {
-    expect(
-      shouldInsertNewline(enter({ isComposing: true }), { enterAction: 'newline' })
-    ).toBe(false);
+    expect(shouldInsertNewline(enter({ isComposing: true }), { enterAction: 'newline' })).toBe(
+      false
+    );
   });
 });
