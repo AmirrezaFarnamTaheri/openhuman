@@ -131,3 +131,6 @@ the installed OpenHuman application has not been replaced.
 - The user now authorizes fork build, release and publication after validation.
   No OpenHuman PR, push or new release has been created at this point. The
   remaining run-panel implementation list above is still outstanding.
+
+- Final owner review update: TinyTools PR 74 at a49d5f9 has all fork and upstream CI jobs passing, including 90 percent per-file coverage. Both upstream PRs are conflict-free.
+- Full native Linux scripts: 962 pass, 5 skip, 0 fail (967 total). Typecheck, i18n coverage, English checks, and production dependency audit pass. New archive-to-create regression: all 17 thread-list tests pass.
