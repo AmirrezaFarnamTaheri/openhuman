@@ -12266,8 +12266,8 @@ async fn json_rpc_live_voice_settings_roundtrip_preserves_and_clears_overrides()
         json!({}),
     )
     .await;
-    let initial = assert_no_jsonrpc_error(&initial, "live voice defaults");
-    assert_eq!(initial["result"]["default_provider"], "gemini-hosted");
+    let initial = peel_logs_envelope(assert_no_jsonrpc_error(&initial, "live voice defaults"));
+    assert_eq!(initial["default_provider"], "gemini-hosted");
     let update = post_json_rpc(
         &rpc_base,
         7402,
@@ -12275,9 +12275,9 @@ async fn json_rpc_live_voice_settings_roundtrip_preserves_and_clears_overrides()
         json!({ "gemini": { "voice": "Kore", "language": "en-US" } }),
     )
     .await;
-    let updated = assert_no_jsonrpc_error(&update, "persist live voice overrides");
-    assert_eq!(updated["result"]["gemini"]["voice"], "Kore");
-    assert_eq!(updated["result"]["gemini"]["language"], "en-US");
+    let updated = peel_logs_envelope(assert_no_jsonrpc_error(&update, "persist live voice overrides"));
+    assert_eq!(updated["gemini"]["voice"], "Kore");
+    assert_eq!(updated["gemini"]["language"], "en-US");
     let patch = post_json_rpc(
         &rpc_base,
         7403,
@@ -12293,12 +12293,12 @@ async fn json_rpc_live_voice_settings_roundtrip_preserves_and_clears_overrides()
         json!({}),
     )
     .await;
-    let after = assert_no_jsonrpc_error(&after, "read persisted live voice overrides");
-    assert!(after["result"]["gemini"]["voice"].is_null());
-    assert_eq!(after["result"]["gemini"]["language"], "en-US");
+    let after = peel_logs_envelope(assert_no_jsonrpc_error(&after, "read persisted live voice overrides"));
+    assert!(after["gemini"]["voice"].is_null());
+    assert_eq!(after["gemini"]["language"], "en-US");
     assert_eq!(
-        after["result"]["default_provider"],
-        initial["result"]["default_provider"]
+        after["default_provider"],
+        initial["default_provider"]
     );
     rpc_join.abort();
 }
