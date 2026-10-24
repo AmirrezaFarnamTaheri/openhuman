@@ -8,6 +8,7 @@ use tinyflows_bus::schedule::{DOCUMENT_INTERFACE, DOCUMENT_METHOD};
 /// re-enter the same bridge, even when no storage backend was pre-installed.
 /// Run in a child because a regression would deadlock the shared bridge and
 /// poison unrelated tests in the enclosing library suite.
+#[cfg(feature = "storage-sqlite")]
 #[test]
 fn document_callback_does_not_reenter_the_shared_storage_bridge() {
     const CHILD: &str = "OPENHUMAN_CRON_PORT_BRIDGE_CHILD";
