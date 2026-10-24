@@ -261,8 +261,9 @@ jobs:
     needs: plan
     if: inputs.profile == 'hosted' && fromJSON(needs.plan.outputs.matrix).include[0] != null
     runs-on: ubuntu-22.04
-    # Hosted Rust coverage shards run concurrently on independent runners.
-    timeout-minutes: ${{ startsWith(matrix.group, 'rust-cov-') && 180 || 100 }}
+    # Storage shards compile independent feature sets and need enough time
+    # to finish while displaying each individual check's live log.
+    timeout-minutes: ${{ startsWith(matrix.group, 'rust-cov-') && 180 || startsWith(matrix.group, 'storage-') && 150 || 100 }}
     container:
       # Empty for the pester group: pwsh ships on the bare runner image.
       image: ${{ matrix.container }}
@@ -403,6 +404,18 @@ jobs:
       - name: "Lane: Rust gates-off smoke"
         if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'rust-gates-off') }}
         run: node scripts/ci/self-hosted/lanes.mjs --wait rust-gates-off
+
+      - name: "Lane: storage E2E"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'storage-e2e') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait storage-e2e
+
+      - name: "Lane: storage library and cron"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'storage-lib') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait storage-lib
+
+      - name: "Lane: storage session store"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'storage-session') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait storage-session
 
       - name: "Lane: Tauri clippy + coverage"
         if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'tauri') }}

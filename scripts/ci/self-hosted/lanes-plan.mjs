@@ -59,14 +59,12 @@ export const HOSTED_GROUPS = [
   { group: "rust-cov-facades", lanes: ["rust-cov-facades"], maxParallel: 1, container: true },
   { group: "rust-cov-integrations", lanes: ["rust-cov-integrations"], maxParallel: 1, container: true },
   { group: "tauri", lanes: ["tauri"], maxParallel: 1, container: true },
-  // The storage drivers build the core with features no other lane enables,
-  // so they get a runner (and a `target/`) of their own.
-  {
-    group: "storage",
-    lanes: ["storage-drivers"],
-    maxParallel: 1,
-    container: true,
-  },
+  // The monolithic hosted storage runner exceeded the job timeout.
+  // Independently report E2E, library/cron and session-store suites without
+  // dropping any test. EX63 retains its original storage-drivers lane.
+  { group: "storage-e2e", lanes: ["storage-e2e"], maxParallel: 1, container: true },
+  { group: "storage-lib", lanes: ["storage-lib"], maxParallel: 1, container: true },
+  { group: "storage-session", lanes: ["storage-session"], maxParallel: 1, container: true },
   // pwsh ships on the bare ubuntu-latest image, not in the CI container.
   { group: "pester", lanes: ["pester"], maxParallel: 1, container: false },
 ];
@@ -698,6 +696,35 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           }),
         };
       }),
+    );
+  }
+
+  // Hosted storage shards compile and run independently, each with an
+  // isolated native-module fixture. The private EX63 lane is unchanged.
+  if (!ex63) {
+    const storageIndex = lanes.findIndex((lane) => lane.name === "storage-drivers");
+    if (storageIndex < 0) throw new Error("missing storage driver lane");
+    const [storage] = lanes.splice(storageIndex, 1);
+    const shard = (name, names) => ({
+      ...storage,
+      name,
+      checks: storage.checks
+        .filter((check) => names.includes(check.name))
+        .map((check) =>
+          check.name === "test-modules"
+            ? {
+                ...check,
+                run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir(name)}" ${laneModuleEnv(name)}`,
+              }
+            : check,
+        ),
+    });
+    lanes.splice(
+      storageIndex,
+      0,
+      shard("storage-e2e", ["test-modules", "storage-e2e"]),
+      shard("storage-lib", ["test-modules", "storage-lib-tests", "cron-module-tests"]),
+      shard("storage-session", ["storage-session-store-tests"]),
     );
   }
 
