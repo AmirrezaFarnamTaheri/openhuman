@@ -479,8 +479,12 @@ async fn register_address(scope: &DocScope) -> Result<CallbackAddress> {
     .await
     .map_err(|error| anyhow::anyhow!(error))
     .context("serve the schedule document port")?;
+    #[cfg(test)]
+    diagnostic.phase("after-serve-test-gate");
     #[cfg(all(test, feature = "modules"))]
     registration_tests::after_serve(&path).await;
+    #[cfg(test)]
+    diagnostic.phase("cache-insert");
     tracing::debug!(scope = %scope.scope.as_str(), %path, "[cron:documents] port served");
     let address = CallbackAddress {
         destination: module::HOST_BUS_NAME.to_string(),
