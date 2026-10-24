@@ -1,54 +1,67 @@
 ---
-name: PR17 Rust formatting diagnostic
+name: PR17 archived storage diagnostics
 
 on:
   push:
     branches: [codex/pr17-cold-diagnostics-20261024]
 
 permissions:
+  actions: read
   contents: read
-  packages: read
 
 concurrency:
   group: pr17-cold-diagnostics
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
-  rust-format:
-    name: Inspect exact PR Rust formatting
+  inspect-artifact:
+    name: Inspect archived storage lane output
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
-    container:
-      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
-      options: --init
+    timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout diagnostic snapshot of PR source
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-      - name: Trust checkout
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Check out pinned submodules
-        run: bash scripts/ci/checkout-submodules.sh
-      - name: Check required Rust formatting
+      - name: Download and inspect the exact archived storage log
+        shell: bash
         run: |
-          bash scripts/ci-cancel-aware.sh cargo fmt --manifest-path Cargo.toml \
-            --package openhuman --package openhuman-cli --package openhuman-embed \
-            --package openhuman-modules-linked --package openhuman-rpc \
-            --package openhuman-tinyhumans --package openhuman-tui -- --check
-      - name: Print exact formatter repair when the check fails
-        if: failure()
-        run: |
-          bash scripts/ci-cancel-aware.sh cargo fmt --manifest-path Cargo.toml \
-            --package openhuman --package openhuman-cli --package openhuman-embed \
-            --package openhuman-modules-linked --package openhuman-rpc \
-            --package openhuman-tinyhumans --package openhuman-tui
-          git diff -- crates
+          set -euo pipefail
+          gh api --method GET repos/AmirrezaFarnamTaheri/openhuman/actions/artifacts/12559809636/zip > "$RUNNER_TEMP/pr17-storage.zip"
+          python3 - "$RUNNER_TEMP/pr17-storage.zip" <<'PY'
+          import hashlib
+          import io
+          import pathlib
+          import re
+          import sys
+          import zipfile
+
+          payload = pathlib.Path(sys.argv[1]).read_bytes()
+          digest = hashlib.sha256(payload).hexdigest()
+          expected = "f01d4deba5ff30c9a654522a0e9215c3f5564cb9ae168c9604d0ca734a378081"
+          print("Artifact 12559809636: bytes=", len(payload), "sha256=", digest)
+          if digest != expected:
+              raise SystemExit("Artifact checksum differs from the GitHub artifact metadata")
+          with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+              for entry in archive.infolist():
+                  print("ARCHIVE", entry.filename, "bytes=", entry.file_size)
+              for entry in archive.infolist():
+                  if entry.is_dir() or not entry.filename.endswith((".log", ".json")):
+                      continue
+                  if entry.file_size > 2_000_000:
+                      raise SystemExit("Unexpectedly large diagnostic log")
+                  lines = archive.read(entry).decode("utf-8", errors="replace").splitlines()
+                  print("FILE", entry.filename, "lines=", len(lines))
+                  if entry.filename.endswith(".json"):
+                      for line in lines:
+                          print(line)
+                      continue
+                  print("HEAD")
+                  for line in lines[:25]:
+                      print(line)
+                  print("RESULT AND LONG-RUNNING MARKERS")
+                  for line in lines:
+                      if re.search(r"test result:|has been running for over|\[ci\]\[lanes\].*(success|failed|failure)", line):
+                          print(line)
+                  print("TAIL")
+                  for line in lines[-240:]:
+                      print(line)
+          PY
