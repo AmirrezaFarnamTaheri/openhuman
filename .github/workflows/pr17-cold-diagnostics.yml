@@ -53,10 +53,10 @@ jobs:
             crates/openhuman-app -> target
           cache-on-failure: true
           shared-key: ci-fast-storage
-      - name: Install debugger
+      - name: Install diagnostic tools
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends gdb jq python3-tomli
+          apt-get install -y --no-install-recommends jq ripgrep python3-tomli
       - name: Stage the same test modules as hosted storage
         run: |
           mkdir -p ci-out
@@ -156,71 +156,16 @@ jobs:
           test "${#binaries[@]}" -eq 1
           test -x "${binaries[0]}"
           printf '%s\n' "${binaries[0]}" > ci-out/storage-executable.txt
-      - name: Diagnose the unchanged storage filter with a bounded stack capture
+      - name: Repeat the complete parallel storage suite without a debugger
         run: |
           set -euo pipefail
-          ulimit -c 0
           set -a
           . ci-out/test-modules-storage-drivers.env
           set +a
-          cat > ci-out/storage.gdb <<'GDB'
-          set pagination off
-          set confirm off
-          set print frame-arguments none
-          set print elements 0
-          set print thread-events off
-          set disable-randomization off
-          set debuginfod enabled off
-          handle SIGPIPE nostop noprint pass
-          handle SIGABRT stop print nopass
-          start
-          python
-          import os
-          import signal
-          import threading
-
-          diagnostic_pid = gdb.selected_inferior().pid
-          diagnostic_timed_out = threading.Event()
-
-          def stop_after_deadline():
-              diagnostic_timed_out.set()
-              try:
-                  os.kill(diagnostic_pid, signal.SIGABRT)
-              except ProcessLookupError:
-                  pass
-
-          diagnostic_timer = threading.Timer(600, stop_after_deadline)
-          diagnostic_timer.daemon = True
-          diagnostic_timer.start()
-          end
-          continue
-          python
-          diagnostic_timer.cancel()
-          if gdb.selected_inferior().threads():
-              if diagnostic_timed_out.is_set():
-                  gdb.write("PR17_STORAGE_WATCHDOG: 600 seconds of test execution elapsed\n")
-              else:
-                  gdb.write("PR17_STORAGE_STOP: inferior stopped before exit\n")
-              gdb.execute("thread apply all bt 50")
-              gdb.execute("kill")
-              gdb.execute("quit " + ("124" if diagnostic_timed_out.is_set() else "1"))
-          end
-          GDB
-          cat > ci-out/storage-debug-runner.sh <<'RUNNER'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          expected_binary="$(cat "$GITHUB_WORKSPACE/ci-out/storage-executable.txt")"
-          test "$(readlink -f -- "$1")" = "$(readlink -f -- "$expected_binary")"
-          printf 'Diagnostic test cwd: %s\n' "$PWD"
-          unset CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER
-          exec gdb -nx -nh --batch --return-child-result \
-            -x "$GITHUB_WORKSPACE/ci-out/storage.gdb" --args "$@"
-          RUNNER
-          chmod +x ci-out/storage-debug-runner.sh
-          export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="$GITHUB_WORKSPACE/ci-out/storage-debug-runner.sh"
           for attempt in 1 2 3; do
-            printf 'Storage diagnostic attempt %s\n' "$attempt"
-            bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            printf 'Native storage validation attempt %s\n' "$attempt"
+            timeout --signal=TERM --kill-after=15s 600s \
+              bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
               --features storage-sqlite,storage-file --lib -- \
               storage:: cron:: flows:: security::approval:: security::devices:: \
               security::secret_storage:: security::credentials:: desktop::notifications:: \
