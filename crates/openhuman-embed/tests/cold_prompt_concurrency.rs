@@ -58,7 +58,6 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
     let completed_turns = Arc::new(AtomicUsize::new(0));
     let started_turns = Arc::new(AtomicUsize::new(0));
     let heartbeat_ticks = Arc::new(AtomicUsize::new(0));
-    let provider_probe = Arc::new(OnceLock::<GatedProvider>::new());
     let heartbeat_counter = Arc::clone(&heartbeat_ticks);
     let heartbeat = executor.spawn(async move {
         loop {
@@ -69,11 +68,15 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
     let scenario_stage = Arc::clone(&stage);
     let scenario_completed_turns = Arc::clone(&completed_turns);
     let scenario_started_turns = Arc::clone(&started_turns);
+    // Publish the provider's counters to the independent timeout thread.
+    // A zero completed-turn count alone cannot distinguish a runtime deadlock
+    // from a request gate held below its required concurrency threshold.
+    let provider_probe = Arc::new(OnceLock::<Arc<GatedProvider>>::new());
     let scenario_provider_probe = Arc::clone(&provider_probe);
     let scenario = executor.spawn(async move {
         let backend = stub_backend().await;
-        let provider = GatedProvider::start(REPLY).await;
-        assert!(scenario_provider_probe.set(provider.clone()).is_ok());
+        let provider = Arc::new(GatedProvider::start(REPLY).await);
+        assert!(scenario_provider_probe.set(Arc::clone(&provider)).is_ok());
         scenario_stage.store(1, Ordering::SeqCst);
         let mut config = offline_config();
         config.modules.allow_download = false;
@@ -147,22 +150,17 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
             let completed = completed_turns.load(Ordering::SeqCst);
             let started = started_turns.load(Ordering::SeqCst);
             let ticks = heartbeat_ticks.load(Ordering::SeqCst);
-            let provider = provider_probe
+            let provider_state = provider_probe
                 .get()
-                .map(GatedProvider::diagnostic_state)
+                .map(|provider| provider.diagnostic_state())
                 .unwrap_or_else(|| "provider not started".to_string());
             eprintln!(
                 "cold prompt regression did not complete: {error}; \
                  stage={phase}, started_turns={started}/{AGENTS}, \
-                 completed_turns={completed}/{AGENTS}, heartbeat_ticks={ticks}, \
-                 provider=({provider}); all {AGENTS} \
+                 completed_turns={completed}/{AGENTS}, heartbeat_ticks={ticks}; \
+                 provider=[{provider_state}]; all {AGENTS} \
                  cold turns must overlap with one worker and one blocking thread"
             );
-            // The isolated diagnostic workflow runs this binary under GDB.
-            // Abort only there so the debugger can capture every worker stack.
-            if std::env::var_os("OPENHUMAN_COLD_PROMPT_BACKTRACE").is_some() {
-                std::process::abort();
-            }
             panic!("cold prompt preparation did not finish within {HANG_GUARD:?}");
         })
         .expect("cold-prompt test task");

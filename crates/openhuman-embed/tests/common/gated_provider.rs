@@ -47,7 +47,6 @@ impl Shared {
 }
 
 /// A running gated provider. The server task lives as long as the runtime.
-#[derive(Clone)]
 pub struct GatedProvider {
     addr: SocketAddr,
     shared: Arc<Shared>,
@@ -84,7 +83,7 @@ impl GatedProvider {
             return "counters unavailable".to_string();
         };
         format!(
-            "requests={}, in_flight={}, peak={}, gate_open={}",
+            "chat_requests={}, in_flight={}, peak_in_flight={}, gate_open={}",
             counters.chat_requests,
             counters.in_flight,
             counters.peak_in_flight,
