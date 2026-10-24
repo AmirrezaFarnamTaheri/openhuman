@@ -1,0 +1,832 @@
+---
+name: PR17 atomic storage wait diagnostics
+
+on:
+  push:
+    branches: [codex/pr17-storage-atomic-debug-20261024]
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: pr17-storage-atomic-debug
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  hosted-evidence:
+    name: Inspect timed-out hosted storage evidence
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download and verify the archived storage lane
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/12568291058/zip" \
+            -o "$RUNNER_TEMP/pr17-hosted-storage.zip"
+          python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import zipfile
+
+          archive = Path(os.environ["RUNNER_TEMP"]) / "pr17-hosted-storage.zip"
+          expected = "44ccfab91ca18895c2ca0a65d65d8ff7101addd008fc7650596415d7469ae2c6"
+          data = archive.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          assert digest == expected, (digest, expected)
+          print(f"PR17_HOSTED_ARCHIVE_VERIFIED id=12568291058 bytes={len(data)} sha256={digest}")
+          with zipfile.ZipFile(archive) as bundle:
+              for item in bundle.infolist():
+                  if item.is_dir():
+                      continue
+                  assert item.file_size <= 10_000_000, (item.filename, item.file_size)
+                  payload = bundle.read(item)
+                  if b"\x00" in payload:
+                      print(f"PR17_HOSTED_BINARY {item.filename} bytes={len(payload)}")
+                      continue
+                  text = payload.decode("utf-8", errors="replace")
+                  print(f"PR17_HOSTED_FILE_BEGIN {item.filename} chars={len(text)}")
+                  print(text[:1_000_000])
+                  if len(text) > 1_000_000:
+                      print("PR17_HOSTED_FILE_TRUNCATED")
+                  print(f"PR17_HOSTED_FILE_END {item.filename}")
+          PY
+
+  storage-wait:
+    name: Inspect atomic storage waits (cohort ${{ matrix.cohort }})
+    strategy:
+      fail-fast: false
+      matrix:
+        cohort: [1, 2, 3]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init --cap-add=SYS_PTRACE
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+      RUST_MIN_STACK: "16777216"
+      GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
+    steps:
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout exact production source
+        uses: actions/checkout@v7
+        with:
+          ref: 94e8d9cba539a3c025369f02da5aee42f6e34bda
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out pinned submodules
+        run: bash scripts/ci/checkout-submodules.sh
+      - name: Restore storage build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            crates/openhuman-app -> target
+          cache-on-failure: true
+          shared-key: ci-fast-storage
+      - name: Install diagnostic tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends gdb jq ripgrep python3-tomli
+      - name: Stage the same test modules as hosted storage
+        run: |
+          mkdir -p ci-out
+          bash scripts/ci/self-hosted/install-test-modules.sh \
+            "/tmp/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/storage-drivers" \
+            ci-out/test-modules-storage-drivers.env
+      - name: Prepare and verify bounded late attachment
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -eq 0
+          test "$(git rev-parse HEAD)" = 94e8d9cba539a3c025369f02da5aee42f6e34bda
+          git diff --exit-code
+          cat > "$RUNNER_TEMP/pr17-late-attach.py" <<'PY'
+          #!/usr/bin/env python3
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import signal
+          import select
+          import subprocess
+          import sys
+          import threading
+          import time
+          
+          QUIET_SECONDS = 180.0
+          GDB_SECONDS = 60.0
+          KILL_GRACE = 15.0
+          ANSI = re.compile(rb"\x1b\[[0-?]*[ -/]*[@-~]")
+          COMPLETED = re.compile(rb"^test .+ \.\.\. (?:ok|FAILED|ignored)(?:\b|$)")
+          
+          def group_signal(pid, sig):
+              try:
+                  os.killpg(pid, sig)
+              except ProcessLookupError:
+                  pass
+          
+          def stop_group(proc):
+              if proc.poll() is None:
+                  group_signal(proc.pid, signal.SIGTERM)
+                  try:
+                      proc.wait(timeout=5)
+                  except subprocess.TimeoutExpired:
+                      group_signal(proc.pid, signal.SIGKILL)
+                      proc.wait(timeout=5)
+          
+          ATOMIC_CAPTURE = """try:
+              import json
+              import struct
+              gdb.execute("set may-call-functions off")
+              gdb.execute("set language c")
+              assert int(gdb.parse_and_eval("sizeof(void *)")) == 8, "expected 64-bit target"
+              assert "little endian" in gdb.execute("show endian", to_string=True), "unexpected byte order"
+              def read_symbol(name, size):
+                  address = int(gdb.parse_and_eval("(void *)&" + name))
+                  return bytes(gdb.selected_inferior().read_memory(address, size))
+              meta = struct.unpack("<4Q", read_symbol("PR17_DIAG_META", 32))
+              assert meta == (0x50523137, 1, 1024, 64), ("unsupported diagnostic layout", meta)
+              dropped, = struct.unpack("<Q", read_symbol("PR17_DIAG_DROPPED", 8))
+              data = read_symbol("PR17_DIAG_SLOTS", meta[2] * meta[3])
+              records = []
+              for index in range(meta[2]):
+                  words = struct.unpack_from("<8Q", data, index * meta[3])
+                  if words[0] == 0:
+                      continue
+                  names = ("id", "kind", "phase", "key", "resource", "parent", "link", "reserved")
+                  record = dict(zip(names, words))
+                  record["slot"] = index
+                  record["claimed"] = words[0] == 0xffffffffffffffff
+                  records.append(record)
+              print("PR17_ATOMIC_HEADER " + json.dumps({"layout": meta, "dropped": dropped, "active": len(records)}, sort_keys=True), flush=True)
+              for record in records:
+                  print("PR17_ATOMIC " + json.dumps(record, sort_keys=True), flush=True)
+          except Exception as error:
+              print('PR17_ATOMIC_ERROR ' + repr(error), flush=True)
+          """
+          
+          def start_gdb(pid, prefix, *, atomic=False):
+              commands = prefix.with_suffix(".gdb")
+              log_path = prefix.with_suffix(".log")
+              commands.write_text(
+                  "set pagination off\nset confirm off\nset print thread-events off\nset non-stop off\n"
+                  "set debuginfod enabled off\nset auto-load off\n"
+                  "set print frame-arguments none\n"
+                  "python\n"
+                  f"pid = {pid}\n"
+                  "try:\n"
+                  "    gdb.execute('attach %d' % pid)\n"
+                  "    if gdb.selected_inferior().pid != pid:\n"
+                  "        raise gdb.GdbError('attach did not select the target')\n"
+                  "    print('PR17_GDB_ATTACHED pid=%d' % pid, flush=True)\n"
+                  + ("".join("    " + line + "\n" for line in ATOMIC_CAPTURE.splitlines()) if atomic else "")
+                  + "    gdb.execute('info threads')\n"
+                  "    gdb.execute('thread apply all bt 96')\n"
+                  "finally:\n"
+                  "    if gdb.selected_inferior().pid == pid:\n"
+                  "        gdb.execute('detach')\n"
+                  "        print('PR17_GDB_DETACHED pid=%d' % pid, flush=True)\n"
+                  "end\nquit\n",
+                  encoding="utf-8",
+              )
+              log = log_path.open("wb")
+              try:
+                  proc = subprocess.Popen(
+                      ["gdb", "--batch", "--nx", "--quiet", "-x", str(commands)],
+                      stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                  )
+              except BaseException:
+                  log.close()
+                  raise
+              return proc, log, log_path
+          
+          def probe(out):
+              child = subprocess.Popen([os.environ["PR17_ATOMIC_PROBE"]], stdout=subprocess.PIPE, start_new_session=True)
+              debugger = None
+              log = None
+              try:
+                  readable, _, _ = select.select([child.stdout], [], [], 5.0)
+                  if not readable or child.stdout.readline() != b"ready\n":
+                      raise RuntimeError("atomic attach probe did not become ready")
+                  debugger, log, log_path = start_gdb(child.pid, out / "attach-probe", atomic=True)
+                  try:
+                      rc = debugger.wait(timeout=GDB_SECONDS)
+                  except subprocess.TimeoutExpired:
+                      stop_group(debugger)
+                      raise RuntimeError("harmless-child GDB attach exceeded 60 seconds")
+                  log.close()
+                  log = None
+                  data = log_path.read_text(encoding="utf-8", errors="replace")
+                  attached = f"PR17_GDB_ATTACHED pid={child.pid}" in data
+                  detached = f"PR17_GDB_DETACHED pid={child.pid}" in data
+                  if rc != 0 or not attached or not detached or child.poll() is not None:
+                      sys.stderr.write(data)
+                      raise RuntimeError("attach/detach probe failed; do not relax seccomp automatically")
+                  headers = [json.loads(line.split(" ", 1)[1]) for line in data.splitlines() if line.startswith("PR17_ATOMIC_HEADER ")]
+                  records = [json.loads(line.split(" ", 1)[1]) for line in data.splitlines() if line.startswith("PR17_ATOMIC ")]
+                  expected = {"id": 123, "kind": 99, "phase": 1, "key": 456, "resource": 789, "parent": 0, "link": 42, "reserved": 0, "slot": 0, "claimed": False}
+                  if "PR17_ATOMIC_ERROR " in data or len(headers) != 1 or headers[0]["dropped"] != 0 or headers[0]["active"] != 1 or records != [expected]:
+                      sys.stderr.write(data)
+                      raise RuntimeError("atomic decoder probe failed")
+                  print("PR17_ATTACH_PROBE success; exact atomic record decoded and child remained alive after detach", flush=True)
+              finally:
+                  if debugger is not None:
+                      stop_group(debugger)
+                  if log is not None:
+                      log.close()
+                  stop_group(child)
+          
+          def run_target(out):
+              expected = Path(os.environ["PR17_EXPECTED_EXE"]).resolve(strict=True)
+              actual = Path(sys.argv[1]).resolve(strict=True)
+              if actual != expected or not os.path.samefile(actual, expected):
+                  raise RuntimeError(f"Cargo runner executable mismatch: {actual} != {expected}")
+              attempt = int(os.environ["PR17_ATTEMPT"])
+              prefix = out / f"storage-attempt-{attempt}"
+              result_path = prefix.with_suffix(".result.json")
+              deadline = float(os.environ["PR17_DEADLINE_MONOTONIC"])
+              if deadline <= time.monotonic():
+                  raise RuntimeError("attempt deadline elapsed before Cargo invoked the runner")
+              env = os.environ.copy()
+              env.pop("CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER", None)
+              received_signal = [None]
+              def receive_signal(sig, _frame):
+                  if received_signal[0] is None:
+                      received_signal[0] = sig
+              signal.signal(signal.SIGTERM, receive_signal)
+              signal.signal(signal.SIGINT, receive_signal)
+          
+              child = subprocess.Popen(
+                  sys.argv[1:], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                  bufsize=0, start_new_session=True,
+              )
+              started = time.monotonic()
+              progress = [started, 0]
+              lock = threading.Lock()
+              log_lock = threading.Lock()
+              combined = prefix.with_suffix(".log").open("wb", buffering=0)
+              def pump(pipe, stream, suffix):
+                  with prefix.with_suffix(suffix).open("wb", buffering=0) as stream_log:
+                      for line in iter(pipe.readline, b""):
+                          now = time.monotonic()
+                          if COMPLETED.search(ANSI.sub(b"", line).rstrip(b"\r\n")):
+                              with lock:
+                                  progress[0] = now
+                                  progress[1] += 1
+                          stream_log.write(line)
+                          with log_lock:
+                              combined.write(line)
+                          stream.buffer.write(line)
+                          stream.buffer.flush()
+                  pipe.close()
+              readers = [
+                  threading.Thread(target=pump, args=(child.stdout, sys.stdout, ".stdout.log"), daemon=True),
+                  threading.Thread(target=pump, args=(child.stderr, sys.stderr, ".stderr.log"), daemon=True),
+              ]
+              for reader in readers:
+                  reader.start()
+              print(f"PR17_NATIVE_START attempt={attempt} pid={child.pid} cwd={os.getcwd()} exe={actual}", flush=True)
+          
+              debugger = None
+              debug_log = None
+              debug_path = None
+              debug_started = None
+              attach_requested = False
+              gdb_timed_out = False
+              gdb_termination_started = None
+              gdb_resumed = False
+              gdb_launch_error = None
+              timed_out = False
+              termination_started = None
+              try:
+                  while child.poll() is None:
+                      now = time.monotonic()
+                      if termination_started is None and (now >= deadline or received_signal[0] is not None):
+                          timed_out = now >= deadline
+                          termination_started = now
+                          group_signal(child.pid, signal.SIGTERM)
+                      if termination_started is not None and now - termination_started >= KILL_GRACE:
+                          group_signal(child.pid, signal.SIGKILL)
+                      with lock:
+                          last_completed, completed_count = progress
+                      if not attach_requested and termination_started is None and now - last_completed >= QUIET_SECONDS:
+                          attach_requested = True
+                          print(f"PR17_DIAGNOSTIC_ATTACH attempt={attempt} pid={child.pid} quiet_s={now-last_completed:.1f} completed_lines={completed_count}; this attempt cannot be a clean pass", flush=True)
+                          try:
+                              debugger, debug_log, debug_path = start_gdb(child.pid, out / f"storage-attempt-{attempt}-gdb", atomic=True)
+                              debug_started = time.monotonic()
+                          except OSError as error:
+                              gdb_launch_error = str(error)
+                              print(f"PR17_GDB_LAUNCH_ERROR {error}", file=sys.stderr, flush=True)
+                      if debugger is not None and debugger.poll() is None:
+                          if gdb_termination_started is None and now - debug_started >= GDB_SECONDS:
+                              gdb_timed_out = True
+                              gdb_termination_started = now
+                              group_signal(debugger.pid, signal.SIGTERM)
+                          elif gdb_termination_started is not None and now - gdb_termination_started >= 5:
+                              group_signal(debugger.pid, signal.SIGKILL)
+                      if debugger is not None and debugger.poll() is not None and gdb_timed_out and not gdb_resumed:
+                          group_signal(child.pid, signal.SIGCONT)
+                          gdb_resumed = True
+                      time.sleep(0.1)
+              finally:
+                  if child.poll() is None:
+                      stop_group(child)
+                  if debugger is not None:
+                      stop_group(debugger)
+                  if debug_log is not None:
+                      debug_log.close()
+                  for reader in readers:
+                      reader.join(timeout=2)
+                  if not any(reader.is_alive() for reader in readers):
+                      combined.close()
+          
+              child_status = child.returncode
+              if timed_out:
+                  exit_status = 124
+              elif received_signal[0] is not None:
+                  exit_status = 128 + received_signal[0]
+              else:
+                  exit_status = child_status if child_status >= 0 else 128 - child_status
+              debug_text = "" if debug_path is None else debug_path.read_text(encoding="utf-8", errors="replace")
+              result = {
+                  "attempt": attempt, "pid": child.pid, "executable": str(actual),
+                  "cwd": os.getcwd(), "elapsed_s": round(time.monotonic() - started, 3),
+                  "child_status": child_status, "exit_status": exit_status,
+                  "deadline_exceeded": timed_out, "signal": received_signal[0],
+                  "completed_test_lines": progress[1],
+                  "attach_requested": attach_requested, "gdb_timed_out": gdb_timed_out,
+                  "gdb_attached": f"PR17_GDB_ATTACHED pid={child.pid}" in debug_text,
+                  "gdb_detached": f"PR17_GDB_DETACHED pid={child.pid}" in debug_text,
+                  "gdb_status": None if debugger is None else debugger.returncode,
+                  "gdb_launch_error": gdb_launch_error,
+                  "gdb_log": None if debug_path is None else str(debug_path),
+                  "clean_pass": False,
+                  "source_instrumented": True,
+                  "diagnostic_pass": exit_status == 0 and not attach_requested,
+                  "classification": "atomic_instrumented_after_attach" if attach_requested else "atomic_instrumented",
+              }
+              result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+              print("PR17_NATIVE_RESULT " + json.dumps(result, sort_keys=True), flush=True)
+              return exit_status
+          
+          if __name__ == "__main__":
+              output = Path(os.environ["PR17_DIAG_OUT"]).resolve()
+              output.mkdir(parents=True, exist_ok=True)
+              if sys.argv[1:] == ["--probe"]:
+                  probe(output)
+              elif len(sys.argv) >= 2:
+                  sys.exit(run_target(output))
+              else:
+                  raise SystemExit("expected --probe or Cargo executable and test arguments")
+          PY
+          cat > "$RUNNER_TEMP/pr17-atomic-probe.c" <<'C'
+          #include <stdint.h>
+          #include <unistd.h>
+          
+          uint64_t PR17_DIAG_META[4] = {0x50523137, 1, 1024, 64};
+          _Alignas(64) uint64_t PR17_DIAG_SLOTS[1024][8];
+          uint64_t PR17_DIAG_DROPPED = 0;
+          
+          int main(void) {
+              uint64_t record[8] = {123, 99, 1, 456, 789, 0, 42, 0};
+              for (int i = 0; i < 8; i++) PR17_DIAG_SLOTS[0][i] = record[i];
+              if (write(STDOUT_FILENO, "ready\n", 6) != 6) return 2;
+              pause();
+              return 0;
+          }
+          C
+          cc -g -O0 "$RUNNER_TEMP/pr17-atomic-probe.c" -o "$RUNNER_TEMP/pr17-atomic-probe"
+          export PR17_ATOMIC_PROBE="$RUNNER_TEMP/pr17-atomic-probe"
+          python3 -m py_compile "$RUNNER_TEMP/pr17-late-attach.py"
+          chmod +x "$RUNNER_TEMP/pr17-late-attach.py"
+          export PR17_DIAG_OUT="$GITHUB_WORKSPACE/ci-out"
+          "$RUNNER_TEMP/pr17-late-attach.py" --probe
+      - name: Apply and record atomic-only observers
+        run: |
+          set -euo pipefail
+          cat > ci-out/atomic-patches.json <<'JSON'
+          [
+            [
+              "cron/mod.rs",
+              "pub mod scheduler;\n",
+              "pub mod scheduler;\n\n#[cfg(test)]\npub(crate) mod wait_diagnostics;\n"
+            ],
+            [
+              "cron/documents_port.rs",
+              "impl DocScope {\n",
+              "impl DocScope {\n    #[cfg(test)]\n    pub(crate) fn diagnostic_key(&self) -> u64 {\n        crate::cron::wait_diagnostics::hash_parts(&[\n            self.workspace_dir.as_os_str().as_encoded_bytes(),\n            self.scope.as_str().as_bytes(),\n        ])\n    }\n\n"
+            ],
+            [
+              "cron/documents_port.rs",
+              "pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {\n",
+              "pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {\n    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(1, 10, scope.diagnostic_key(), 0, 0);\n"
+            ],
+            [
+              "cron/documents_port.rs",
+              "        let scope = scope.clone();\n        runtime\n",
+              "        let scope = scope.clone();\n        #[cfg(test)]\n        wait.phase(11);\n        runtime\n"
+            ],
+            [
+              "cron/documents_port.rs",
+              "async fn register_address(scope: &DocScope) -> Result<CallbackAddress> {\n    let key = scope.key();\n    let mut served = SERVED.lock().await;\n",
+              "async fn register_address(scope: &DocScope) -> Result<CallbackAddress> {\n    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(2, 19, scope.diagnostic_key(), &SERVED as *const _ as usize as u64, 0);\n    let key = scope.key();\n    #[cfg(test)]\n    wait.phase(20);\n    let mut served = SERVED.lock().await;\n    #[cfg(test)]\n    wait.phase(21);\n"
+            ],
+            [
+              "cron/documents_port.rs",
+              "    let path = path_for(&key);\n    module::serve(\n",
+              "    let path = path_for(&key);\n    #[cfg(test)]\n    {\n        wait.phase(22);\n        wait.link(crate::cron::wait_diagnostics::hash_parts(&[path.as_bytes()]));\n    }\n    module::serve(\n"
+            ],
+            [
+              "cron/documents_port.rs",
+              "    #[cfg(all(test, feature = \"modules\"))]\n    registration_tests::after_serve(&path).await;\n    tracing::debug!",
+              "    #[cfg(test)]\n    wait.phase(23);\n    #[cfg(all(test, feature = \"modules\"))]\n    registration_tests::after_serve(&path).await;\n    #[cfg(test)]\n    wait.phase(24);\n    tracing::debug!"
+            ],
+            [
+              "cron/documents_port.rs",
+              "    served.insert(key, address.clone());\n",
+              "    #[cfg(test)]\n    wait.phase(25);\n    served.insert(key, address.clone());\n"
+            ],
+            [
+              "cron/client.rs",
+              "    let proxy = module::proxy(config).await.map_err(|e| anyhow!(e))?;\n    tracing::trace!(member, \"[cron:bus] call\");\n    proxy.call(member, args).await.map_err(|error| {\n",
+              "    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(13, 130, crate::cron::wait_diagnostics::hash_parts(&[config.workspace_dir.as_os_str().as_encoded_bytes()]), crate::cron::wait_diagnostics::hash_parts(&[member.as_bytes()]), 0);\n    let proxy = module::proxy(config).await.map_err(|e| anyhow!(e))?;\n    #[cfg(test)]\n    wait.phase(131);\n    tracing::trace!(member, \"[cron:bus] call\");\n    #[cfg(test)]\n    wait.phase(132);\n    proxy.call(member, args).await.map_err(|error| {\n        #[cfg(test)]\n        wait.phase(133);\n"
+            ],
+            [
+              "cron/client.rs",
+              "    if !matches!(&operation, StoreOperation::Migrate) {\n        let _: Value = store_raw(config, scope, StoreOperation::Migrate).await?;\n    }\n    store_raw(config, scope, operation).await\n",
+              "    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(7, 70, scope.diagnostic_key(), u64::from(matches!(&operation, StoreOperation::Migrate)), 0);\n    if !matches!(&operation, StoreOperation::Migrate) {\n        #[cfg(test)]\n        wait.phase(71);\n        let _: Value = store_raw(config, scope, StoreOperation::Migrate).await?;\n    }\n    #[cfg(test)]\n    wait.phase(72);\n    store_raw(config, scope, operation).await\n"
+            ],
+            [
+              "cron/client.rs",
+              "    let request = StoreRequest {\n        storage: store_config(config, scope).await?,",
+              "    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(11, 110, scope.diagnostic_key(), u64::from(matches!(&operation, StoreOperation::Migrate)), 0);\n    let request = StoreRequest {\n        storage: store_config(config, scope).await?,"
+            ],
+            [
+              "cron/client.rs",
+              "    let value: Value = call(config, members::SCHEDULE_STORE, (request,)).await?;\n    serde_json::from_value(value).map_err(|error| {",
+              "    #[cfg(test)]\n    wait.phase(111);\n    let value: Value = call(config, members::SCHEDULE_STORE, (request,)).await?;\n    #[cfg(test)]\n    wait.phase(112);\n    serde_json::from_value(value).map_err(|error| {"
+            ],
+            [
+              "modules/tinyflows.rs",
+              "    ) -> Result<(), String> {\n        let runtime = runtime::runtime()\n",
+              "    ) -> Result<(), String> {\n        #[cfg(test)]\n        let diagnostic_key = crate::cron::wait_diagnostics::hash_parts(&[path.as_bytes()]);\n        #[cfg(test)]\n        let wait = crate::cron::wait_diagnostics::Span::new(3, 30, diagnostic_key, 0, 0);\n        let runtime = runtime::runtime()\n"
+            ],
+            [
+              "modules/tinyflows.rs",
+              "        let served = runtime\n            .spawn(async move {\n                let path = ObjectPath::new(&path).map_err(|e| e.to_string())?;\n",
+              "        #[cfg(test)]\n        let diagnostic_parent = wait.id();\n        #[cfg(test)]\n        wait.phase(31);\n        let served = runtime\n            .spawn(async move {\n                #[cfg(test)]\n                let owner = crate::cron::wait_diagnostics::Span::new(4, 40, diagnostic_key, 0, diagnostic_parent);\n                let path = ObjectPath::new(&path).map_err(|e| e.to_string())?;\n                #[cfg(test)]\n                owner.phase(41);\n"
+            ],
+            [
+              "modules/tinyflows.rs",
+              "                    .map_err(|e| e.to_string())?;\n                connection\n                    .serve_at(path, object)\n",
+              "                    .map_err(|e| e.to_string())?;\n                #[cfg(test)]\n                owner.phase(42);\n                connection\n                    .serve_at(path, object)\n"
+            ],
+            [
+              "storage/local.rs",
+              "fn workspace_backend(workspace_dir: &Path) -> WorkspaceBackend {\n    let mut opened = WORKSPACES.lock().unwrap_or_else(PoisonError::into_inner);\n",
+              "fn workspace_backend(workspace_dir: &Path) -> WorkspaceBackend {\n    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(5, 50, crate::cron::wait_diagnostics::hash_parts(&[workspace_dir.as_os_str().as_encoded_bytes()]), &WORKSPACES as *const _ as usize as u64, 0);\n    let mut opened = WORKSPACES.lock().unwrap_or_else(PoisonError::into_inner);\n    #[cfg(test)]\n    wait.phase(51);\n"
+            ],
+            [
+              "storage/local.rs",
+              "async fn open_default_backend(workspace_dir: PathBuf) -> Result<Arc<dyn StorageBackend>> {\n    #[cfg(test)]\n    await_test_backend_open_gate().await;\n",
+              "async fn open_default_backend(workspace_dir: PathBuf) -> Result<Arc<dyn StorageBackend>> {\n    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(12, 62, crate::cron::wait_diagnostics::hash_parts(&[workspace_dir.as_os_str().as_encoded_bytes()]), 0, 0);\n    #[cfg(test)]\n    await_test_backend_open_gate().await;\n"
+            ],
+            [
+              "storage/local.rs",
+              "    let url = super::config::default_url(&workspace_dir);\n    super::config::prepare_default_dir",
+              "    let url = super::config::default_url(&workspace_dir);\n    #[cfg(test)]\n    wait.phase(63);\n    super::config::prepare_default_dir"
+            ],
+            [
+              "storage/local.rs",
+              "    tracing::debug!(\n        target: \"openhuman::storage\",\n        workspace = %workspace_dir.display(),",
+              "    #[cfg(test)]\n    wait.phase(64);\n    tracing::debug!(\n        target: \"openhuman::storage\",\n        workspace = %workspace_dir.display(),"
+            ],
+            [
+              "storage/local.rs",
+              "    super::open(&url)\n",
+              "    #[cfg(test)]\n    wait.phase(65);\n    super::open(&url)\n"
+            ],
+            [
+              "storage/local.rs",
+              "    cell.get_or_try_init(|| async move { open_default_backend(workspace_dir).await })\n",
+              "    #[cfg(test)]\n    let diagnostic_key = crate::cron::wait_diagnostics::hash_parts(&[workspace_dir.as_os_str().as_encoded_bytes()]);\n    #[cfg(test)]\n    let diagnostic_resource = Arc::as_ptr(&cell) as usize as u64;\n    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(6, 60, diagnostic_key, diagnostic_resource, 0);\n    #[cfg(test)]\n    let diagnostic_parent = wait.id();\n    cell.get_or_try_init(|| async move {\n        #[cfg(test)]\n        let _owner = crate::cron::wait_diagnostics::Span::new(6, 61, diagnostic_key, diagnostic_resource, diagnostic_parent);\n        open_default_backend(workspace_dir).await\n    })\n"
+            ],
+            [
+              "cron/bus_host.rs",
+              "        match &self.runtime {\n            Some(handle) => handle\n                .spawn(fut)\n                .await\n                .map_err(|error| format!(\"the scheduled job's task did not finish: {error}\")),\n            None => Ok(fut.await),\n        }\n",
+              "        #[cfg(test)]\n        let wait = crate::cron::wait_diagnostics::Span::new(8, 80, 0, self as *const _ as usize as u64, 0);\n        match &self.runtime {\n            Some(handle) => {\n                #[cfg(test)]\n                wait.phase(81);\n                handle.spawn(fut).await\n                    .map_err(|error| format!(\"the scheduled job's task did not finish: {error}\"))\n            }\n            None => {\n                #[cfg(test)]\n                wait.phase(82);\n                Ok(fut.await)\n            }\n        }\n"
+            ],
+            [
+              "storage/mod.rs",
+              "pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {\n    let parsed",
+              "pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {\n    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(14, 139, crate::cron::wait_diagnostics::hash_parts(&[url.as_bytes()]), 0, 0);\n    let parsed"
+            ],
+            [
+              "storage/mod.rs",
+              "    let backend = tinystoragedrivers::open(&parsed).await?;\n",
+              "    #[cfg(test)]\n    wait.phase(140);\n    let backend = tinystoragedrivers::open(&parsed).await?;\n"
+            ],
+            [
+              "storage/mod.rs",
+              "    let report = boot::prepare_and_migrate(&backend).await?;\n",
+              "    #[cfg(test)]\n    wait.phase(141);\n    let report = boot::prepare_and_migrate(&backend).await?;\n    #[cfg(test)]\n    wait.phase(142);\n"
+            ],
+            [
+              "storage/mod.rs",
+              "    static BRIDGE: OnceLock<Result<Blocking, String>> = OnceLock::new();\n    let bridge",
+              "    static BRIDGE: OnceLock<Result<Blocking, String>> = OnceLock::new();\n    #[cfg(test)]\n    let wait = crate::cron::wait_diagnostics::Span::new(9, 90, 0, &BRIDGE as *const _ as usize as u64, 0);\n    let bridge"
+            ],
+            [
+              "storage/mod.rs",
+              "    bridge.run(future)?\n",
+              "    #[cfg(test)]\n    wait.phase(91);\n    bridge.run(future)?\n"
+            ]
+          ]
+          JSON
+          cat > ci-out/atomic-helper.rs <<'RS'
+          use std::sync::atomic::{AtomicU64, Ordering};
+          
+          const COUNT: usize = 1024;
+          const CLAIMED: u64 = u64::MAX;
+          
+          #[repr(C, align(64))]
+          struct Slot([AtomicU64; 8]);
+          
+          impl Slot {
+              const fn new() -> Self {
+                  Self([const { AtomicU64::new(0) }; 8])
+              }
+          }
+          
+          const _: [(); 64] = [(); std::mem::size_of::<Slot>()];
+          
+          #[used]
+          #[unsafe(no_mangle)]
+          static PR17_DIAG_META: [u64; 4] = [0x50523137, 1, COUNT as u64, 64];
+          
+          #[used]
+          #[unsafe(no_mangle)]
+          static PR17_DIAG_SLOTS: [Slot; COUNT] = [const { Slot::new() }; COUNT];
+          
+          #[used]
+          #[unsafe(no_mangle)]
+          static PR17_DIAG_DROPPED: AtomicU64 = AtomicU64::new(0);
+          
+          static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+          
+          pub(crate) struct Span {
+              index: usize,
+              id: u64,
+          }
+          
+          impl Span {
+              pub(crate) fn new(kind: u64, phase: u64, key: u64, resource: u64, parent: u64) -> Self {
+                  std::hint::black_box(&PR17_DIAG_META);
+                  let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+                  if id != 0 && id != CLAIMED {
+                      let start = id as usize % COUNT;
+                      for offset in 0..COUNT {
+                          let index = (start + offset) % COUNT;
+                          let words = &PR17_DIAG_SLOTS[index].0;
+                          if words[0]
+                              .compare_exchange(0, CLAIMED, Ordering::Acquire, Ordering::Relaxed)
+                              .is_ok()
+                          {
+                              for (index, value) in [kind, phase, key, resource, parent, 0, 0]
+                                  .into_iter()
+                                  .enumerate()
+                              {
+                                  words[index + 1].store(value, Ordering::Relaxed);
+                              }
+                              words[0].store(id, Ordering::Release);
+                              return Self { index, id };
+                          }
+                      }
+                  }
+                  PR17_DIAG_DROPPED.fetch_add(1, Ordering::Relaxed);
+                  Self { index: COUNT, id: 0 }
+              }
+          
+              pub(crate) fn id(&self) -> u64 {
+                  self.id
+              }
+          
+              pub(crate) fn phase(&self, phase: u64) {
+                  if self.index < COUNT {
+                      PR17_DIAG_SLOTS[self.index].0[2].store(phase, Ordering::Release);
+                  }
+              }
+          
+              pub(crate) fn link(&self, link: u64) {
+                  if self.index < COUNT {
+                      PR17_DIAG_SLOTS[self.index].0[6].store(link, Ordering::Relaxed);
+                  }
+              }
+          }
+          
+          impl Drop for Span {
+              fn drop(&mut self) {
+                  if self.index < COUNT {
+                      PR17_DIAG_SLOTS[self.index].0[0].store(0, Ordering::Release);
+                  }
+              }
+          }
+          
+          pub(crate) fn hash_parts(parts: &[&[u8]]) -> u64 {
+              let mut hash = 0xcbf29ce484222325_u64;
+              for part in parts {
+                  for byte in (part.len() as u64).to_le_bytes() {
+                      hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+                  }
+                  for &byte in *part {
+                      hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+                  }
+              }
+              hash
+          }
+          RS
+          cat > ci-out/atomic-apply.py <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          
+          expected = "94e8d9cba539a3c025369f02da5aee42f6e34bda"
+          assert subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() == expected
+          subprocess.run(["git", "diff", "--exit-code"], check=True)
+          root = Path("crates/openhuman-core/src")
+          patches = json.loads(Path("ci-out/atomic-patches.json").read_text())
+          assert len(patches) == 27
+          changed = {}
+          for relative, old, new in patches:
+              path = root / relative
+              text = changed[path] if path in changed else path.read_text()
+              assert text.count(old) == 1, (relative, old[:100], text.count(old))
+              changed[path] = text.replace(old, new, 1)
+          helper = root / "cron/wait_diagnostics.rs"
+          assert not helper.exists()
+          helper_text = Path("ci-out/atomic-helper.rs").read_text()
+          assert "black_box(&PR17_DIAG_META)" in helper_text
+          assert len(changed) == 7
+          for path, text in changed.items():
+              path.write_text(text)
+          helper.write_text(helper_text)
+          print("PR17_ATOMIC_PATCH applied 27 exact replacements across seven source files and added the fixed-slot observer.")
+          PY
+          cat > ci-out/atomic-phases.md <<'PHASES'
+          # Atomic storage diagnostic phase map
+          
+          This is an observer on source 94e8d9cba539a3c025369f02da5aee42f6e34bda.
+          It is not a production repair or clean validation of unmodified source.
+          No new task, application future wrapper, logging thread, channel, Config clone, or timeout is added.
+          The helper uses fixed atomic slots and borrowed-byte hashing.
+          
+          | Kind | Phase | Meaning |
+          |---|---|---|
+          | 1 | 10, 11 | Document address: runtime, owned-registration join |
+          | 2 | 19, 20, 21, 22, 23, 24, 25 | Registration: scope key, SERVED wait, lock/cache, module serve, existing test gate, existing trace, insert |
+          | 3 | 30, 31 | Module serve caller: runtime, existing child join |
+          | 4 | 40, 41, 42 | Existing module serve child: path parse, RequestName, serve_at |
+          | 5 | 50, 51 | Workspace backend map: lock wait, lock held |
+          | 6 | 60, 61 | Backend OnceCell: waiter, initializer owner |
+          | 7 | 70, 71, 72 | store_in: entry, preceding migration, requested operation |
+          | 8 | 80, 81, 82 | Binding::offload: entry, existing spawned future join, existing inline future |
+          | 9 | 90, 91 | Storage bridge: singleton, bridge.run |
+          | 11 | 110, 111, 112 | store_raw: StoreRequest/store_config, ScheduleStore, decode |
+          | 12 | 62, 63, 64, 65 | Backend open: existing test gate, directory preparation, existing trace, storage open |
+          | 13 | 130, 131, 132, 133 | Cron call: proxy readiness, existing trace, proxy.call, error trace |
+          | 14 | 139, 140, 141, 142 | Storage open: URL parse/log, driver open, boot migration, wrap/return |
+          
+          Slot words are id, kind, phase, key, resource, parent, link, reserved.
+          Kind 2 resource is &SERVED; its link is the callback path hash, matching kind 3/4 key.
+          Kind 3 owns kind 4 via parent id.
+          Kind 6 resource is the exact Arc OnceCell address; initializer parent identifies its waiter.
+          Kind 7/11 resource is 1 for a Migrate operation and 0 otherwise.
+          Kind 8 resource is the Binding address. Kind 9 resource is the bridge singleton address.
+          Kind 13 resource hashes the member name.
+          Hashes use length-prefixed FNV-1a on borrowed bytes.
+          Id 0 is free; u64::MAX is an in-progress slot claim and its payload is inconclusive.
+          A nonzero dropped counter means absence of an observer cannot exclude a wait.
+          The debugger stops all threads and reads memory only. It never calls inferior functions.
+          PHASES
+          python3 -m py_compile ci-out/atomic-apply.py
+          python3 ci-out/atomic-apply.py
+          cargo fmt --all
+          git diff --stat
+          git diff --binary > ci-out/atomic-source.patch
+          cp crates/openhuman-core/src/cron/wait_diagnostics.rs ci-out/atomic-helper-formatted.rs
+      - name: Compile the storage target with atomic observers
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib \
+            --no-run --message-format=json-render-diagnostics > ci-out/storage-build.jsonl
+          jq -c 'select(.reason == "compiler-artifact" and .executable != null) | {target: .target.name, kind: .target.kind, test: .profile.test, executable: .executable}' ci-out/storage-build.jsonl
+          mapfile -t binaries < <(jq -r 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == "openhuman_core" and .executable != null) | .executable' ci-out/storage-build.jsonl | sort -u)
+          test "${#binaries[@]}" -eq 1
+          test -x "${binaries[0]}"
+          printf '%s\n' "${binaries[0]}" > ci-out/storage-executable.txt
+          gdb --batch --nx --quiet "${binaries[0]}" \
+            -ex 'info address PR17_DIAG_META' \
+            -ex 'info address PR17_DIAG_SLOTS' \
+            -ex 'info address PR17_DIAG_DROPPED' \
+            2>&1 | tee ci-out/atomic-symbols.log
+          ! rg -q 'No symbol|not defined' ci-out/atomic-symbols.log
+          for symbol in PR17_DIAG_META PR17_DIAG_SLOTS PR17_DIAG_DROPPED; do
+            rg -q "$symbol" ci-out/atomic-symbols.log
+          done
+      - name: Run the diagnostic suite and capture after inactivity
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          export PR17_DIAG_OUT="$GITHUB_WORKSPACE/ci-out"
+          export PR17_EXPECTED_EXE="$(cat ci-out/storage-executable.txt)"
+          export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="$RUNNER_TEMP/pr17-late-attach.py"
+          diagnostic_failure=0
+          for attempt in 1 2 3; do
+            export PR17_ATTEMPT="$attempt"
+            export PR17_DEADLINE_MONOTONIC="$(python3 -c 'import time; print(time.monotonic() + 600.0)')"
+            result="$PR17_DIAG_OUT/storage-attempt-$attempt.result.json"
+            rm -f "$result"
+            set +e
+            # The runner enforces 600s for the test plus 15s termination grace.
+            # This outer bound also permits debugger and pipe cleanup.
+            timeout --signal=TERM --kill-after=15s 645s \
+              bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+              --features storage-sqlite,storage-file --lib -- \
+              storage:: cron:: flows:: security::approval:: security::devices:: \
+              security::secret_storage:: security::credentials:: desktop::notifications:: \
+              integrations::task_sources:: integrations::composio::file_store \
+              agent::orchestration:: config::workspace:: desktop::app_state:: \
+              desktop::control:: platform::cost:: inference::tokenjuice:: \
+              config::schema::load::source:: \
+              --skip cron::bus_host::tests:: --skip cron::documents_port::tests::
+            cargo_status=$?
+            set -e
+            if [ ! -f "$result" ]; then
+              printf 'PR17_HARNESS_FAILURE: no native result; cargo_status=%s\n' "$cargo_status"
+              [ "$cargo_status" -eq 0 ] && exit 1
+              exit "$cargo_status"
+            fi
+            cat "$result"
+            attempt_status=$(jq -r '.exit_status' "$result")
+            attached=$(jq -r '.attach_requested' "$result")
+            printf 'PR17_STORAGE_ATTEMPT_STATUS attempt=%s cargo_status=%s native_status=%s attached=%s\n' "$attempt" "$cargo_status" "$attempt_status" "$attached"
+            if [ "$attempt_status" -eq 0 ] && [ "$cargo_status" -ne 0 ]; then
+              exit "$cargo_status"
+            fi
+            if [ "$attached" = true ]; then
+              printf 'PR17_DIAGNOSTIC_ONLY: an attach was attempted; this is not clean native validation.\n'
+              [ "$attempt_status" -ne 0 ] || exit 86
+              exit "$attempt_status"
+            fi
+            if [ "$attempt_status" -eq 101 ]; then
+              diagnostic_failure=101
+            elif [ "$attempt_status" -ne 0 ]; then
+              exit "$attempt_status"
+            fi
+          done
+          exit "$diagnostic_failure"
+      - name: Print captured stacks for remote inspection
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in sorted(Path("ci-out").glob("storage-attempt-*-gdb.log")):
+              text = path.read_text(encoding="utf-8", errors="replace")
+              print(f"PR17_GDB_LOG_BEGIN {path.name} chars={len(text)}")
+              print(text[:3000000])
+              if len(text) > 3000000:
+                  print("PR17_GDB_LOG_TRUNCATED; complete capture is in the artifact")
+              print(f"PR17_GDB_LOG_END {path.name}")
+          PY
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr17-storage-atomic-debug-${{ matrix.cohort }}
+          path: ci-out/
+          retention-days: 7
+          if-no-files-found: warn
