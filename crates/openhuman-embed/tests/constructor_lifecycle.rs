@@ -157,14 +157,15 @@ async fn removal_case(
             .await
             .expect("removal wait is bounded")
             .expect("removal task");
-        assert!(matches!(result, Err(AgentError::CleanupPending)), "{result:?}");
+        assert!(
+            matches!(result, Err(AgentError::CleanupPending)),
+            "{result:?}"
+        );
         // Retrying a deferred removal can add purge intent without releasing
         // the home or creating a replacement instance prematurely.
-        let retry = tokio::time::timeout(WAIT, async {
-            runtime.remove_agent(id).purge().await
-        })
-        .await
-        .expect("deferred removal retry is bounded");
+        let retry = tokio::time::timeout(WAIT, async { runtime.remove_agent(id).purge().await })
+            .await
+            .expect("deferred removal retry is bounded");
         assert!(matches!(retry, Err(AgentError::CleanupPending)));
     }
     let outcome = tokio::time::timeout(WAIT, turn)
@@ -190,12 +191,15 @@ async fn removal_case(
         Err(AgentError::DuplicateId(ref duplicate)) if duplicate == id
     ));
     gate.finish().await;
-    common::eventually("constructor release permits purge and deregistration", || {
-        (!home.exists()
-            && AgentContextRegistry::get(id).is_none()
-            && !runtime.agent_ids().iter().any(|reserved| reserved == id))
-        .then_some(())
-    })
+    common::eventually(
+        "constructor release permits purge and deregistration",
+        || {
+            (!home.exists()
+                && AgentContextRegistry::get(id).is_none()
+                && !runtime.agent_ids().iter().any(|reserved| reserved == id))
+            .then_some(())
+        },
+    )
     .await;
     drop(agent);
 }

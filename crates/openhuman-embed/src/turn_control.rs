@@ -380,14 +380,12 @@ impl Turn {
             },
             run_queue: steering.queue(),
             construction_keepalive: match &self.target {
-                TurnTarget::Agent(agent) => Some(
-                    agent
-                        .construction_keepalive()
-                        .ok_or_else(|| CoreError::AgentRemoved {
-                            method: AGENT_CHAT,
-                            agent_id: agent.id.clone(),
-                        })?,
-                ),
+                TurnTarget::Agent(agent) => Some(agent.construction_keepalive().ok_or_else(
+                    || CoreError::AgentRemoved {
+                        method: AGENT_CHAT,
+                        agent_id: agent.id.clone(),
+                    },
+                )?),
                 TurnTarget::Runtime(runtime) => Some(runtime.clone()),
             },
         };
