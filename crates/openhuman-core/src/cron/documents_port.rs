@@ -400,12 +400,33 @@ fn path_for(key: &str) -> String {
 }
 
 /// The address the module calls for `scope`'s documents, serving the object on
-/// first use.
+/// first use. Registration and its cache update run on the process-lifetime
+/// module runtime, so a blocked or cancelled caller cannot retain the shared
+/// registration lock or leave a served object outside the cache.
 ///
 /// # Errors
 ///
 /// When the module bus is unavailable.
 pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
+    #[cfg(feature = "modules")]
+    {
+        let runtime = crate::modules::runtime::runtime()
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+            .context("initialize the schedule document port runtime")?;
+        let scope = scope.clone();
+        runtime
+            .spawn(async move { register_address(&scope).await })
+            .await
+            .context("schedule document port registration task did not finish")?
+    }
+    #[cfg(not(feature = "modules"))]
+    {
+        register_address(scope).await
+    }
+}
+
+async fn register_address(scope: &DocScope) -> Result<CallbackAddress> {
     let key = scope.key();
     let mut served = SERVED.lock().await;
     if let Some(address) = served.get(&key) {
@@ -421,6 +442,8 @@ pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
     .await
     .map_err(|error| anyhow::anyhow!(error))
     .context("serve the schedule document port")?;
+    #[cfg(all(test, feature = "modules"))]
+    registration_tests::after_serve(&path).await;
     tracing::debug!(scope = %scope.scope.as_str(), %path, "[cron:documents] port served");
     let address = CallbackAddress {
         destination: module::HOST_BUS_NAME.to_string(),
@@ -433,3 +456,7 @@ pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
 #[cfg(all(test, feature = "modules"))]
 #[path = "documents_port_tests.rs"]
 mod tests;
+
+#[cfg(all(test, feature = "modules"))]
+#[path = "documents_port_registration_tests.rs"]
+mod registration_tests;

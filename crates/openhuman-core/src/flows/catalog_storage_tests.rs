@@ -284,6 +284,13 @@ async fn catalog_storage_resolves_the_current_backend_and_confines_graph_namespa
         CatalogStorageReply, DocDeleteWhereRequest,
     };
 
+    if crate::util::module_test_process::run(
+        module_path!(),
+        "catalog_storage_resolves_the_current_backend_and_confines_graph_namespace_queries",
+    ) {
+        return;
+    }
+
     let workspace = tempfile::tempdir().expect("isolated workspace");
     let config = Config {
         workspace_dir: workspace.path().to_path_buf(),

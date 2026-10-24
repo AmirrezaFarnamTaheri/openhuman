@@ -1,0 +1,241 @@
+---
+name: PR17 storage repair validation
+
+on:
+  push:
+    branches: [codex/pr17-storage-repair-validation-20261024]
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: pr17-storage-repair-validation
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  storage-wait:
+    name: Prove registration regressions and repeat parallel storage
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+      RUST_MIN_STACK: "16777216"
+      GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
+    steps:
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout exact diagnostic source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out pinned submodules
+        run: bash scripts/ci/checkout-submodules.sh
+      - name: Restore storage build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            crates/openhuman-app -> target
+          cache-on-failure: true
+          shared-key: ci-fast-storage
+      - name: Install debugger
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends gdb jq python3-tomli
+      - name: Stage the same test modules as hosted storage
+        run: |
+          mkdir -p ci-out
+          bash scripts/ci/self-hosted/install-test-modules.sh \
+            "/tmp/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/storage-drivers" \
+            ci-out/test-modules-storage-drivers.env
+      - name: Format candidate and record exact reviewable source
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+
+          paths = [
+              "crates/openhuman-core/src/cron/documents_port.rs",
+              "crates/openhuman-core/src/cron/documents_port_registration_tests.rs",
+              "crates/openhuman-core/src/flows/catalog_storage_tests.rs",
+              "crates/openhuman-core/src/storage/import/tinyflows_tests.rs",
+          ]
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only"], text=True).splitlines())
+          assert changed.issubset(set(paths)), sorted(changed)
+          for path in paths:
+              content = pathlib.Path(path).read_text()
+              print("PR17_FORMATTED_FILE " + json.dumps({"path": path, "content": content}))
+          pathlib.Path("ci-out/fixed-documents-port.rs").write_text(
+              pathlib.Path(paths[0]).read_text())
+          PY
+      - name: Prepare the original registration with only the new test gate
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin 647cc67b00f4dad08767197858c53133ec2037a8
+          git show 647cc67b00f4dad08767197858c53133ec2037a8:crates/openhuman-core/src/cron/documents_port.rs \
+            > ci-out/original-documents-port.rs
+          python3 - <<'PY'
+          import pathlib
+
+          source = pathlib.Path("ci-out/original-documents-port.rs").read_text()
+          anchor = '    .context("serve the schedule document port")?;'
+          assert source.count(anchor) == 1
+          source = source.replace(anchor, anchor + '\n    #[cfg(all(test, feature = "modules"))]\n    registration_tests::after_serve(&path).await;')
+          source += '\n#[cfg(all(test, feature = "modules"))]\n#[path = "documents_port_registration_tests.rs"]\nmod registration_tests;\n'
+          pathlib.Path("crates/openhuman-core/src/cron/documents_port.rs").write_text(source)
+          PY
+      - name: Require both regressions to fail on the original ownership
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib --no-run
+          for case_name in synchronous_retry_does_not_block_registration_owner cancelled_caller_runtime_keeps_one_registration; do
+            set +e
+            timeout 150s bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+              --features storage-sqlite,storage-file --lib -- \
+              --exact "cron::documents_port::registration_tests::$case_name" --nocapture \
+              2>&1 | tee "ci-out/red-$case_name.log"
+            test_status=${PIPESTATUS[0]}
+            set -e
+            test "$test_status" -eq 101
+            case "$case_name" in
+              synchronous_retry_does_not_block_registration_owner)
+                rg -F "registration must finish without the blocked caller runtime" "ci-out/red-$case_name.log"
+                ;;
+              cancelled_caller_runtime_keeps_one_registration)
+                rg -F "registration survives its caller runtime" "ci-out/red-$case_name.log"
+                ;;
+            esac
+            rg -F "0 passed; 1 failed" "ci-out/red-$case_name.log"
+            printf 'PR17_EXPECTED_REGRESSION_FAILURE %s status=%s\n' "$case_name" "$test_status"
+          done
+      - name: Restore the candidate and pass the two regressions
+        run: |
+          set -euo pipefail
+          cp ci-out/fixed-documents-port.rs crates/openhuman-core/src/cron/documents_port.rs
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib -- \
+            cron::documents_port::registration_tests:: --nocapture \
+            2>&1 | tee ci-out/green-registration-regressions.log
+      - name: Compile the exact storage library test target
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib \
+            --no-run --message-format=json-render-diagnostics > ci-out/storage-build.jsonl
+          jq -c 'select(.reason == "compiler-artifact" and .executable != null) | {target: .target.name, kind: .target.kind, test: .profile.test, executable: .executable}' ci-out/storage-build.jsonl
+          mapfile -t binaries < <(jq -r 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == "openhuman_core" and .executable != null) | .executable' ci-out/storage-build.jsonl | sort -u)
+          test "${#binaries[@]}" -eq 1
+          test -x "${binaries[0]}"
+          printf '%s\n' "${binaries[0]}" > ci-out/storage-executable.txt
+      - name: Diagnose the unchanged storage filter with a bounded stack capture
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          cat > ci-out/storage.gdb <<'GDB'
+          set pagination off
+          set confirm off
+          set print frame-arguments none
+          set print elements 0
+          set print thread-events off
+          set disable-randomization off
+          set debuginfod enabled off
+          handle SIGPIPE nostop noprint pass
+          handle SIGABRT stop print nopass
+          start
+          python
+          import os
+          import signal
+          import threading
+
+          diagnostic_pid = gdb.selected_inferior().pid
+          diagnostic_timed_out = threading.Event()
+
+          def stop_after_deadline():
+              diagnostic_timed_out.set()
+              try:
+                  os.kill(diagnostic_pid, signal.SIGABRT)
+              except ProcessLookupError:
+                  pass
+
+          diagnostic_timer = threading.Timer(600, stop_after_deadline)
+          diagnostic_timer.daemon = True
+          diagnostic_timer.start()
+          end
+          continue
+          python
+          diagnostic_timer.cancel()
+          if gdb.selected_inferior().threads():
+              if diagnostic_timed_out.is_set():
+                  gdb.write("PR17_STORAGE_WATCHDOG: 600 seconds of test execution elapsed\n")
+              else:
+                  gdb.write("PR17_STORAGE_STOP: inferior stopped before exit\n")
+              gdb.execute("thread apply all bt 50")
+              gdb.execute("kill")
+              gdb.execute("quit " + ("124" if diagnostic_timed_out.is_set() else "1"))
+          end
+          GDB
+          cat > ci-out/storage-debug-runner.sh <<'RUNNER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          expected_binary="$(cat "$GITHUB_WORKSPACE/ci-out/storage-executable.txt")"
+          test "$(readlink -f -- "$1")" = "$(readlink -f -- "$expected_binary")"
+          printf 'Diagnostic test cwd: %s\n' "$PWD"
+          unset CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER
+          exec gdb -nx -nh --batch --return-child-result \
+            -x "$GITHUB_WORKSPACE/ci-out/storage.gdb" --args "$@"
+          RUNNER
+          chmod +x ci-out/storage-debug-runner.sh
+          export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="$GITHUB_WORKSPACE/ci-out/storage-debug-runner.sh"
+          for attempt in 1 2 3; do
+            printf 'Storage diagnostic attempt %s\n' "$attempt"
+            bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+              --features storage-sqlite,storage-file --lib -- \
+              storage:: cron:: flows:: security::approval:: security::devices:: \
+              security::secret_storage:: security::credentials:: desktop::notifications:: \
+              integrations::task_sources:: integrations::composio::file_store \
+              agent::orchestration:: config::workspace:: desktop::app_state:: \
+              desktop::control:: platform::cost:: inference::tokenjuice:: \
+              config::schema::load::source:: \
+              --skip cron::bus_host::tests:: --skip cron::documents_port::tests:: \
+              2>&1 | tee "ci-out/storage-attempt-$attempt.log"
+          done
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr17-storage-repair-validation
+          path: ci-out/
+          retention-days: 7
+          if-no-files-found: warn
