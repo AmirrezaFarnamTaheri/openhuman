@@ -78,6 +78,9 @@ async fn own_manual_run(
     delivery: ManualDelivery,
     reply_tx: &mut Option<tokio::sync::oneshot::Sender<Result<RunJobReply, String>>>,
 ) -> Result<()> {
+    #[cfg(test)]
+    let diagnostic = crate::cron::wait_diagnostics::Span::new(
+        format!("manual {} {} {run_id}", config.workspace_dir.display(), job.id), "host.register");
     // Keep the invocation's CoreContext strongly pinned while Binding itself
     // retains only a Weak reference. The task is the acyclic lifetime owner.
     let _context_pin = ctx.core().cloned();
@@ -90,7 +93,11 @@ async fn own_manual_run(
     let host = bus_host::register(binding.clone())
         .await
         .map_err(|e| anyhow!(e))?;
+    #[cfg(test)]
+    diagnostic.phase("scope.current");
     let scope = binding.within(async { DocScope::current(&config) }).await?;
+    #[cfg(test)]
+    diagnostic.phase("documents.address");
     let storage = StoreConfig {
         backend: StoreBackend::Documents {
             callback: crate::cron::documents_port::address(&scope).await?,
@@ -100,6 +107,8 @@ async fn own_manual_run(
     };
     // ManualStart bypasses ScheduleStore, so migration must precede Prepare and
     // any possible claim just as it does for the ordinary scheduler.
+    #[cfg(test)]
+    diagnostic.phase("store.migrate");
     crate::cron::client::store_in::<serde_json::Value>(
         &config,
         &scope,
@@ -113,6 +122,8 @@ async fn own_manual_run(
         scope: scope_id,
         request_id,
     };
+    #[cfg(test)]
+    diagnostic.phase("manual.prepare");
     let handle: ManualRunHandle = loop {
         let proxy = match module::proxy(&config).await {
             Ok(proxy) => proxy,
@@ -146,6 +157,8 @@ async fn own_manual_run(
     let mut retry_delay = Duration::from_millis(20);
     let terminal = loop {
         let state = if !started {
+            #[cfg(test)]
+            diagnostic.phase("manual.start");
             match module::proxy(&config).await {
                 Ok(proxy) => match proxy
                     .call::<ManualRunState>(members::START_MANUAL_RUN, (&start,))
@@ -167,6 +180,8 @@ async fn own_manual_run(
                 }
             }
         } else {
+            #[cfg(test)]
+            diagnostic.phase("manual.wait");
             match module::proxy(&config).await {
                 Err(error) => {
                     tracing::debug!(%error, "[cron:scheduler] retrying WaitManualRun");
@@ -253,10 +268,14 @@ async fn own_manual_run(
         ManualRunOutcome::Stopped { .. } => Err("cron manual run was stopped".to_string()),
         ManualRunOutcome::Failed { message, .. } => Err(message),
     };
+    #[cfg(test)]
+    diagnostic.phase("terminal.reply");
     if let Some(reply_tx) = reply_tx.take() {
         let _ = reply_tx.send(outcome_reply);
     }
 
+    #[cfg(test)]
+    diagnostic.phase("manual.ack");
     let ack = AcknowledgeManualRun { handle };
     let mut retry_delay = Duration::from_millis(20);
     loop {

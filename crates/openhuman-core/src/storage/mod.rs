@@ -165,6 +165,9 @@ pub fn explicit_url(config: &Config) -> Option<String> {
 /// An unparseable URL, a driver this build was compiled without (the error
 /// names the Cargo feature), or a backend that cannot be reached.
 pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
+    #[cfg(test)]
+    let diagnostic = crate::cron::wait_diagnostics::Span::new(
+        format!("storage-open {}", redact_url(url)), "parse");
     let parsed = StorageUrl::parse(url)?;
     tracing::info!(
         target: "openhuman::storage",
@@ -174,7 +177,11 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
     );
     // Every opened backend checks the process's lease fences on write; with
     // no fence registered (every single-user host) that is a pass-through.
+    #[cfg(test)]
+    diagnostic.phase("driver.open");
     let backend = tinystoragedrivers::open(&parsed).await?;
+    #[cfg(test)]
+    diagnostic.phase("boot.prepare-and-migrate");
     // Schema, scope move and migrations run on the raw backend, before any
     // lease fence exists to refuse them.
     let report = boot::prepare_and_migrate(&backend).await?;
@@ -294,6 +301,17 @@ where
         .get_or_init(|| Blocking::new().map_err(|error| error.to_string()))
         .as_ref()
         .map_err(|error| StorageError::backend(error.clone()))?;
+    #[cfg(test)]
+    let _diagnostic = crate::cron::wait_diagnostics::Span::new(
+        format!("bridge-caller {}", std::any::type_name::<F>()), "bridge.run");
+    #[cfg(test)]
+    let diagnostic_caller = _diagnostic.id();
+    #[cfg(test)]
+    let future = async move {
+        let _diagnostic = crate::cron::wait_diagnostics::Span::new(
+            format!("bridge-future caller={diagnostic_caller} {}", std::any::type_name::<F>()), "future.await");
+        future.await
+    };
     bridge.run(future)?
 }
 

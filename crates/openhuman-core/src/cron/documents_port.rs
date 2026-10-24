@@ -143,13 +143,20 @@ impl DocScope {
     /// ScheduleStore caller can be waiting on the shared storage bridge. Never
     /// synchronously re-enter that bridge from the callback.
     async fn callback_documents(&self) -> Result<Arc<dyn DocumentStore>, StorageError> {
+        #[cfg(test)]
+        let diagnostic = super::wait_diagnostics::Span::new(
+            format!("callback-documents {}", self.key()), "backend");
         let backend = match &self.backend {
             Some(backend) => Arc::clone(backend),
             None => crate::storage::local::backend_for_callback(&self.workspace_dir)
                 .await
                 .map_err(|error| StorageError::unavailable(error.to_string()))?,
         };
+        #[cfg(test)]
+        diagnostic.phase("for_scope");
         let scoped = backend.for_scope(&self.scope)?;
+        #[cfg(test)]
+        diagnostic.phase("clone-documents");
         Ok(Arc::clone(scoped.documents()))
     }
 
@@ -228,7 +235,13 @@ fn encode<T: serde::Serialize>(value: T) -> Result<Value, StorageError> {
 
 impl DocumentsPort {
     async fn handle(&self, request: Value) -> Result<Value, StorageError> {
+        #[cfg(test)]
+        let diagnostic = super::wait_diagnostics::Span::new(
+            format!("document {} {}", self.scope.key(), request.get("op").and_then(Value::as_str).unwrap_or("?")),
+            "resolve-documents");
         let documents = self.scope.callback_documents().await?;
+        #[cfg(test)]
+        diagnostic.phase("document-operation");
         let op = text(&request, "op")?.to_string();
         tracing::trace!(%op, "[cron:documents] request");
         match op.as_str() {
@@ -422,6 +435,8 @@ fn path_for(key: &str) -> String {
 ///
 /// When the module bus is unavailable.
 pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
+    #[cfg(test)]
+    let diagnostic = super::wait_diagnostics::Span::new(format!("address-caller {}", scope.key()), "module-runtime");
     #[cfg(feature = "modules")]
     {
         let runtime = crate::modules::runtime::runtime()
@@ -429,6 +444,8 @@ pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
             .map_err(|error| anyhow::anyhow!(error))
             .context("initialize the schedule document port runtime")?;
         let scope = scope.clone();
+        #[cfg(test)]
+        diagnostic.phase("register-join");
         runtime
             .spawn(async move { register_address(&scope).await })
             .await
@@ -442,11 +459,17 @@ pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
 
 async fn register_address(scope: &DocScope) -> Result<CallbackAddress> {
     let key = scope.key();
+    #[cfg(test)]
+    let diagnostic = super::wait_diagnostics::Span::new(format!("address-owner {key}"), "SERVED.lock");
     let mut served = SERVED.lock().await;
+    #[cfg(test)]
+    diagnostic.phase("SERVED.held");
     if let Some(address) = served.get(&key) {
         return Ok(address.clone());
     }
     let path = path_for(&key);
+    #[cfg(test)]
+    diagnostic.phase("module.serve");
     module::serve(
         path.clone(),
         DocumentsPort {

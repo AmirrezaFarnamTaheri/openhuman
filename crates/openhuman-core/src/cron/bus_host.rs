@@ -169,6 +169,19 @@ impl Binding {
         T: Send + 'static,
         F: Future<Output = T> + Send + 'static,
     {
+        #[cfg(test)]
+        let diagnostic = super::wait_diagnostics::Span::new(
+            format!("host-offload {} {}", self.config().workspace_dir.display(), std::any::type_name::<F>()),
+            "runtime-join");
+        #[cfg(test)]
+        let diagnostic_caller = diagnostic.id();
+        #[cfg(test)]
+        let fut = async move {
+            let _diagnostic = super::wait_diagnostics::Span::new(
+                format!("host-task caller={diagnostic_caller} {}", std::any::type_name::<F>()),
+                "future.await");
+            fut.await
+        };
         match &self.runtime {
             Some(handle) => handle
                 .spawn(fut)

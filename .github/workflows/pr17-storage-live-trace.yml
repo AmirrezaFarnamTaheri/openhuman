@@ -1,0 +1,120 @@
+---
+name: PR17 current storage live tracing
+
+on:
+  push:
+    branches: [codex/pr17-storage-live-trace-20261024]
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: pr17-storage-live-trace
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  storage-wait:
+    name: Trace current storage waits with normal concurrency
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+      RUST_MIN_STACK: "16777216"
+      GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
+    steps:
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout exact diagnostic source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out pinned submodules
+        run: bash scripts/ci/checkout-submodules.sh
+      - name: Restore storage build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            crates/openhuman-app -> target
+          cache-on-failure: true
+          shared-key: ci-fast-storage
+      - name: Install diagnostic tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends jq ripgrep python3-tomli
+      - name: Stage the same test modules as hosted storage
+        run: |
+          mkdir -p ci-out
+          bash scripts/ci/self-hosted/install-test-modules.sh \
+            "/tmp/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/storage-drivers" \
+            ci-out/test-modules-storage-drivers.env
+      - name: Format the temporary trace instrumentation
+        run: cargo fmt --all
+      - name: Compile the exact storage library test target
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib \
+            --no-run --message-format=json-render-diagnostics > ci-out/storage-build.jsonl
+          jq -c 'select(.reason == "compiler-artifact" and .executable != null) | {target: .target.name, kind: .target.kind, test: .profile.test, executable: .executable}' ci-out/storage-build.jsonl
+          mapfile -t binaries < <(jq -r 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == "openhuman_core" and .executable != null) | .executable' ci-out/storage-build.jsonl | sort -u)
+          test "${#binaries[@]}" -eq 1
+          test -x "${binaries[0]}"
+          printf '%s\n' "${binaries[0]}" > ci-out/storage-executable.txt
+      - name: Trace the complete parallel storage suite without a debugger
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          diagnostic_failure=0
+          for attempt in 1 2 3; do
+            printf 'Native storage trace attempt %s\n' "$attempt"
+            set +e
+            timeout --signal=TERM --kill-after=15s 600s \
+              bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+              --features storage-sqlite,storage-file --lib -- \
+              storage:: cron:: flows:: security::approval:: security::devices:: \
+              security::secret_storage:: security::credentials:: desktop::notifications:: \
+              integrations::task_sources:: integrations::composio::file_store \
+              agent::orchestration:: config::workspace:: desktop::app_state:: \
+              desktop::control:: platform::cost:: inference::tokenjuice:: \
+              config::schema::load::source:: \
+              --skip cron::bus_host::tests:: --skip cron::documents_port::tests:: \
+              2>&1 | tee "ci-out/storage-attempt-$attempt.log"
+            attempt_status=${PIPESTATUS[0]}
+            set -e
+            printf 'PR17_STORAGE_ATTEMPT_STATUS attempt=%s status=%s\n' "$attempt" "$attempt_status"
+            if [ "$attempt_status" -eq 101 ]; then
+              diagnostic_failure=101
+            elif [ "$attempt_status" -ne 0 ]; then
+              exit "$attempt_status"
+            fi
+          done
+          exit "$diagnostic_failure"
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr17-storage-live-trace
+          path: ci-out/
+          retention-days: 7
+          if-no-files-found: warn

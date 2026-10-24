@@ -118,7 +118,12 @@ fn workspace_backend(workspace_dir: &Path) -> WorkspaceBackend {
 
 async fn open_default_backend(workspace_dir: PathBuf) -> Result<Arc<dyn StorageBackend>> {
     #[cfg(test)]
+    let diagnostic = crate::cron::wait_diagnostics::Span::new(
+        format!("workspace-init {}", workspace_dir.display()), "test-gate");
+    #[cfg(test)]
     await_test_backend_open_gate().await;
+    #[cfg(test)]
+    diagnostic.phase("prepare-default-dir");
 
     let url = super::config::default_url(&workspace_dir);
     super::config::prepare_default_dir(&workspace_dir).with_context(|| {
@@ -132,6 +137,8 @@ async fn open_default_backend(workspace_dir: PathBuf) -> Result<Arc<dyn StorageB
         workspace = %workspace_dir.display(),
         "[storage::local] opening the workspace default backend (none installed)"
     );
+    #[cfg(test)]
+    diagnostic.phase("storage.open");
     super::open(&url)
         .await
         .with_context(|| format!("open the default storage for {}", workspace_dir.display()))
@@ -141,6 +148,9 @@ async fn initialized_backend(
     cell: WorkspaceBackend,
     workspace_dir: PathBuf,
 ) -> Result<Arc<dyn StorageBackend>> {
+    #[cfg(test)]
+    let _diagnostic = crate::cron::wait_diagnostics::Span::new(
+        format!("workspace-cell {}", workspace_dir.display()), "OnceCell.get_or_try_init");
     cell.get_or_try_init(|| async move { open_default_backend(workspace_dir).await })
         .await
         .map(Arc::clone)

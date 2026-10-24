@@ -38,7 +38,12 @@ async fn call<R: DeserializeOwned>(
     member: &'static str,
     args: impl Serialize,
 ) -> Result<R> {
+    #[cfg(test)]
+    let diagnostic = super::wait_diagnostics::Span::new(
+        format!("call {} {member}", config.workspace_dir.display()), "proxy");
     let proxy = module::proxy(config).await.map_err(|e| anyhow!(e))?;
+    #[cfg(test)]
+    diagnostic.phase("proxy.call");
     tracing::trace!(member, "[cron:bus] call");
     proxy.call(member, args).await.map_err(|error| {
         tracing::debug!(member, error = %error.wire_message(), "[cron:bus] call failed");
@@ -76,10 +81,16 @@ async fn store_raw<R: DeserializeOwned>(
     scope: &DocScope,
     operation: StoreOperation,
 ) -> Result<R> {
+    #[cfg(test)]
+    let diagnostic = super::wait_diagnostics::Span::new(
+        format!("store {} {:?}", config.workspace_dir.display(), std::mem::discriminant(&operation)),
+        "store_config");
     let request = StoreRequest {
         storage: store_config(config, scope).await?,
         operation: serde_json::to_value(&operation)?,
     };
+    #[cfg(test)]
+    diagnostic.phase("ScheduleStore");
     let value: Value = call(config, members::SCHEDULE_STORE, (request,)).await?;
     serde_json::from_value(value).map_err(|error| {
         tracing::warn!(%error, "[cron:bus] undecodable ScheduleStore reply");

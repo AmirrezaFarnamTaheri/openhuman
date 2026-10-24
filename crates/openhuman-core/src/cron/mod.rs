@@ -17,6 +17,8 @@ pub mod channel_bridge;
 pub(crate) mod client;
 pub mod completion_owner;
 pub(crate) mod documents_port;
+#[cfg(test)]
+pub(crate) mod wait_diagnostics;
 pub mod handlers;
 pub mod host_delivery;
 pub mod job_builder;
