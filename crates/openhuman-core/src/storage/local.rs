@@ -184,11 +184,10 @@ pub async fn backend_for_async(workspace_dir: &Path) -> Result<Arc<dyn StorageBa
 
 /// Resolve a workspace backend while serving an asynchronous module callback.
 ///
-/// A synchronous caller may already be running on the process-wide storage
-/// bridge while awaiting this callback. Calling `backend_for` here (directly
-/// or through `backend_for_async`'s blocking task) would enqueue another job
-/// on that same bridge and deadlock both sides. Drive the shared OnceCell
-/// initializer on the callback's asynchronous runtime instead.
+/// Resolve the shared OnceCell on the module-owned callback runtime, which
+/// keeps driving initialization while synchronous application callers wait.
+/// This also lets a future already running on the storage bridge await the
+/// callback: the bridge rejects synchronous re-entry from its own thread.
 ///
 /// The installed backend still wins, and each lookup still observes workspace
 /// invalidation/rebinding rather than retaining a stale backend handle.

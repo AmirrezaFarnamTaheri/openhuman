@@ -29,7 +29,8 @@ fn document_callback_does_not_reenter_the_shared_storage_bridge() {
             if let Some(status) = child.try_wait().expect("poll isolated test") {
                 let output = child.wait_with_output().expect("read isolated test");
                 assert!(
-                    status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+                    status.success()
+                        && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
                     "callback bridge test failed; status={status}\nstdout:\n{}\nstderr:\n{}",
                     String::from_utf8_lossy(&output.stdout),
                     String::from_utf8_lossy(&output.stderr)

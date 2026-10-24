@@ -392,15 +392,15 @@ struct CatalogStoragePort {
 #[tinybus::interface(name = "ai.tinyhumans.tinyflows.CatalogStorage")]
 impl CatalogStoragePort {
     async fn doc_capabilities(&self) -> BusResult<CatalogStorageReply> {
-        let result = self
-            .scope
-            .documents()
-            .await
-            .map(|documents| catalog::CatalogStorageCapabilities {
-                record_metadata: documents
-                    .capabilities()
-                    .contains(Capability::RecordMetadata),
-            });
+        let result =
+            self.scope
+                .documents()
+                .await
+                .map(|documents| catalog::CatalogStorageCapabilities {
+                    record_metadata: documents
+                        .capabilities()
+                        .contains(Capability::RecordMetadata),
+                });
         Ok(catalog_reply(result))
     }
 
@@ -419,7 +419,8 @@ impl CatalogStoragePort {
             allowed_record(&request.collection, &request.id)?;
             let value: Option<Versioned<Value>> = self
                 .scope
-                .documents().await?
+                .documents()
+                .await?
                 .get(&request.collection, &request.id)
                 .await?;
             value
@@ -470,7 +471,8 @@ impl CatalogStoragePort {
             allowed_record(&request.collection, &request.id)?;
             let precondition: Precondition = decoded(encoded(request.precondition)?)?;
             self.scope
-                .documents().await?
+                .documents()
+                .await?
                 .delete(&request.collection, &request.id, precondition)
                 .await
         }
@@ -485,7 +487,8 @@ impl CatalogStoragePort {
             query.filter = flow_namespace_filter(&request.collection, query.filter);
             let page: Page<Versioned<Value>> = self
                 .scope
-                .documents().await?
+                .documents()
+                .await?
                 .query(&request.collection, &query)
                 .await?;
             Ok(catalog::CatalogDocumentPage {
@@ -520,7 +523,8 @@ impl CatalogStoragePort {
             let filter: Filter = decoded(encoded(request.filter)?)?;
             let filter = flow_namespace_filter(&request.collection, filter);
             self.scope
-                .documents().await?
+                .documents()
+                .await?
                 .delete_where(&request.collection, &filter)
                 .await
         }

@@ -416,6 +416,13 @@ async fn fallback_backend_migrates_legacy_catalog_state_without_importing_files(
         }
     }
 
+    if crate::util::module_test_process::run(
+        module_path!(),
+        "fallback_backend_migrates_legacy_catalog_state_without_importing_files",
+    ) {
+        return;
+    }
+
     let (dir, mut config) = workspace();
     config.components.tinyflows = true;
     let legacy_dir = dir.path().join("flows");
