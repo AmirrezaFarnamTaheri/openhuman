@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh api --method GET repos/AmirrezaFarnamTaheri/openhuman/actions/artifacts/12559809636/zip > "$RUNNER_TEMP/pr17-storage.zip"
+          gh api --method GET repos/AmirrezaFarnamTaheri/openhuman/actions/artifacts/12561043006/zip > "$RUNNER_TEMP/pr17-storage.zip"
           python3 - "$RUNNER_TEMP/pr17-storage.zip" <<'PY'
           import hashlib
           import io
@@ -36,8 +36,8 @@ jobs:
 
           payload = pathlib.Path(sys.argv[1]).read_bytes()
           digest = hashlib.sha256(payload).hexdigest()
-          expected = "f01d4deba5ff30c9a654522a0e9215c3f5564cb9ae168c9604d0ca734a378081"
-          print("Artifact 12559809636: bytes=", len(payload), "sha256=", digest)
+          expected = "1ba8ba5342a297e3dc5f87d9975a6436db41e84aada8e9576e0e269c6c89a0a7"
+          print("Artifact 12561043006: bytes=", len(payload), "sha256=", digest)
           if digest != expected:
               raise SystemExit("Artifact checksum differs from the GitHub artifact metadata")
           with zipfile.ZipFile(io.BytesIO(payload)) as archive:
@@ -59,7 +59,7 @@ jobs:
                       print(line)
                   print("RESULT AND LONG-RUNNING MARKERS")
                   for line in lines:
-                      if re.search(r"test result:|has been running for over|\[ci\]\[lanes\].*(success|failed|failure)", line):
+                      if re.search(r"running [0-9]+ tests|test result:|has been running for over|\[ci\]\[lanes\].*(success|failed|failure)", line):
                           print(line)
                   print("TAIL")
                   for line in lines[-240:]:
