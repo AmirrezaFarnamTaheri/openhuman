@@ -1,5 +1,5 @@
 ---
-name: PR17 archived storage diagnostics
+name: PR17 storage wait diagnostics
 
 on:
   push:
@@ -8,60 +8,154 @@ on:
 permissions:
   actions: read
   contents: read
+  packages: read
 
 concurrency:
   group: pr17-cold-diagnostics
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  inspect-artifact:
-    name: Inspect archived storage lane output
+  storage-wait:
+    name: Diagnose the unchanged storage library suite
     runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init
     env:
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+      RUST_MIN_STACK: "16777216"
       GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
     steps:
-      - name: Download and inspect the exact archived storage log
-        shell: bash
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout exact diagnostic source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out pinned submodules
+        run: bash scripts/ci/checkout-submodules.sh
+      - name: Restore storage build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            crates/openhuman-app -> target
+          cache-on-failure: false
+          shared-key: ci-fast-storage
+      - name: Install debugger
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends gdb jq python3-tomli
+      - name: Stage the same test modules as hosted storage
+        run: |
+          mkdir -p ci-out
+          bash scripts/ci/self-hosted/install-test-modules.sh \
+            "/tmp/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/storage-drivers" \
+            ci-out/test-modules-storage-drivers.env
+      - name: Compile the exact storage library test target
         run: |
           set -euo pipefail
-          gh api --method GET repos/AmirrezaFarnamTaheri/openhuman/actions/artifacts/12561043006/zip > "$RUNNER_TEMP/pr17-storage.zip"
-          python3 - "$RUNNER_TEMP/pr17-storage.zip" <<'PY'
-          import hashlib
-          import io
-          import pathlib
-          import re
-          import sys
-          import zipfile
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib \
+            --no-run --message-format=json-render-diagnostics > ci-out/storage-build.jsonl
+          mapfile -t binaries < <(jq -r 'select(.reason == "compiler-artifact" and .executable != null and (.target.kind | index("lib"))) | .executable' ci-out/storage-build.jsonl | sort -u)
+          test "${#binaries[@]}" -eq 1
+          test -x "${binaries[0]}"
+          printf '%s\n' "${binaries[0]}" > ci-out/storage-executable.txt
+      - name: Diagnose the unchanged storage filter with a bounded stack capture
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          cat > ci-out/storage.gdb <<'GDB'
+          set pagination off
+          set confirm off
+          set print frame-arguments none
+          set print elements 0
+          set print thread-events off
+          set disable-randomization off
+          set debuginfod enabled off
+          handle SIGPIPE nostop noprint pass
+          handle SIGABRT stop print nopass
+          start
+          python
+          import os
+          import signal
+          import threading
 
-          payload = pathlib.Path(sys.argv[1]).read_bytes()
-          digest = hashlib.sha256(payload).hexdigest()
-          expected = "1ba8ba5342a297e3dc5f87d9975a6436db41e84aada8e9576e0e269c6c89a0a7"
-          print("Artifact 12561043006: bytes=", len(payload), "sha256=", digest)
-          if digest != expected:
-              raise SystemExit("Artifact checksum differs from the GitHub artifact metadata")
-          with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-              for entry in archive.infolist():
-                  print("ARCHIVE", entry.filename, "bytes=", entry.file_size)
-              for entry in archive.infolist():
-                  if entry.is_dir() or not entry.filename.endswith((".log", ".json")):
-                      continue
-                  if entry.file_size > 2_000_000:
-                      raise SystemExit("Unexpectedly large diagnostic log")
-                  lines = archive.read(entry).decode("utf-8", errors="replace").splitlines()
-                  print("FILE", entry.filename, "lines=", len(lines))
-                  if entry.filename.endswith(".json"):
-                      for line in lines:
-                          print(line)
-                      continue
-                  print("HEAD")
-                  for line in lines[:25]:
-                      print(line)
-                  print("RESULT AND LONG-RUNNING MARKERS")
-                  for line in lines:
-                      if re.search(r"running [0-9]+ tests|test result:|has been running for over|\[ci\]\[lanes\].*(success|failed|failure)", line):
-                          print(line)
-                  print("TAIL")
-                  for line in lines[-240:]:
-                      print(line)
-          PY
+          diagnostic_pid = gdb.selected_inferior().pid
+          diagnostic_timed_out = threading.Event()
+
+          def stop_after_deadline():
+              diagnostic_timed_out.set()
+              try:
+                  os.kill(diagnostic_pid, signal.SIGABRT)
+              except ProcessLookupError:
+                  pass
+
+          diagnostic_timer = threading.Timer(600, stop_after_deadline)
+          diagnostic_timer.daemon = True
+          diagnostic_timer.start()
+          end
+          continue
+          python
+          diagnostic_timer.cancel()
+          if gdb.selected_inferior().threads():
+              if diagnostic_timed_out.is_set():
+                  gdb.write("PR17_STORAGE_WATCHDOG: 600 seconds of test execution elapsed\n")
+              else:
+                  gdb.write("PR17_STORAGE_STOP: inferior stopped before exit\n")
+              gdb.execute("thread apply all bt 50")
+              gdb.execute("kill")
+              gdb.execute("quit " + ("124" if diagnostic_timed_out.is_set() else "1"))
+          end
+          GDB
+          cat > ci-out/storage-debug-runner.sh <<'RUNNER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          expected_binary="$(cat "$GITHUB_WORKSPACE/ci-out/storage-executable.txt")"
+          test "$(readlink -f -- "$1")" = "$(readlink -f -- "$expected_binary")"
+          printf 'Diagnostic test cwd: %s\n' "$PWD"
+          unset CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER
+          exec gdb -nx -nh --batch --return-child-result \
+            -x "$GITHUB_WORKSPACE/ci-out/storage.gdb" --args "$@"
+          RUNNER
+          chmod +x ci-out/storage-debug-runner.sh
+          export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="$GITHUB_WORKSPACE/ci-out/storage-debug-runner.sh"
+          for attempt in 1 2 3; do
+            printf 'Storage diagnostic attempt %s\n' "$attempt"
+            bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+              --features storage-sqlite,storage-file --lib -- \
+              storage:: cron:: flows:: security::approval:: security::devices:: \
+              security::secret_storage:: security::credentials:: desktop::notifications:: \
+              integrations::task_sources:: integrations::composio::file_store \
+              agent::orchestration:: config::workspace:: desktop::app_state:: \
+              desktop::control:: platform::cost:: inference::tokenjuice:: \
+              config::schema::load::source:: \
+              --skip cron::bus_host::tests:: --skip cron::documents_port::tests:: \
+              2>&1 | tee "ci-out/storage-attempt-$attempt.log"
+          done
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr17-storage-wait-diagnostics
+          path: ci-out/
+          retention-days: 7
+          if-no-files-found: warn
