@@ -77,6 +77,9 @@ jobs:
               "crates/openhuman-core/src/cron/documents_port_registration_tests.rs",
               "crates/openhuman-core/src/flows/catalog_storage_tests.rs",
               "crates/openhuman-core/src/storage/import/tinyflows_tests.rs",
+              "crates/openhuman-core/src/storage/local.rs",
+              "crates/openhuman-core/src/flows/catalog_storage.rs",
+              "crates/openhuman-core/src/cron/documents_port_tests.rs",
           ]
           changed = set(subprocess.check_output(
               ["git", "diff", "--name-only"], text=True).splitlines())
@@ -90,8 +93,8 @@ jobs:
       - name: Prepare the original registration with only the new test gate
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin 647cc67b00f4dad08767197858c53133ec2037a8
-          git show 647cc67b00f4dad08767197858c53133ec2037a8:crates/openhuman-core/src/cron/documents_port.rs \
+          git fetch --no-tags --depth=1 origin 986977c5fd813cf5bc73d717a753314cd50cceb3
+          git show 986977c5fd813cf5bc73d717a753314cd50cceb3:crates/openhuman-core/src/cron/documents_port.rs \
             > ci-out/original-documents-port.rs
           python3 - <<'PY'
           import pathlib

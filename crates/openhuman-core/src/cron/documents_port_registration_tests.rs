@@ -142,7 +142,9 @@ async fn synchronous_retry_does_not_block_registration_owner() {
     }
     tokio::time::timeout(Duration::from_secs(20), async {
         let (_workspace, config, scope) = fixture();
-        module::proxy(&config).await.expect("linked module attaches");
+        module::proxy(&config)
+            .await
+            .expect("linked module attaches");
         let (probe, entered, release) = arm(&scope);
         let (start_sync_tx, start_sync_rx) = oneshot::channel();
         let (polled_tx, polled_rx) = oneshot::channel();
@@ -165,7 +167,9 @@ async fn synchronous_retry_does_not_block_registration_owner() {
             (initial, retry)
         });
 
-        entered.await.expect("initial callback served before commit");
+        entered
+            .await
+            .expect("initial callback served before commit");
         start_sync_tx.send(()).expect("owner remains available");
         polled_rx.await.expect("sync bridge future was polled");
         release.send(()).expect("registration gate remains live");
@@ -197,7 +201,9 @@ async fn cancelled_caller_runtime_keeps_one_registration() {
     }
     tokio::time::timeout(Duration::from_secs(20), async {
         let (_workspace, config, scope) = fixture();
-        module::proxy(&config).await.expect("linked module attaches");
+        module::proxy(&config)
+            .await
+            .expect("linked module attaches");
         let (probe, entered, release) = arm(&scope);
         let (cancel_tx, cancel_rx) = oneshot::channel();
         let owner_scope = scope.clone();
@@ -209,7 +215,9 @@ async fn cancelled_caller_runtime_keeps_one_registration() {
             assert!(error.is_cancelled());
         });
 
-        entered.await.expect("callback served before caller cancellation");
+        entered
+            .await
+            .expect("callback served before caller cancellation");
         cancel_tx.send(()).expect("owner remains available");
         stopped.await.expect("cancelled caller runtime was dropped");
         release

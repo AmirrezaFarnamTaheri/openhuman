@@ -139,6 +139,20 @@ impl DocScope {
         Ok(Arc::clone(scoped.documents()))
     }
 
+    /// The module bus calls this from an async handler while a synchronous
+    /// ScheduleStore caller can be waiting on the shared storage bridge. Never
+    /// synchronously re-enter that bridge from the callback.
+    async fn callback_documents(&self) -> Result<Arc<dyn DocumentStore>, StorageError> {
+        let backend = match &self.backend {
+            Some(backend) => Arc::clone(backend),
+            None => crate::storage::local::backend_for_callback(&self.workspace_dir)
+                .await
+                .map_err(|error| StorageError::unavailable(error.to_string()))?,
+        };
+        let scoped = backend.for_scope(&self.scope)?;
+        Ok(Arc::clone(scoped.documents()))
+    }
+
     /// Whether this scope can atomically update the schedule store's admission
     /// policy. An unenforced host can skip clearing an absent policy when the
     /// backend lacks transactions; the module refuses writes if a policy
@@ -214,7 +228,7 @@ fn encode<T: serde::Serialize>(value: T) -> Result<Value, StorageError> {
 
 impl DocumentsPort {
     async fn handle(&self, request: Value) -> Result<Value, StorageError> {
-        let documents = self.scope.documents()?;
+        let documents = self.scope.callback_documents().await?;
         let op = text(&request, "op")?.to_string();
         tracing::trace!(%op, "[cron:documents] request");
         match op.as_str() {
