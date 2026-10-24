@@ -4,6 +4,7 @@ use serde_json::json;
 /// A flow CatalogStorage callback can run while a synchronous catalog
 /// caller is awaiting the same process-wide bridge. Its lazy backend lookup
 /// must not try to send a second request to that occupied bridge.
+#[cfg(feature = "storage-sqlite")]
 #[test]
 fn catalog_callback_does_not_reenter_the_shared_storage_bridge() {
     const CHILD: &str = "OPENHUMAN_CATALOG_PORT_BRIDGE_CHILD";
