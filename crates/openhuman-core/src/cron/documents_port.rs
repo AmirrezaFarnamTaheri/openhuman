@@ -214,7 +214,13 @@ fn encode<T: serde::Serialize>(value: T) -> Result<Value, StorageError> {
 
 impl DocumentsPort {
     async fn handle(&self, request: Value) -> Result<Value, StorageError> {
+        #[cfg(test)]
+        let diagnostic = super::wait_diagnostics::Span::new(
+            format!("document {} {}", self.scope.key(), request.get("op").and_then(Value::as_str).unwrap_or("?")),
+            "resolve-documents");
         let documents = self.scope.documents()?;
+        #[cfg(test)]
+        diagnostic.phase("document-operation");
         let op = text(&request, "op")?.to_string();
         tracing::trace!(%op, "[cron:documents] request");
         match op.as_str() {
@@ -407,11 +413,17 @@ fn path_for(key: &str) -> String {
 /// When the module bus is unavailable.
 pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
     let key = scope.key();
+    #[cfg(test)]
+    let diagnostic = super::wait_diagnostics::Span::new(format!("address {key}"), "SERVED.lock");
     let mut served = SERVED.lock().await;
+    #[cfg(test)]
+    diagnostic.phase("SERVED.held");
     if let Some(address) = served.get(&key) {
         return Ok(address.clone());
     }
     let path = path_for(&key);
+    #[cfg(test)]
+    diagnostic.phase("module.serve");
     module::serve(
         path.clone(),
         DocumentsPort {

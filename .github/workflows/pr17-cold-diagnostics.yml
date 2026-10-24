@@ -1,5 +1,5 @@
 ---
-name: PR17 storage wait diagnostics
+name: PR17 storage stage diagnostics
 
 on:
   push:
@@ -20,7 +20,7 @@ defaults:
 
 jobs:
   storage-wait:
-    name: Diagnose the unchanged storage library suite
+    name: Trace storage request stages with unchanged concurrency
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     container:
@@ -156,7 +156,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: pr17-storage-wait-diagnostics
+          name: pr17-storage-stage-diagnostics
           path: ci-out/
           retention-days: 7
           if-no-files-found: warn

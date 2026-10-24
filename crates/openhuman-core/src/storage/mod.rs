@@ -294,6 +294,15 @@ where
         .get_or_init(|| Blocking::new().map_err(|error| error.to_string()))
         .as_ref()
         .map_err(|error| StorageError::backend(error.clone()))?;
+    #[cfg(test)]
+    let _diagnostic = crate::cron::wait_diagnostics::Span::new(
+        format!("bridge-caller {}", std::any::type_name::<F>()), "bridge.run");
+    #[cfg(test)]
+    let future = async move {
+        let _diagnostic = crate::cron::wait_diagnostics::Span::new(
+            format!("bridge-future {}", std::any::type_name::<F>()), "future.await");
+        future.await
+    };
     bridge.run(future)?
 }
 

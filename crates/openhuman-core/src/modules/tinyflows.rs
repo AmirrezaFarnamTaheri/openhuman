@@ -104,7 +104,12 @@ mod imp {
         config: &Config,
         timeout: std::time::Duration,
     ) -> Result<Proxy, String> {
+        #[cfg(test)]
+        let diagnostic = crate::cron::wait_diagnostics::Span::new(
+            format!("schedule-proxy {}", config.workspace_dir.display()), "ensure");
         ensure(config).await?;
+        #[cfg(test)]
+        diagnostic.phase("module-runtime");
         let runtime = runtime::runtime()
             .await
             .map_err(|error| format!("the module bus is unavailable: {error}"))?;
@@ -258,17 +263,25 @@ mod imp {
         path: String,
         object: impl tinybus::service::Interface + 'static,
     ) -> Result<(), String> {
+        #[cfg(test)]
+        let diagnostic = crate::cron::wait_diagnostics::Span::new(format!("serve {path}"), "module-runtime");
         let runtime = runtime::runtime()
             .await
             .map_err(|error| format!("the module bus is unavailable: {error}"))?;
         let connection = runtime.connection().clone();
+        #[cfg(test)]
+        diagnostic.phase("serve-join");
         let served = runtime
             .spawn(async move {
+                #[cfg(test)]
+                let diagnostic = crate::cron::wait_diagnostics::Span::new(format!("serve-task {path}"), "request_name");
                 let path = ObjectPath::new(&path).map_err(|e| e.to_string())?;
                 connection
                     .request_name(HOST_BUS_NAME)
                     .await
                     .map_err(|e| e.to_string())?;
+                #[cfg(test)]
+                diagnostic.phase("serve_at");
                 connection
                     .serve_at(path, object)
                     .await
