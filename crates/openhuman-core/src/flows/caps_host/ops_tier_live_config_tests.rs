@@ -323,126 +323,144 @@ async fn code_adapter_observes_file_backed_tier_changes_between_calls() {
 
 #[tokio::test]
 async fn native_adapter_uses_live_upgrade_for_filesystem_write() {
-    use crate::security::{AutonomyLevel, SecurityPolicy};
+    crate::security::turn_origin::with_origin(
+        crate::security::turn_origin::AgentTurnOrigin::Cli,
+        async {
+            use crate::security::{AutonomyLevel, SecurityPolicy};
 
-    let dir = tempfile::tempdir().unwrap();
-    let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
-    save_tier_config(&captured).await;
-    let mut live = captured.clone();
-    live.autonomy.level = AutonomyLevel::Full;
-    save_tier_config(&live).await;
+            let dir = tempfile::tempdir().unwrap();
+            let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
+            save_tier_config(&captured).await;
+            let mut live = captured.clone();
+            live.autonomy.level = AutonomyLevel::Full;
+            save_tier_config(&live).await;
 
-    let tools = OpenHumanTools {
-        ctx: live_tier_context(&captured),
-        config: Arc::new(captured.clone()),
-        security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
-            &captured.workspace_dir,
-            &captured.action_dir,
-        )),
-        approval: Default::default(),
-    };
-    tools
-        .invoke(
-            "oh:file_write",
-            json!({ "path": "tier-upgrade.txt", "content": "written" }),
-            None,
-        )
-        .await
-        .expect("live Full tier and downstream filesystem gate must allow the write");
-    assert_eq!(
-        std::fs::read_to_string(captured.action_dir.join("tier-upgrade.txt")).unwrap(),
-        "written"
-    );
+            let tools = OpenHumanTools {
+                ctx: live_tier_context(&captured),
+                config: Arc::new(captured.clone()),
+                security: Arc::new(SecurityPolicy::from_config(
+                    &captured.autonomy,
+                    &captured.workspace_dir,
+                    &captured.action_dir,
+                )),
+                approval: Default::default(),
+            };
+            tools
+                .invoke(
+                    "oh:file_write",
+                    json!({ "path": "tier-upgrade.txt", "content": "written" }),
+                    None,
+                )
+                .await
+                .expect("live Full tier and downstream filesystem gate must allow the write");
+            assert_eq!(
+                std::fs::read_to_string(captured.action_dir.join("tier-upgrade.txt")).unwrap(),
+                "written"
+            );
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn native_adapter_downgrade_blocks_a_write_on_the_same_capability() {
-    use crate::security::{AutonomyLevel, SecurityPolicy};
+    crate::security::turn_origin::with_origin(
+        crate::security::turn_origin::AgentTurnOrigin::Cli,
+        async {
+            use crate::security::{AutonomyLevel, SecurityPolicy};
 
-    let dir = tempfile::tempdir().unwrap();
-    let mut captured = persisted_tier_config(dir.path(), true, AutonomyLevel::Full);
-    save_tier_config(&captured).await;
-    let ctx = live_tier_context(&captured);
-    let tools = OpenHumanTools {
-        ctx,
-        config: Arc::new(captured.clone()),
-        security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
-            &captured.workspace_dir,
-            &captured.action_dir,
-        )),
-        approval: Default::default(),
-    };
+            let dir = tempfile::tempdir().unwrap();
+            let mut captured = persisted_tier_config(dir.path(), true, AutonomyLevel::Full);
+            save_tier_config(&captured).await;
+            let ctx = live_tier_context(&captured);
+            let tools = OpenHumanTools {
+                ctx,
+                config: Arc::new(captured.clone()),
+                security: Arc::new(SecurityPolicy::from_config(
+                    &captured.autonomy,
+                    &captured.workspace_dir,
+                    &captured.action_dir,
+                )),
+                approval: Default::default(),
+            };
 
-    tools
-        .invoke(
-            "oh:file_write",
-            json!({ "path": "tier-downgrade.txt", "content": "before" }),
-            None,
-        )
-        .await
-        .expect("Full permits the initial write");
-    let path = captured.action_dir.join("tier-downgrade.txt");
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), "before");
+            tools
+                .invoke(
+                    "oh:file_write",
+                    json!({ "path": "tier-downgrade.txt", "content": "before" }),
+                    None,
+                )
+                .await
+                .expect("Full permits the initial write");
+            let path = captured.action_dir.join("tier-downgrade.txt");
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "before");
 
-    captured.autonomy.level = AutonomyLevel::ReadOnly;
-    save_tier_config(&captured).await;
-    let error = tools
-        .invoke(
-            "oh:file_write",
-            json!({ "path": "tier-downgrade.txt", "content": "after" }),
-            None,
-        )
-        .await
-        .expect_err("the same long-lived capability must observe ReadOnly");
-    assert!(matches!(
-        error,
-        EngineError::Capability(ref message) if message.contains(POLICY_BLOCKED_MARKER)
-    ));
-    assert_eq!(
-        std::fs::read_to_string(path).unwrap(),
-        "before",
-        "the denied call must not modify the existing file"
-    );
+            captured.autonomy.level = AutonomyLevel::ReadOnly;
+            save_tier_config(&captured).await;
+            let error = tools
+                .invoke(
+                    "oh:file_write",
+                    json!({ "path": "tier-downgrade.txt", "content": "after" }),
+                    None,
+                )
+                .await
+                .expect_err("the same long-lived capability must observe ReadOnly");
+            assert!(matches!(
+                error,
+                EngineError::Capability(ref message) if message.contains(POLICY_BLOCKED_MARKER)
+            ));
+            assert_eq!(
+                std::fs::read_to_string(path).unwrap(),
+                "before",
+                "the denied call must not modify the existing file"
+            );
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn http_adapter_passes_its_live_upgrade_to_the_http_gate_without_egress() {
-    use crate::security::{AutonomyLevel, SecurityPolicy};
+    crate::security::turn_origin::with_origin(
+        crate::security::turn_origin::AgentTurnOrigin::Cli,
+        async {
+            use crate::security::{AutonomyLevel, SecurityPolicy};
 
-    let dir = tempfile::tempdir().unwrap();
-    let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
-    save_tier_config(&captured).await;
-    let mut live = captured.clone();
-    live.autonomy.level = AutonomyLevel::Full;
-    save_tier_config(&live).await;
-    let http = OpenHumanHttp {
-        ctx: live_tier_context(&captured),
-        config: Arc::new(captured.clone()),
-        security: Arc::new(SecurityPolicy::from_config(
-            &captured.autonomy,
-            &captured.workspace_dir,
-            &captured.action_dir,
-        )),
-        http_config: HttpRequestConfig {
-            allowed_domains: vec!["example.com".to_string()],
-            ..Default::default()
+            let dir = tempfile::tempdir().unwrap();
+            let captured = persisted_tier_config(dir.path(), true, AutonomyLevel::ReadOnly);
+            save_tier_config(&captured).await;
+            let mut live = captured.clone();
+            live.autonomy.level = AutonomyLevel::Full;
+            save_tier_config(&live).await;
+            let http = OpenHumanHttp {
+                ctx: live_tier_context(&captured),
+                config: Arc::new(captured.clone()),
+                security: Arc::new(SecurityPolicy::from_config(
+                    &captured.autonomy,
+                    &captured.workspace_dir,
+                    &captured.action_dir,
+                )),
+                http_config: HttpRequestConfig {
+                    allowed_domains: vec!["example.com".to_string()],
+                    ..Default::default()
+                },
+                http_creds: Arc::new(HttpCredentialsStore::from_config(&captured)),
+                approval: Default::default(),
+            };
+
+            // The URL is syntactically invalid, so the inner HTTP tool rejects it
+            // before DNS or network access. Reaching that validation proves its
+            // NetGate received the same live Full policy as the outer tier decision.
+            let error = http
+                .request(json!({ "method": "GET", "url": "not-a-url" }), None)
+                .await
+                .expect_err("invalid URL must fail before network access");
+            let EngineError::Capability(message) = error;
+            assert_eq!(
+                message, "Only http:// and https:// URLs are allowed",
+                "the refreshed policy must pass the inner NetGate and reach URL validation"
+            );
         },
-        http_creds: Arc::new(HttpCredentialsStore::from_config(&captured)),
-        approval: Default::default(),
-    };
-
-    // The URL is syntactically invalid, so the inner HTTP tool rejects it
-    // before DNS or network access. Reaching that validation proves its
-    // NetGate received the same live Full policy as the outer tier decision.
-    let error = http
-        .request(json!({ "method": "GET", "url": "not-a-url" }), None)
-        .await
-        .expect_err("invalid URL must fail before network access");
-    let EngineError::Capability(message) = error;
-    assert_eq!(
-        message, "Only http:// and https:// URLs are allowed",
-        "the refreshed policy must pass the inner NetGate and reach URL validation"
-    );
+    )
+    .await;
 }

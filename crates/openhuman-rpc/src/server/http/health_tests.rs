@@ -25,14 +25,46 @@ async fn get_schema_memory_entries_match_the_pre_refactor_raw_bytes() {
     let full_digest = format!("{:x}", Sha256::digest(&body));
 
     let dump: RawSchemaDump = serde_json::from_slice(&body).expect("parse GET /schema methods");
-    let memory_methods: Vec<&str> = dump
+    let memory_methods: Vec<String> = dump
         .methods
         .iter()
         .filter_map(|method| {
             let value: serde_json::Value =
                 serde_json::from_str(method.get()).expect("parse raw schema method");
-            (value["namespace"] == "memory" && value["function"] != "local_start")
-                .then_some(method.get())
+            if value["namespace"] != "memory" || value["function"] == "local_start" {
+                return None;
+            }
+            // Removing the retired Composio source kind deliberately updated
+            // two comments. Check the current text, then normalize just those
+            // comments to keep the original wire-schema byte snapshot useful.
+            let mut raw = method.get().to_owned();
+            if value["function"] == "sources_add" {
+                for (name, current, historical) in [
+                    (
+                        "kind",
+                        "folder | file | link | github | rss.",
+                        "folder | file | link | github | rss | composio.",
+                    ),
+                    (
+                        "target",
+                        "Path, URL, owner/repo or feed URL.",
+                        "Path, URL, owner/repo, feed URL or Composio toolkit.",
+                    ),
+                ] {
+                    let field = value["inputs"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|field| field["name"] == name)
+                        .expect("historical source input exists");
+                    assert_eq!(field["comment"], current);
+                    raw = raw.replace(
+                        &serde_json::to_string(current).unwrap(),
+                        &serde_json::to_string(historical).unwrap(),
+                    );
+                }
+            }
+            Some(raw)
         })
         .collect();
     assert_eq!(

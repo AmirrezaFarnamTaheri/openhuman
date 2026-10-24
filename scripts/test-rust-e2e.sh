@@ -227,7 +227,7 @@ elif [ "${OPENHUMAN_TEST_MODULES_STAGED:-}" = "1" ]; then
   echo "[rust-e2e] Using pre-staged native modules from OPENHUMAN_MODULE_PATH."
 else
   # Shell command analysis and the storage URL E2E suites load TinyBox through
-  # the native module path; the ignored MCP registry cases need TinyMCP. Both
+  # the native module path; the MCP registry cases need TinyMCP. Both
   # come from the registry-pinned release, digest-verified before any
   # subprocess starts.
   for released_id in tinyconnectors tinyflows tinysearch tinybox tinymcp; do
@@ -357,7 +357,7 @@ for suite in "${SUITES[@]}"; do
     echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (serial)"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
       --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
-      --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+      --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
     continue
   fi
   if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then

@@ -100,18 +100,21 @@ fn import_blocking(
 ) -> Result<ImportSummary, LayoutError> {
     let mut summary = ImportSummary::default();
     let mut failures = Vec::new();
-    for report in storage::import::run_all(backend, config) {
-        summary.domains += 1;
-        if let Err(error) = &report.outcome {
-            failures.push(format!("{}: {error:#}", report.domain));
-        }
-    }
+    // These imports can create storage scopes. Materialize them before the
+    // module-owned migrations enumerate scopes, so a second pass cannot
+    // discover additional scopes and change an otherwise finished migration.
     match crate::memory::state_store::import_all(backend, workspace) {
         Ok(names) => summary.memory_state = names,
         Err(error) => failures.push(format!("memory state: {error:#}")),
     }
     if let Err(error) = crate::threads::store::backend::import_legacy_into(backend, workspace) {
         failures.push(format!("conversations: {error}"));
+    }
+    for report in storage::import::run_all(backend, config) {
+        summary.domains += 1;
+        if let Err(error) = &report.outcome {
+            failures.push(format!("{}: {error:#}", report.domain));
+        }
     }
     if failures.is_empty() {
         Ok(summary)

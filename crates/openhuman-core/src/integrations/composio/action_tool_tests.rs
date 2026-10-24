@@ -485,6 +485,11 @@ fn deferred_instance_returns_live_config_for_redaction() {
         config.composio.api_key = Some("test-direct-key-for-deferred-redaction".to_string());
         config.save().await.expect("save config to disk");
 
+        let context = crate::core::runtime::CoreContext::for_test(
+            crate::core::runtime::DomainSet::full(),
+            Some(config.workspace_dir.clone()),
+        );
+
         // Deferred instances (the parent-session catalogue synthesised beside
         // delegation tools) have no spawn-time config to anchor to — `config`
         // is `None` — so before this fix `execute()`'s `None => outcome` arm
@@ -496,11 +501,10 @@ fn deferred_instance_returns_live_config_for_redaction() {
         );
 
         // Boxed exactly like `Tool::execute` does.
-        let (live_config, outcome) = Box::pin(t.execute_unredacted(
-            &DispatchCtx::process_default(),
-            serde_json::json!({}),
-            None,
-        ))
+        let (live_config, outcome) = crate::core::runtime::CoreContext::scope(context, async {
+            Box::pin(t.execute_unredacted(&DispatchCtx::ambient(), serde_json::json!({}), None))
+                .await
+        })
         .await;
         let first = outcome.expect("contract-gate surface is Ok(error result)");
         assert!(

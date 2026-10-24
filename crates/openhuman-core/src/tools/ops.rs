@@ -116,6 +116,13 @@ pub fn all_tools_with_runtime(
         Box::new(ApplyPatchTool::new(security.clone())),
         Box::new(CsvExportTool::new(security.clone())),
     ];
+    #[cfg(feature = "structural-code")]
+    match tinytools_std::code::code_tools(security.clone()) {
+        Ok(code_tools) => tools.extend(code_tools),
+        Err(error) => {
+            tracing::error!(%error, "[tools] structural code tools could not be initialized")
+        }
+    }
     tools.extend(crate::agent::registration::dialogue_tools(
         action_dir,
         root_config,

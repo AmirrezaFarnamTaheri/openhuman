@@ -68,6 +68,7 @@ media = ["openhuman-tinyhumans/media"]
 flows = ["openhuman-tinyhumans/flows"]
 skills = ["openhuman-tinyhumans/skills"]
 mcp = ["openhuman-tinyhumans/mcp"]
+structural-code = ["openhuman-tinyhumans/structural-code"]
 # Also lets the server's Sentry-routing tests run against a core that reports
 # to Sentry.
 crash-reporting = ["openhuman-tinyhumans/crash-reporting"]

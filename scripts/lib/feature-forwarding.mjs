@@ -500,8 +500,6 @@ export const CHAIN_LOCAL_GATES = {
     'bin-tools': 'CLI argument parsing + logger init for the `openhuman-fleet` binary.',
     'linked-modules':
       'Local development only: links module implementation crates into this binary through `openhuman-modules-linked`. Never a product gate (see checkLinkedModulesIsolation).',
-    'structural-code':
-      'CLI-only integration-test gate; the structural-code test target is hosted by openhuman-cli and has no library implementation feature to forward.',
   },
 };
 

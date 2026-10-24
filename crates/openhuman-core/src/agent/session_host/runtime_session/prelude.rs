@@ -75,8 +75,15 @@ impl OpenHumanTurnPrelude {
         };
         let flow_archetype_text = super::prompt::flow_archetype_text(self, cold).await?;
         let prefix = if cold {
-            let tiered = self
-                .build_system_prompt_tiered_with_flow_archetype(flow_archetype_text.as_deref())?;
+            // This read may use the storage driver's blocking pool. Await it
+            // before holding any prompt locks, so cold turns cannot occupy
+            // all blocking threads while waiting for one another.
+            let identities =
+                crate::integrations::render_connected_identities_async(&self.dispatch_ctx()).await;
+            let tiered = self.build_system_prompt_tiered_with_identities(
+                flow_archetype_text.as_deref(),
+                identities,
+            )?;
             Some(tinyagents_runtime::PrefixSnapshot::new(
                 tiered
                     .system_messages()
@@ -93,13 +100,16 @@ impl OpenHumanTurnPrelude {
         })
     }
 
+    #[cfg(test)]
     pub(super) fn build_system_prompt_tiered(&self) -> Result<crate::agent::prompts::TieredPrompt> {
-        self.build_system_prompt_tiered_with_flow_archetype(None)
+        let identities = crate::integrations::render_connected_identities(&self.dispatch_ctx());
+        self.build_system_prompt_tiered_with_identities(None, identities)
     }
 
-    pub(super) fn build_system_prompt_tiered_with_flow_archetype(
+    fn build_system_prompt_tiered_with_identities(
         &self,
         flow_archetype_text: Option<&str>,
+        connected_identities_md: String,
     ) -> Result<crate::agent::prompts::TieredPrompt> {
         use crate::agent::prompts::{PromptContext, PromptTool};
         let surface = self
@@ -166,7 +176,7 @@ impl OpenHumanTurnPrelude {
             visible_tool_names: &visible_tool_names,
             tool_call_format: self.tool_dispatcher.tool_call_format(),
             connected_integrations: &mutable.connected_integrations,
-            connected_identities_md: self.connected_identities_md(),
+            connected_identities_md,
             user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
             personality_roster: vec![],
             agents_md_global: agents_md.global,

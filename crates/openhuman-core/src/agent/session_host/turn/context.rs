@@ -12,14 +12,25 @@ impl OpenHumanSessionHost {
     /// [`Self::build_system_prompt_with_flow_archetype`] with an explicitly
     /// fetched archetype.
     pub fn build_system_prompt(&self) -> Result<String> {
-        self.build_system_prompt_with_flow_archetype(None)
+        let identities = crate::integrations::render_connected_identities(&self.dispatch_ctx());
+        self.build_system_prompt_with_identities(None, identities)
     }
 
     /// Builds the system prompt with an optional TinyFlows archetype already
     /// fetched by an async caller using its scoped runtime config.
-    pub(crate) fn build_system_prompt_with_flow_archetype(
+    pub(crate) async fn build_system_prompt_with_flow_archetype(
         &self,
         flow_archetype_text: Option<&str>,
+    ) -> Result<String> {
+        let identities =
+            crate::integrations::render_connected_identities_async(&self.dispatch_ctx()).await;
+        self.build_system_prompt_with_identities(flow_archetype_text, identities)
+    }
+
+    fn build_system_prompt_with_identities(
+        &self,
+        flow_archetype_text: Option<&str>,
+        connected_identities_md: String,
     ) -> Result<String> {
         // `visible_tool_specs` holds shared `Arc<ToolSpec>` leaves. Materialise
         // the canonical dialect input for this prompt build.
@@ -70,9 +81,7 @@ impl OpenHumanSessionHost {
             visible_tool_names: &prompt_visible_tool_names,
             tool_call_format: self.tool_dispatcher.tool_call_format(),
             connected_integrations: &self.connected_integrations,
-            connected_identities_md: crate::integrations::render_connected_identities(
-                &self.dispatch_ctx(),
-            ),
+            connected_identities_md,
             user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
             personality_roster: vec![], // TODO: build_personality_roster(&workspace_dir)
             agents_md_global: agents_md.global,

@@ -6,6 +6,9 @@
 #[path = "support/tinyhumans_boot.rs"]
 mod tinyhumans_boot;
 
+#[path = "support/mcp_http.rs"]
+mod mcp_http;
+
 #[path = "support/env_guard.rs"]
 mod env_guard;
 #[path = "support/scripted_stack.rs"]
@@ -9231,10 +9234,10 @@ async fn mcp_clients_lifecycle() {
 
 /// MCP clients **happy path** over real JSON-RPC: declare in `mcp.json` →
 /// connect → tool_call → update_env (reconnect) → disconnect against a real
-/// stdio MCP subprocess (the `test-mcp-stub` binary).
+/// loopback HTTP MCP fixture.
 ///
-/// No npx, no network, no catalog: the server is declared through
-/// `mcp_clients_config_set` with a `command` pointing at the stub binary, which
+/// No external service or catalog: the server is declared through
+/// `mcp_clients_config_set` with a loopback URL, which
 /// is how a user adds any server now — the registry is browse-only.
 #[tokio::test]
 async fn mcp_clients_declare_connect_tool_call_happy_path() {
@@ -9254,7 +9257,8 @@ async fn mcp_clients_declare_connect_tool_call_happy_path() {
     let user_scoped_dir = openhuman_home.join("users").join("local");
     write_min_config(&user_scoped_dir, &mock_origin);
 
-    let stub_path = env!("CARGO_BIN_EXE_test-mcp-stub");
+    let mcp_server = mcp_http::echo_server().await;
+    let mcp_url = mcp_server.uri();
 
     let (rpc_addr, rpc_join) = serve_on_ephemeral(build_core_http_router(false)).await;
     let rpc_base = format!("http://{}", rpc_addr);
@@ -9265,7 +9269,7 @@ async fn mcp_clients_declare_connect_tool_call_happy_path() {
         &rpc_base,
         9920,
         "openhuman.mcp_clients_config_set",
-        json!({ "mcpServers": { "echo": { "command": stub_path } } }),
+        json!({ "mcpServers": { "echo": { "url": mcp_url } } }),
     )
     .await;
     let declared_body = peel_logs_envelope(assert_no_jsonrpc_error(
@@ -9278,13 +9282,13 @@ async fn mcp_clients_declare_connect_tool_call_happy_path() {
         "config_set should report the new server as added: {declared_body}"
     );
     assert_eq!(
-        declared_body["mcpServers"]["echo"]["command"],
-        json!(stub_path),
-        "config_set should render the declared command back: {declared_body}"
+        declared_body["mcpServers"]["echo"]["url"],
+        json!(mcp_url),
+        "config_set should render the declared endpoint back: {declared_body}"
     );
     let server_id = installed_server_id(&rpc_base, 9926, "echo").await;
 
-    // ── 2. connect spawns the stub and lists its one `echo` tool ─────────────
+    // ── 2. connect opens the server and lists its one `echo` tool ─────────────
     let connect = post_json_rpc(
         &rpc_base,
         9921,
@@ -9385,7 +9389,7 @@ async fn mcp_clients_declare_connect_tool_call_happy_path() {
         "echo tool_call after reconfigure should round-trip the input payload: {tc2_inner}"
     );
 
-    // ── 5. disconnect cleans up the subprocess ───────────────────────────────
+    // ── 5. disconnect closes the module connection ───────────────────────────────
     let disconnect = post_json_rpc(
         &rpc_base,
         9924,
@@ -9428,7 +9432,8 @@ async fn mcp_clients_reconfigure_then_retire_over_rpc() {
     write_min_config(&openhuman_home, &mock_origin);
     write_min_config(&openhuman_home.join("users").join("local"), &mock_origin);
 
-    let stub_path = env!("CARGO_BIN_EXE_test-mcp-stub");
+    let mcp_server = mcp_http::echo_server().await;
+    let mcp_url = mcp_server.uri();
     let (rpc_addr, rpc_join) = serve_on_ephemeral(build_core_http_router(false)).await;
     let rpc_base = format!("http://{}", rpc_addr);
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -9438,7 +9443,7 @@ async fn mcp_clients_reconfigure_then_retire_over_rpc() {
         &rpc_base,
         9950,
         "openhuman.mcp_clients_config_set",
-        json!({ "mcpServers": { "echo-reconf": { "command": stub_path } } }),
+        json!({ "mcpServers": { "echo-reconf": { "url": mcp_url } } }),
     )
     .await;
     assert_no_jsonrpc_error(&declared, "mcp_clients_config_set (declare)");

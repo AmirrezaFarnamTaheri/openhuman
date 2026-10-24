@@ -4,8 +4,8 @@
 //! against a `wiremock` provider. Their transcripts and journal must land in
 //! the store, and their run status in the runtime's in-memory storage, each
 //! agent's apart from the other's; a reopened
-//! agent must resume its thread *from the store*; and nothing durable may be
-//! written under the runtime's scratch workspace.
+//! agent must resume its thread *from the store*; and no conversation data may
+//! be written under the runtime's scratch workspace.
 //!
 //! One `#[test]` because a runtime claims a process-wide slot.
 
@@ -46,6 +46,75 @@ fn files_under(root: &std::path::Path) -> Vec<String> {
     found
 }
 
+/// Flow resources are initialized outside the first turn's critical path.
+/// Wait for their published snapshot before recording the filesystem baseline;
+/// a successful turn alone does not mean this legitimate materialization ended.
+async fn wait_for_flow_resources(
+    runtime: &Runtime,
+    config: &openhuman_core::config::Config,
+    agent: Option<&str>,
+) {
+    let compiled = openhuman_core::core::runtime::compiled_features();
+    if !["skills", "flows", "modules"]
+        .iter()
+        .all(|feature| compiled[*feature])
+        || !config.modules.enabled
+        || !config.components.skills
+        || !config.components.flows
+        || !config.components.tinyflows
+    {
+        return;
+    }
+    let context = runtime.core_runtime().context();
+    let context = agent.map_or_else(|| Arc::clone(context), |id| context.for_agent(id));
+    let dispatch = openhuman_core::core::runtime::DispatchCtx::new(context);
+    if dispatch
+        .domains()
+        .is_some_and(|domains| !domains.skills || !domains.flows)
+    {
+        return;
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(90), async {
+        loop {
+            if openhuman_core::skills::load_workflow_metadata_for(&dispatch, config)
+                .iter()
+                .any(|skill| skill.id() == "flow-authoring")
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| {
+        eprintln!("session_store: flow resources did not initialize for {agent:?}");
+        panic!("flow resource initialization timed out");
+    });
+}
+
+/// Even the initial baseline must not hide an accidentally persisted transcript,
+/// turn journal or session database.
+fn assert_no_durable_sessions(paths: &[String]) {
+    let durable: Vec<_> = paths
+        .iter()
+        .filter(|path| {
+            path.split(['/', '\\']).any(|part| {
+                matches!(
+                    part,
+                    "session_raw" | "session_db" | "tinyagents_store" | "turn_states"
+                )
+            })
+        })
+        .collect();
+    if !durable.is_empty() {
+        eprintln!("session_store: durable session paths found: {durable:?}");
+    }
+    assert!(
+        durable.is_empty(),
+        "session data must stay in the host store"
+    );
+}
+
 #[test]
 fn a_stateless_runtime_keeps_every_conversation_in_its_session_store() {
     let _ = env_logger::builder().is_test(true).try_init();
@@ -70,6 +139,7 @@ fn a_stateless_runtime_keeps_every_conversation_in_its_session_store() {
             // On by default in the product: it must stand down by itself once
             // a host store owns the transcripts.
             config.agent.session_dual_write = true;
+            config.modules.allow_download = false;
             let runtime = Runtime::builder()
                 .config(config)
                 .workspace(Workspace::stateless())
@@ -100,11 +170,21 @@ fn a_stateless_runtime_keeps_every_conversation_in_its_session_store() {
                 .expect("first turn");
             assert_eq!(first.reply, "noted");
             let thread = first.session_id.clone();
-            // Runtime initialization and the first turn create required
-            // configuration/scaffolding files. Snapshot that legitimate
-            // baseline, then ensure subsequent turns add no durable files of
-            // any kind.
-            let baseline: HashSet<_> = files_under(&scratch).into_iter().collect();
+            ravi.turn("hello").send().await.expect("ravi's first turn");
+            let core_config = runtime
+                .core_runtime()
+                .context()
+                .embedder_config()
+                .expect("the runtime retains its supplied config");
+            wait_for_flow_resources(&runtime, core_config, None).await;
+            wait_for_flow_resources(&runtime, asha.config(), Some("asha")).await;
+            wait_for_flow_resources(&runtime, ravi.config(), Some("ravi")).await;
+            // Both agents' first turns and their lazy resources are now
+            // initialized. Reject durable session data before accepting this
+            // scaffolding, then require every later turn to add no files.
+            let baseline = files_under(&scratch);
+            assert_no_durable_sessions(&baseline);
+            let baseline: HashSet<_> = baseline.into_iter().collect();
             asha.turn("and at eight")
                 .session(&thread)
                 .send()
@@ -137,7 +217,10 @@ fn a_stateless_runtime_keeps_every_conversation_in_its_session_store() {
             );
 
             // ── ravi: a different agent ───────────────────────────────────
-            ravi.turn("hello").send().await.expect("ravi's turn");
+            ravi.turn("hello again")
+                .send()
+                .await
+                .expect("ravi's next turn");
 
             // Asha's transcript is in her stores, and only hers.
             let asha_stores = store.for_agent("asha");
@@ -178,13 +261,18 @@ fn a_stateless_runtime_keeps_every_conversation_in_its_session_store() {
             assert!(!runs.is_empty(), "asha's runs are recorded in her scope");
 
             // Nothing durable reached the scratch workspace.
-            let written: Vec<_> = files_under(&scratch)
+            let after = files_under(&scratch);
+            assert_no_durable_sessions(&after);
+            let written: Vec<_> = after
                 .into_iter()
                 .filter(|path| !baseline.contains(path))
                 .collect();
+            if !written.is_empty() {
+                eprintln!("session_store: unexpected workspace writes: {written:?}");
+            }
             assert!(
                 written.is_empty(),
-                "a stateless workspace must remain empty, found: {written:?}"
+                "later turns must not add workspace files, found: {written:?}"
             );
 
             // Dropping a handle only schedules its MCP close, and the deferred

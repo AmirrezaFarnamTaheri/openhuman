@@ -42,6 +42,7 @@ fn full_product_features_enabled() -> bool {
         ("tinymemes", cfg!(feature = "tinymemes")),
         ("inbound-queues", cfg!(feature = "inbound-queues")),
         ("storage-sqlite", cfg!(feature = "storage-sqlite")),
+        ("structural-code", cfg!(feature = "structural-code")),
     ];
     let declared: std::collections::BTreeSet<_> = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

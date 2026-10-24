@@ -14,6 +14,7 @@ fn activity(rounds: usize, tools: &[&str]) -> FinishActivity {
     FinishActivity {
         tool_rounds: rounds,
         tools_called: tools.iter().map(|t| (*t).to_string()).collect(),
+        tools_executed: tools.iter().map(|t| (*t).to_string()).collect(),
         ..Default::default()
     }
 }
@@ -310,8 +311,8 @@ async fn an_unlinked_wrap_up_does_not_silence_the_check() {
 }
 
 /// Peer convergence: one-round code edits and child handoffs still need a final
-/// independent requirements/verification pass; the harness records requested
-/// tool names, so consequential attempts are checked even if execution fails.
+/// independent requirements/verification pass when the executor starts, even
+/// if execution later fails. Refused requests have no execution to verify.
 #[test]
 fn single_round_mutations_and_delegations_require_finish_verification() {
     for tool in [
@@ -345,17 +346,24 @@ fn single_round_mutations_and_delegations_require_finish_verification() {
 }
 
 #[test]
-fn structural_write_requests_require_finish_verification() {
+fn structural_writes_require_finish_verification_but_previews_and_refusals_do_not() {
     for tool in ["ast_patch", "chunk_apply"] {
         let activity = FinishActivity {
             tool_rounds: 1,
             tools_called: [tool.to_string()].into_iter().collect(),
+            tools_executed: [tool.to_string()].into_iter().collect(),
+            tools_with_side_effects: [tool.to_string()].into_iter().collect(),
             ..Default::default()
         };
         assert!(
             should_check(&activity),
-            "a requested structural write needs a check"
+            "a started structural write needs a check"
         );
+        let mut preview = activity.clone();
+        preview.tools_with_side_effects.clear();
+        assert!(!should_check(&preview), "read-only preview of {tool}");
+        preview.tools_executed.clear();
+        assert!(!should_check(&preview), "refused request for {tool}");
     }
     for tool in ["file_read", "grep", "glob", "current_time"] {
         assert!(
@@ -365,6 +373,24 @@ fn structural_write_requests_require_finish_verification() {
                 ..Default::default()
             }),
             "read-only {tool} should not force an extra check"
+        );
+    }
+}
+
+#[test]
+fn requested_but_unexecuted_mutations_and_handoffs_do_not_trigger_verification() {
+    for tool in VERIFY_AFTER_TOOL
+        .iter()
+        .copied()
+        .chain([TODO_TOOL, "delegate_coding"])
+    {
+        assert!(
+            !should_check(&FinishActivity {
+                tool_rounds: 1,
+                tools_called: [tool.to_string()].into_iter().collect(),
+                ..Default::default()
+            }),
+            "refused {tool} request must not trigger an extra model call"
         );
     }
 }

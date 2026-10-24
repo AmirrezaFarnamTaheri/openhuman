@@ -218,8 +218,7 @@ async fn supervisor_strategy_message_mentions_supervisor() {
 
 #[tokio::test]
 async fn update_run_rejected_when_rpc_mutations_disabled() {
-    use crate::config::TEST_ENV_LOCK;
-    let _lock = TEST_ENV_LOCK.lock().await;
+    use crate::core::runtime::{CoreContext, DomainSet};
     let tmp = tempfile::TempDir::new().unwrap();
 
     // Write a config with mutations disabled.
@@ -234,11 +233,8 @@ async fn update_run_rejected_when_rpc_mutations_disabled() {
         ..crate::config::UpdateConfig::default()
     };
     cfg.save().await.expect("save config");
-    std::env::set_var("OPENHUMAN_WORKSPACE", tmp.path());
-
-    let outcome = update_run(&DispatchCtx::process_default()).await;
-
-    std::env::remove_var("OPENHUMAN_WORKSPACE");
+    let ctx = DispatchCtx::new(CoreContext::for_test_with_config(DomainSet::full(), cfg));
+    let outcome = update_run(&ctx).await;
 
     // Should contain an error indicating the mutation was blocked.
     let err = outcome.value.get("error");

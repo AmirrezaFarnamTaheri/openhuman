@@ -650,7 +650,7 @@ async fn run_typed_mode(
         visible_tool_names: &visible_tool_names,
         tool_call_format: prompt_tool_call_format,
         connected_integrations: &connected_integrations_for_prompt,
-        connected_identities_md: options.run_context.connected_identities_md(),
+        connected_identities_md: options.run_context.connected_identities_md().await,
         user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
         personality_roster: vec![],
         agents_md_global: agents_md.global.clone(),

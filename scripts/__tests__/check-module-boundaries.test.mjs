@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { auditGraph, bridgeReach, graph, isImplementation, linkedHostAudit, run, treeGraph, validatePolicy, CONTRACT_REGISTRY } from '../ci/check-module-boundaries.mjs';
 
@@ -288,7 +289,7 @@ test('a package-scoped normal tree still rejects an activated implementation wri
 
 test('host boundary audit ignores writer features unified only by unrelated workspace dev fixtures', () => {
   const root = resolve(new URL('../..', import.meta.url).pathname);
-  const harnessRoot = mkdtempSync(join(root, 'target', 'module-boundaries-host-isolation-'));
+  const harnessRoot = mkdtempSync(join(tmpdir(), 'module-boundaries-host-isolation-'));
   try {
     mkdirSync(join(harnessRoot, 'scripts', 'ci'), { recursive: true });
     writeFileSync(join(harnessRoot, 'scripts', 'ci', 'module-boundaries.json'), JSON.stringify(policy));

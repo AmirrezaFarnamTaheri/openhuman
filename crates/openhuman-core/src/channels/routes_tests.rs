@@ -178,7 +178,7 @@ fn provider_alias_and_route_selection_round_trip() {
 
 #[cfg(feature = "modules")]
 #[tokio::test]
-async fn cached_models_and_help_responses_render_expected_text() {
+async fn legacy_route_help_ignores_retired_cache_and_directs_users_to_the_live_catalog() {
     let tempdir = tempfile::tempdir().unwrap();
     let state_dir = tempdir.path().join("state");
     std::fs::create_dir_all(&state_dir).unwrap();
@@ -198,8 +198,12 @@ async fn cached_models_and_help_responses_render_expected_text() {
 
     let models = module_route_help_response(tempdir.path(), "/model", Vec::new()).await;
     assert!(models.contains("Current provider: `openai`"));
-    assert!(models.contains("Cached model IDs"));
-    assert!(models.contains("- `gpt-5-mini`"));
+    assert!(models.contains("Model catalog is unavailable in this channel for `openai`"));
+    assert!(models.contains("View available models in the web UI"));
+    assert!(
+        !models.contains("gpt-5-mini"),
+        "retired disk cache must not be advertised"
+    );
 
     let providers = module_route_help_response(
         tempdir.path(),
@@ -301,7 +305,7 @@ async fn load_cached_model_preview_returns_empty_when_cache_json_is_invalid() {
     .unwrap();
 
     let response = module_route_help_response(tempdir.path(), "/model", Vec::new()).await;
-    assert!(response.contains("No cached model list found for `openai`"));
+    assert!(response.contains("Model catalog is unavailable in this channel for `openai`"));
 }
 
 #[tokio::test]

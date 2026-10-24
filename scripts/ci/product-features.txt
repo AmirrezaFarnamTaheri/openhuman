@@ -113,3 +113,6 @@ storage-sqlite
 
 # OS keychain providers owned by the RPC host layer.
 os-keyring
+
+# Native structural inspection and revision-checked editing tools.
+structural-code

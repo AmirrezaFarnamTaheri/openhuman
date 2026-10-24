@@ -103,6 +103,35 @@ async fn files_folder_is_created_on_first_use() {
     assert!(files_dir.is_dir());
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn reservation_and_published_bytes_are_private_to_the_owner() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = TempDir::new().unwrap();
+    let files = dir.path().join("Files");
+    let path = reserve_file(&files, "private", "txt", "private-artifact")
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o077,
+        0
+    );
+    write_visible_projection(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &FileRoots::new(&files),
+        &path,
+        b"private content",
+    )
+    .await
+    .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"private content");
+    assert_eq!(
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o077,
+        0
+    );
+}
+
 #[tokio::test]
 async fn a_repeated_title_gets_a_numbered_name_instead_of_overwriting() {
     let tmp = TempDir::new().unwrap();

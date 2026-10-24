@@ -329,6 +329,11 @@ fn open_projection_parent(path: &Path) -> std::io::Result<cap_std::fs::Dir> {
 fn artifact_open_options() -> cap_std::fs::OpenOptions {
     let mut options = cap_std::fs::OpenOptions::new();
     options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use cap_std::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
     options
 }
 

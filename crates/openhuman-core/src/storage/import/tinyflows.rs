@@ -347,7 +347,16 @@ async fn migrate_owner_stores(
     backend: Arc<dyn StorageBackend>,
     config: Config,
 ) -> (Vec<Report>, bool) {
-    let scopes = crate::storage::boot::scopes_to_migrate(&backend).await;
+    let mut scopes = crate::storage::boot::scopes_to_migrate(&backend).await;
+    // A legacy agent cron store may be its scope's first data. Prepare that
+    // scope before importing it, rather than discovering it on the next boot.
+    for (agent, _) in agent_cron_dirs(&config.workspace_dir) {
+        let scope = crate::storage::scope_for_agent(&agent);
+        if !scopes.contains(&scope) {
+            scopes.push(scope);
+        }
+    }
+    scopes.sort_by(|left, right| left.as_str().cmp(right.as_str()));
     #[cfg(feature = "flows")]
     let local = Scope::local();
     #[cfg(feature = "flows")]

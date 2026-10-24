@@ -89,9 +89,15 @@ async fn load_and_get_security_policy_info_reflects_env_overlay() {
         let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
         let _budget_guard = EnvVarGuard::set("OPENHUMAN_MAX_ACTIONS_PER_HOUR", budget.to_string());
 
-        let outcome = load_and_get_security_policy_info(&DispatchCtx::process_default())
-            .await
-            .expect("load_and_get_security_policy_info should succeed");
+        let context = crate::core::runtime::CoreContext::for_test(
+            crate::core::runtime::DomainSet::full(),
+            None,
+        );
+        let outcome = crate::core::runtime::CoreContext::scope(context, async {
+            load_and_get_security_policy_info(&DispatchCtx::ambient()).await
+        })
+        .await
+        .expect("load_and_get_security_policy_info should succeed");
 
         assert_eq!(
             outcome.value["max_actions_per_hour"],

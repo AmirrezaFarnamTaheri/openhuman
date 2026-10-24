@@ -66,6 +66,22 @@ async fn spawn_blocking_keeps_the_handed_context() {
     assert_eq!(agent.as_deref(), Some("u-ravi"));
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_blocking_operation_can_enter_the_runtime_under_its_handed_context() {
+    let dispatch = DispatchCtx::new(agent_context("u-ravi"));
+    let handle = tokio::runtime::Handle::current();
+    let agent = dispatch
+        .spawn_blocking(move || {
+            handle.block_on(async {
+                tokio::task::yield_now().await;
+                seen()
+            })
+        })
+        .await
+        .expect("blocking operation must not nest runtime entry");
+    assert_eq!(agent.as_deref(), Some("u-ravi"));
+}
+
 #[tokio::test]
 async fn a_task_spawned_from_a_context_keeps_it_across_awaits_and_nested_spawns() {
     let dispatch = DispatchCtx::new(agent_context("u-asha"));
