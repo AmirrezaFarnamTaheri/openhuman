@@ -14,8 +14,15 @@ pub(crate) struct Lifecycle {
     removed: watch::Sender<bool>,
     approvals: Arc<ApprovalState>,
     in_flight: AtomicUsize,
+    construction: Mutex<ConstructionState>,
     idle: Notify,
     torn_down: AtomicBool,
+}
+
+#[derive(Default)]
+struct ConstructionState {
+    active: usize,
+    deferred_purge: Option<bool>,
 }
 
 /// Serializes live approval decisions with the instance's removal claim.
@@ -59,6 +66,7 @@ impl Lifecycle {
             removed: watch::Sender::new(false),
             approvals: Arc::new(ApprovalState::default()),
             in_flight: AtomicUsize::new(0),
+            construction: Mutex::new(ConstructionState::default()),
             idle: Notify::new(),
             torn_down: AtomicBool::new(false),
         }
@@ -132,7 +140,7 @@ impl Lifecycle {
         let wait = async {
             loop {
                 let notified = self.idle.notified();
-                if self.in_flight.load(Ordering::SeqCst) == 0 {
+                if self.in_flight.load(Ordering::SeqCst) == 0 && !self.is_constructing() {
                     return;
                 }
                 notified.await;
@@ -141,9 +149,91 @@ impl Lifecycle {
         tokio::time::timeout(limit, wait).await.is_ok()
     }
 
+    pub(crate) fn is_constructing(&self) -> bool {
+        let state = self
+            .construction
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.active != 0
+    }
+
+    /// After admission closes, the last constructor takes this teardown.
+    pub(crate) fn defer_construction_removal(&self, purge: bool) -> bool {
+        let mut state = self
+            .construction
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.active == 0 {
+            return false;
+        }
+        state.deferred_purge = Some(state.deferred_purge.unwrap_or(false) || purge);
+        true
+    }
+
+    /// A retry can add purge intent while the original removal is deferred.
+    pub(crate) fn merge_deferred_removal(&self, purge: bool) -> bool {
+        let mut state = self
+            .construction
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(requested) = state.deferred_purge.as_mut() else {
+            return false;
+        };
+        *requested |= purge;
+        true
+    }
+
     /// Claims the one-time teardown. `false` when it already ran.
     pub(crate) fn begin_teardown(&self) -> bool {
         !self.torn_down.swap(true, Ordering::SeqCst)
+    }
+}
+
+/// Keeps both the workspace owner and removal accounting alive while a
+/// blocking constructor can outlive its cancelled turn.
+struct ConstructionLease(Arc<super::AgentInner>);
+
+impl super::AgentInner {
+    pub(crate) fn construction_keepalive(self: &Arc<Self>) -> Option<Arc<dyn Send + Sync>> {
+        self.lifecycle.approvals.with_live(|| {
+            self.lifecycle
+                .construction
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .active += 1;
+            Arc::new(ConstructionLease(Arc::clone(self))) as Arc<dyn Send + Sync>
+        })
+    }
+
+    pub(crate) fn defer_removal(&self, purge: bool) {
+        if !self.lifecycle.defer_construction_removal(purge) {
+            self.teardown("agent_removed");
+            self.defer_cleanup(purge);
+        }
+    }
+}
+
+impl Drop for ConstructionLease {
+    fn drop(&mut self) {
+        let deferred = {
+            let mut state = self
+                .0
+                .lifecycle
+                .construction
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            state.active -= 1;
+            if state.active == 0 {
+                state.deferred_purge.take()
+            } else {
+                None
+            }
+        };
+        if let Some(purge) = deferred {
+            self.0.teardown("agent_removed");
+            self.0.defer_cleanup(purge);
+        }
+        self.0.lifecycle.idle.notify_waiters();
     }
 }
 

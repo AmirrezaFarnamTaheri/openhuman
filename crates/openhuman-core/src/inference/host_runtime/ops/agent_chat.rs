@@ -89,6 +89,10 @@ pub struct AgentChatEnv {
     /// The host environment installed on the session
     /// ([`OpenHumanSessionHost::set_host_env`]).
     pub host: crate::agent::turn_env::HostTurnEnv,
+    /// Owns the resources used by synchronous session construction. The
+    /// blocking task retains this lease even if its caller is cancelled;
+    /// it is never installed on the session or propagated to child runs.
+    pub construction_keepalive: Option<std::sync::Arc<dyn Send + Sync>>,
     /// Messages to steer the turn while it runs
     /// ([`OpenHumanSessionHost::set_run_queue`]). Items pushed on its
     /// [`QueueLane::Steer`](tinyagents_harness::run_queue::QueueLane::Steer)
@@ -412,8 +416,15 @@ pub async fn agent_chat_reply_for(
                 "[inference] agent_chat rooting turn tools at cwd={}",
                 root.display()
             );
-            let mut agent =
-                build_turn_agent(&turn_ctx, &scoped, &target, turn_session_id, temperature).await?;
+            let mut agent = build_turn_agent(
+                &turn_ctx,
+                &scoped,
+                &target,
+                turn_session_id,
+                temperature,
+                env.construction_keepalive,
+            )
+            .await?;
             // Also thread it as the turn's workspace descriptor so acting tools
             // that read `ToolExecutionContext::workspace` (shell) resolve their
             // default cwd here, and so spawned sub-agents inherit the same root.
@@ -421,8 +432,15 @@ pub async fn agent_chat_reply_for(
             agent
         }
         None => {
-            let mut agent =
-                build_turn_agent(&turn_ctx, config, &target, turn_session_id, temperature).await?;
+            let mut agent = build_turn_agent(
+                &turn_ctx,
+                config,
+                &target,
+                turn_session_id,
+                temperature,
+                env.construction_keepalive,
+            )
+            .await?;
             // An ordinary turn still acts from the agent's configured action
             // directory. Make the descriptor explicit just as for a cwd
             // override: shell tools and tool hooks must report the same root,

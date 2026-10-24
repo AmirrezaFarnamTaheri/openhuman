@@ -62,6 +62,7 @@ pub(super) async fn build_turn_agent(
     target: &AgentChatTarget<'_>,
     session_id: Option<&str>,
     temperature: Option<f64>,
+    construction_keepalive: Option<std::sync::Arc<dyn Send + Sync>>,
 ) -> Result<OpenHumanSessionHost, String> {
     let target = match target {
         AgentChatTarget::Orchestrator => BuildTarget::Orchestrator,
@@ -79,12 +80,24 @@ pub(super) async fn build_turn_agent(
     };
     let config = config.clone();
     let session_id = session_id.map(str::to_owned);
-    let build_context = ctx.clone();
+    let build_context = ctx
+        .turn_origin_or_scoped()
+        .map_or_else(|| ctx.clone(), |origin| ctx.with_turn_origin(origin));
+    // Provider sources retain a weak binding to the caller's long-lived
+    // context; the derived origin scope is only for this blocking task.
+    let task_context = ctx.clone();
     // Tool and workflow catalogues use synchronous storage/module bridges.
     // Blocking an executor worker here can starve a concurrent initializer
     // those bridges await, even after block_in_place hands off the worker.
     // Carry the same context into the blocking pool and let the caller yield.
-    ctx.spawn_blocking(move || target.build(&build_context, &config, session_id.as_deref()))
+    let (agent, _construction_keepalive) = build_context
+        .spawn_blocking(move || {
+            let agent = target.build(&task_context, &config, session_id.as_deref());
+            // A detached task drops the built session before its resource
+            // lease. A cancelled caller must not purge a live constructor.
+            (agent, construction_keepalive)
+        })
         .await
-        .map_err(|error| format!("agent session construction task failed: {error}"))?
+        .map_err(|error| format!("agent session construction task failed: {error}"))?;
+    agent
 }
