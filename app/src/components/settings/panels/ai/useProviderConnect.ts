@@ -20,6 +20,7 @@ import {
   type ProviderAuthError,
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
+import { invalidateModelCatalogCache } from '../../../../services/modelCatalogCache';
 import { openhumanUpdateLocalAiSettings } from '../../../../utils/tauriCommands/config';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
 import {
@@ -31,7 +32,6 @@ import {
   maskKeyLabel,
 } from './aiPanelTypes';
 import { parseFleetApiKeys } from './modelFleetOps';
-import { invalidateModelCatalogCache } from './ProviderModelPickerDialog';
 
 const normalizeProviderSlug = (slug: string) => slug.trim().toLowerCase();
 const isProviderSlug = (candidate: string, slug: string) =>
@@ -244,11 +244,6 @@ export function useProviderConnect({
             if (!isLocalRuntime && !isCodexOAuth && !isCliLogin) {
               await setCloudProviderKey(slug, trimmed);
             }
-            // The provider's endpoint and/or credential just changed, so its
-            // cached model catalog is stale (see
-            // `ProviderModelPickerDialog`'s cache). Drop it before the next
-            // picker reads it.
-            invalidateModelCatalogCache(slug);
             const latestSettingsAfterKey = latestSettings.current;
             const latestDraftProvider = latestSettingsAfterKey.draft.cloudProviders.find(provider =>
               isProviderSlug(provider.slug, slug)
@@ -374,6 +369,9 @@ export function useProviderConnect({
         }
         onConnected();
       } finally {
+        // Configuration and credential writes may have been compensated.
+        // Discard every read begun against an intermediate route as well.
+        invalidateModelCatalogCache(slug);
         setBusyAction(null);
         finishOperation();
       }

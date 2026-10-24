@@ -38,6 +38,7 @@ import {
   openhumanLocalAiDiagnostics,
   openhumanLocalAiStatus,
 } from '../../utils/tauriCommands/localAi';
+import { invalidateModelCatalogCache } from '../modelCatalogCache';
 
 // ─── Domain types — what the AIPanel consumes ──────────────────────────────
 
@@ -493,6 +494,15 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
     return;
   }
   await openhumanUpdateModelSettings(patch);
+  if (patch.cloud_providers) {
+    const before = new Map(prev.cloudProviders.map(provider => [provider.slug, provider]));
+    const after = new Map(next.cloudProviders.map(provider => [provider.slug, provider]));
+    for (const slug of new Set([...before.keys(), ...after.keys()])) {
+      if (JSON.stringify(before.get(slug)) !== JSON.stringify(after.get(slug))) {
+        invalidateModelCatalogCache(slug);
+      }
+    }
+  }
 }
 
 /** Order-insensitive structural equality for two model registries. */
@@ -533,6 +543,7 @@ export async function setCloudProviderKey(slug: string, apiKey: string): Promise
     token: apiKey,
     setActive: true,
   });
+  invalidateModelCatalogCache(slug);
 }
 
 /**
@@ -787,6 +798,7 @@ export async function clearCloudProviderKey(slug: string): Promise<void> {
   // Clear the new-style key. Legacy bare-slug entries are left as-is
   // since we can't be sure they aren't used by other things.
   await authRemoveProviderCredentials({ provider: authKeyForSlug(slug), profile: 'default' });
+  invalidateModelCatalogCache(slug);
 }
 
 export async function startOpenAiCodexOAuth(): Promise<OpenAiCodexOAuthStartResult> {
@@ -810,10 +822,12 @@ export async function completeOpenAiCodexOAuth(callbackUrl: string): Promise<voi
     method: 'openhuman.inference_openai_oauth_complete',
     params: { callback_url: callback },
   });
+  invalidateModelCatalogCache('openai');
 }
 
 export async function importOpenAiCodexCliAuth(): Promise<void> {
   await callCoreRpc({ method: 'openhuman.inference_openai_oauth_import_codex_cli', params: {} });
+  invalidateModelCatalogCache('openai');
 }
 
 /**
@@ -826,6 +840,7 @@ export async function importOpenAiCodexCliAuth(): Promise<void> {
  */
 export async function flushCloudProviders(providers: CloudProviderCreds[]): Promise<void> {
   await openhumanUpdateModelSettings({ cloud_providers: providers });
+  invalidateModelCatalogCache();
 }
 
 /**

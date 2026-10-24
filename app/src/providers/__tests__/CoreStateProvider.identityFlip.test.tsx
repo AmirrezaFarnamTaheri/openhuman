@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,7 +6,10 @@ import * as coreStateApi from '../../services/coreStateApi';
 import * as threadSlice from '../../store/threadSlice';
 import * as userScopedStorage from '../../store/userScopedStorage';
 import * as tauriCommands from '../../utils/tauriCommands';
-import { setCoreStateSnapshot } from '../../lib/coreState/store';
+import { ProviderModelPickerDialog } from '../../components/settings/panels/ai/ProviderModelPickerDialog';
+import { getCoreStateSnapshot, setCoreStateSnapshot } from '../../lib/coreState/store';
+import { listProviderModels } from '../../services/api/aiSettingsApi';
+import { invalidateModelCatalogCache } from '../../services/modelCatalogCache';
 import { socketService } from '../../services/socketService';
 import { store } from '../../store';
 import { addAccount } from '../../store/accountsSlice';
@@ -15,6 +18,7 @@ import { consumeIdentityFlipSeed } from '../../utils/bootstrapActiveUser';
 import CoreStateProvider, { useCoreState } from '../CoreStateProvider';
 
 vi.mock('../../services/coreStateApi');
+vi.mock('../../services/api/aiSettingsApi', () => ({ listProviderModels: vi.fn() }));
 vi.mock('../../services/analytics', () => ({ syncAnalyticsConsent: vi.fn() }));
 vi.mock('../../utils/tauriCommands', () => ({
   openhumanUpdateAnalyticsSettings: vi.fn(),
@@ -101,6 +105,8 @@ describe('CoreStateProvider — identity flip cleanup (#900)', () => {
   const restartApp = vi.mocked(tauriCommands.restartApp);
 
   beforeEach(() => {
+    invalidateModelCatalogCache();
+    vi.mocked(listProviderModels).mockReset();
     fetchSnapshot.mockReset();
     listTeams.mockReset();
     listTeams.mockResolvedValue([]);
@@ -381,5 +387,55 @@ describe('CoreStateProvider — identity flip cleanup (#900)', () => {
     expect(seedAtRestart).toBe('B');
 
     disconnectSpy.mockRestore();
+  });
+
+  it('reloads an open private catalog only after the new identity commits and clears its selection', async () => {
+    userScopedStorage.setActiveUserId('A');
+    fetchSnapshot.mockResolvedValue(makeSnapshot({ userId: 'A', sessionToken: 'tokA' }));
+    vi.mocked(listProviderModels).mockImplementation(async () => {
+      const id = getCoreStateSnapshot().snapshot.auth.userId;
+      return id ? [{ id: `private-${id}`, owned_by: 'private' }] : [];
+    });
+    let ctx: CoreStateContextValue | undefined;
+    render(
+      <CoreStateProvider>
+        <Consumer captureCtx={c => (ctx = c)} />
+        <ProviderModelPickerDialog
+          allowManaged={false}
+          cloudProviders={[
+            {
+              id: 'private',
+              slug: 'private',
+              label: 'Private provider',
+              endpoint: 'https://private.example/v1',
+              authStyle: 'bearer',
+              maskedKey: '••••',
+            },
+          ]}
+          localModels={[]}
+          ollamaRunning={false}
+          claudeCodeEnabled={false}
+          initial={null}
+          onClose={() => {}}
+          onSelect={() => {}}
+        />
+      </CoreStateProvider>
+    );
+    await act(async () => {
+      await ctx!.refresh();
+    });
+    await screen.findByRole('option', { name: 'private-A' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Model' }), {
+      target: { value: 'private-A' },
+    });
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeEnabled();
+
+    fetchSnapshot.mockResolvedValue(makeSnapshot({ userId: 'B', sessionToken: 'tokB' }));
+    await act(async () => {
+      await ctx!.refresh();
+    });
+    await screen.findByRole('option', { name: 'private-B' });
+    expect(screen.queryByRole('option', { name: 'private-A' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeDisabled();
   });
 });

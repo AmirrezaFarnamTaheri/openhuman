@@ -11,6 +11,7 @@ import {
   loadAISettings,
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
+import { invalidateModelCatalogCache } from '../../../../services/modelCatalogCache';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
 import {
   type AISettings,
@@ -19,7 +20,6 @@ import {
   ProviderProbeError,
 } from './aiPanelTypes';
 import { validModelFleetImageEndpoint } from './modelFleetOps';
-import { invalidateModelCatalogCache } from './ProviderModelPickerDialog';
 
 /**
  * Compare only provider configuration, excluding encrypted-key presence and
@@ -140,16 +140,6 @@ export function useCloudProviderEditorSubmit({
             previous.endpoint !== upserted.endpoint ||
             previous.authStyle !== upserted.authStyle ||
             (previous.caCertPem ?? '') !== (upserted.caCertPem ?? ''));
-        // The model catalog is cached per provider slug (see
-        // `ProviderModelPickerDialog`). A provider whose endpoint, slug or
-        // credential changed can serve a different model list, so the cached
-        // one has to go before the next picker reads it.
-        if (changedDestination || previous === null || previous.slug !== upserted.slug) {
-          invalidateModelCatalogCache(upserted.slug);
-          if (previous && previous.slug !== upserted.slug) {
-            invalidateModelCatalogCache(previous.slug);
-          }
-        }
         if (savedKeyExists && changedDestination && !apiKey) {
           // Even an explicit skipProbe must not route an existing saved key to a
           // newly configured endpoint or trusted CA without replacement.
@@ -327,6 +317,13 @@ export function useCloudProviderEditorSubmit({
             throw new Error(redactCandidateSecrets(error.message, apiKey));
           }
           throw error;
+        } finally {
+          if (settingsWriteAttempted) {
+            invalidateModelCatalogCache(upserted.slug);
+            if (previous && previous.slug !== upserted.slug) {
+              invalidateModelCatalogCache(previous.slug);
+            }
+          }
         }
         onDone();
       } finally {

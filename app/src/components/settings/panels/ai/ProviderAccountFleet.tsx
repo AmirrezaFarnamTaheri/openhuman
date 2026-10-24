@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useT } from '../../../../lib/i18n/I18nContext';
+import { invalidateModelCatalogCache } from '../../../../services/modelCatalogCache';
 import {
   authActivateProviderCredentials,
   authListProviderCredentials,
@@ -105,6 +106,7 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
         token,
         setActive: false,
       });
+      invalidateModelCatalogCache(active);
       setSecret('');
       setLabel('');
       setRevision(value => value + 1);
@@ -125,6 +127,7 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
     setNotice('');
     try {
       await authActivateProviderCredentials({ provider: 'provider:' + active, profile });
+      invalidateModelCatalogCache(active);
       setRevision(value => value + 1);
       setNotice(
         t('settings.ai.fleet.accountsSelected', 'Preferred account updated for new model requests.')
@@ -147,6 +150,7 @@ export function ProviderAccountFleet({ providers }: { providers: CloudProvider[]
     setNotice('');
     try {
       await authRemoveProviderCredentials({ provider: 'provider:' + active, profile });
+      invalidateModelCatalogCache(active);
       setRemoveConfirmation(null);
       setRevision(value => value + 1);
       setNotice(t('settings.ai.fleet.accountsRemoved', 'Account removed.'));

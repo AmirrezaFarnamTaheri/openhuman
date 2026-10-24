@@ -1,8 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { cn } from '../../../../lib/cn';
 import { useT } from '../../../../lib/i18n/I18nContext';
 import { listProviderModels, type ModelInfo } from '../../../../services/api/aiSettingsApi';
+import {
+  cachedModelCatalog,
+  invalidateModelCatalogCache,
+  loadModelCatalog,
+  modelCatalogIdentity,
+  modelCatalogProviderRevision,
+  modelCatalogRevision,
+  ModelCatalogSupersededError,
+  subscribeModelCatalog,
+} from '../../../../services/modelCatalogCache';
 import Alert from '../../../ui/Alert';
 import Button from '../../../ui/Button';
 import { ModalShell } from '../../../ui/ModalShell';
@@ -16,6 +26,11 @@ import {
 } from './aiPanelTypes';
 import { ModelEntryField, useModelEntryMode } from './ModelEntryField';
 import { ProviderSwatch } from './ProviderListRow';
+
+export {
+  cachedModelCatalog,
+  invalidateModelCatalogCache,
+} from '../../../../services/modelCatalogCache';
 
 type TFn = (key: string, fallback?: string) => string;
 
@@ -106,31 +121,6 @@ interface ProviderModelPickerDialogProps {
 const sourceKey = (source: CustomDialogSource) =>
   source.kind === 'cloud' ? `cloud:${source.providerSlug}` : source.kind;
 
-/**
- * Per-provider model catalogs, cached for the lifetime of the app.
- *
- * Opening the picker and stepping through providers used to re-fetch each
- * provider's `/models` listing every time the user moved to it, and moving
- * back and forth re-fetched again. The catalog of a given provider changes
- * only when the user edits that provider, so the listing is worth keeping.
- *
- * A cached entry holds the resolved models AND the promise, so two surfaces
- * asking for the same provider at the same time (the composer's picker and
- * the settings panel's) share one request instead of racing two.
- */
-const modelCatalogCache = new Map<string, ModelInfo[]>();
-
-/** Drops a provider's cached catalog — call when that provider changes. */
-export function invalidateModelCatalogCache(providerSlug?: string): void {
-  if (providerSlug) modelCatalogCache.delete(providerSlug);
-  else modelCatalogCache.clear();
-}
-
-/** A cached catalog, or undefined when the provider has not been listed yet. */
-export function cachedModelCatalog(providerSlug: string): ModelInfo[] | undefined {
-  return modelCatalogCache.get(providerSlug);
-}
-
 const isManaged = (source: CustomDialogSource | null): boolean => source?.kind === 'managed';
 
 const sourceLabel = (source: CustomDialogSource, providers: CloudProvider[], t: TFn) =>
@@ -194,20 +184,25 @@ export function ProviderModelPickerDialog({
     initial?.source ?? sources[0] ?? null
   );
   const [model, setModel] = useState(initial?.model ?? '');
-  const [catalog, setCatalog] = useState<ModelInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogRequest, setCatalogRequest] = useState(0);
+  const cacheRevision = useSyncExternalStore(
+    subscribeModelCatalog,
+    modelCatalogRevision,
+    modelCatalogRevision
+  );
+  const identity = modelCatalogIdentity();
+  const [remoteCatalog, setRemoteCatalog] = useState<{
+    identity: string;
+    slug: string;
+    revision: number;
+    models: ModelInfo[];
+    loading: boolean;
+    error: string | null;
+  } | null>(null);
   const isLocalSource = source?.kind === 'local';
   const selectedCloudProvider =
     source?.kind === 'cloud'
       ? cloudProviders.find(provider => provider.slug === source.providerSlug)
       : undefined;
-  const modelEntryMode = useModelEntryMode({
-    endpoint: selectedCloudProvider?.endpoint,
-    model,
-    catalogIds: catalog.map(candidate => candidate.id),
-  });
 
   /**
    * Slug whose `/models` listing backs the right-hand pane, or null when the
@@ -231,48 +226,71 @@ export function ProviderModelPickerDialog({
     return null;
   }, [source]);
 
-  // Local models are supplied by the host, not fetched. Kept separate so a new
-  // array identity re-mirrors the list without re-triggering a network call.
-  useEffect(() => {
-    if (isLocalSource) setCatalog(localModels);
-  }, [isLocalSource, localModels]);
+  const providerRevision = modelCatalogProviderRevision(fetchSlug);
+  const [selectionScope, setSelectionScope] = useState({ identity, fetchSlug, providerRevision });
+  if (
+    selectionScope.identity !== identity ||
+    selectionScope.fetchSlug !== fetchSlug ||
+    selectionScope.providerRevision !== providerRevision
+  ) {
+    setSelectionScope({ identity, fetchSlug, providerRevision });
+    if (selectionScope.identity !== identity) {
+      setSource(sources[0] ?? null);
+      setModel('');
+      setQuery('');
+    } else if (fetchSlug && selectionScope.fetchSlug === fetchSlug) {
+      // Clear a previously selected private model before the next UI commit.
+      // Edits to an unrelated provider leave manual model entries intact.
+      setModel('');
+      setQuery('');
+    }
+  }
+  const remoteCatalogIsCurrent =
+    remoteCatalog?.identity === identity &&
+    remoteCatalog.slug === fetchSlug &&
+    remoteCatalog.revision === providerRevision;
+  const catalog: ModelInfo[] = isLocalSource
+    ? localModels
+    : remoteCatalogIsCurrent
+      ? remoteCatalog.models
+      : [];
+  const loading = Boolean(fetchSlug) && (!remoteCatalogIsCurrent || remoteCatalog.loading);
+  const catalogError = remoteCatalogIsCurrent ? remoteCatalog.error : null;
+  const modelEntryMode = useModelEntryMode({
+    endpoint: selectedCloudProvider?.endpoint,
+    model,
+    catalogIds: catalog.map(candidate => candidate.id),
+  });
 
   useEffect(() => {
-    if (!fetchSlug) {
-      if (!isLocalSource) setCatalog([]);
-      return;
-    }
+    if (!fetchSlug) return;
     let active = true;
-    // A cached catalog renders immediately — no spinner, no network. The
-    // provider's model list is stable for as long as the provider is
-    // unchanged, so re-listing it on every picker open was pure latency.
+    const scope = { identity, slug: fetchSlug, revision: providerRevision };
     const cached = cachedModelCatalog(fetchSlug);
     if (cached) {
-      setCatalog(cached);
-      setLoading(false);
-      setCatalogError(null);
+      setRemoteCatalog({ ...scope, models: cached, loading: false, error: null });
       return;
     }
-    setLoading(true);
-    setCatalog([]);
-    setCatalogError(null);
-    void listProviderModels(fetchSlug)
+    setRemoteCatalog({ ...scope, models: [], loading: true, error: null });
+    void loadModelCatalog(fetchSlug, () => listProviderModels(fetchSlug))
       .then(models => {
         if (!active) return;
-        modelCatalogCache.set(fetchSlug, models);
-        setCatalog(models);
-        setLoading(false);
+        setRemoteCatalog({ ...scope, models, loading: false, error: null });
       })
-      .catch(() => {
-        if (active) {
-          setLoading(false);
-          setCatalogError('Could not load models from this provider.');
+      .catch(error => {
+        if (active && !(error instanceof ModelCatalogSupersededError)) {
+          setRemoteCatalog({
+            ...scope,
+            models: [],
+            loading: false,
+            error: 'Could not load models from this provider.',
+          });
         }
       });
     return () => {
       active = false;
     };
-  }, [catalogRequest, fetchSlug, isLocalSource]);
+  }, [cacheRevision, fetchSlug, identity, providerRevision]);
   // Search both provider names and the active provider's catalog. Keep the
   // selected provider visible so its model results remain usable.
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -439,7 +457,6 @@ export function ProviderModelPickerDialog({
                 // cache entry is dropped first — otherwise the cached catalog
                 // would be served and the retry would look like a no-op.
                 if (fetchSlug) invalidateModelCatalogCache(fetchSlug);
-                setCatalogRequest(request => request + 1);
               }}
               label={t('settings.ai.modelLabel')}
               placeholder={t('settings.ai.picker.modelIdPlaceholder')}

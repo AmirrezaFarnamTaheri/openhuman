@@ -6,6 +6,11 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  cachedModelCatalog,
+  invalidateModelCatalogCache,
+  loadModelCatalog,
+} from '../../modelCatalogCache';
 // ─── Import SUT after mocks ───────────────────────────────────────────────────
 
 import {
@@ -1488,5 +1493,42 @@ describe('public model catalog cannot authenticate a provider-editor credential'
   it('does not require key proof when simply browsing model names', async () => {
     mockCallCoreRpc.mockResolvedValue({ result: { models: [{ id: 'public' }] } });
     await expect(listProviderModels('chutes')).resolves.toHaveLength(1);
+  });
+});
+
+describe('model catalog invalidation after credential writes', () => {
+  beforeEach(async () => {
+    invalidateModelCatalogCache();
+    mockAuthStoreProviderCredentials.mockReset();
+    mockAuthRemoveProviderCredentials.mockReset();
+    mockCallCoreRpc.mockReset();
+    mockOpenhumanUpdateModelSettings.mockReset();
+    await loadModelCatalog('openai', async () => [{ id: 'old-account-model', owned_by: 'openai' }]);
+    await loadModelCatalog('unrelated', async () => [{ id: 'unchanged', owned_by: 'other' }]);
+  });
+
+  it.each([
+    ['key replacement', () => setCloudProviderKey('openai', 'replacement')],
+    ['key removal', () => clearCloudProviderKey('openai')],
+    ['OAuth completion', () => completeOpenAiCodexOAuth('https://localhost/callback?code=test')],
+    ['CLI credential import', () => importOpenAiCodexCliAuth()],
+  ])('discards the old catalog after %s', async (_label, mutate) => {
+    await mutate();
+    expect(cachedModelCatalog('openai')).toBeUndefined();
+    expect(cachedModelCatalog('unrelated')).toEqual([{ id: 'unchanged', owned_by: 'other' }]);
+  });
+
+  it('preserves a valid catalog when a key write is rejected', async () => {
+    mockAuthStoreProviderCredentials.mockRejectedValue(new Error('key store unavailable'));
+    await expect(setCloudProviderKey('openai', 'replacement')).rejects.toThrow(
+      'key store unavailable'
+    );
+    expect(cachedModelCatalog('openai')).toEqual([{ id: 'old-account-model', owned_by: 'openai' }]);
+  });
+
+  it('invalidates catalogs after a provider list is published, including removals', async () => {
+    await flushCloudProviders([]);
+    expect(cachedModelCatalog('openai')).toBeUndefined();
+    expect(cachedModelCatalog('unrelated')).toBeUndefined();
   });
 });
