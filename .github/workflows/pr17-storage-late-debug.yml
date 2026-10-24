@@ -1,0 +1,400 @@
+---
+name: PR17 native storage delayed debugger
+
+on:
+  push:
+    branches: [codex/pr17-storage-late-debug-20261024]
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: pr17-storage-late-debug
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  storage-wait:
+    name: Inspect native storage only after progress stops
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init --cap-add=SYS_PTRACE
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+      RUST_MIN_STACK: "16777216"
+      GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
+    steps:
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout exact production source
+        uses: actions/checkout@v7
+        with:
+          ref: 94e8d9cba539a3c025369f02da5aee42f6e34bda
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out pinned submodules
+        run: bash scripts/ci/checkout-submodules.sh
+      - name: Restore storage build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            crates/openhuman-app -> target
+          cache-on-failure: true
+          shared-key: ci-fast-storage
+      - name: Install diagnostic tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends gdb jq ripgrep python3-tomli
+      - name: Stage the same test modules as hosted storage
+        run: |
+          mkdir -p ci-out
+          bash scripts/ci/self-hosted/install-test-modules.sh \
+            "/tmp/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/storage-drivers" \
+            ci-out/test-modules-storage-drivers.env
+      - name: Prepare and verify bounded late attachment
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -eq 0
+          test "$(git rev-parse HEAD)" = 94e8d9cba539a3c025369f02da5aee42f6e34bda
+          git diff --exit-code
+          cat > "$RUNNER_TEMP/pr17-late-attach.py" <<'PY'
+          #!/usr/bin/env python3
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import signal
+          import subprocess
+          import sys
+          import threading
+          import time
+          
+          QUIET_SECONDS = 180.0
+          GDB_SECONDS = 60.0
+          KILL_GRACE = 15.0
+          ANSI = re.compile(rb"\x1b\[[0-?]*[ -/]*[@-~]")
+          COMPLETED = re.compile(rb"^test .+ \.\.\. (?:ok|FAILED|ignored)(?:\b|$)")
+          
+          def group_signal(pid, sig):
+              try:
+                  os.killpg(pid, sig)
+              except ProcessLookupError:
+                  pass
+          
+          def stop_group(proc):
+              if proc.poll() is None:
+                  group_signal(proc.pid, signal.SIGTERM)
+                  try:
+                      proc.wait(timeout=5)
+                  except subprocess.TimeoutExpired:
+                      group_signal(proc.pid, signal.SIGKILL)
+                      proc.wait(timeout=5)
+          
+          def start_gdb(pid, prefix):
+              commands = prefix.with_suffix(".gdb")
+              log_path = prefix.with_suffix(".log")
+              commands.write_text(
+                  "set pagination off\nset confirm off\nset print thread-events off\n"
+                  "set debuginfod enabled off\nset auto-load off\n"
+                  "set print frame-arguments none\n"
+                  "python\n"
+                  f"pid = {pid}\n"
+                  "try:\n"
+                  "    gdb.execute('attach %d' % pid)\n"
+                  "    if gdb.selected_inferior().pid != pid:\n"
+                  "        raise gdb.GdbError('attach did not select the target')\n"
+                  "    print('PR17_GDB_ATTACHED pid=%d' % pid, flush=True)\n"
+                  "    gdb.execute('info threads')\n"
+                  "    gdb.execute('thread apply all bt 96')\n"
+                  "finally:\n"
+                  "    if gdb.selected_inferior().pid == pid:\n"
+                  "        gdb.execute('detach')\n"
+                  "        print('PR17_GDB_DETACHED pid=%d' % pid, flush=True)\n"
+                  "end\nquit\n",
+                  encoding="utf-8",
+              )
+              log = log_path.open("wb")
+              try:
+                  proc = subprocess.Popen(
+                      ["gdb", "--batch", "--nx", "--quiet", "-x", str(commands)],
+                      stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                  )
+              except BaseException:
+                  log.close()
+                  raise
+              return proc, log, log_path
+          
+          def probe(out):
+              child = subprocess.Popen(["sleep", "120"], start_new_session=True)
+              debugger = None
+              log = None
+              try:
+                  debugger, log, log_path = start_gdb(child.pid, out / "attach-probe")
+                  try:
+                      rc = debugger.wait(timeout=GDB_SECONDS)
+                  except subprocess.TimeoutExpired:
+                      stop_group(debugger)
+                      raise RuntimeError("harmless-child GDB attach exceeded 60 seconds")
+                  log.close()
+                  log = None
+                  data = log_path.read_text(encoding="utf-8", errors="replace")
+                  attached = f"PR17_GDB_ATTACHED pid={child.pid}" in data
+                  detached = f"PR17_GDB_DETACHED pid={child.pid}" in data
+                  if rc != 0 or not attached or not detached or child.poll() is not None:
+                      sys.stderr.write(data)
+                      raise RuntimeError("attach/detach probe failed; do not relax seccomp automatically")
+                  print("PR17_ATTACH_PROBE success; child remained alive after detach", flush=True)
+              finally:
+                  if debugger is not None:
+                      stop_group(debugger)
+                  if log is not None:
+                      log.close()
+                  stop_group(child)
+          
+          def run_target(out):
+              expected = Path(os.environ["PR17_EXPECTED_EXE"]).resolve(strict=True)
+              actual = Path(sys.argv[1]).resolve(strict=True)
+              if actual != expected or not os.path.samefile(actual, expected):
+                  raise RuntimeError(f"Cargo runner executable mismatch: {actual} != {expected}")
+              attempt = int(os.environ["PR17_ATTEMPT"])
+              prefix = out / f"storage-attempt-{attempt}"
+              result_path = prefix.with_suffix(".result.json")
+              deadline = float(os.environ["PR17_DEADLINE_MONOTONIC"])
+              if deadline <= time.monotonic():
+                  raise RuntimeError("attempt deadline elapsed before Cargo invoked the runner")
+              env = os.environ.copy()
+              env.pop("CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER", None)
+              received_signal = [None]
+              def receive_signal(sig, _frame):
+                  if received_signal[0] is None:
+                      received_signal[0] = sig
+              signal.signal(signal.SIGTERM, receive_signal)
+              signal.signal(signal.SIGINT, receive_signal)
+          
+              child = subprocess.Popen(
+                  sys.argv[1:], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                  bufsize=0, start_new_session=True,
+              )
+              started = time.monotonic()
+              progress = [started, 0]
+              lock = threading.Lock()
+              log_lock = threading.Lock()
+              combined = prefix.with_suffix(".log").open("wb", buffering=0)
+              def pump(pipe, stream, suffix):
+                  with prefix.with_suffix(suffix).open("wb", buffering=0) as stream_log:
+                      for line in iter(pipe.readline, b""):
+                          now = time.monotonic()
+                          if COMPLETED.search(ANSI.sub(b"", line).rstrip(b"\r\n")):
+                              with lock:
+                                  progress[0] = now
+                                  progress[1] += 1
+                          stream_log.write(line)
+                          with log_lock:
+                              combined.write(line)
+                          stream.buffer.write(line)
+                          stream.buffer.flush()
+                  pipe.close()
+              readers = [
+                  threading.Thread(target=pump, args=(child.stdout, sys.stdout, ".stdout.log"), daemon=True),
+                  threading.Thread(target=pump, args=(child.stderr, sys.stderr, ".stderr.log"), daemon=True),
+              ]
+              for reader in readers:
+                  reader.start()
+              print(f"PR17_NATIVE_START attempt={attempt} pid={child.pid} cwd={os.getcwd()} exe={actual}", flush=True)
+          
+              debugger = None
+              debug_log = None
+              debug_path = None
+              debug_started = None
+              attach_requested = False
+              gdb_timed_out = False
+              gdb_termination_started = None
+              gdb_resumed = False
+              gdb_launch_error = None
+              timed_out = False
+              termination_started = None
+              try:
+                  while child.poll() is None:
+                      now = time.monotonic()
+                      if termination_started is None and (now >= deadline or received_signal[0] is not None):
+                          timed_out = now >= deadline
+                          termination_started = now
+                          group_signal(child.pid, signal.SIGTERM)
+                      if termination_started is not None and now - termination_started >= KILL_GRACE:
+                          group_signal(child.pid, signal.SIGKILL)
+                      with lock:
+                          last_completed, completed_count = progress
+                      if not attach_requested and termination_started is None and now - last_completed >= QUIET_SECONDS:
+                          attach_requested = True
+                          print(f"PR17_DIAGNOSTIC_ATTACH attempt={attempt} pid={child.pid} quiet_s={now-last_completed:.1f} completed_lines={completed_count}; this attempt cannot be a clean pass", flush=True)
+                          try:
+                              debugger, debug_log, debug_path = start_gdb(child.pid, out / f"storage-attempt-{attempt}-gdb")
+                              debug_started = time.monotonic()
+                          except OSError as error:
+                              gdb_launch_error = str(error)
+                              print(f"PR17_GDB_LAUNCH_ERROR {error}", file=sys.stderr, flush=True)
+                      if debugger is not None and debugger.poll() is None:
+                          if gdb_termination_started is None and now - debug_started >= GDB_SECONDS:
+                              gdb_timed_out = True
+                              gdb_termination_started = now
+                              group_signal(debugger.pid, signal.SIGTERM)
+                          elif gdb_termination_started is not None and now - gdb_termination_started >= 5:
+                              group_signal(debugger.pid, signal.SIGKILL)
+                      if debugger is not None and debugger.poll() is not None and gdb_timed_out and not gdb_resumed:
+                          group_signal(child.pid, signal.SIGCONT)
+                          gdb_resumed = True
+                      time.sleep(0.1)
+              finally:
+                  if child.poll() is None:
+                      stop_group(child)
+                  if debugger is not None:
+                      stop_group(debugger)
+                  if debug_log is not None:
+                      debug_log.close()
+                  for reader in readers:
+                      reader.join(timeout=2)
+                  if not any(reader.is_alive() for reader in readers):
+                      combined.close()
+          
+              child_status = child.returncode
+              if timed_out:
+                  exit_status = 124
+              elif received_signal[0] is not None:
+                  exit_status = 128 + received_signal[0]
+              else:
+                  exit_status = child_status if child_status >= 0 else 128 - child_status
+              debug_text = "" if debug_path is None else debug_path.read_text(encoding="utf-8", errors="replace")
+              result = {
+                  "attempt": attempt, "pid": child.pid, "executable": str(actual),
+                  "cwd": os.getcwd(), "elapsed_s": round(time.monotonic() - started, 3),
+                  "child_status": child_status, "exit_status": exit_status,
+                  "deadline_exceeded": timed_out, "signal": received_signal[0],
+                  "completed_test_lines": progress[1],
+                  "attach_requested": attach_requested, "gdb_timed_out": gdb_timed_out,
+                  "gdb_attached": f"PR17_GDB_ATTACHED pid={child.pid}" in debug_text,
+                  "gdb_detached": f"PR17_GDB_DETACHED pid={child.pid}" in debug_text,
+                  "gdb_status": None if debugger is None else debugger.returncode,
+                  "gdb_launch_error": gdb_launch_error,
+                  "gdb_log": None if debug_path is None else str(debug_path),
+                  "clean_pass": exit_status == 0 and not attach_requested,
+                  "classification": "diagnostic_after_attach" if attach_requested else "native_unattached",
+              }
+              result_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+              print("PR17_NATIVE_RESULT " + json.dumps(result, sort_keys=True), flush=True)
+              return exit_status
+          
+          if __name__ == "__main__":
+              output = Path(os.environ["PR17_DIAG_OUT"]).resolve()
+              output.mkdir(parents=True, exist_ok=True)
+              if sys.argv[1:] == ["--probe"]:
+                  probe(output)
+              elif len(sys.argv) >= 2:
+                  sys.exit(run_target(output))
+              else:
+                  raise SystemExit("expected --probe or Cargo executable and test arguments")
+          PY
+          python3 -m py_compile "$RUNNER_TEMP/pr17-late-attach.py"
+          chmod +x "$RUNNER_TEMP/pr17-late-attach.py"
+          export PR17_DIAG_OUT="$GITHUB_WORKSPACE/ci-out"
+          "$RUNNER_TEMP/pr17-late-attach.py" --probe
+      - name: Compile the exact storage library test target
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib \
+            --no-run --message-format=json-render-diagnostics > ci-out/storage-build.jsonl
+          jq -c 'select(.reason == "compiler-artifact" and .executable != null) | {target: .target.name, kind: .target.kind, test: .profile.test, executable: .executable}' ci-out/storage-build.jsonl
+          mapfile -t binaries < <(jq -r 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == "openhuman_core" and .executable != null) | .executable' ci-out/storage-build.jsonl | sort -u)
+          test "${#binaries[@]}" -eq 1
+          test -x "${binaries[0]}"
+          printf '%s\n' "${binaries[0]}" > ci-out/storage-executable.txt
+      - name: Run the unchanged suite and attach only after inactivity
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          export PR17_DIAG_OUT="$GITHUB_WORKSPACE/ci-out"
+          export PR17_EXPECTED_EXE="$(cat ci-out/storage-executable.txt)"
+          export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="$RUNNER_TEMP/pr17-late-attach.py"
+          diagnostic_failure=0
+          for attempt in 1 2 3; do
+            export PR17_ATTEMPT="$attempt"
+            export PR17_DEADLINE_MONOTONIC="$(python3 -c 'import time; print(time.monotonic() + 600.0)')"
+            result="$PR17_DIAG_OUT/storage-attempt-$attempt.result.json"
+            rm -f "$result"
+            set +e
+            # The runner enforces 600s for the test plus 15s termination grace.
+            # This outer bound also permits debugger and pipe cleanup.
+            timeout --signal=TERM --kill-after=15s 645s \
+              bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+              --features storage-sqlite,storage-file --lib -- \
+              storage:: cron:: flows:: security::approval:: security::devices:: \
+              security::secret_storage:: security::credentials:: desktop::notifications:: \
+              integrations::task_sources:: integrations::composio::file_store \
+              agent::orchestration:: config::workspace:: desktop::app_state:: \
+              desktop::control:: platform::cost:: inference::tokenjuice:: \
+              config::schema::load::source:: \
+              --skip cron::bus_host::tests:: --skip cron::documents_port::tests::
+            cargo_status=$?
+            set -e
+            if [ ! -f "$result" ]; then
+              printf 'PR17_HARNESS_FAILURE: no native result; cargo_status=%s\n' "$cargo_status"
+              [ "$cargo_status" -eq 0 ] && exit 1
+              exit "$cargo_status"
+            fi
+            cat "$result"
+            attempt_status=$(jq -r '.exit_status' "$result")
+            attached=$(jq -r '.attach_requested' "$result")
+            printf 'PR17_STORAGE_ATTEMPT_STATUS attempt=%s cargo_status=%s native_status=%s attached=%s\n' "$attempt" "$cargo_status" "$attempt_status" "$attached"
+            if [ "$attempt_status" -eq 0 ] && [ "$cargo_status" -ne 0 ]; then
+              exit "$cargo_status"
+            fi
+            if [ "$attached" = true ]; then
+              printf 'PR17_DIAGNOSTIC_ONLY: an attach was attempted; this is not clean native validation.\n'
+              [ "$attempt_status" -ne 0 ] || exit 86
+              exit "$attempt_status"
+            fi
+            if [ "$attempt_status" -eq 101 ]; then
+              diagnostic_failure=101
+            elif [ "$attempt_status" -ne 0 ]; then
+              exit "$attempt_status"
+            fi
+          done
+          exit "$diagnostic_failure"
+      - name: Print captured stacks for remote inspection
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in sorted(Path("ci-out").glob("storage-attempt-*-gdb.log")):
+              text = path.read_text(encoding="utf-8", errors="replace")
+              print(f"PR17_GDB_LOG_BEGIN {path.name} chars={len(text)}")
+              print(text[:3000000])
+              if len(text) > 3000000:
+                  print("PR17_GDB_LOG_TRUNCATED; complete capture is in the artifact")
+              print(f"PR17_GDB_LOG_END {path.name}")
+          PY
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr17-storage-late-debug
+          path: ci-out/
+          retention-days: 7
+          if-no-files-found: warn
