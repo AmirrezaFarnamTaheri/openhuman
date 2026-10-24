@@ -58,9 +58,15 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
     let completed_turns = Arc::new(AtomicUsize::new(0));
     let scenario_stage = Arc::clone(&stage);
     let scenario_completed_turns = Arc::clone(&completed_turns);
+    // Publish the provider's counters to the independent timeout thread.
+    // A zero completed-turn count alone cannot distinguish a runtime deadlock
+    // from a request gate held below its required concurrency threshold.
+    let provider_probe = Arc::new(std::sync::OnceLock::<Arc<GatedProvider>>::new());
+    let scenario_provider_probe = Arc::clone(&provider_probe);
     let scenario = executor.spawn(async move {
         let backend = stub_backend().await;
-        let provider = GatedProvider::start(REPLY).await;
+        let provider = Arc::new(GatedProvider::start(REPLY).await);
+        assert!(scenario_provider_probe.set(Arc::clone(&provider)).is_ok());
         scenario_stage.store(1, Ordering::SeqCst);
         let mut config = offline_config();
         config.modules.allow_download = false;
@@ -128,9 +134,17 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
             // The linked module's panic hook omits assertion payloads.
             let phase = STAGES[stage.load(Ordering::SeqCst)];
             let completed = completed_turns.load(Ordering::SeqCst);
+            let provider_state = provider_probe.get().map(|provider| {
+                format!(
+                    "chat_requests={}, in_flight={}, peak_in_flight={}, gate_open={}",
+                    provider.chat_requests(), provider.in_flight(),
+                    provider.peak_in_flight(), provider.is_open()
+                )
+            }).unwrap_or_else(|| "provider not started".to_string());
             eprintln!(
                 "cold prompt regression did not complete: {error}; \
-                 stage={phase}, completed_turns={completed}/{AGENTS}; all {AGENTS} \
+                 stage={phase}, completed_turns={completed}/{AGENTS}; \
+                 provider=[{provider_state}]; all {AGENTS} \
                  cold turns must overlap with one worker and one blocking thread"
             );
             panic!("cold prompt preparation did not finish within {HANG_GUARD:?}");
