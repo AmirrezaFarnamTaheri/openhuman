@@ -1,0 +1,181 @@
+---
+name: PR17 callback initialization validation
+
+on:
+  push:
+    branches: [codex/pr17-callback-storage-validation-20261024]
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: pr17-callback-storage-validation
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  storage-wait:
+    name: Prove callback initialization ownership
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+      RUST_MIN_STACK: "16777216"
+      GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
+    steps:
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout exact diagnostic source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out pinned submodules
+        run: bash scripts/ci/checkout-submodules.sh
+      - name: Restore storage build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            crates/openhuman-app -> target
+          cache-on-failure: true
+          shared-key: ci-fast-storage
+      - name: Install diagnostic tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends jq ripgrep python3-tomli
+      - name: Stage the same test modules as hosted storage
+        run: |
+          mkdir -p ci-out
+          bash scripts/ci/self-hosted/install-test-modules.sh \
+            "/tmp/openhuman-test-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/storage-drivers" \
+            ci-out/test-modules-storage-drivers.env
+      - name: Format candidate and record exact reviewable source
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+
+          paths = [
+              "crates/openhuman-core/src/modules/runtime.rs",
+              "crates/openhuman-core/src/modules/runtime_callback_storage_tests.rs",
+          ]
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only"], text=True).splitlines())
+          assert changed.issubset(set(paths)), sorted(changed)
+          for path in paths:
+              content = pathlib.Path(path).read_text()
+              print("PR17_FORMATTED_FILE " + json.dumps({"path": path, "content": content}))
+          pathlib.Path("ci-out/fixed-module-runtime.rs").write_text(
+              pathlib.Path(paths[0]).read_text())
+          PY
+      - name: Prepare original callback ownership with only the new test hooks
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin 94e8d9cba539a3c025369f02da5aee42f6e34bda
+          git show 94e8d9cba539a3c025369f02da5aee42f6e34bda:crates/openhuman-core/src/modules/runtime.rs \
+            > ci-out/original-module-runtime.rs
+          python3 - <<'PY'
+          import pathlib
+
+          source = pathlib.Path("ci-out/original-module-runtime.rs").read_text()
+          before = "async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<()> {\n"
+          assert source.count(before) == 1
+          source = source.replace(before, before + "    #[cfg(test)]\n    callback_storage::before_install();\n")
+          after = "    Ok(())\n}\n\n/// Whether the module runtime"
+          assert source.count(after) == 1
+          source = source.replace(after, "    #[cfg(test)]\n    callback_storage::after_install().await;\n" + after)
+          source += '\n#[cfg(test)]\n#[path = "runtime_callback_storage_tests.rs"]\nmod callback_storage;\n'
+          pathlib.Path("crates/openhuman-core/src/modules/runtime.rs").write_text(source)
+          PY
+      - name: Require both regressions to fail on the original ownership
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib --no-run
+          for case_name in synchronous_retry_does_not_block_callback_owner cancelled_caller_runtime_keeps_one_callback_install; do
+            set +e
+            timeout 150s bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+              --features storage-sqlite,storage-file --lib -- \
+              --exact "modules::runtime::callback_storage::$case_name" --nocapture \
+              2>&1 | tee "ci-out/red-$case_name.log"
+            test_status=${PIPESTATUS[0]}
+            set -e
+            test "$test_status" -eq 101
+            case "$case_name" in
+              synchronous_retry_does_not_block_callback_owner)
+                expected_failure="module callback publication must finish without the blocked caller runtime"
+                ;;
+              cancelled_caller_runtime_keeps_one_callback_install)
+                expected_failure="cancelled caller must not reinstall module callbacks"
+                ;;
+            esac
+            python3 - "$expected_failure" "ci-out/red-$case_name.log" "$case_name" <<'PY'
+          import pathlib
+          import sys
+
+          expected, log_path, case_name = sys.argv[1:]
+          source_path = pathlib.Path("crates/openhuman-core/src/modules/runtime_callback_storage_tests.rs")
+          matches = [
+              number for number, line in enumerate(source_path.read_text().splitlines(), 1)
+              if expected in line
+          ]
+          assert len(matches) == 1, matches
+          site = f"module panicked at {source_path.name}:{matches[0]}:"
+          log = pathlib.Path(log_path).read_text()
+          assert expected in log or site in log, f"missing intended failure: {site}"
+          assert f"modules::runtime::callback_storage::{case_name}" in log
+          assert "0 passed; 1 failed" in log, "the exact regression did not fail"
+          print(f"PR17_EXPECTED_PANIC_SITE {site}")
+          PY
+            printf 'PR17_EXPECTED_REGRESSION_FAILURE %s status=%s\n' "$case_name" "$test_status"
+          done
+      - name: Restore the candidate and pass the two regressions
+        run: |
+          set -euo pipefail
+          cp ci-out/fixed-module-runtime.rs crates/openhuman-core/src/modules/runtime.rs
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib -- \
+            modules::runtime::callback_storage:: --nocapture \
+            2>&1 | tee ci-out/green-callback-regressions.log
+      - name: Exercise existing module runtime behavior
+        run: |
+          set -euo pipefail
+          set -a
+          . ci-out/test-modules-storage-drivers.env
+          set +a
+          timeout --signal=TERM --kill-after=15s 180s \
+            bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
+            --features storage-sqlite,storage-file --lib -- \
+            modules::runtime:: --nocapture \
+            2>&1 | tee ci-out/module-runtime-regressions.log
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr17-callback-storage-validation
+          path: ci-out/
+          retention-days: 7
+          if-no-files-found: warn

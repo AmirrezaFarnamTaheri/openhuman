@@ -52,19 +52,34 @@ static CALLBACKS: tokio::sync::OnceCell<Result<(), String>> = tokio::sync::OnceC
 /// failed to start does not start on a later call.
 pub async fn runtime() -> tinybus::Result<&'static ModuleRuntime> {
     let runtime = runtime_now()?;
-    CALLBACKS
-        .get_or_init(|| async {
-            // On the module runtime, not the caller's: the callbacks serve
-            // objects that must outlive whichever runtime asked first.
-            match runtime.spawn(install_callbacks(runtime)).await {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(error)) => Err(error.to_string()),
-                Err(error) => Err(format!("the module callbacks did not finish: {error}")),
-            }
-        })
-        .await
-        .as_ref()
-        .map_err(|error| tinybus::Error::Transport(error.clone()))?;
+    let callbacks = match CALLBACKS.get() {
+        Some(cached) => cached.clone(),
+        None => runtime
+            .spawn(async move {
+                // Own initialization and cache publication on the permanent
+                // runtime: the caller may block or disappear while we wait.
+                CALLBACKS
+                    .get_or_init(|| async {
+                        // Keep callback panics cached as initialization errors.
+                        match runtime.spawn(install_callbacks(runtime)).await {
+                            Ok(Ok(())) => Ok(()),
+                            Ok(Err(error)) => Err(error.to_string()),
+                            Err(error) => {
+                                Err(format!("the module callbacks did not finish: {error}"))
+                            }
+                        }
+                    })
+                    .await
+                    .clone()
+            })
+            .await
+            .map_err(|error| {
+                tinybus::Error::Transport(format!(
+                    "the module callback cache task did not finish: {error}"
+                ))
+            })?,
+    };
+    callbacks.map_err(tinybus::Error::Transport)?;
     Ok(runtime)
 }
 
@@ -93,6 +108,8 @@ fn runtime_now() -> tinybus::Result<&'static ModuleRuntime> {
 
 /// Serve the host objects modules call back into, before any module loads.
 async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<()> {
+    #[cfg(test)]
+    callback_storage::before_install();
     let connection = runtime.connection();
 
     // The summary callback exists for the module alone; with the component off
@@ -125,6 +142,8 @@ async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<(
             tracing::debug!("[modules] eventqueues component off; inbound Host not served");
         }
     }
+    #[cfg(test)]
+    callback_storage::after_install().await;
     Ok(())
 }
 
@@ -161,3 +180,7 @@ pub fn is_module_serving(id: &str) -> bool {
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "runtime_callback_storage_tests.rs"]
+mod callback_storage;
