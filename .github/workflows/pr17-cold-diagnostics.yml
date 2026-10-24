@@ -1,5 +1,5 @@
 ---
-name: PR17 atomic storage wait diagnostics
+name: PR17 transport wait diagnostics
 
 on:
   push:
@@ -19,52 +19,8 @@ defaults:
     shell: bash
 
 jobs:
-  hosted-evidence:
-    name: Inspect timed-out hosted storage evidence
-    runs-on: ubuntu-22.04
-    timeout-minutes: 5
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - name: Download and verify the archived storage lane
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/12568291058/zip" \
-            -o "$RUNNER_TEMP/pr17-hosted-storage.zip"
-          python3 - <<'PY'
-          import hashlib
-          import os
-          from pathlib import Path
-          import zipfile
-
-          archive = Path(os.environ["RUNNER_TEMP"]) / "pr17-hosted-storage.zip"
-          expected = "44ccfab91ca18895c2ca0a65d65d8ff7101addd008fc7650596415d7469ae2c6"
-          data = archive.read_bytes()
-          digest = hashlib.sha256(data).hexdigest()
-          assert digest == expected, (digest, expected)
-          print(f"PR17_HOSTED_ARCHIVE_VERIFIED id=12568291058 bytes={len(data)} sha256={digest}")
-          with zipfile.ZipFile(archive) as bundle:
-              for item in bundle.infolist():
-                  if item.is_dir():
-                      continue
-                  assert item.file_size <= 10_000_000, (item.filename, item.file_size)
-                  payload = bundle.read(item)
-                  if b"\x00" in payload:
-                      print(f"PR17_HOSTED_BINARY {item.filename} bytes={len(payload)}")
-                      continue
-                  text = payload.decode("utf-8", errors="replace")
-                  print(f"PR17_HOSTED_FILE_BEGIN {item.filename} chars={len(text)}")
-                  print(text[:1_000_000])
-                  if len(text) > 1_000_000:
-                      print("PR17_HOSTED_FILE_TRUNCATED")
-                  print(f"PR17_HOSTED_FILE_END {item.filename}")
-          PY
-
   storage-wait:
-    name: Inspect atomic storage waits (cohort ${{ matrix.cohort }})
+    name: Inspect transport waits (cohort ${{ matrix.cohort }})
     strategy:
       fail-fast: false
       matrix:
@@ -180,6 +136,38 @@ jobs:
                   print("PR17_ATOMIC " + json.dumps(record, sort_keys=True), flush=True)
           except Exception as error:
               print('PR17_ATOMIC_ERROR ' + repr(error), flush=True)
+          try:
+              import gdb, json, struct
+              gdb.execute("set may-call-functions off")
+              gdb.execute("set language c")
+              assert int(gdb.parse_and_eval("sizeof(void *)")) == 8, "expected 64-bit target"
+              assert "little endian" in gdb.execute("show endian", to_string=True), "unexpected byte order"
+              def read_tb_symbol(name, size):
+                  address = int(gdb.parse_and_eval("(void *)&" + name))
+                  return bytes(gdb.selected_inferior().read_memory(address, size))
+              tb_meta = struct.unpack("<4Q", read_tb_symbol("PR17_TB_DIAG_META", 32))
+              assert tb_meta == (0x50525442, 1, 1024, 128), ("unsupported TB diagnostic layout", tb_meta)
+              tb_dropped, = struct.unpack("<Q", read_tb_symbol("PR17_TB_DIAG_DROPPED", 8))
+              tb_data = read_tb_symbol("PR17_TB_DIAG_SLOTS", tb_meta[2] * tb_meta[3])
+              tb_names = ("id", "kind", "phase", "connection", "serial", "member", "runtime", "task", "flavor", "aux", "pending_mutex", "transport", "reply_serial", "message_kind", "reserved0", "reserved1")
+              tb_rows, tb_claiming = [], []
+              for index in range(tb_meta[2]):
+                  words = struct.unpack_from("<16Q", tb_data, index * tb_meta[3])
+                  if words[0] == 0:
+                      continue
+                  if words[0] == 0xffffffffffffffff:
+                      tb_claiming.append(index)
+                      continue
+                  record = dict(zip(tb_names, words))
+                  record["slot"] = index
+                  for name in ("connection", "member", "runtime", "task", "pending_mutex", "transport"):
+                      record[name] = hex(record[name])
+                  tb_rows.append(record)
+              print("PR17_TB_SUMMARY " + json.dumps({"layout": tb_meta, "dropped": tb_dropped, "active": len(tb_rows), "claiming": len(tb_claiming), "claiming_slots": tb_claiming}, sort_keys=True), flush=True)
+              for record in sorted(tb_rows, key=lambda row: row["id"]):
+                  print("PR17_TB_SLOT " + json.dumps(record, sort_keys=True), flush=True)
+          except Exception as error:
+              print("PR17_TB_ERROR " + repr(error), flush=True)
           """
           
           def start_gdb(pid, prefix, *, atomic=False):
@@ -245,7 +233,21 @@ jobs:
                   if "PR17_ATOMIC_ERROR " in data or len(headers) != 1 or headers[0]["dropped"] != 0 or headers[0]["active"] != 1 or records != [expected]:
                       sys.stderr.write(data)
                       raise RuntimeError("atomic decoder probe failed")
-                  print("PR17_ATTACH_PROBE success; exact atomic record decoded and child remained alive after detach", flush=True)
+                  tb_headers = [json.loads(line.split(" ", 1)[1]) for line in data.splitlines() if line.startswith("PR17_TB_SUMMARY ")]
+                  tb_records = [json.loads(line.split(" ", 1)[1]) for line in data.splitlines() if line.startswith("PR17_TB_SLOT ")]
+                  tb_expected = {
+                      "id": 321, "kind": 98, "phase": 2,
+                      "connection": "0x1111222233334444", "serial": 66051,
+                      "member": "0xb126edadb160ab9", "runtime": "0xaaaabbbbccccdddd",
+                      "task": "0x123456789abcdef", "flavor": 2, "aux": 17,
+                      "pending_mutex": "0x2222333344445555", "transport": "0x3333444455556666",
+                      "reply_serial": 197637, "message_kind": 1, "reserved0": 19, "reserved1": 23, "slot": 3,
+                  }
+                  tb_header_expected = {"layout": [0x50525442, 1, 1024, 128], "dropped": 0, "active": 1, "claiming": 0, "claiming_slots": []}
+                  if "PR17_TB_ERROR " in data or tb_headers != [tb_header_expected] or tb_records != [tb_expected]:
+                      sys.stderr.write(data)
+                      raise RuntimeError("TinyBus atomic decoder probe failed")
+                  print("PR17_ATTACH_PROBE success; exact core and TinyBus records decoded and child remained alive after detach", flush=True)
               finally:
                   if debugger is not None:
                       stop_group(debugger)
@@ -404,10 +406,21 @@ jobs:
           uint64_t PR17_DIAG_META[4] = {0x50523137, 1, 1024, 64};
           _Alignas(64) uint64_t PR17_DIAG_SLOTS[1024][8];
           uint64_t PR17_DIAG_DROPPED = 0;
+          uint64_t PR17_TB_DIAG_META[4] = {0x50525442, 1, 1024, 128};
+          _Alignas(128) uint64_t PR17_TB_DIAG_SLOTS[1024][16];
+          uint64_t PR17_TB_DIAG_DROPPED = 0;
           
           int main(void) {
               uint64_t record[8] = {123, 99, 1, 456, 789, 0, 42, 0};
+              uint64_t tb_record[16] = {
+                  321, 98, 2, UINT64_C(0x1111222233334444), 66051,
+                  UINT64_C(0x0b126edadb160ab9), UINT64_C(0xaaaabbbbccccdddd),
+                  UINT64_C(0x0123456789abcdef), 2, 17,
+                  UINT64_C(0x2222333344445555), UINT64_C(0x3333444455556666),
+                  197637, 1, 19, 23
+              };
               for (int i = 0; i < 8; i++) PR17_DIAG_SLOTS[0][i] = record[i];
+              for (int i = 0; i < 16; i++) PR17_TB_DIAG_SLOTS[3][i] = tb_record[i];
               if (write(STDOUT_FILENO, "ready\n", 6) != 6) return 2;
               pause();
               return 0;
@@ -732,6 +745,152 @@ jobs:
           git diff --stat
           git diff --binary > ci-out/atomic-source.patch
           cp crates/openhuman-core/src/cron/wait_diagnostics.rs ci-out/atomic-helper-formatted.rs
+      - name: Observe the pinned TinyBus request and reply path
+        run: |
+          set -euo pipefail
+          cat > ci-out/tb-atomic-patches.json <<'JSON'
+          [["        let started = tokio::time::Instant::now();\n","        let started = tokio::time::Instant::now();\n        let pr17 = pr17_diag::Span::new(\n            101, 100, Arc::as_ptr(&self.inner) as usize as u64, 0, member.as_str(),\n        );\n        pr17.context(\n            &self.inner.pending as *const _ as usize as u64,\n            Arc::as_ptr(&self.inner.transport) as *const () as usize as u64,\n        );\n"],["        let serial = self.inner.serial.fetch_add(1, Ordering::Relaxed);\n        message.header.serial = serial;\n        let (tx, rx) = oneshot::channel();\n        self.inner.pending.lock().await.insert(\n            serial,\n            PendingReply {\n                sender: tx,\n                expected,\n                bus_control,\n                confidential: message.header.confidential,\n                unverified_direct: self.unique_name().is_none(),\n            },\n        );\n\n        if let Err(e) = self.enqueue(message).await {\n            self.inner.pending.lock().await.remove(&serial);\n            return Err(e);\n        }\n\n        match tokio::time::timeout(timeout.saturating_sub(started.elapsed()), rx).await {\n            Ok(Ok(reply)) => match reply.header.kind {\n                MessageKind::Error => Err(reply.into_error()),\n                _ => Ok(reply),\n            },\n            // The dispatch loop dropped the sender: the transport is gone.\n            Ok(Err(_)) => Err(Error::ConnectionClosed),\n            Err(_) => {\n                // Reclaim the slot, or a timed-out call leaks one entry per\n                // occurrence for the life of the connection.\n                self.inner.pending.lock().await.remove(&serial);\n                Err(Error::Timeout {\n                    member,\n                    timeout_ms: timeout.as_millis() as u64,\n                })\n            }\n        }","        pr17.phase(105);\n        let serial = self.inner.serial.fetch_add(1, Ordering::Relaxed);\n        pr17.serial(serial);\n        message.header.serial = serial;\n        let (tx, rx) = oneshot::channel();\n        pr17.phase(110);\n        {\n            let mut pending = self.inner.pending.lock().await;\n            pr17.phase(111);\n            pr17.aux(pending.len());\n            pending.insert(\n                serial,\n                PendingReply {\n                    sender: tx,\n                    expected,\n                    bus_control,\n                    confidential: message.header.confidential,\n                    unverified_direct: self.unique_name().is_none(),\n                },\n            );\n            pr17.phase(112);\n        }\n        pr17.phase(113);\n        pr17.aux(self.inner.outbox.capacity());\n        pr17.phase(120);\n        if let Err(e) = self.enqueue(message).await {\n            pr17.phase(121);\n            {\n                let mut pending = self.inner.pending.lock().await;\n                pr17.phase(122);\n                pr17.aux(pending.len());\n                pending.remove(&serial);\n                pr17.phase(123);\n            }\n            pr17.phase(124);\n            return Err(e);\n        }\n        pr17.aux(self.inner.outbox.capacity());\n        pr17.phase(130);\n        match tokio::time::timeout(timeout.saturating_sub(started.elapsed()), rx).await {\n            Ok(Ok(reply)) => {\n                pr17.phase(131);\n                match reply.header.kind {\n                    MessageKind::Error => Err(reply.into_error()),\n                    _ => Ok(reply),\n                }\n            }\n            // The dispatch loop dropped the sender: the transport is gone.\n            Ok(Err(_)) => {\n                pr17.phase(132);\n                Err(Error::ConnectionClosed)\n            }\n            Err(_) => {\n                pr17.phase(140);\n                // Keep removed reply senders dropping under the original lock.\n                pr17.phase(141);\n                {\n                    let mut pending = self.inner.pending.lock().await;\n                    pr17.phase(142);\n                    pr17.aux(pending.len());\n                    pending.remove(&serial);\n                    pr17.phase(143);\n                }\n                pr17.phase(144);\n                Err(Error::Timeout {\n                    member,\n                    timeout_ms: timeout.as_millis() as u64,\n                })\n            }\n        }"],["    async fn enqueue(&self, message: Message) -> Result<()> {\n        self.inner\n            .outbox\n            .send(message)\n            .await\n            .map_err(|_| Error::ConnectionClosed)\n    }","    async fn enqueue(&self, message: Message) -> Result<()> {\n        let pr17 = pr17_diag::Span::new(\n            105, 500, Arc::as_ptr(&self.inner) as usize as u64,\n            message.header.serial,\n            message.header.member.as_ref().map_or(\"\", |name| name.as_str()),\n        );\n        pr17.aux(self.inner.outbox.capacity());\n        let result = self.inner\n            .outbox\n            .send(message)\n            .await\n            .map_err(|_| Error::ConnectionClosed);\n        pr17.phase(501);\n        pr17.aux(self.inner.outbox.capacity());\n        result\n    }"],["async fn writer_loop(\n    transport: Arc<dyn Transport>,\n    mut outbound: mpsc::Receiver<Message>,\n    inner: std::sync::Weak<Inner>,\n) {\n    while let Some(message) = outbound.recv().await {\n        let call =\n            (message.header.kind == MessageKind::MethodCall).then_some(message.header.serial);\n        match transport.send(message).await {\n            Ok(()) => {}\n            Err(refusal @ Error::Protocol(_)) => {\n                tracing::warn!(error = %refusal, \"transport refused a message; dropping it\");\n                if let (Some(serial), Some(inner)) = (call, inner.upgrade()) {\n                    refuse_call(&inner, serial, &refusal).await;\n                }\n            }\n            Err(e) => {\n                tracing::debug!(error = %e, \"connection write failed; closing\");\n                break;\n            }\n        }\n    }\n}\n","async fn writer_loop(\n    transport: Arc<dyn Transport>,\n    mut outbound: mpsc::Receiver<Message>,\n    inner: std::sync::Weak<Inner>,\n) {\n    let pr17 = pr17_diag::Span::new(102, 300, inner.as_ptr() as usize as u64, 0, \"\");\n    pr17.context(0, Arc::as_ptr(&transport) as *const () as usize as u64);\n    pr17.aux(outbound.len());\n    while let Some(message) = outbound.recv().await {\n        pr17.message(&message.header);\n        pr17.aux(outbound.len());\n        pr17.phase(301);\n        let call =\n            (message.header.kind == MessageKind::MethodCall).then_some(message.header.serial);\n        match transport.send(message).await {\n            Ok(()) => {}\n            Err(refusal @ Error::Protocol(_)) => {\n                pr17.phase(302);\n                tracing::warn!(error = %refusal, \"transport refused a message; dropping it\");\n                if let (Some(serial), Some(inner)) = (call, inner.upgrade()) {\n                    refuse_call(&inner, serial, &refusal).await;\n                }\n            }\n            Err(e) => {\n                pr17.phase(303);\n                tracing::debug!(error = %e, \"connection write failed; closing\");\n                break;\n            }\n        }\n        pr17.aux(outbound.len());\n        pr17.phase(300);\n    }\n}\n"],["async fn refuse_call(inner: &Inner, serial: u64, refusal: &Error) {\n    let Some(pending) = inner.pending.lock().await.remove(&serial) else {\n        return;\n    };","async fn refuse_call(inner: &Inner, serial: u64, refusal: &Error) {\n    let pr17 = pr17_diag::Span::new(104, 400, inner as *const _ as usize as u64, serial, \"\");\n    pr17.context(\n        &inner.pending as *const _ as usize as u64,\n        Arc::as_ptr(&inner.transport) as *const () as usize as u64,\n    );\n    let pending = {\n        let mut map = inner.pending.lock().await;\n        pr17.phase(401);\n        pr17.aux(map.len());\n        let pending = map.remove(&serial);\n        pr17.phase(402);\n        pending\n    };\n    pr17.phase(403);\n    let Some(pending) = pending else {\n        return;\n    };"],["    let _ = pending.sender.send(Message::error_reply(&call, refusal));","    pr17.phase(404);\n    let _ = pending.sender.send(Message::error_reply(&call, refusal));\n    pr17.phase(405);"],["async fn dispatch_loop(inner: Arc<Inner>) {\n    loop {\n        let delivery = if let Some(memory) = crate::transport::downcast::<\n            crate::transport::memory::MemoryTransport,\n        >(inner.transport.as_ref())\n        {\n            memory.recv_with_provenance().await\n        } else {\n            inner.transport.recv().await.map(|message| {\n                message.map(|message| {\n                    // The exclusive reader samples the proof immediately after\n                    // recv, before any await or next recv can replace its slot.\n                    let brokered = inner\n                        .native_provenance\n                        .as_ref()\n                        .map_or(inner.brokered_native, |proof| proof.load(Ordering::Acquire));\n                    (message, brokered)\n                })\n            })\n        };\n        let (message, brokered) = match delivery {\n            Ok(Some(delivery)) => delivery,\n            Ok(None) => break,\n            Err(e) => {\n                tracing::debug!(error = %e, \"connection read failed; closing\");\n                break;\n            }\n        };\n\n        match message.header.kind {\n            MessageKind::MethodReturn | MessageKind::Error => {\n                let Some(serial) = message.header.reply_serial else {\n                    tracing::debug!(\"dropped a reply with no reply_serial\");\n                    continue;\n                };\n                // An unmatched reply is a timed-out call arriving late. Normal,\n                // and nothing to do but drop it.\n                let mut pending = inner.pending.lock().await;\n                if pending\n                    .get(&serial)\n                    .is_some_and(|waiter| waiter.accepts(&message, brokered))\n                    && let Some(waiter) = pending.remove(&serial)\n                {\n                    let _ = waiter.sender.send(message);\n                }\n            }\n            MessageKind::Signal | MessageKind::DirectedSignal => {\n                // `send` fails only when nobody is subscribed, which is the\n                // common case for a service that emits but never listens.\n                let _ = inner\n                    .signal_deliveries\n                    .send(crate::SignalDelivery::received(message.clone(), brokered));\n                let _ = inner.signals.send(message);\n            }\n            MessageKind::MethodCall => {\n                // Spawned, so a long-running method does not block replies to\n                // calls this connection has outstanding.\n                tokio::spawn(handle_call(inner.clone(), message, brokered));\n            }\n        }\n    }\n\n    // Wake everyone still waiting rather than leaving them to time out one by\n    // one: the link is gone and no reply is ever coming.\n    inner.pending.lock().await.clear();\n}\n","async fn dispatch_loop(inner: Arc<Inner>) {\n    let pr17 = pr17_diag::Span::new(103, 200, Arc::as_ptr(&inner) as usize as u64, 0, \"\");\n    pr17.context(\n        &inner.pending as *const _ as usize as u64,\n        Arc::as_ptr(&inner.transport) as *const () as usize as u64,\n    );\n    loop {\n        pr17.aux(inner.outbox.capacity());\n        pr17.phase(200);\n        let delivery = if let Some(memory) = crate::transport::downcast::<\n            crate::transport::memory::MemoryTransport,\n        >(inner.transport.as_ref())\n        {\n            memory.recv_with_provenance().await\n        } else {\n            inner.transport.recv().await.map(|message| {\n                message.map(|message| {\n                    let brokered = inner\n                        .native_provenance\n                        .as_ref()\n                        .map_or(inner.brokered_native, |proof| proof.load(Ordering::Acquire));\n                    (message, brokered)\n                })\n            })\n        };\n        let (message, brokered) = match delivery {\n            Ok(Some(delivery)) => delivery,\n            Ok(None) => break,\n            Err(e) => {\n                tracing::debug!(error = %e, \"connection read failed; closing\");\n                break;\n            }\n        };\n        pr17.message(&message.header);\n        pr17.phase(201);\n        match message.header.kind {\n            MessageKind::MethodReturn | MessageKind::Error => {\n                let Some(serial) = message.header.reply_serial else {\n                    tracing::debug!(\"dropped a reply with no reply_serial\");\n                    continue;\n                };\n                pr17.phase(210);\n                let mut pending = inner.pending.lock().await;\n                pr17.phase(211);\n                pr17.aux(pending.len());\n                if pending\n                    .get(&serial)\n                    .is_some_and(|waiter| waiter.accepts(&message, brokered))\n                    && let Some(waiter) = pending.remove(&serial)\n                {\n                    pr17.phase(212);\n                    let _ = waiter.sender.send(message);\n                    pr17.phase(213);\n                }\n                pr17.phase(214);\n            }\n            MessageKind::Signal | MessageKind::DirectedSignal => {\n                pr17.phase(220);\n                let _ = inner\n                    .signal_deliveries\n                    .send(crate::SignalDelivery::received(message.clone(), brokered));\n                let _ = inner.signals.send(message);\n            }\n            MessageKind::MethodCall => {\n                pr17.phase(230);\n                tokio::spawn(handle_call(inner.clone(), message, brokered));\n            }\n        }\n    }\n    pr17.phase(240);\n    {\n        let mut pending = inner.pending.lock().await;\n        pr17.phase(241);\n        pr17.aux(pending.len());\n        pending.clear();\n        pr17.phase(242);\n    }\n    pr17.phase(243);\n}\n"]]
+          JSON
+          cat > ci-out/tb-atomic-helper.rs <<'RS'
+          
+          mod pr17_diag {
+              use std::hash::{Hash, Hasher};
+              use std::sync::atomic::{AtomicU64, Ordering};
+              const COUNT: usize = 1024;
+              const CLAIMED: u64 = u64::MAX;
+              #[repr(C, align(128))]
+              struct Slot([AtomicU64; 16]);
+              impl Slot {
+                  const fn new() -> Self {
+                      Self([const { AtomicU64::new(0) }; 16])
+                  }
+              }
+              const _: [(); 128] = [(); std::mem::size_of::<Slot>()];
+              #[used]
+              #[unsafe(no_mangle)]
+              static PR17_TB_DIAG_META: [u64; 4] = [0x50525442, 1, COUNT as u64, 128];
+              #[used]
+              #[unsafe(no_mangle)]
+              static PR17_TB_DIAG_SLOTS: [Slot; COUNT] = [const { Slot::new() }; COUNT];
+              #[used]
+              #[unsafe(no_mangle)]
+              static PR17_TB_DIAG_DROPPED: AtomicU64 = AtomicU64::new(0);
+              static NEXT: AtomicU64 = AtomicU64::new(1);
+              struct Fingerprint(u64);
+              impl Hasher for Fingerprint {
+                  fn finish(&self) -> u64 { self.0 }
+                  fn write(&mut self, bytes: &[u8]) {
+                      for &byte in bytes {
+                          self.0 = (self.0 ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+                      }
+                  }
+              }
+              fn fingerprint(value: &impl Hash) -> u64 {
+                  let mut hash = Fingerprint(0xcbf29ce484222325);
+                  value.hash(&mut hash);
+                  hash.finish()
+              }
+              pub(super) fn member(name: &str) -> u64 {
+                  let mut hash = Fingerprint(0xcbf29ce484222325);
+                  hash.write(name.as_bytes());
+                  hash.finish()
+              }
+              pub(super) struct Span { index: usize }
+              impl Span {
+                  pub(super) fn new(kind: u64, phase: u64, connection: u64, serial: u64, name: &str) -> Self {
+                      std::hint::black_box(&PR17_TB_DIAG_META);
+                      let (runtime, flavor) = tokio::runtime::Handle::try_current().map_or((0, 0), |handle| {
+                          let flavor = match handle.runtime_flavor() {
+                              tokio::runtime::RuntimeFlavor::CurrentThread => 1,
+                              tokio::runtime::RuntimeFlavor::MultiThread => 2,
+                              _ => 3,
+                          };
+                          (fingerprint(&handle.id()), flavor)
+                      });
+                      let task = tokio::task::try_id().as_ref().map_or(0, fingerprint);
+                      let id = NEXT.fetch_add(1, Ordering::Relaxed);
+                      if id != 0 && id != CLAIMED {
+                          for offset in 0..COUNT {
+                              let index = (id as usize + offset) % COUNT;
+                              let words = &PR17_TB_DIAG_SLOTS[index].0;
+                              if words[0].compare_exchange(0, CLAIMED, Ordering::Acquire, Ordering::Relaxed).is_ok() {
+                                  for (word, value) in [
+                                      kind, phase, connection, serial, member(name), runtime, task,
+                                      flavor, 0, 0, 0, 0, 0, 0, 0,
+                                  ].into_iter().enumerate() {
+                                      words[word + 1].store(value, Ordering::Relaxed);
+                                  }
+                                  words[0].store(id, Ordering::Release);
+                                  return Self { index };
+                              }
+                          }
+                      }
+                      PR17_TB_DIAG_DROPPED.fetch_add(1, Ordering::Relaxed);
+                      Self { index: COUNT }
+                  }
+                  fn set(&self, word: usize, value: u64) {
+                      if self.index < COUNT {
+                          PR17_TB_DIAG_SLOTS[self.index].0[word].store(value, Ordering::Release);
+                      }
+                  }
+                  pub(super) fn phase(&self, value: u64) { self.set(2, value); }
+                  pub(super) fn serial(&self, value: u64) { self.set(4, value); }
+                  pub(super) fn name(&self, value: Option<&str>) {
+                      self.set(5, value.map_or(0, member));
+                  }
+                  pub(super) fn aux(&self, value: usize) { self.set(9, value as u64); }
+                  pub(super) fn message(&self, header: &super::Header) {
+                      self.serial(header.serial);
+                      self.name(header.member.as_ref().map(|name| name.as_str()));
+                      self.set(12, header.reply_serial.unwrap_or(0));
+                      self.set(13, match &header.kind {
+                          super::MessageKind::MethodCall => 1,
+                          super::MessageKind::MethodReturn => 2,
+                          super::MessageKind::Error => 3,
+                          super::MessageKind::Signal => 4,
+                          super::MessageKind::DirectedSignal => 5,
+                      });
+                  }
+                  pub(super) fn context(&self, mutex: u64, transport: u64) {
+                      self.set(10, mutex);
+                      self.set(11, transport);
+                  }
+              }
+              impl Drop for Span {
+                  fn drop(&mut self) { self.set(0, 0); }
+              }
+          }
+          RS
+          cat > ci-out/tb-atomic-apply.py <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          
+          root = Path("vendor/tinybus")
+          expected = "aa36051e2d384b09a1fb7871758fcf22c2a7e709"
+          assert subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip() == expected
+          subprocess.run(["git", "-C", str(root), "diff", "--exit-code"], check=True)
+          path = root / "crates/tinybus/src/connection.rs"
+          source = path.read_text()
+          assert len(source.encode()) == 67300, len(source.encode())
+          patches = json.loads(Path("ci-out/tb-atomic-patches.json").read_text())
+          assert len(patches) == 7
+          for old, new in patches:
+              assert source.count(old) == 1, (old[:100], source.count(old))
+              source = source.replace(old, new, 1)
+          helper = Path("ci-out/tb-atomic-helper.rs").read_text()
+          assert "black_box(&PR17_TB_DIAG_META)" in helper
+          source += helper
+          assert source.count("pending.lock().await") == 6
+          path.write_text(source)
+          print("PR17_TB_ATOMIC_PATCH applied seven exact replacements plus one fixed-slot helper at pinned TinyBus aa36051; six pending acquisitions preserved.")
+          PY
+          python3 -m py_compile ci-out/tb-atomic-apply.py
+          python3 ci-out/tb-atomic-apply.py
+          rustfmt --edition 2024 --config skip_children=true vendor/tinybus/crates/tinybus/src/connection.rs
+          git -C vendor/tinybus diff --check
+          git -C vendor/tinybus diff -- crates/tinybus/src/connection.rs > ci-out/tb-atomic-source.diff
+          cp vendor/tinybus/crates/tinybus/src/connection.rs ci-out/tb-connection-formatted.rs
       - name: Compile the storage target with atomic observers
         run: |
           set -euo pipefail
@@ -747,13 +906,18 @@ jobs:
           test -x "${binaries[0]}"
           printf '%s\n' "${binaries[0]}" > ci-out/storage-executable.txt
           gdb --batch --nx --quiet "${binaries[0]}" \
+            -ex 'set language c' \
             -ex 'info address PR17_DIAG_META' \
             -ex 'info address PR17_DIAG_SLOTS' \
             -ex 'info address PR17_DIAG_DROPPED' \
+            -ex 'info address PR17_TB_DIAG_META' \
+            -ex 'info address PR17_TB_DIAG_SLOTS' \
+            -ex 'info address PR17_TB_DIAG_DROPPED' \
             2>&1 | tee ci-out/atomic-symbols.log
           ! rg -q 'No symbol|not defined' ci-out/atomic-symbols.log
-          for symbol in PR17_DIAG_META PR17_DIAG_SLOTS PR17_DIAG_DROPPED; do
-            rg -q "$symbol" ci-out/atomic-symbols.log
+          for symbol in PR17_DIAG_META PR17_DIAG_SLOTS PR17_DIAG_DROPPED \
+                        PR17_TB_DIAG_META PR17_TB_DIAG_SLOTS PR17_TB_DIAG_DROPPED; do
+            rg -Fq "Symbol \"$symbol\" is at " ci-out/atomic-symbols.log
           done
       - name: Run the diagnostic suite and capture after inactivity
         run: |
