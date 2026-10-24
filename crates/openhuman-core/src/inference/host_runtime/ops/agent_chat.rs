@@ -5,6 +5,10 @@ use crate::config::Config;
 use crate::core::Outcome;
 use crate::inference::provider as providers;
 
+#[path = "agent_chat_builder.rs"]
+mod builder;
+use builder::build_turn_agent;
+
 use super::turn_guards::{
     effective_agent_chat_origin, enforce_user_prompt_or_reject, grant_turn_cwd,
     normalize_model_override, resolve_turn_cwd,
@@ -267,47 +271,6 @@ fn definition_for_turn(
     }
 }
 
-fn build_turn_agent(
-    ctx: &crate::core::runtime::DispatchCtx,
-    config: &Config,
-    target: &AgentChatTarget<'_>,
-    session_id: Option<&str>,
-    temperature: Option<f64>,
-) -> Result<OpenHumanSessionHost, String> {
-    match target {
-        AgentChatTarget::Orchestrator => OpenHumanSessionHost::from_config(ctx, config),
-        AgentChatTarget::AgentId(id) => {
-            log::debug!("[inference] agent_chat building agent_id={id}");
-            OpenHumanSessionHost::from_config_for_agent(ctx, config, id)
-        }
-        AgentChatTarget::Definition {
-            definition,
-            host,
-            host_only: true,
-            ..
-        } => {
-            let definition = definition_for_turn(definition, temperature);
-            OpenHumanSessionHost::from_config_host_only(ctx, config, &definition, *host, session_id)
-        }
-        AgentChatTarget::Definition {
-            definition, host, ..
-        } => {
-            let definition = definition_for_turn(definition, temperature);
-            match host {
-                Some(host) => OpenHumanSessionHost::from_config_with_host_tools(
-                    ctx,
-                    config,
-                    &definition,
-                    host,
-                    session_id,
-                ),
-                None => OpenHumanSessionHost::from_config_with_definition(ctx, config, &definition),
-            }
-        }
-    }
-    .map_err(|e| e.to_string())
-}
-
 /// [`agent_chat`] on an explicit [`AgentChatTarget`].
 ///
 /// Two differences from the historical `agent_chat` beyond the target:
@@ -450,7 +413,7 @@ pub async fn agent_chat_reply_for(
                 root.display()
             );
             let mut agent =
-                build_turn_agent(&turn_ctx, &scoped, &target, turn_session_id, temperature)?;
+                build_turn_agent(&turn_ctx, &scoped, &target, turn_session_id, temperature).await?;
             // Also thread it as the turn's workspace descriptor so acting tools
             // that read `ToolExecutionContext::workspace` (shell) resolve their
             // default cwd here, and so spawned sub-agents inherit the same root.
@@ -459,7 +422,7 @@ pub async fn agent_chat_reply_for(
         }
         None => {
             let mut agent =
-                build_turn_agent(&turn_ctx, config, &target, turn_session_id, temperature)?;
+                build_turn_agent(&turn_ctx, config, &target, turn_session_id, temperature).await?;
             // An ordinary turn still acts from the agent's configured action
             // directory. Make the descriptor explicit just as for a cwd
             // override: shell tools and tool hooks must report the same root,
