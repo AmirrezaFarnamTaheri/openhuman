@@ -1,0 +1,76 @@
+---
+name: PR17 final-head storage archive
+
+on:
+  push:
+    branches: [codex/pr17-storage-archive-647-20261024]
+
+permissions:
+  actions: read
+
+concurrency:
+  group: pr17-storage-archive-647
+  cancel-in-progress: true
+
+jobs:
+  inspect-artifact:
+    name: Inspect final647 storage lane output
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download and inspect the exact archived storage log
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method GET repos/AmirrezaFarnamTaheri/openhuman/actions/artifacts/12563972264/zip > "$RUNNER_TEMP/pr17-storage-647.zip"
+          python3 - "$RUNNER_TEMP/pr17-storage-647.zip" <<'PY'
+          import hashlib
+          import io
+          import pathlib
+          import re
+          import sys
+          import zipfile
+
+          remaining = 30000
+
+          def emit(value):
+              global remaining
+              for line in str(value).splitlines():
+                  if remaining == 0:
+                      raise SystemExit(0)
+                  print(line)
+                  remaining -= 1
+
+          payload = pathlib.Path(sys.argv[1]).read_bytes()
+          digest = hashlib.sha256(payload).hexdigest()
+          expected = "f90d82f846f7b37d1753d0abcaf30f2e53c60b4ac00446e569d88ee466e28078"
+          emit(f"Artifact 12563972264: bytes={len(payload)} sha256={digest}")
+          if digest != expected:
+              raise SystemExit("Artifact checksum differs from the GitHub artifact metadata")
+          with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+              for entry in archive.infolist():
+                  emit(f"ARCHIVE {entry.filename!r} bytes={entry.file_size}")
+              for entry in archive.infolist():
+                  if entry.is_dir() or not entry.filename.endswith((".log", ".json")):
+                      continue
+                  if entry.file_size > 2_000_000:
+                      raise SystemExit("Unexpectedly large diagnostic log")
+                  lines = archive.read(entry).decode("utf-8", errors="replace").splitlines()
+                  emit(f"FILE {entry.filename!r} lines={len(lines)}")
+                  if entry.filename.endswith(".json"):
+                      for line in lines:
+                          emit(line)
+                      continue
+                  emit("HEAD")
+                  for line in lines[:25]:
+                      emit(line)
+                  emit("RESULT AND LONG-RUNNING MARKERS")
+                  for line in lines:
+                      if re.search(r"test result:|has been running for over|\[ci\]\[lanes\].*(success|failed|failure)", line):
+                          emit(line)
+                  emit("TAIL")
+                  for line in lines[-240:]:
+                      emit(line)
+          PY
