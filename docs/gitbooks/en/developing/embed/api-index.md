@@ -199,6 +199,7 @@ The compiled capability report describes this build:
     "http-server": true,
     "inbound-queues": true,
     "inference": false,
+    "langfuse": false,
     "mcp": true,
     "media": true,
     "modules": true,
@@ -209,6 +210,7 @@ The compiled capability report describes this build:
     "storage-mongodb": false,
     "storage-s3": false,
     "storage-sqlite": true,
+    "structural-code": true,
     "tinymemes": true,
     "voice": false,
     "web3": false

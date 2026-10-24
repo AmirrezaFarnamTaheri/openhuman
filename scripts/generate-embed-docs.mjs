@@ -235,28 +235,6 @@ export function generateEmbedDocs({ root = ROOT, check = false, capabilities } =
   }
   const obsolete = markdownFiles(directory, new Set(['.md', '.json'])).filter(path => !desired.has(path));
   const stale = [...desired].filter(([path, source]) => !existsSync(path) || readFileSync(path, 'utf8') !== source);
-  // Temporary CI export for regenerating public docs while local execution is unavailable.
-  if (check && (stale.length || obsolete.length) && process.env.GITHUB_ACTIONS === 'true'
-    && process.env.GITHUB_WORKSPACE && resolve(root) === resolve(process.env.GITHUB_WORKSPACE)) {
-    const emit = record => {
-      const encoded = JSON.stringify(record).replace(/[\u007f-\uffff]/g, char => '\\u' + char.charCodeAt(0).toString(16).padStart(4, '0'));
-      writeFileSync(1, 'OPENHUMAN_EMBED_DOC_RECOVERY_V1 ' + encoded + '\n');
-    };
-    const publicPath = path => portablePath(relative(root, path));
-    const sourceSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
-    emit({ type: 'begin', source_sha: sourceSha, files: stale.map(([path]) => publicPath(path)), obsolete: obsolete.map(publicPath) });
-    for (const [path, source] of stale) {
-      const name = publicPath(path);
-      const chunks = Math.ceil(source.length / 2048);
-      const sha = execFileSync('git', ['hash-object', '--stdin'], { cwd: root, input: source, encoding: 'utf8' }).trim();
-      emit({ type: 'file', path: name, bytes: Buffer.byteLength(source, 'utf8'), chars: source.length, chunks, sha });
-      for (let index = 0; index < chunks; index += 1) {
-        emit({ type: 'chunk', path: name, index, text: source.slice(index * 2048, (index + 1) * 2048) });
-      }
-      emit({ type: 'file_end', path: name, sha });
-    }
-    emit({ type: 'end', files: stale.length, obsolete: obsolete.length });
-  }
   if (check && (stale.length || obsolete.length)) throw new Error(`Embed documentation drift: ${[...stale.map(([path]) => path), ...obsolete].map(path => relative(root, path)).join(', ')}. Run pnpm docs:generate.`);
   if (!check) for (const [path, source] of stale) {
     mkdirSync(dirname(path), { recursive: true });
