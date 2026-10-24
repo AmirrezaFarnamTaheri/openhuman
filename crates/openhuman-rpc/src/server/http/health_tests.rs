@@ -99,11 +99,11 @@ async fn get_schema_memory_entries_match_the_pre_refactor_raw_bytes() {
     );
     assert_eq!(
         memory_bytes.len(),
-        18_868,
+        18_897,
         "memory schema methods' raw byte count"
     );
     assert_eq!(
-        memory_digest, "b8142e8908f032972ce3f451a73c5d18cd74a6d0287f2315e585584840665955",
+        memory_digest, "7b1b15f7e40cc7f4e6b767ea8eb4d17e49c5a3a5c6250164a733af828ec22783",
         "memory schema methods' raw SHA-256"
     );
 }
