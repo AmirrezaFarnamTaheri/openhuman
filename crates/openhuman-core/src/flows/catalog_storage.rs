@@ -48,10 +48,11 @@ impl DocScope {
         }
     }
 
-    fn documents(&self) -> Result<Arc<dyn DocumentStore>, StorageError> {
+    async fn documents(&self) -> Result<Arc<dyn DocumentStore>, StorageError> {
         let backend = match &self.backend {
             Some(backend) => Arc::clone(backend),
-            None => crate::storage::local::backend_for(&self.workspace_dir)
+            None => crate::storage::local::backend_for_callback(&self.workspace_dir)
+                .await
                 .map_err(|error| StorageError::unavailable(error.to_string()))?,
         };
         let scoped = backend.for_scope(&self.scope)?;
@@ -394,6 +395,7 @@ impl CatalogStoragePort {
         let result = self
             .scope
             .documents()
+            .await
             .map(|documents| catalog::CatalogStorageCapabilities {
                 record_metadata: documents
                     .capabilities()
@@ -406,7 +408,7 @@ impl CatalogStoragePort {
         let result = async {
             allowed_collection(&request.spec.name)?;
             let spec: CollectionSpec = decoded(encoded(request.spec)?)?;
-            self.scope.documents()?.ensure_collection(&spec).await
+            self.scope.documents().await?.ensure_collection(&spec).await
         }
         .await;
         Ok(catalog_reply(result))
@@ -417,7 +419,7 @@ impl CatalogStoragePort {
             allowed_record(&request.collection, &request.id)?;
             let value: Option<Versioned<Value>> = self
                 .scope
-                .documents()?
+                .documents().await?
                 .get(&request.collection, &request.id)
                 .await?;
             value
@@ -444,7 +446,7 @@ impl CatalogStoragePort {
         let result = async {
             allowed_record(&request.collection, &request.id)?;
             let precondition: Precondition = decoded(encoded(request.precondition)?)?;
-            let documents = self.scope.documents()?;
+            let documents = self.scope.documents().await?;
             documents
                 .put_with(
                     &request.collection,
@@ -468,7 +470,7 @@ impl CatalogStoragePort {
             allowed_record(&request.collection, &request.id)?;
             let precondition: Precondition = decoded(encoded(request.precondition)?)?;
             self.scope
-                .documents()?
+                .documents().await?
                 .delete(&request.collection, &request.id, precondition)
                 .await
         }
@@ -483,7 +485,7 @@ impl CatalogStoragePort {
             query.filter = flow_namespace_filter(&request.collection, query.filter);
             let page: Page<Versioned<Value>> = self
                 .scope
-                .documents()?
+                .documents().await?
                 .query(&request.collection, &query)
                 .await?;
             Ok(catalog::CatalogDocumentPage {
@@ -518,7 +520,7 @@ impl CatalogStoragePort {
             let filter: Filter = decoded(encoded(request.filter)?)?;
             let filter = flow_namespace_filter(&request.collection, filter);
             self.scope
-                .documents()?
+                .documents().await?
                 .delete_where(&request.collection, &filter)
                 .await
         }
