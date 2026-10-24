@@ -332,7 +332,8 @@ impl OpenHumanSessionHost {
         // body and get wrapped by [`SystemPromptBuilder::for_subagent`].
         let prompt_builder = match target_def {
             Some(def) => match &def.system_prompt {
-                PromptSource::Dynamic(()) => SystemPromptBuilder::from_dynamic(def.prompt_fn()?),
+                PromptSource::Dynamic(()) => SystemPromptBuilder::from_dynamic(def.prompt_fn()?)
+                    .with_connected_mcp_snapshot(def.prompt_needs_connected_mcp()),
                 PromptSource::Verbatim(text) => SystemPromptBuilder::verbatim(text.clone()),
                 PromptSource::Inline(text) => SystemPromptBuilder::for_subagent(
                     text.clone(),

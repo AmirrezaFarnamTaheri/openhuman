@@ -1,6 +1,7 @@
 //! Host-specific model/tool/prompt preparation for one runtime turn.
 
 use super::*;
+use crate::agent_registry::agents::orchestrator as orchestrator_prompt;
 
 impl OpenHumanTurnPrelude {
     #[allow(clippy::type_complexity)]
@@ -75,14 +76,20 @@ impl OpenHumanTurnPrelude {
         };
         let flow_archetype_text = super::prompt::flow_archetype_text(self, cold).await?;
         let prefix = if cold {
-            // This read may use the storage driver's blocking pool. Await it
-            // before holding any prompt locks, so cold turns cannot occupy
-            // all blocking threads while waiting for one another.
+            // Identity reads and cold MCP initialization may need this
+            // executor's blocking pool or timers. Await both before taking
+            // prompt locks; synchronous bridges can starve their own driver.
             let identities =
                 crate::integrations::render_connected_identities_async(&self.dispatch_ctx()).await;
-            let tiered = self.build_system_prompt_tiered_with_identities(
+            let mcp_servers = if self.mcp_prompt_available() {
+                orchestrator_prompt::render_connected_mcp_servers_async(&self.dispatch_ctx()).await
+            } else {
+                String::new()
+            };
+            let tiered = self.build_system_prompt_tiered_with_connections(
                 flow_archetype_text.as_deref(),
                 identities,
+                mcp_servers,
             )?;
             Some(tinyagents_runtime::PrefixSnapshot::new(
                 tiered
@@ -100,16 +107,66 @@ impl OpenHumanTurnPrelude {
         })
     }
 
+    fn prompt_visible_tool_names(
+        &self,
+        surface: &OpenHumanTurnToolSurface,
+        withheld: &std::collections::HashSet<String>,
+    ) -> std::collections::HashSet<String> {
+        let mut visible = surface.tool_policy_session.visible_tool_names_for_prompt();
+        visible.retain(|name| !withheld.contains(name));
+        visible.retain(|name| !surface.permanent_tool_names.contains(name));
+        if self.thread_id.is_none() {
+            visible.retain(|name| {
+                !crate::agent::tinyagents::tool_registration::is_thread_goal_tool(name)
+            });
+        }
+        visible
+    }
+
+    fn mcp_prompt_available(&self) -> bool {
+        if !self.prompt_builder.needs_connected_mcp_snapshot() {
+            return false;
+        }
+        let surface = self
+            .tool_surface
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let withheld = self.rule_withheld_tools(&surface);
+        let mut visible = self.prompt_visible_tool_names(&surface, &withheld);
+        let mut discovery_tools = Vec::new();
+        crate::agent::prompts::swap_deferred_for_discovery_bridge(
+            &mut discovery_tools,
+            &mut visible,
+            &surface.deferred_tool_names,
+        );
+        orchestrator_prompt::mcp_tools_reachable(
+            &visible,
+            surface
+                .tools
+                .iter()
+                .chain(surface.synthesized_tools.iter())
+                .filter(|tool| !surface.permanent_tool_names.contains(tool.name()))
+                .filter(|tool| !withheld.contains(tool.name()))
+                .map(|tool| tool.name()),
+        )
+    }
+
     #[cfg(test)]
     pub(super) fn build_system_prompt_tiered(&self) -> Result<crate::agent::prompts::TieredPrompt> {
         let identities = crate::integrations::render_connected_identities(&self.dispatch_ctx());
-        self.build_system_prompt_tiered_with_identities(None, identities)
+        let mcp_servers = if self.mcp_prompt_available() {
+            orchestrator_prompt::render_connected_mcp_servers(&self.dispatch_ctx())
+        } else {
+            String::new()
+        };
+        self.build_system_prompt_tiered_with_connections(None, identities, mcp_servers)
     }
 
-    fn build_system_prompt_tiered_with_identities(
+    fn build_system_prompt_tiered_with_connections(
         &self,
         flow_archetype_text: Option<&str>,
         connected_identities_md: String,
+        connected_mcp_servers_md: String,
     ) -> Result<crate::agent::prompts::TieredPrompt> {
         use crate::agent::prompts::{PromptContext, PromptTool};
         let surface = self
@@ -143,14 +200,7 @@ impl OpenHumanTurnPrelude {
         let mut prompt_tools = PromptTool::from_tool_refs(tool_refs.iter().copied());
         prompt_tools.retain(|tool| !surface.permanent_tool_names.contains(tool.name.as_ref()));
         prompt_tools.retain(|tool| !withheld.contains(tool.name.as_ref()));
-        let mut visible_tool_names = surface.tool_policy_session.visible_tool_names_for_prompt();
-        visible_tool_names.retain(|name| !withheld.contains(name));
-        visible_tool_names.retain(|name| !surface.permanent_tool_names.contains(name));
-        if self.thread_id.is_none() {
-            visible_tool_names.retain(|name| {
-                !crate::agent::tinyagents::tool_registration::is_thread_goal_tool(name)
-            });
-        }
+        let mut visible_tool_names = self.prompt_visible_tool_names(&surface, &withheld);
         crate::agent::prompts::swap_deferred_for_discovery_bridge(
             &mut prompt_tools,
             &mut visible_tool_names,
@@ -177,6 +227,7 @@ impl OpenHumanTurnPrelude {
             tool_call_format: self.tool_dispatcher.tool_call_format(),
             connected_integrations: &mutable.connected_integrations,
             connected_identities_md,
+            connected_mcp_servers_md,
             user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
             personality_roster: vec![],
             agents_md_global: agents_md.global,

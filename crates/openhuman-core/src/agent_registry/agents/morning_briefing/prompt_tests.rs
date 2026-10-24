@@ -20,6 +20,7 @@ fn ctx_with_identity(identity: Option<UserIdentity>) -> PromptContext<'static> {
         tool_call_format: ToolCallFormat::PFormat,
         connected_integrations: &[],
         connected_identities_md: String::new(),
+        connected_mcp_servers_md: String::new(),
         user_identity: identity,
         personality_roster: vec![],
         agents_md_global: None,

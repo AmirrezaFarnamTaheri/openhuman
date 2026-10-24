@@ -16,6 +16,7 @@ fn prompt_context<'a>(workspace: &'a std::path::Path, agent_id: &'a str) -> Prom
         tool_call_format: tinytools_agent::dialect::ToolCallFormat::PFormat,
         connected_integrations: &[],
         connected_identities_md: String::new(),
+        connected_mcp_servers_md: String::new(),
         user_identity: None,
         personality_roster: vec![],
         agents_md_global: None,

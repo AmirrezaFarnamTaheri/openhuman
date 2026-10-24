@@ -21,7 +21,10 @@ use crate::agent::subagent_host::types::{
     SubagentMode, SubagentRunError, SubagentRunOptions, SubagentRunOutcome,
 };
 use crate::agent::tinyagents::budget::MAX_SPAWN_DEPTH;
-use crate::agent_registry::host_definition::{AgentDefinition, AgentDefinitionRegistry};
+use crate::agent_registry::agents::orchestrator as orchestrator_prompt;
+use crate::agent_registry::host_definition::{
+    AgentDefinition, AgentDefinitionExt, AgentDefinitionRegistry,
+};
 use crate::inference::provider::AGENT_TURN_MAX_OUTPUT_TOKENS;
 use tinyagents_definition::{
     validate_tier_transition, AgentTier, IterationPolicy, PromptSource,
@@ -639,6 +642,17 @@ async fn run_typed_mode(
         tinyagents_harness::context::AgentsMdContent::default()
     };
 
+    let prompt_dispatch = options.run_context.dispatch_ctx();
+    let connected_mcp_servers_md = if definition.prompt_needs_connected_mcp()
+        && orchestrator_prompt::mcp_tools_reachable(
+            &visible_tool_names,
+            prompt_tools.iter().map(|tool| tool.name.as_ref()),
+        )
+    {
+        orchestrator_prompt::render_connected_mcp_servers_async(&prompt_dispatch).await
+    } else {
+        String::new()
+    };
     let prompt_ctx = PromptContext {
         workspace_dir: &parent.workspace_dir,
         model_name: &model,
@@ -651,6 +665,7 @@ async fn run_typed_mode(
         tool_call_format: prompt_tool_call_format,
         connected_integrations: &connected_integrations_for_prompt,
         connected_identities_md: options.run_context.connected_identities_md().await,
+        connected_mcp_servers_md,
         user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
         personality_roster: vec![],
         agents_md_global: agents_md.global.clone(),

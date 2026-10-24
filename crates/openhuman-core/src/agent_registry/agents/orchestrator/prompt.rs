@@ -24,6 +24,21 @@ use tinytools_agent::dialect::ToolCallFormat;
 
 const ARCHETYPE: &str = include_str!("prompt.md");
 
+/// Whether the prompt's effective surface can reach a connected MCP tool.
+/// Shared by async preparation and rendering; the renderer checks again so
+/// a policy change while the snapshot loads cannot reveal a hidden route.
+pub(crate) fn mcp_tools_reachable<'a>(
+    visible_tool_names: &std::collections::HashSet<String>,
+    tool_names: impl IntoIterator<Item = &'a str>,
+) -> bool {
+    cfg!(feature = "mcp")
+        && (visible_tool_names.is_empty()
+            || visible_tool_names.contains("mcp_registry_tool_call")
+            || tool_names
+                .into_iter()
+                .any(|name| name == "mcp_registry_tool_call"))
+}
+
 pub fn build(ctx: &PromptContext<'_>) -> Result<String> {
     let mut out = String::with_capacity(8192);
     let push = |out: &mut String, part: &str| {
@@ -45,13 +60,10 @@ pub fn build(ctx: &PromptContext<'_>) -> Result<String> {
     // Registered is enough: the orchestrator defers the registry tools
     // (`deferred_tools` in its agent.toml), so they are reachable through
     // `tool_search` and by name without being in the visible set.
-    let mcp_available = cfg!(feature = "mcp")
-        && (ctx.visible_tool_names.is_empty()
-            || ctx.visible_tool_names.contains("mcp_registry_tool_call")
-            || ctx
-                .tools
-                .iter()
-                .any(|tool| tool.name.as_ref() == "mcp_registry_tool_call"));
+    let mcp_available = mcp_tools_reachable(
+        ctx.visible_tool_names,
+        ctx.tools.iter().map(|tool| tool.name.as_ref()),
+    );
 
     // `composio_connect` exists only while Composio is on (the registry builds no
     // Composio tools under `composio.mode = "disabled"`), so its routing row must
@@ -117,7 +129,7 @@ pub fn build(ctx: &PromptContext<'_>) -> Result<String> {
         &render_connected_integrations(ctx.connected_integrations),
     );
     if mcp_available {
-        push(&mut out, &render_connected_mcp_servers());
+        push(&mut out, ctx.connected_mcp_servers_md.as_str());
     }
 
     // NOTE: the grounding contract lives in `prompt.md` under the shared
@@ -435,22 +447,27 @@ fn render_installed_skills(
 /// *without the user naming it* (e.g. a connected "weather" server answering
 /// "what's the weather in Tokyo?").
 ///
-/// Reads the global connection map via a guarded `block_on` — the same
-/// pattern `tool_registry::ops::registry_entries` uses. `block_in_place`
-/// requires the multi-threaded runtime; single-threaded contexts (unit
-/// tests) fall back to an empty list and the section is omitted.
-fn render_connected_mcp_servers() -> String {
-    use crate::mcp::registry::connections;
-    let servers = match tokio::runtime::Handle::try_current() {
+/// Compatibility loader for synchronous prompt APIs. Async turn preparation
+/// must use `render_connected_mcp_servers_async` before taking prompt locks;
+/// this bridge can occupy the workers needed to drive a cold module's timer.
+pub(crate) fn render_connected_mcp_servers(ctx: &crate::core::runtime::DispatchCtx) -> String {
+    match tokio::runtime::Handle::try_current() {
         Ok(handle) if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
-            tokio::task::block_in_place(|| {
-                handle.block_on(connections::connected_overview(
-                    &crate::core::runtime::DispatchCtx::ambient(),
-                ))
-            })
+            tokio::task::block_in_place(|| handle.block_on(render_connected_mcp_servers_async(ctx)))
         }
-        _ => Vec::new(),
-    };
+        _ => String::new(),
+    }
+}
+
+/// Load the caller-scoped snapshot without blocking its executor. MCP
+/// initialization can poll transitions using a timer on this runtime.
+pub(crate) async fn render_connected_mcp_servers_async(
+    ctx: &crate::core::runtime::DispatchCtx,
+) -> String {
+    if !cfg!(feature = "mcp") {
+        return String::new();
+    }
+    let servers = crate::mcp::registry::connections::connected_overview(ctx).await;
     format_connected_mcp_block(&servers)
 }
 

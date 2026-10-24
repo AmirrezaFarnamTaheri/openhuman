@@ -6,11 +6,22 @@ mod common;
 use common::gated_provider::GatedProvider;
 use common::{offline_config, stub_backend};
 use openhuman_embed::{Access, AgentSpec, Provider, Runtime, Workspace};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 const AGENTS: usize = 100;
 const REPLY: &str = "cold-prompts-completed";
 const HANG_GUARD: Duration = Duration::from_secs(300);
+const STAGES: [&str; 7] = [
+    "starting fixtures",
+    "building runtime",
+    "creating agents",
+    "running cold turns",
+    "removing agents",
+    "dropping runtime",
+    "finishing fixtures",
+];
 
 /// A failed deadlock assertion must not wait forever while Tokio joins the
 /// blocking task that caused the failure.
@@ -43,9 +54,14 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
     // Poll the large agent futures on the configured worker stack. Keep the
     // deadline on the libtest thread: a timer in this executor cannot fire if
     // the sole worker and blocking thread are both starved by the regression.
-    let scenario = executor.spawn(async {
+    let stage = Arc::new(AtomicUsize::new(0));
+    let completed_turns = Arc::new(AtomicUsize::new(0));
+    let scenario_stage = Arc::clone(&stage);
+    let scenario_completed_turns = Arc::clone(&completed_turns);
+    let scenario = executor.spawn(async move {
         let backend = stub_backend().await;
         let provider = GatedProvider::start(REPLY).await;
+        scenario_stage.store(1, Ordering::SeqCst);
         let mut config = offline_config();
         config.modules.allow_download = false;
         let runtime = Runtime::builder()
@@ -55,6 +71,7 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
             .build()
             .await
             .expect("embedded runtime builds");
+        scenario_stage.store(2, Ordering::SeqCst);
 
         // Every agent has its own untouched prompt cache. A warm-up turn
         // would miss the identity read that used to block inside prompt
@@ -77,6 +94,7 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
             })
             .collect();
         provider.hold_until(AGENTS);
+        scenario_stage.store(3, Ordering::SeqCst);
         let mut turns = tokio::task::JoinSet::new();
         for agent in &agents {
             let agent = agent.clone();
@@ -87,14 +105,18 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
                 .expect("cold turn task")
                 .expect("cold turn completes");
             assert_eq!(outcome.reply, REPLY);
+            scenario_completed_turns.fetch_add(1, Ordering::SeqCst);
         }
         assert!(provider.is_open());
         assert_eq!(provider.chat_requests(), AGENTS);
         assert_eq!(provider.peak_in_flight(), AGENTS);
 
+        scenario_stage.store(4, Ordering::SeqCst);
         common::finish_runtime_agents(&runtime).await;
+        scenario_stage.store(5, Ordering::SeqCst);
         drop(agents);
         drop(runtime);
+        scenario_stage.store(6, Ordering::SeqCst);
     });
     let (finished, completion) = std::sync::mpsc::sync_channel(1);
     executor.spawn(async move {
@@ -104,8 +126,11 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
         .recv_timeout(HANG_GUARD)
         .unwrap_or_else(|error| {
             // The linked module's panic hook omits assertion payloads.
+            let phase = STAGES[stage.load(Ordering::SeqCst)];
+            let completed = completed_turns.load(Ordering::SeqCst);
             eprintln!(
-                "cold prompt regression did not complete: {error}; all {AGENTS} \
+                "cold prompt regression did not complete: {error}; \
+                 stage={phase}, completed_turns={completed}/{AGENTS}; all {AGENTS} \
                  cold turns must overlap with one worker and one blocking thread"
             );
             panic!("cold prompt preparation did not finish within {HANG_GUARD:?}");
