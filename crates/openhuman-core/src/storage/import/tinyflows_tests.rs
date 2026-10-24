@@ -384,13 +384,18 @@ fn an_invalid_flow_record_keeps_the_import_open_for_retry() {
             panic!("retry should remain incomplete without new writes: {first:?} / {retry:?}")
         }
     }
-    assert!(legacy_flow_import_pending(&backend, &config, &Scope::local()).unwrap());
-    assert!(!legacy_flow_import_pending(
-        &backend,
-        &config,
-        &crate::storage::scope_for_profile("another-profile"),
-    )
-    .unwrap());
+    let pending = |scope| {
+        let backend = Arc::clone(&backend);
+        let config = config.clone();
+        crate::storage::block_on_anyhow(async move {
+            legacy_flow_import_pending(&backend, &config, &scope).await
+        })
+        .unwrap()
+    };
+    assert!(pending(Scope::local()));
+    assert!(!pending(crate::storage::scope_for_profile(
+        "another-profile"
+    )));
     assert_eq!(tree(dir.path()), before, "the legacy files were modified");
 }
 
@@ -409,6 +414,13 @@ async fn fallback_backend_migrates_legacy_catalog_state_without_importing_files(
                 crate::storage::install(backend);
             }
         }
+    }
+
+    if crate::util::module_test_process::run(
+        module_path!(),
+        "fallback_backend_migrates_legacy_catalog_state_without_importing_files",
+    ) {
+        return;
     }
 
     let (dir, mut config) = workspace();
@@ -454,7 +466,13 @@ async fn fallback_backend_migrates_legacy_catalog_state_without_importing_files(
         Some(json!({"seen": true}))
     );
     assert!(
-        flow_import_marker_done(&backend, &config).is_ok_and(|done| !done),
+        !import_state::done(
+            &scoped,
+            MARKER_OWNER,
+            &marker_step(FLOWS_DOMAIN, &config.workspace_dir),
+        )
+        .await
+        .unwrap(),
         "the unbooted local fallback must not run the workspace-file importer"
     );
     assert_eq!(tree(&legacy_dir), legacy_files_before);

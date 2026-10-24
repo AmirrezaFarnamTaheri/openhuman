@@ -438,6 +438,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Letzte 7 Tage',
   'chat.sidebar.group.previous30Days': 'Letzte 30 Tage',
   'chat.sidebar.group.older': 'Älter',
+  'chat.sidebar.archived': 'Archiviert',
+  'chat.sidebar.restoreThread': 'Wiederherstellen',
   'chat.sidebar.pinThread': 'Unterhaltung anheften',
   'chat.sidebar.unpinThread': 'Unterhaltung lösen',
   'chat.sidebar.unread': 'Neue Antwort',
@@ -2464,6 +2466,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Eine Anbietergruppe unterstützt höchstens 128 API-Schlüssel.',
   'settings.ai.fleet.partialKeyVerified':
     'Einige API-Schlüssel wurden abgelehnt, aber ein anderer wurde bestätigt. Prüfen Sie den Schlüsselstatus des Anbieters.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman konnte diese Schlüsselgruppe anhand des Modellkatalogs des Anbieters nicht bestätigen. Die Schlüssel wurden gespeichert und werden beim Senden einer Modellanfrage geprüft.',
   'settings.ai.apiKeyFieldLabel': 'Bezeichnung des API-Schlüsselfelds',
   'settings.ai.apiKeyRequired': 'Bitte füge deinen API-Schlüssel ein, um fortzufahren.',
   'settings.ai.apiKeyStoredEncrypted': 'API-Schlüssel verschlüsselt gespeichert',
@@ -3910,6 +3914,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Jobs suchen...',
   'settings.developerMenu.eventLog.column.time': 'Uhrzeit',
   'settings.developerMenu.eventLog.column.event': 'Veranstaltung',
+  'settings.agentAccess.totalTimeout.label': 'Gesamtes Zeitlimit pro Durchlauf',
+  'settings.agentAccess.totalTimeout.desc':
+    'Standardmäßig gibt es kein gesamtes Zeitlimit pro Durchlauf. Legen Sie mit OPENHUMAN_AGENT_TURN_TIMEOUT_SECS ein Limit fest; 0 deaktiviert es. Schutzlimits für einzelne Aktionen und festgefahrene Aufrufe bleiben aktiv.',
   'settings.agentAccess.group.approvals': 'Genehmigungen',
   'settings.agentAccess.group.fileSystem': 'Dateisystem',
   'settings.agentAccess.group.limits': 'Grenzwerte',
@@ -5262,6 +5269,9 @@ const messages: TranslationMap = {
 
   'settings.layout.corners.round': 'Abgerundet',
   'settings.layout.contrast.subtle': 'Dezent',
+  'settings.agentAccess.hideShellWindows.label': 'Terminalfenster ausblenden',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Native Terminalfenster unter Windows für neue Shell-Sitzungen ausblenden.',
 };
 
 export default messages;

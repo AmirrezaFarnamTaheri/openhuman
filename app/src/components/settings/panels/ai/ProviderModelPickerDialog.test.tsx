@@ -1,12 +1,25 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { listProviderModels } from '../../../../services/api/aiSettingsApi';
-import { ProviderModelPickerDialog } from './ProviderModelPickerDialog';
+import type { CloudProvider } from './aiPanelTypes';
+import {
+  invalidateModelCatalogCache,
+  ProviderModelPickerDialog,
+} from './ProviderModelPickerDialog';
 
 vi.mock('../../../../services/api/aiSettingsApi', () => ({ listProviderModels: vi.fn() }));
 
 describe('ProviderModelPickerDialog', () => {
+  // The model catalog cache is module-level and app-wide on purpose: a
+  // provider's model list is stable, so it is not re-fetched every time the
+  // picker opens. That makes it shared state across test cases, and each case
+  // mocks `listProviderModels` with its own catalog — so the cache has to be
+  // cleared between them, or the first case's catalog answers for all of them.
+  beforeEach(() => {
+    invalidateModelCatalogCache();
+  });
+
   it('returns the provider-reported context window with a catalog selection', async () => {
     vi.mocked(listProviderModels).mockResolvedValue([
       { id: 'gpt-4o-mini', owned_by: 'openai', context_window: 128_000 },
@@ -263,5 +276,99 @@ describe('ProviderModelPickerDialog', () => {
     );
 
     expect(screen.queryByTestId('model-picker-managed-pane')).toBeNull();
+  });
+});
+
+describe('ProviderModelPickerDialog catalog invalidation', () => {
+  const provider: CloudProvider = {
+    id: 'private',
+    slug: 'private',
+    label: 'Private provider',
+    endpoint: 'https://private.example/v1',
+    authStyle: 'bearer',
+    maskedKey: '••••',
+  };
+  const renderPicker = () =>
+    render(
+      <ProviderModelPickerDialog
+        allowManaged={false}
+        cloudProviders={[provider]}
+        localModels={[]}
+        ollamaRunning={false}
+        claudeCodeEnabled={false}
+        initial={null}
+        onClose={() => {}}
+        onSelect={() => {}}
+      />
+    );
+
+  beforeEach(() => {
+    invalidateModelCatalogCache();
+    vi.mocked(listProviderModels).mockReset();
+  });
+
+  it('clears the selected private model after its credentials change', async () => {
+    vi.mocked(listProviderModels)
+      .mockResolvedValueOnce([{ id: 'private-old', owned_by: 'private' }])
+      .mockResolvedValueOnce([{ id: 'private-new', owned_by: 'private' }]);
+    renderPicker();
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Model' }), {
+      target: { value: 'private-old' },
+    });
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeEnabled();
+    act(() => invalidateModelCatalogCache('private'));
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeDisabled();
+    await screen.findByRole('option', { name: 'private-new' });
+    expect(screen.queryByRole('option', { name: 'private-old' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeDisabled();
+  });
+
+  it('preserves a manual model ID when an unrelated provider changes', async () => {
+    vi.mocked(listProviderModels).mockResolvedValue([]);
+    renderPicker();
+    const input = await screen.findByRole('textbox', { name: 'Model' });
+    fireEvent.change(input, { target: { value: 'deployment-42' } });
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeEnabled();
+    act(() => invalidateModelCatalogCache('unrelated'));
+    expect(input).toHaveValue('deployment-42');
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeEnabled();
+    expect(listProviderModels).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a local model selection when cloud catalogs are reset', () => {
+    render(
+      <ProviderModelPickerDialog
+        allowManaged={false}
+        cloudProviders={[]}
+        localModels={[{ id: 'local-model', sizeBytes: 1, family: 'local' }]}
+        ollamaRunning
+        claudeCodeEnabled={false}
+        initial={{ source: { kind: 'local' }, model: 'local-model' }}
+        onClose={() => {}}
+        onSelect={() => {}}
+      />
+    );
+    act(() => invalidateModelCatalogCache());
+    expect(screen.getByRole('textbox', { name: 'Model' })).toHaveValue('local-model');
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeEnabled();
+  });
+
+  it('refreshes an open picker and ignores an obsolete in-flight response', async () => {
+    let finishOld!: (models: { id: string; owned_by: string }[]) => void;
+    vi.mocked(listProviderModels)
+      .mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            finishOld = resolve;
+          })
+      )
+      .mockResolvedValueOnce([{ id: 'private-new', owned_by: 'private' }]);
+    renderPicker();
+    await waitFor(() => expect(listProviderModels).toHaveBeenCalledTimes(1));
+    act(() => invalidateModelCatalogCache('private'));
+    await screen.findByRole('option', { name: 'private-new' });
+    await act(async () => finishOld([{ id: 'private-old', owned_by: 'private' }]));
+    expect(screen.queryByRole('option', { name: 'private-old' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'private-new' })).toBeInTheDocument();
   });
 });

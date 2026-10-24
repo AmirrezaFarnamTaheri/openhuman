@@ -6,11 +6,55 @@
 use crate::agent::OpenHumanSessionHost;
 use crate::config::Config;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 
 use super::types::{SessionCacheFingerprint, SessionEntry};
 
 pub(super) fn autonomy_signature(config: &Config) -> String {
-    serde_json::to_string(&config.autonomy).unwrap_or_default()
+    // Runtime/provider settings are captured at construction. Include the whole
+    // persisted document so a newly added setting cannot silently miss cache
+    // invalidation; resolved paths are runtime-only and must be included too.
+    // This rebuilds at the next turn, without rewriting frozen prefix/history.
+    // The profile binding is immutable and shared across config clones. A new
+    // binding must rebuild the client even when its serialized settings match.
+    let profile_binding = config
+        .profile_providers
+        .as_ref()
+        .map(|binding| std::sync::Arc::as_ptr(binding) as usize);
+    let mut snapshot = match serde_json::to_value((
+        config,
+        &config.action_dir,
+        &config.workspace_dir,
+        &config.config_path,
+        &config.ephemeral_route,
+        &config.resolved_endpoints,
+        profile_binding,
+        crate::security::credentials::profiles::profile_revision(
+            &crate::security::credentials::state_dir_from_config(config),
+        )
+        .map(|revision| revision.to_string()),
+    )) {
+        Ok(value) => value,
+        Err(_) => {
+            // Never reuse a cached runtime on an unrepresentable config, and
+            // never put raw configuration (which may include keys) in logs.
+            log::warn!("[web-channel] runtime settings fingerprint unavailable");
+            return uuid::Uuid::new_v4().to_string();
+        }
+    };
+    snapshot.sort_all_objects();
+    let bytes = match serde_json::to_vec(&snapshot) {
+        Ok(bytes) => bytes,
+        Err(_) => return uuid::Uuid::new_v4().to_string(),
+    };
+    let mut digest = Sha256::new();
+    digest.update(b"openhuman-session-runtime-settings-v1:");
+    digest.update(bytes);
+    digest
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 /// Signature of `config.model_registry` for the session-cache fingerprint.
@@ -621,3 +665,7 @@ mod session_checkout_agents_tests;
 #[cfg(test)]
 #[path = "session_routing_tests.rs"]
 mod session_routing_tests;
+
+#[cfg(test)]
+#[path = "session_fingerprint_tests.rs"]
+mod session_fingerprint_tests;

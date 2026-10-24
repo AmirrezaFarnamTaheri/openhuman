@@ -310,9 +310,9 @@ async fn an_unlinked_wrap_up_does_not_silence_the_check() {
     );
 }
 
-/// Peer convergence: a one-round code edit or single child handoff still needs
-/// a final independent requirement/verification pass; five-round threshold
-/// alone misses short but consequential coding missions.
+/// Peer convergence: one-round code edits and child handoffs still need a final
+/// independent requirements/verification pass when the executor starts, even
+/// if execution later fails. Refused requests have no execution to verify.
 #[test]
 fn single_round_mutations_and_delegations_require_finish_verification() {
     for tool in [
@@ -346,31 +346,52 @@ fn single_round_mutations_and_delegations_require_finish_verification() {
 }
 
 #[test]
-fn requested_or_previewed_structural_writes_do_not_count_as_started_mutations() {
+fn structural_writes_require_finish_verification_but_previews_and_refusals_do_not() {
     for tool in ["ast_patch", "chunk_apply"] {
-        let mut activity = FinishActivity {
+        let activity = FinishActivity {
             tool_rounds: 1,
             tools_called: [tool.to_string()].into_iter().collect(),
+            tools_executed: [tool.to_string()].into_iter().collect(),
+            tools_with_side_effects: [tool.to_string()].into_iter().collect(),
             ..Default::default()
         };
         assert!(
-            !should_check(&activity),
-            "a refused request did not execute"
-        );
-        activity.tools_executed.insert(tool.into());
-        assert!(!should_check(&activity), "a preview did not start a write");
-        activity.tools_with_side_effects.insert(tool.into());
-        assert!(
             should_check(&activity),
-            "a started write attempt needs a check"
+            "a started structural write needs a check"
+        );
+        let mut preview = activity.clone();
+        preview.tools_with_side_effects.clear();
+        assert!(!should_check(&preview), "read-only preview of {tool}");
+        preview.tools_executed.clear();
+        assert!(!should_check(&preview), "refused request for {tool}");
+    }
+    for tool in ["file_read", "grep", "glob", "current_time"] {
+        assert!(
+            !should_check(&FinishActivity {
+                tool_rounds: 1,
+                tools_called: [tool.to_string()].into_iter().collect(),
+                ..Default::default()
+            }),
+            "read-only {tool} should not force an extra check"
         );
     }
-    for tool in ["file_write", "edit", TODO_TOOL, "delegate_coding"] {
-        assert!(!should_check(&FinishActivity {
-            tool_rounds: 1,
-            tools_called: [tool.to_string()].into_iter().collect(),
-            ..Default::default()
-        }));
+}
+
+#[test]
+fn requested_but_unexecuted_mutations_and_handoffs_do_not_trigger_verification() {
+    for tool in VERIFY_AFTER_TOOL
+        .iter()
+        .copied()
+        .chain([TODO_TOOL, "delegate_coding"])
+    {
+        assert!(
+            !should_check(&FinishActivity {
+                tool_rounds: 1,
+                tools_called: [tool.to_string()].into_iter().collect(),
+                ..Default::default()
+            }),
+            "refused {tool} request must not trigger an extra model call"
+        );
     }
 }
 

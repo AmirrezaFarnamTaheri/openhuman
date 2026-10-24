@@ -368,6 +368,8 @@ const en: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Previous 7 days',
   'chat.sidebar.group.previous30Days': 'Previous 30 days',
   'chat.sidebar.group.older': 'Older',
+  'chat.sidebar.archived': 'Archived',
+  'chat.sidebar.restoreThread': 'Restore',
   'chat.sidebar.pinThread': 'Pin conversation',
   'chat.sidebar.unpinThread': 'Unpin conversation',
   'chat.sidebar.unread': 'New reply',
@@ -2806,6 +2808,8 @@ const en: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'A provider group supports at most 128 API keys.',
   'settings.ai.fleet.partialKeyVerified':
     'Some API keys were rejected, but another key was verified. Review the provider key health.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman could not confirm this key group through the provider catalogue. The keys were saved and will be checked when a model request is sent.',
   'settings.ai.apiKeyFieldLabel': 'API Key',
   'settings.ai.apiKeyRequired': 'Please paste your API key to continue.',
   'settings.ai.apiKeyStoredEncrypted': 'Your API key is stored encrypted on this device.',
@@ -3380,6 +3384,9 @@ const en: TranslationMap = {
     'Enter a whole number of seconds within the allowed range',
   'settings.agentAccess.timeout.envOverride':
     'The OPENHUMAN_TOOL_TIMEOUT_SECS environment variable is overriding this setting, so changes here have no effect until it is unset.',
+  'settings.agentAccess.totalTimeout.label': 'Overall turn limit',
+  'settings.agentAccess.totalTimeout.desc':
+    'No total wall-clock limit is applied by default. Set OPENHUMAN_AGENT_TURN_TIMEOUT_SECS to choose one; 0 disables it. Individual action and stalled-call safeguards still apply.',
   'settings.agentAccess.group.approvals': 'Approvals',
   'settings.agentAccess.group.fileSystem': 'File system',
   'settings.agentAccess.group.limits': 'Limits',
@@ -5389,6 +5396,9 @@ const en: TranslationMap = {
   'settings.appearance.showChatMascot': 'Show Tiny on the message box',
 
   'settings.layout.corners.round': 'Rounded',
+  'settings.agentAccess.hideShellWindows.label': 'Hide shell windows',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Suppress native terminal windows on Windows for new shell sessions.',
 };
 
 export default en;

@@ -100,9 +100,9 @@ export function ToolDataView({
       }
     }
     return (
-      <dl className="divide-border bg-muted/40 divide-y rounded-md px-2 text-xs">
+      <dl className="divide-border divide-y text-sm">
         {entries.map(([key, item]) => (
-          <div key={key} className="grid grid-cols-[minmax(7rem,auto)_1fr] gap-3 py-1.5">
+          <div key={key} className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1 py-2">
             <dt className="text-muted-foreground font-medium">{friendlyLabel(key)}</dt>
             <dd className="min-w-0 wrap-break-word">
               <ToolDataView value={item} preserveObjectFields={preserveObjectFields} />

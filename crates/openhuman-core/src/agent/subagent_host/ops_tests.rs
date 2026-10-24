@@ -303,6 +303,8 @@ fn gate(parent: Option<&AgentDefinition>, child: &AgentDefinition) -> Result<(),
     super::runner::tier_gate_decision(parent, child, "parent-agent", "task-1")
 }
 
+#[path = "ops_tests_cold_prompt_tests.rs"]
+mod cold_prompt_tests;
 #[path = "ops_tests_model_resolution_tests.rs"]
 mod model_resolution_tests;
 #[path = "ops_tests_slug_filter_typed_mode_tests.rs"]

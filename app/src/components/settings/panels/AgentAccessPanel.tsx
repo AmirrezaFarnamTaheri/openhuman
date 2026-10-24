@@ -6,8 +6,10 @@ import {
   type AutonomyLevel,
   openhumanGetAgentSettings,
   openhumanGetAutonomySettings,
+  openhumanGetConfig,
   openhumanUpdateAgentSettings,
   openhumanUpdateAutonomySettings,
+  openhumanUpdateRuntimeSettings,
   type ToolDispatcher,
   type TrustedAccess,
   type TrustedRoot,
@@ -49,9 +51,9 @@ const AgentAccessPanel = () => {
   // unlabelled-origin denial in the approval gate are unaffected by this setting; see `settings.agentAccess.autoApproveAll.desc`.
   const [autoApproveAll, setAutoApproveAll] = useState(false);
   const [trustedRoots, setTrustedRoots] = useState<TrustedRoot[]>([]);
-  // "Always allow" allowlist — populated by the in-chat "Always allow" button;
-  // shown here read-only with a Remove action (the re-protect path).
+  // Shared with the in-chat "Always allow" button.
   const [autoApprove, setAutoApprove] = useState<string[]>([]);
+  const [newAllowedTool, setNewAllowedTool] = useState('');
 
   const [newRootPath, setNewRootPath] = useState('');
   const [newRootAccess, setNewRootAccess] = useState<TrustedAccess>('read');
@@ -76,12 +78,47 @@ const AgentAccessPanel = () => {
   const toolDispatcherSeqRef = useRef(0);
 
   const [isLoading, setIsLoading] = useState(true);
+  const [hideShellWindows, setHideShellWindows] = useState(false);
+  const [shellLoading, setShellLoading] = useState(true);
+  const [shellSaving, setShellSaving] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   // Monotonic guard so out-of-order auto-save responses can't clobber UI state
   // with a stale result (last write wins).
   const persistSeqRef = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void openhumanGetConfig()
+      .then(response => {
+        if (cancelled) return;
+        const shell = response.result.config.shell as { hide_window?: boolean } | undefined;
+        setHideShellWindows(shell?.hide_window === true);
+      })
+      .catch(e => {
+        if (!cancelled)
+          setError(e instanceof Error ? e.message : t('settings.agentAccess.loadError'));
+      })
+      .finally(() => {
+        if (!cancelled) setShellLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  const toggleShellWindows = async (checked: boolean) => {
+    setShellSaving(true);
+    try {
+      await openhumanUpdateRuntimeSettings({ shell_hide_window: checked });
+      setHideShellWindows(checked);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('settings.agentAccess.loadError'));
+    } finally {
+      setShellSaving(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +282,18 @@ const AgentAccessPanel = () => {
     void persist({ workspaceOnly, trustedRoots, autoApprove: nextList });
   };
 
+  const addAutoApprove = () => {
+    const tool = newAllowedTool.trim();
+    if (!tool || isSaving || autoApprove.includes(tool)) return;
+    const previous = autoApprove;
+    setAutoApprove([...previous, tool]);
+    setNewAllowedTool('');
+    void persist({ workspaceOnly, trustedRoots, autoApprove: [...previous, tool] }, () => {
+      setAutoApprove(previous);
+      setNewAllowedTool(tool);
+    });
+  };
+
   // Persist the action timeout on blur / Enter. Validates the integer range
   // client-side (the core re-validates) and no-ops when unchanged. Separate
   // from the autonomy `persist` path so a timeout edit can't clobber the
@@ -286,6 +335,19 @@ const AgentAccessPanel = () => {
 
   return (
     <SettingsPanel description={t('settings.agentAccess.menuDesc')}>
+      <Field
+        htmlFor="switch-hide-shell-windows"
+        label={t('settings.agentAccess.hideShellWindows.label')}
+        description={t('settings.agentAccess.hideShellWindows.desc')}
+        control={
+          <SettingsSwitch
+            id="switch-hide-shell-windows"
+            checked={hideShellWindows}
+            disabled={shellLoading || shellSaving}
+            onCheckedChange={toggleShellWindows}
+          />
+        }
+      />
       {isLoading ? (
         <p className="text-sm text-content-muted">{t('settings.agentAccess.loading')}</p>
       ) : (
@@ -348,6 +410,38 @@ const AgentAccessPanel = () => {
                   ))}
                 </ul>
               )}
+              <div className="flex items-center gap-2 px-4 pb-4 pt-1">
+                <SettingsTextField
+                  mono
+                  className="flex-1"
+                  value={newAllowedTool}
+                  onChange={e => setNewAllowedTool(e.target.value)}
+                  aria-label={t('settings.agentAccess.alwaysAllow')}
+                  disabled={isSaving}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      addAutoApprove();
+                    }
+                  }}
+                  inputSize="sm"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  leadingIcon={<Plus className="h-3.5 w-3.5" aria-hidden />}
+                  onClick={addAutoApprove}
+                  aria-label={`${t('settings.agentAccess.add')}: ${t('settings.agentAccess.alwaysAllow')}`}
+                  disabled={
+                    isSaving ||
+                    !newAllowedTool.trim() ||
+                    autoApprove.includes(newAllowedTool.trim())
+                  }>
+                  {t('settings.agentAccess.add')}
+                </Button>
+              </div>
             </div>
 
             <Field
@@ -500,6 +594,12 @@ const AgentAccessPanel = () => {
                 </div>
               )}
             </div>
+            <Alert variant="info" density="compact" className="mx-4 mb-3" role="note">
+              <AlertDescription>
+                <strong>{t('settings.agentAccess.totalTimeout.label')}:</strong>{' '}
+                {t('settings.agentAccess.totalTimeout.desc')}
+              </AlertDescription>
+            </Alert>
           </Card>
 
           {/* ── Tool-call format: JSON by default, code styles opt-in ────── */}

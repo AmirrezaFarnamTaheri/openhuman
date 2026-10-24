@@ -38,6 +38,7 @@ fn ctx_with<'a>(integrations: &'a [ConnectedIntegration]) -> PromptContext<'a> {
         tool_call_format: ToolCallFormat::PFormat,
         connected_integrations: integrations,
         connected_identities_md: String::new(),
+        connected_mcp_servers_md: String::new(),
         user_identity: None,
         personality_roster: vec![],
         agents_md_global: None,
@@ -62,22 +63,28 @@ fn connected_mcp_block_empty_when_none() {
 #[test]
 fn mcp_prompt_instruction_requires_a_reachable_registry_tool() {
     const MCP_LINE: &str = "MCP: server tools come from `tool_search`";
+    const MCP_SNAPSHOT: &str = "## Connected MCP Servers\n\nMCP_SNAPSHOT_CANARY";
     let mut ctx = ctx_with(&[]);
+    // Rendering must consume the supplied snapshot without a runtime lookup.
+    ctx.connected_mcp_servers_md = MCP_SNAPSHOT.to_string();
     // Neither visible nor registered: no MCP route.
     let hidden = ["web_fetch".to_string()].into_iter().collect();
     ctx.visible_tool_names = &hidden;
     let without = build(&ctx).unwrap();
     assert!(!without.contains(MCP_LINE));
+    assert!(!without.contains(MCP_SNAPSHOT));
 
     let unfiltered = std::collections::HashSet::new();
     ctx.visible_tool_names = &unfiltered;
     let wildcard = build(&ctx).unwrap();
     assert_eq!(wildcard.contains(MCP_LINE), cfg!(feature = "mcp"));
+    assert_eq!(wildcard.contains(MCP_SNAPSHOT), cfg!(feature = "mcp"));
 
     let visible = ["mcp_registry_tool_call".to_string()].into_iter().collect();
     ctx.visible_tool_names = &visible;
     let with = build(&ctx).unwrap();
     assert_eq!(with.contains(MCP_LINE), cfg!(feature = "mcp"));
+    assert_eq!(with.contains(MCP_SNAPSHOT), cfg!(feature = "mcp"));
     if cfg!(feature = "mcp") {
         assert!(with.contains("never guess their arguments"));
     }
@@ -94,6 +101,7 @@ fn mcp_prompt_instruction_requires_a_reachable_registry_tool() {
     ctx.tools = &registered;
     let deferred = build(&ctx).unwrap();
     assert_eq!(deferred.contains(MCP_LINE), cfg!(feature = "mcp"));
+    assert_eq!(deferred.contains(MCP_SNAPSHOT), cfg!(feature = "mcp"));
 }
 
 #[test]

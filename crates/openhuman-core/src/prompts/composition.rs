@@ -150,6 +150,7 @@ impl TieredPrompt {
 pub struct SystemPromptBuilder {
     sections: Vec<ProductSection>,
     verbatim: bool,
+    needs_connected_mcp: bool,
 }
 
 impl SystemPromptBuilder {
@@ -165,6 +166,7 @@ impl SystemPromptBuilder {
                 ProductSection::Runtime,
             ],
             verbatim: false,
+            needs_connected_mcp: false,
         }
     }
 
@@ -186,6 +188,7 @@ impl SystemPromptBuilder {
         Self {
             sections,
             verbatim: false,
+            needs_connected_mcp: false,
         }
     }
 
@@ -193,6 +196,7 @@ impl SystemPromptBuilder {
         Self {
             sections: vec![ProductSection::Archetype(body)],
             verbatim: false,
+            needs_connected_mcp: false,
         }
     }
 
@@ -200,6 +204,7 @@ impl SystemPromptBuilder {
         Self {
             sections: vec![ProductSection::Archetype(body)],
             verbatim: true,
+            needs_connected_mcp: false,
         }
     }
 
@@ -210,7 +215,18 @@ impl SystemPromptBuilder {
                 ProductSection::AgentsInstructions,
             ],
             verbatim: false,
+            needs_connected_mcp: false,
         }
+    }
+
+    /// Declare the async metadata consumed by the selected dynamic builder.
+    pub(crate) fn with_connected_mcp_snapshot(mut self, needed: bool) -> Self {
+        self.needs_connected_mcp = needed;
+        self
+    }
+
+    pub(crate) fn needs_connected_mcp_snapshot(&self) -> bool {
+        self.needs_connected_mcp
     }
 
     pub fn build(&self, context: &PromptContext<'_>) -> Result<String> {

@@ -211,7 +211,7 @@ impl Tool for ShellTool {
                 .ok_or_else(|| anyhow::anyhow!("command analysis is unavailable"))?;
             let analysis = crate::modules::tinybox::analyze_command(config, command.to_owned())
                 .await
-                .map_err(|_| anyhow::anyhow!("command analysis is unavailable"))?;
+                .map_err(|error| anyhow::anyhow!("command analysis is unavailable: {error}"))?;
             let analysis = serde_json::to_value(analysis)
                 .map_err(|_| anyhow::anyhow!("command analysis is unavailable"))?;
             return Ok(Some(json!({ "analysis": analysis })));
@@ -320,8 +320,11 @@ impl ShellTool {
             let analysis =
                 match crate::modules::tinybox::analyze_command(config, command.to_owned()).await {
                     Ok(analysis) => analysis,
-                    Err(_) => {
-                        return (false, ToolResult::error("Command analysis is unavailable."));
+                    Err(error) => {
+                        return (
+                            false,
+                            ToolResult::error(format!("Command analysis is unavailable: {error}")),
+                        );
                     }
                 };
             if let Err(reason) = self.security.check_gated_command_analysis(&analysis) {

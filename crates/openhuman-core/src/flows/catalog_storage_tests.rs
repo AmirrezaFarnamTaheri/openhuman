@@ -1,6 +1,66 @@
 use super::*;
 use serde_json::json;
 
+/// A flow CatalogStorage callback can run while a synchronous catalog
+/// caller is awaiting the same process-wide bridge. Its lazy backend lookup
+/// must not try to send a second request to that occupied bridge.
+#[cfg(feature = "storage-sqlite")]
+#[test]
+fn catalog_callback_does_not_reenter_the_shared_storage_bridge() {
+    const CHILD: &str = "OPENHUMAN_CATALOG_PORT_BRIDGE_CHILD";
+    const NAME: &str = "catalog_callback_does_not_reenter_the_shared_storage_bridge";
+    let module = module_path!().split_once("::").unwrap().1;
+    let test = format!("{module}::{NAME}");
+
+    if std::env::var(CHILD).as_deref() != Ok(test.as_str()) {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &test, "--nocapture", "--test-threads=1"])
+            .env(CHILD, &test)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn isolated catalog callback test");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(35);
+        loop {
+            if let Some(status) = child.try_wait().expect("poll isolated test") {
+                let output = child.wait_with_output().expect("read isolated test");
+                assert!(
+                    status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+                    "catalog callback bridge test failed; status={status}\nstdout:\n{}\nstderr:\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                return;
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().expect("kill stalled catalog regression");
+                let output = child.wait_with_output().expect("read stalled child");
+                panic!(
+                    "CatalogStorage callback deadlocked the storage bridge\nstdout:\n{}\nstderr:\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    let workspace = tempfile::tempdir().unwrap();
+    let scope = DocScope {
+        workspace_dir: workspace.path().to_path_buf(),
+        scope: Scope::local(),
+        backend: None,
+    };
+    let port = CatalogStoragePort { scope };
+    let result = crate::storage::block_on_anyhow(async move {
+        port.doc_capabilities()
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))
+    })
+    .expect("catalog callback completes without re-entering bridge");
+    assert!(matches!(result, CatalogStorageReply::Value { .. }));
+}
+
 fn context(config: &Config, profile: &str) -> DispatchCtx {
     use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet};
     use crate::tools::toolpacks::ToolGroups;
@@ -283,6 +343,13 @@ async fn catalog_storage_resolves_the_current_backend_and_confines_graph_namespa
         CatalogCollectionSpec, CatalogDocumentPrecondition, CatalogFilter, CatalogQuery,
         CatalogStorageReply, DocDeleteWhereRequest,
     };
+
+    if crate::util::module_test_process::run(
+        module_path!(),
+        "catalog_storage_resolves_the_current_backend_and_confines_graph_namespace_queries",
+    ) {
+        return;
+    }
 
     let workspace = tempfile::tempdir().expect("isolated workspace");
     let config = Config {

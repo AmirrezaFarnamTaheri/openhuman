@@ -227,7 +227,7 @@ elif [ "${OPENHUMAN_TEST_MODULES_STAGED:-}" = "1" ]; then
   echo "[rust-e2e] Using pre-staged native modules from OPENHUMAN_MODULE_PATH."
 else
   # Shell command analysis and the storage URL E2E suites load TinyBox through
-  # the native module path; the ignored MCP registry cases need TinyMCP. Both
+  # the native module path; the MCP registry cases need TinyMCP. Both
   # come from the registry-pinned release, digest-verified before any
   # subprocess starts.
   for released_id in tinyconnectors tinyflows tinysearch tinybox tinymcp; do
@@ -357,7 +357,7 @@ for suite in "${SUITES[@]}"; do
     echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (serial)"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
       --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
-      --test "$suite" -- --ignored --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+      --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
     continue
   fi
   if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then
@@ -370,13 +370,13 @@ for suite in "${SUITES[@]}"; do
       --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
     continue
   fi
-  if [ "$suite" = "tinydocs_linked_e2e" ]; then
+  if [ "$suite" = "tinydocs_linked_e2e" ] || [ "$suite" = "inbound_linked_e2e" ]; then
     # This local-only E2E target is outside the product feature set. Enable
     # its required linked implementation explicitly instead of failing Cargo's
     # required-features check.
     echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (linked-modules)"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
-      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES,linked-modules" \
+      --manifest-path Cargo.toml --features "$PRODUCT_FEATURES,linked-modules,inbound-queues" \
       --test "$suite" -- ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
     continue
   fi

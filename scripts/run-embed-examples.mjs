@@ -30,13 +30,13 @@ export function assertExampleOutput(name, result) {
     throw new Error(`${name}: successful exit without behavioral assertion marker\n${result.stdout}`);
   }
 }
-export function runExamples({ run = spawnSync, examples = discoverExamples(), environment = process.env, profile = null } = {}) {
+export function runExamples({ run = spawnSync, examples = discoverExamples(), environment = process.env, profile = null, ciSmoke = false } = {}) {
   // `profile` forces every example into one Cargo profile (PR CI passes "dev"
   // so a release-declared measurement shares the plain dev build instead of
   // paying a thin-LTO build nothing else can reuse). Without it each example
   // keeps its declared profile. Default-features-disabled stays per example:
   // it is a distinct feature graph, not a profile choice.
-  const profileOf = (example) => profile ?? example.profile ?? "dev";
+  const profileOf = (example) => profile ?? (ciSmoke ? "dev" : example.profile ?? "dev");
   // Share one feature graph per build configuration. Measurements retain their
   // minimal graph rather than inheriting other examples' features.
   const configuration = (example) => `${profileOf(example)}:${example.defaultFeatures !== false}`;
@@ -55,6 +55,7 @@ export function runExamples({ run = spawnSync, examples = discoverExamples(), en
     if (example.defaultFeatures === false) args.push("--no-default-features");
     const features = [...featureGroups.get(configuration(example))].sort();
     if (features.length) args.push("--features", features.join(","));
+    if (ciSmoke && example.name === "linux_fleet") args.push("--", "2");
     const result = run(resolve(root, "scripts/ci-cancel-aware.sh"), ["cargo", ...args], {
       cwd: root, encoding: "utf8", env: offlineEnvironment(environment), timeout: 1800000, maxBuffer: 16 * 1024 * 1024,
     });
@@ -67,6 +68,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   else {
     const at = process.argv.indexOf("--profile");
     if (at >= 0 && !process.argv[at + 1]) throw new Error("--profile needs a value");
-    runExamples({ profile: at >= 0 ? process.argv[at + 1] : null });
+    runExamples({ profile: at >= 0 ? process.argv[at + 1] : null, ciSmoke: process.argv.includes("--ci-smoke") });
   }
 }

@@ -306,6 +306,10 @@ pub struct PromptContext<'a> {
     /// by the caller so prompt builders remain deterministic and avoid
     /// hidden global reads during `build(ctx)`.
     pub connected_identities_md: String,
+    /// Pre-rendered connected-MCP metadata fetched by the caller before
+    /// synchronous prompt rendering. An empty snapshot omits the section;
+    /// builders must never initialize a module or block on its runtime.
+    pub connected_mcp_servers_md: String,
     /// Authenticated user identity (id/name/email) when available — see
     /// [`UserIdentity`]. `None` for unauthenticated paths (CLI without a
     /// session, tests). Pre-fetched by the caller from the

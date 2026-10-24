@@ -126,9 +126,7 @@ export function ToolCall({
               {request != null ? (
                 <div className="px-3.5 pt-2.5 pb-2">
                   <p className={cn(mono, 'text-muted-foreground mb-1')}>{requestLabel}</p>
-                  <div className="text-muted-foreground max-h-48 overflow-auto font-mono">
-                    {request}
-                  </div>
+                  <div className="text-foreground/80 max-h-64 overflow-auto">{request}</div>
                 </div>
               ) : null}
               {request != null && result != null ? (

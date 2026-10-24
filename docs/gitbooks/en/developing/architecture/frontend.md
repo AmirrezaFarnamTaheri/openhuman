@@ -89,7 +89,7 @@ _Generated from `app/src/App.tsx` by `scripts/generate-architecture-docs.mjs`. D
 | 7 | `CoreStateProvider` | Core app snapshot: auth, session, onboarding state |
 | 8 | `SocketProvider` | Core socket.io events; desktop only (mobile uses the TunnelTransport relay) |
 | 9 | `ChatRuntimeProvider` | Chat runtime events, tool timeline, and approvals |
-| 10 | `AppDataRouter` | Hash-based data routing that supports navigation blockers |
+| 10 | `Router` | HashRouter navigation for all routes |
 | 11 | `CommandProvider` | Command palette context |
 | 12 | `ServiceBlockingGate` | Blocks the shell until required services are configured |
 

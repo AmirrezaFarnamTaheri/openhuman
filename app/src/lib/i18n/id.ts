@@ -428,6 +428,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': '7 hari terakhir',
   'chat.sidebar.group.previous30Days': '30 hari terakhir',
   'chat.sidebar.group.older': 'Lebih lama',
+  'chat.sidebar.archived': 'Diarsipkan',
+  'chat.sidebar.restoreThread': 'Pulihkan',
   'chat.sidebar.pinThread': 'Sematkan percakapan',
   'chat.sidebar.unpinThread': 'Lepas sematan percakapan',
   'chat.sidebar.unread': 'Balasan baru',
@@ -2412,6 +2414,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Satu grup penyedia mendukung maksimal 128 kunci API.',
   'settings.ai.fleet.partialKeyVerified':
     'Beberapa kunci API ditolak, tetapi kunci lain telah terverifikasi. Periksa kesehatan kunci penyedia.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman tidak dapat memastikan grup kunci ini melalui katalog penyedia. Kunci telah disimpan dan akan diperiksa saat permintaan model dikirim.',
   'settings.ai.apiKeyFieldLabel': 'Label kolom API key',
   'settings.ai.apiKeyRequired': 'Tempelkan API key Anda untuk melanjutkan.',
   'settings.ai.apiKeyStoredEncrypted': 'API key disimpan terenkripsi',
@@ -3824,6 +3828,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Tugas pencarian...',
   'settings.developerMenu.eventLog.column.time': 'Waktu',
   'settings.developerMenu.eventLog.column.event': 'Peristiwa',
+  'settings.agentAccess.totalTimeout.label': 'Batas waktu total giliran',
+  'settings.agentAccess.totalTimeout.desc':
+    'Secara default, tidak ada batas waktu total untuk satu giliran. Atur OPENHUMAN_AGENT_TURN_TIMEOUT_SECS untuk menetapkan batas; nilai 0 menonaktifkannya. Perlindungan untuk tindakan individual dan panggilan yang macet tetap berlaku.',
   'settings.agentAccess.group.approvals': 'Persetujuan',
   'settings.agentAccess.group.fileSystem': 'Sistem berkas',
   'settings.agentAccess.group.limits': 'Batas',
@@ -5156,6 +5163,9 @@ const messages: TranslationMap = {
   'flows.nodeKind.loop': 'Loop',
 
   'settings.layout.corners.round': 'Membulat',
+  'settings.agentAccess.hideShellWindows.label': 'Sembunyikan jendela terminal',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Sembunyikan jendela terminal asli di Windows untuk sesi shell baru.',
 };
 
 export default messages;

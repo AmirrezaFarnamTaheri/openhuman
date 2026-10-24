@@ -164,8 +164,9 @@ async fn ambient_config_follows_the_explicit_context() {
     );
 }
 
+#[cfg(feature = "modules")]
 #[test]
-fn installed_stdio_servers_get_an_enforced_workspace_scoped_jail() {
+fn installed_stdio_servers_preserve_the_host_workspace_jail_and_grants() {
     let workspace_a = tempfile::tempdir().expect("workspace A");
     let workspace_b = tempfile::tempdir().expect("workspace B");
     let mut config = Config::default();
@@ -174,8 +175,16 @@ fn installed_stdio_servers_get_an_enforced_workspace_scoped_jail() {
     let jail_a = client_config(&config)
         .stdio_sandbox
         .expect("untrusted stdio needs a jail");
-    assert_eq!(jail_a.workspace, workspace_a.path().to_string_lossy());
-    assert!(jail_a.require_process_isolation);
+    assert_eq!(
+        jail_a.workspace,
+        workspace_a
+            .path()
+            .join("mcp_stdio")
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy(),
+    );
+    assert_eq!(jail_a.require_process_isolation, !cfg!(target_os = "macos"));
     assert!(
         jail_a.allow_subprocess,
         "stdio wrappers may need a child process"
@@ -186,16 +195,41 @@ fn installed_stdio_servers_get_an_enforced_workspace_scoped_jail() {
     );
     assert!(jail_a.read_only.is_empty());
     assert!(jail_a.read_write.is_empty());
-    assert!(jail_a.deny_read.is_empty());
+    if jail_a.require_process_isolation {
+        assert!(jail_a.deny_read.is_empty());
+    }
 
     config.workspace_dir = workspace_b.path().to_path_buf();
     let jail_b = client_config(&config)
         .stdio_sandbox
         .expect("second workspace also needs a jail");
-    assert_eq!(jail_b.workspace, workspace_b.path().to_string_lossy());
+    assert_eq!(
+        jail_b.workspace,
+        workspace_b
+            .path()
+            .join("mcp_stdio")
+            .canonicalize()
+            .unwrap()
+            .to_string_lossy(),
+    );
     assert_ne!(
         jail_a.workspace, jail_b.workspace,
         "do not reuse another workspace's jail"
     );
-    assert!(jail_b.require_process_isolation);
+    assert_eq!(jail_b.require_process_isolation, !cfg!(target_os = "macos"));
+}
+
+#[cfg(feature = "modules")]
+#[test]
+fn configured_stdio_grants_survive_client_conversion() {
+    let workspace = tempfile::tempdir().unwrap();
+    let tools = workspace.path().join("tools");
+    std::fs::create_dir(&tools).unwrap();
+    let tools = tools.canonicalize().unwrap().to_string_lossy().into_owned();
+    let mut config = Config::default();
+    config.workspace_dir = workspace.path().to_path_buf();
+    config.runtime.local_jail.extra_read_only = vec![tools.clone()];
+    let sandbox = client_config(&config).stdio_sandbox.expect("host jail");
+    assert_eq!(sandbox.read_only, vec![tools]);
+    assert!(sandbox.read_write.is_empty());
 }

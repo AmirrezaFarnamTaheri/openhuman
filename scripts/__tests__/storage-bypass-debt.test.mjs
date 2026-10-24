@@ -32,6 +32,54 @@ const row = {
   issue: "https://github.com/tinyhumansai/openhuman/issues/7428",
 };
 const history = { baseline: [], extension: null, findings: [row] };
+
+test("the reviewed artifact writer can replace its exact retired site once", () => {
+  const before = {
+    rule: "json-write",
+    path: "crates/openhuman-core/src/artifacts/files.rs",
+    text: "match tokio::fs::OpenOptions::new()",
+    occurrence: 1,
+  };
+  const after = {
+    ...before,
+    text: "let mut options = cap_std::fs::OpenOptions::new();",
+  };
+  const prior = {
+    rawFindings: [before],
+    allowances: [{ ...before, site: before.text }],
+  };
+  const replacement = { ...after, site: after.text };
+  assert.deepEqual(validateAllowances([after], [replacement], prior), []);
+  assert.match(
+    validateAllowances([before, after], [replacement], prior).join("\n"),
+    /growth forbidden/,
+  );
+  assert.match(
+    validateAllowances(
+      [after, { ...after, occurrence: 2 }],
+      [replacement],
+      prior,
+    ).join("\n"),
+    /growth forbidden/,
+  );
+  assert.match(
+    validateAllowances([after], [replacement], {
+      rawFindings: [],
+      allowances: [],
+    }).join("\n"),
+    /growth forbidden/,
+  );
+  const copied = {
+    ...replacement,
+    path: "crates/openhuman-core/src/copied.rs",
+  };
+  assert.match(
+    validateAllowances([{ ...after, path: copied.path }], [copied], prior).join(
+      "\n",
+    ),
+    /growth forbidden/,
+  );
+});
 test("initial extension admits only exact existing canonical coverage", () => {
   assert.deepEqual(validateCoverageDebt([row], [], [row], history), []);
   const added = { ...row, path: "crates/openhuman-embed/src/new.rs" };
@@ -320,16 +368,26 @@ test("current thread and turn-state host facades remain curated after storage mi
 
 test("a Git-recorded move preserves only the original writer and allowance", () => {
   const root = mkdtempSync(join(tmpdir(), "storage-debt-move-"));
-  const git = (...args) => execFileSync("git", args, {
-    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  });
+  const git = (...args) =>
+    execFileSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
   const oldPath = "crates/openhuman-core/src/old/state.rs";
   const newPath = "crates/openhuman-core/src/new/state.rs";
-  const source = Array.from({ length: 30 }, (_, i) => "// original comment " + i).join("\n") +
-    "\ntokio::fs::write(path, bytes);\n";
+  const source =
+    Array.from({ length: 30 }, (_, i) => "// original comment " + i).join(
+      "\n",
+    ) + "\ntokio::fs::write(path, bytes);\n";
   const old = { ...row, path: oldPath };
   const moved = { ...old, path: newPath };
-  const scanner = { scan, withoutAllowed: (_, x) => x, isTestFile: () => false, CURATED_VENDOR_ROOTS: [] };
+  const scanner = {
+    scan,
+    withoutAllowed: (_, x) => x,
+    isTestFile: () => false,
+    CURATED_VENDOR_ROOTS: [],
+  };
   try {
     git("init", "-b", "main");
     git("config", "user.name", "Test");
@@ -337,32 +395,63 @@ test("a Git-recorded move preserves only the original writer and allowance", () 
     mkdirSync(join(root, oldPath, ".."), { recursive: true });
     mkdirSync(join(root, "scripts/ci"), { recursive: true });
     writeFileSync(join(root, oldPath), source);
-    writeFileSync(join(root, "scripts/ci/storage-bypass-baseline.json"), JSON.stringify([old]));
+    writeFileSync(
+      join(root, "scripts/ci/storage-bypass-baseline.json"),
+      JSON.stringify([old]),
+    );
     writeFileSync(join(root, "scripts/ci/storage-bypass-extension.json"), "[]");
-    writeFileSync(join(root, "scripts/ci/storage-bypass-allow-reasons.json"), JSON.stringify([{ ...old, site: old.text }]));
+    writeFileSync(
+      join(root, "scripts/ci/storage-bypass-allow-reasons.json"),
+      JSON.stringify([{ ...old, site: old.text }]),
+    );
     git("add", ".");
     git("commit", "-m", "original writer");
     git("update-ref", "refs/remotes/upstream/main", "HEAD");
     // A pull request run sets GITHUB_BASE_REF, which selects origin/<base>.
-    git("update-ref", `refs/remotes/origin/${process.env.GITHUB_BASE_REF || "main"}`, "HEAD");
+    git(
+      "update-ref",
+      `refs/remotes/origin/${process.env.GITHUB_BASE_REF || "main"}`,
+      "HEAD",
+    );
     git("switch", "-c", "move");
     mkdirSync(join(root, newPath, ".."), { recursive: true });
     git("mv", oldPath, newPath);
-    writeFileSync(join(root, newPath), source + "tokio::fs::write(other, bytes);\n");
+    writeFileSync(
+      join(root, newPath),
+      source + "tokio::fs::write(other, bytes);\n",
+    );
     git("add", ".");
     // The fixture already records upstream/main; inherited fork CI variables
     // must not force this self-contained fixture to fetch the network.
     const previous = historicalFindings(root, scanner, {
-      GITHUB_REPOSITORY: 'tinyhumansai/openhuman',
-      GITHUB_BASE_REF: '',
+      GITHUB_REPOSITORY: "tinyhumansai/openhuman",
+      GITHUB_BASE_REF: "",
     });
     assert.deepEqual(validateCoverageDebt([moved], [moved], [], previous), []);
-    assert.deepEqual(validateAllowances([moved], [{ ...moved, site: moved.text }], previous), []);
+    assert.deepEqual(
+      validateAllowances([moved], [{ ...moved, site: moved.text }], previous),
+      [],
+    );
     const added = { ...moved, text: "tokio::fs::write(other, bytes);" };
-    assert.match(validateCoverageDebt([moved, added], [moved, added], [], previous).join("\n"), /growth forbidden/);
-    assert.match(validateAllowances([moved, added], [{ ...added, site: added.text }], previous).join("\n"), /growth forbidden/);
+    assert.match(
+      validateCoverageDebt([moved, added], [moved, added], [], previous).join(
+        "\n",
+      ),
+      /growth forbidden/,
+    );
+    assert.match(
+      validateAllowances(
+        [moved, added],
+        [{ ...added, site: added.text }],
+        previous,
+      ).join("\n"),
+      /growth forbidden/,
+    );
     const copied = { ...moved, path: "crates/openhuman-core/src/copied.rs" };
-    assert.match(validateCoverageDebt([copied], [copied], [], previous).join("\n"), /growth forbidden/);
+    assert.match(
+      validateCoverageDebt([copied], [copied], [], previous).join("\n"),
+      /growth forbidden/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

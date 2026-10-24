@@ -366,7 +366,7 @@ run_full_suite() {
       # The TinyMCP module owns process-level directory transitions; this
       # binary exercises several workspaces against that shared module object.
       OPENHUMAN_MODULE_PATH="$connectors_module_path" \
-        cargo_test --test "$target" -- --ignored --test-threads=1 "$@"
+        cargo_test --test "$target" -- --test-threads=1 "$@"
     elif [ "$target" = "mcp_registry_multi_server" ]; then
       # The host opens multiple per-workspace clients to one TinyMCP module.
       # Keep this integration target serial so those module-backed transitions
@@ -416,7 +416,7 @@ elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "mcp_registry_e2e" ]; the
     shift
   fi
   OPENHUMAN_MODULE_PATH="$connectors_module_path" \
-    cargo_test --test mcp_registry_e2e -- --ignored --test-threads=1 "$@"
+    cargo_test --test mcp_registry_e2e -- --test-threads=1 "$@"
 elif [ "$#" -ge 2 ] && [ "$1" = "--test" ] && [ "$2" = "tinymcp_storage_smoke_e2e" ]; then
   shift 2
   if [ "${1:-}" = "--" ]; then

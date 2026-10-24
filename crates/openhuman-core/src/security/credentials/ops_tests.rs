@@ -14,6 +14,13 @@ use serde_json::json;
 use tempfile::TempDir;
 use tokio::net::TcpListener;
 
+/// Operator activation is tested under a CLI context, independent of any
+/// embedder context another unit test installed as the process default.
+async fn with_operator_context<F: std::future::Future>(future: F) -> F::Output {
+    use crate::core::runtime::{CoreContext, DomainSet};
+    CoreContext::scope(CoreContext::for_test(DomainSet::full(), None), future).await
+}
+
 fn test_config(tmp: &TempDir) -> Config {
     let config = Config {
         workspace_dir: tmp.path().join("workspace"),
@@ -83,3 +90,5 @@ fn store_live_session(user_id: &str) -> Config {
 mod credential_tests;
 #[path = "ops_provider_oauth_tests.rs"]
 mod provider_oauth_tests;
+#[path = "ops_session_key_tests.rs"]
+mod session_key_tests;

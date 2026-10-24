@@ -233,8 +233,8 @@ pub async fn run(ctx: &crate::core::runtime::DispatchCtx, config: &Config) -> Ve
 /// synchronous code.
 pub fn run_all(backend: &Arc<dyn StorageBackend>, config: &Config) -> Vec<Report> {
     let mut reports = run_with(backend, config, &sources());
-    reports.extend(tinyflows::run_with(backend, config));
     reports.extend(sessions::run_with(backend, config));
+    reports.extend(tinyflows::run_with(backend, config));
     reports
 }
 

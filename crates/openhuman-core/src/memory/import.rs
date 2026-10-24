@@ -109,11 +109,9 @@ pub async fn scan(
 ) -> Result<ImportScanView> {
     let workspace_dir = config.workspace_dir.clone();
     let counts = ctx
-        .spawn_blocking(move || {
-            tinymemory_integrations::import::count_legacy(&workspace_dir)
-        })
-    .await
-    .map_err(|error| Error::Engine(format!("import scan failed: {error}")))?;
+        .spawn_blocking(move || tinymemory_integrations::import::count_legacy(&workspace_dir))
+        .await
+        .map_err(|error| Error::Engine(format!("import scan failed: {error}")))?;
     let counts = counts.map(|counts: LegacyImportCounts| ImportCounts {
         documents: counts.documents,
         conversations: counts.conversations,

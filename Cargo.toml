@@ -132,6 +132,12 @@ incremental = false
 strip = true
 debug = false
 
+# Full core debuginfo can produce an archive above COFF's 32-bit member-offset
+# range on Windows. Keep file/line backtraces without the full type information.
+# Keep this profile aligned with the standalone desktop workspace.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.dev.package."*"]
 debug = false
 

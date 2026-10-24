@@ -133,6 +133,9 @@ export function AssistantUiToolCallCard({
   });
   const activeLabel = toolLabel({ ...presentation, tense: 'active' }, t);
   const doneLabel = toolLabel({ ...presentation, tense: 'done' }, t);
+  const skillAction = toolName === 'use_skill' && presentation.baseName !== 'use_skill';
+  const actionArgs = skillAction ? parseToolArgs(parsedArgs.args) : parsedArgs;
+  const requestInput = skillAction ? actionArgs : input;
   const preserveObjectFields = isStructuralToolName(presentation.baseName);
   const failed = status === 'error';
   const awaiting = awaitingUser || status === 'awaiting_user';
@@ -164,16 +167,16 @@ export function AssistantUiToolCallCard({
 
   const searchBody =
     presentation.body === 'webSearch'
-      ? WebSearchBody({ args: parsedArgs, result: output, structured, searching: running, t })
+      ? WebSearchBody({ args: actionArgs, result: output, structured, searching: running, t })
       : null;
   const richBody = running
     ? null
     : presentation.body === 'shell'
-      ? ShellBody({ args: parsedArgs, result: output, failed, t })
+      ? ShellBody({ args: actionArgs, result: output, failed, t })
       : presentation.body === 'webFetch'
-        ? FetchBody({ args: parsedArgs, result: output, t, onOpenExternal: openExternal })
+        ? FetchBody({ args: actionArgs, result: output, t, onOpenExternal: openExternal })
         : presentation.body === 'file'
-          ? FileBody({ args: parsedArgs, result: output })
+          ? FileBody({ args: actionArgs, result: output })
           : null;
   const showOutput = !searchBody && hasDisplayValue(parsedValue(output));
   const mcpUi = !running && readMcpUiPresentation(structured) ? structured : undefined;
@@ -201,21 +204,34 @@ export function AssistantUiToolCallCard({
       requestLabel={t('conversations.subagent.input')}
       resultLabel={t('conversations.subagent.output')}
       request={
-        !richBody && hasDisplayValue(input) ? (
+        !richBody && hasDisplayValue(requestInput) ? (
           <div data-testid="assistant-ui-tool-input">
-            <ToolDataView value={input} preserveObjectFields={preserveObjectFields} />
+            <ToolDataView value={requestInput} preserveObjectFields={preserveObjectFields} />
           </div>
         ) : undefined
       }
       result={
         !richBody && showOutput ? (
           <div data-testid="assistant-ui-tool-output">
-            <ToolDataView value={output} preserveObjectFields={preserveObjectFields} />
+            {['grep', 'glob'].includes(presentation.baseName) && typeof output === 'string' ? (
+              <pre className="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
+                {output}
+              </pre>
+            ) : (
+              <ToolDataView value={output} preserveObjectFields={preserveObjectFields} />
+            )}
           </div>
         ) : undefined
       }
       meta={
         <>
+          {skillAction && typeof parsedArgs.skill === 'string' ? (
+            <span
+              className="text-muted-foreground text-xs"
+              title={t('conversations.tools.useSkill.done')}>
+              {parsedArgs.skill}
+            </span>
+          ) : null}
           <span
             data-testid="tool-call-status"
             className={
@@ -246,6 +262,7 @@ export function AssistantUiToolCallCard({
                 toolName={toolName}
                 target={detail ?? displayName}
                 failure={failure}
+                diagnostic={typeof output === 'string' ? output : undefined}
               />
             </div>
           ) : null}

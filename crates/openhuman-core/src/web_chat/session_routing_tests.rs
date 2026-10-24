@@ -356,10 +356,11 @@ fn persisted_managed_model_changes_invalidate_the_session_fingerprint() {
     );
 }
 
-/// A concrete picker choice still wins over a changing saved default; changing
-/// that unrelated default must not evict the agent built for the explicit pick.
+/// A concrete picker choice still wins over a changing saved default. The
+/// runtime settings fingerprint refreshes the agent because its other workload
+/// routes can depend on the saved config, while the explicit chat route stays put.
 #[test]
-fn explicit_picker_model_keeps_its_fingerprint_when_saved_default_changes() {
+fn explicit_picker_model_survives_the_runtime_settings_fingerprint_refresh() {
     let mut config = Config::default();
     config.chat_provider = Some("openhuman".to_string());
     config.default_model = Some("openrouter/author/first-model:free".to_string());
@@ -379,7 +380,10 @@ fn explicit_picker_model_keeps_its_fingerprint_when_saved_default_changes() {
         "orchestrator".to_string(),
         "chat",
     );
-    assert_eq!(first, second);
+    assert_eq!(first.model_override, second.model_override);
+    assert_eq!(first.effective_model, second.effective_model);
+    assert_eq!(first.provider_binding, second.provider_binding);
+    assert_ne!(first.autonomy_signature, second.autonomy_signature);
 }
 
 fn configured_huggingface_route() -> Config {

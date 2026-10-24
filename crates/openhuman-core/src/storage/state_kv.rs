@@ -284,7 +284,19 @@ impl StateKv {
             }
             Ok(())
         })?;
-        self.quarantine_invalid_legacy::<T>(legacy)
+        // Import completion and typed validation have separate lifetimes: an
+        // older generic import may already have marked this value as copied.
+        // Cache only successful validation, and keep each requested Rust type
+        // independent so a second reader cannot inherit an incompatible check.
+        let validation_key = format!(
+            "quarantine/{}/{}/{name}/{}",
+            self.owner,
+            self.ns,
+            std::any::type_name::<T>()
+        );
+        self.repo.once_per_backend(&validation_key, || {
+            self.quarantine_invalid_legacy::<T>(legacy)
+        })
     }
 
     fn quarantine_invalid_legacy<T: DeserializeOwned>(&self, legacy: &Path) -> Result<()> {

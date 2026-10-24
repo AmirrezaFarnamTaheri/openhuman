@@ -363,6 +363,7 @@ async fn apply_runtime_settings_updates_kind_and_reasoning() {
     let mut cfg = tmp_config(&tmp);
     let patch = RuntimeSettingsPatch {
         kind: Some("desktop".into()),
+        shell_hide_window: Some(true),
         reasoning_enabled: Some(true),
         reasoning_effort: Some("max".into()),
         ..RuntimeSettingsPatch::default()
@@ -371,6 +372,7 @@ async fn apply_runtime_settings_updates_kind_and_reasoning() {
         .await
         .expect("apply");
     assert_eq!(cfg.runtime.kind, "desktop");
+    assert!(cfg.shell.hide_window);
     assert_eq!(cfg.runtime.reasoning_enabled, Some(true));
     // Aliases are stored as the canonical wire token.
     assert_eq!(cfg.runtime.reasoning_effort.as_deref(), Some("xhigh"));
@@ -383,6 +385,10 @@ async fn apply_runtime_settings_updates_kind_and_reasoning() {
         .await
         .expect("apply clear");
     assert_eq!(cfg.runtime.reasoning_effort, None);
+    assert!(
+        cfg.shell.hide_window,
+        "an unrelated patch must preserve the shell preference"
+    );
 
     let bogus = RuntimeSettingsPatch {
         reasoning_effort: Some("turbo".into()),

@@ -429,6 +429,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Últimos 7 dias',
   'chat.sidebar.group.previous30Days': 'Últimos 30 dias',
   'chat.sidebar.group.older': 'Mais antigas',
+  'chat.sidebar.archived': 'Arquivadas',
+  'chat.sidebar.restoreThread': 'Restaurar',
   'chat.sidebar.pinThread': 'Fixar conversa',
   'chat.sidebar.unpinThread': 'Desafixar conversa',
   'chat.sidebar.unread': 'Nova resposta',
@@ -2424,6 +2426,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Um grupo de provedores aceita no máximo 128 chaves de API.',
   'settings.ai.fleet.partialKeyVerified':
     'Algumas chaves de API foram rejeitadas, mas outra foi verificada. Confira a integridade das chaves.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'O OpenHuman não conseguiu confirmar este grupo de chaves pelo catálogo do provedor. As chaves foram salvas e serão verificadas quando uma solicitação ao modelo for enviada.',
   'settings.ai.apiKeyFieldLabel': 'Rótulo do campo de chave de API',
   'settings.ai.apiKeyRequired': 'Por favor, cole sua chave de API para continuar.',
   'settings.ai.apiKeyStoredEncrypted': 'Chave de API armazenada criptografada',
@@ -3850,6 +3854,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Procurar trabalhos...',
   'settings.developerMenu.eventLog.column.time': 'Tempo',
   'settings.developerMenu.eventLog.column.event': 'Evento',
+  'settings.agentAccess.totalTimeout.label': 'Limite total do turno',
+  'settings.agentAccess.totalTimeout.desc':
+    'Por padrão, não há um limite de tempo total para o turno. Defina OPENHUMAN_AGENT_TURN_TIMEOUT_SECS para escolher um; 0 o desativa. As proteções de ações individuais e chamadas travadas continuam ativas.',
   'settings.agentAccess.group.approvals': 'Homologação',
   'settings.agentAccess.group.fileSystem': 'Sistema de ficheiros',
   'settings.agentAccess.group.limits': 'Limites',
@@ -5184,6 +5191,9 @@ const messages: TranslationMap = {
   'flows.nodeKind.loop': 'Loop',
 
   'settings.layout.corners.round': 'Arredondado',
+  'settings.agentAccess.hideShellWindows.label': 'Ocultar janelas do terminal',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Oculta as janelas nativas do terminal no Windows para novas sessões.',
 };
 
 export default messages;

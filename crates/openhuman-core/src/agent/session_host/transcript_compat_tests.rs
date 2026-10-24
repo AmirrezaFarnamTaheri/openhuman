@@ -341,6 +341,43 @@ fn normalize_clock(value: &mut Value) {
     }
 }
 
+/// The compatibility corpus predates turn-budget guidance. Exclude only that
+/// newly generated addition from the next user message; the frozen prefix and
+/// every persisted history row must still match the historical golden exactly.
+fn normalize_new_turn_guidance(value: &mut Value) {
+    let text = value
+        .as_array_mut()
+        .and_then(|messages| messages.last_mut())
+        .and_then(|message| message.pointer_mut("/user/content/0/text"))
+        .expect("the final request message is the newly appended user turn");
+    let current = text.as_str().expect("new user turn has text");
+    let unlimited = crate::agent::tinyagents::turn_policy::turn_budget_guidance(None);
+    let guidance = current
+        .split("\n\n")
+        .find(|part| *part == unlimited || part.starts_with("Overall turn time limit: "))
+        .expect("new turn must carry current budget guidance");
+    // Read the budget the turn actually used. Other tests can change the
+    // timeout environment after this request was captured.
+    if let Some(limit) = guidance.strip_prefix("Overall turn time limit: ") {
+        let seconds = limit
+            .split_once(" seconds. ")
+            .expect("budget instruction has its canonical format")
+            .0
+            .parse::<u64>()
+            .expect("budget instruction has a numeric duration");
+        assert_eq!(
+            guidance,
+            crate::agent::tinyagents::turn_policy::turn_budget_guidance(Some(
+                seconds
+                    .checked_mul(1_000)
+                    .expect("budget fits milliseconds")
+            ))
+        );
+    }
+    let addition = format!("{guidance}\n\n");
+    *text = Value::String(current.replacen(&addition, "", 1));
+}
+
 /// Everything the model observes after resuming a scenario.
 async fn snapshot(scenario: &'static Scenario) -> Value {
     snapshot_with(scenario, "").await
@@ -388,6 +425,7 @@ pub(super) async fn snapshot_with(scenario: &'static Scenario, variant: &str) ->
 
     let mut next_request = to_json(&request);
     normalize_clock(&mut next_request);
+    normalize_new_turn_guidance(&mut next_request);
     json!({
         "history": history,
         "prefix": prefix,

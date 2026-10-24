@@ -47,12 +47,47 @@ export const RULES = [
 
 const isComment = (line) => /^\s*(#|\/\/|\*|\/\*)/.test(line);
 
+// The boundary auditor inspects a deliberately linked dependency graph with
+// `cargo tree`; it does not compile or select that graph for a shipped host.
+// Keep the exception tied to this exact read-only call, so changing the command
+// to build/test or adding another feature activation is still rejected.
+function inspectionLines(text, file) {
+  const allowed = new Set();
+  if (file !== "scripts/ci/check-module-boundaries.mjs") return allowed;
+  const normalized = text.replaceAll("\r\n", "\n");
+  const treeCall = "  const tree = treeGraph(cargoText(root, 'tree', [\n" +
+    "    '--manifest-path', join(root, 'Cargo.toml'), '--locked', '-p', 'openhuman-cli',\n" +
+    "    '-e', 'normal,build', '--prefix', 'depth', '--format', '{p}',\n" +
+    "    '--no-default-features', '--features', 'linked-modules',\n" +
+    "  ], execute));";
+  const start = normalized.indexOf(treeCall);
+  if (start !== -1 && normalized.indexOf(treeCall, start + 1) === -1) {
+    const first = normalized.slice(0, start).split("\n").length - 1;
+    // Only this complete argument line needs the exception. Exempting the
+    // closing line too would hide another command appended after the call.
+    allowed.add(first + 3);
+  }
+  const metadataLines = new Set([
+    "if (bridgeRoots.length === 0) throw new Error(`linked-modules graph for ${root} does not contain ${target}`);",
+    "if (!pkg || !pkg.features || !Object.hasOwn(pkg.features, 'linked-modules')) {",
+    "throw new Error('openhuman-cli must declare its isolated linked-modules feature');",
+    "return Object.keys(pkg.features).filter(feature => feature !== 'default' && feature !== 'linked-modules');",
+    "throw new Error(`linked-modules probe was not rooted at openhuman-cli: ${tree.root}`);",
+  ]);
+  normalized.split("\n").forEach((line, index) => {
+    if (metadataLines.has(line.trim())) allowed.add(index);
+  });
+  return allowed;
+}
+
 /** Violations in one file's text: `{ file, line, rule, why, text }`. */
 export function scan(text, file) {
   const found = [];
+  const inspection = inspectionLines(text, file);
   text.split("\n").forEach((line, index) => {
     if (isComment(line)) return;
     for (const rule of RULES) {
+      if (rule.name === "linked-modules-feature" && inspection.has(index)) continue;
       if (rule.re.test(line))
         found.push({
           file,

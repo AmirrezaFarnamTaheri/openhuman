@@ -3,6 +3,7 @@
 /// Every Cargo feature gate and whether this core artifact includes it.
 pub fn compiled_features() -> std::collections::BTreeMap<String, bool> {
     [
+        ("langfuse", cfg!(feature = "langfuse")),
         ("storage-sqlite", cfg!(feature = "storage-sqlite")),
         ("storage-mongodb", cfg!(feature = "storage-mongodb")),
         ("storage-file", cfg!(feature = "storage-file")),
@@ -19,9 +20,9 @@ pub fn compiled_features() -> std::collections::BTreeMap<String, bool> {
         ("web3", cfg!(feature = "web3")),
         ("media", cfg!(feature = "media")),
         ("flows", cfg!(feature = "flows")),
-        ("structural-code", cfg!(feature = "structural-code")),
         ("skills", cfg!(feature = "skills")),
         ("mcp", cfg!(feature = "mcp")),
+        ("structural-code", cfg!(feature = "structural-code")),
         ("crash-reporting", cfg!(feature = "crash-reporting")),
         ("channels", cfg!(feature = "channels")),
         ("e2e-test-support", cfg!(feature = "e2e-test-support")),
@@ -33,3 +34,7 @@ pub fn compiled_features() -> std::collections::BTreeMap<String, bool> {
     .map(|(name, enabled)| (name.to_owned(), enabled))
     .collect()
 }
+
+#[cfg(test)]
+#[path = "features_tests.rs"]
+mod tests;

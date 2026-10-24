@@ -264,7 +264,10 @@ function subagentChildToolPart(
 export function subagentMessages(activity: SubagentActivity): readonly AuiThreadMessage[] {
   const likes: ThreadMessageLike[] = [];
   if (activity.prompt?.trim()) {
-    likes.push({ role: 'user', content: [{ type: 'text', text: activity.prompt }] });
+    likes.push({
+      role: 'user',
+      content: userParts({ content: activity.prompt, extraMetadata: {} }),
+    });
   }
   const parts: ThreadAssistantMessagePart[] = [];
   for (const item of subagentTranscriptItems(activity)) {
@@ -804,7 +807,7 @@ function mimeTypeFromDataUri(dataUri: string): string {
   return dataUri.match(/^data:([^;,]+)/i)?.[1] ?? 'application/octet-stream';
 }
 
-function userParts(msg: ThreadMessage): ThreadUserMessagePart[] {
+function userParts(msg: Pick<ThreadMessage, 'content' | 'extraMetadata'>): ThreadUserMessagePart[] {
   const references = parseAttachmentReferences(msg.content ?? '');
   const parsed = parseMessageImages(references.text);
   const metadata = msg.extraMetadata ?? {};

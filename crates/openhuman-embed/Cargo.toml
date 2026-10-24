@@ -36,6 +36,7 @@ media = ["openhuman-core/media"]
 flows = ["openhuman-core/flows"]
 skills = ["openhuman-core/skills"]
 mcp = ["openhuman-core/mcp"]
+structural-code = ["openhuman-core/structural-code"]
 # Also carries `process::sentry`, the shared Sentry options + before_send chain.
 crash-reporting = ["dep:sentry", "openhuman-core/crash-reporting"]
 # The in-process SaaS profile facade (`ProfileRuntime`). Headless: it does not

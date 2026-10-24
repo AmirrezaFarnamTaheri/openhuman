@@ -33,6 +33,7 @@ pub const SAVED_NOT_SHOWN: &str = "saved-not-shown:";
 
 /// A file being produced as an artifact.
 pub struct Production {
+    ctx: crate::core::runtime::DispatchCtx,
     artifacts: Artifacts,
     workspace_dir: PathBuf,
     files: FileRoots,
@@ -65,6 +66,7 @@ impl Production {
     /// Returns an error when the file cannot be reserved or the record cannot
     /// be opened; the card is failed in the second case.
     pub async fn start(
+        ctx: &crate::core::runtime::DispatchCtx,
         workspace_dir: &Path,
         files: FileRoots,
         kind: ArtifactKind,
@@ -92,8 +94,9 @@ impl Production {
         )
         .await?;
 
-        let artifacts = artifacts_service(workspace_dir, files.clone(), None, chat);
+        let artifacts = artifacts_service(ctx, workspace_dir, files.clone(), None, chat);
         let mut production = Self {
+            ctx: ctx.clone(),
             artifacts,
             workspace_dir: workspace_dir.to_path_buf(),
             files,
@@ -237,6 +240,7 @@ impl Production {
             _ => return self.fail_card(reason).await,
         };
         let bridge = super::tiny_store::LegacyUiBridge::new(
+            &self.ctx,
             &self.workspace_dir,
             self.files.clone(),
             self.chat.as_ref(),

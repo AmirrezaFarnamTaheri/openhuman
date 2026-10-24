@@ -6,6 +6,20 @@ use tiny_artifacts::{
 
 use super::*;
 
+#[tokio::test]
+async fn bridge_keeps_the_explicit_dispatch_context_in_another_ambient_scope() {
+    use crate::core::runtime::{CoreContext, DispatchCtx, DomainSet};
+    let explicit = CoreContext::for_test(DomainSet::full(), None);
+    let ambient = CoreContext::for_test(DomainSet::full(), None);
+    let ctx = DispatchCtx::from(explicit.clone());
+    let (workspace, files) = temp_dirs();
+    CoreContext::scope(ambient, async {
+        let bridge = LegacyUiBridge::new(&ctx, workspace, FileRoots::new(files), None);
+        assert!(Arc::ptr_eq(bridge.ctx.core().unwrap(), &explicit));
+    })
+    .await;
+}
+
 fn temp_dirs() -> (PathBuf, PathBuf) {
     let root = std::env::temp_dir().join(format!("tiny-store-{}", uuid::Uuid::new_v4()));
     let (workspace, files) = (root.join("workspace"), root.join("Files"));
@@ -35,9 +49,14 @@ async fn seeded(
 async fn a_visible_projection_is_restricted_to_the_hosts_trusted_files_folder() {
     let (workspace, files) = temp_dirs();
     let outside = workspace.join("untrusted.md");
-    let error = write_visible_projection(&FileRoots::new(&files), &outside, b"private")
-        .await
-        .unwrap_err();
+    let error = write_visible_projection(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &FileRoots::new(&files),
+        &outside,
+        b"private",
+    )
+    .await
+    .unwrap_err();
     assert!(
         error.to_string().contains("trusted Files folder"),
         "{error}"
@@ -56,10 +75,36 @@ async fn a_visible_projection_replaces_an_existing_file_in_a_trusted_previous_fo
     let destination = previous.join("notes.md");
     std::fs::write(&destination, b"old").unwrap();
     let roots = FileRoots::new(&files).with_trusted([previous]);
-    write_visible_projection(&roots, &destination, b"new")
-        .await
-        .unwrap();
+    write_visible_projection(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &roots,
+        &destination,
+        b"new",
+    )
+    .await
+    .unwrap();
     assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+}
+
+#[tokio::test]
+async fn a_file_projection_copies_into_a_trusted_folder_and_reports_its_size() {
+    let (workspace, files) = temp_dirs();
+    let source = workspace.join("large-source.bin");
+    let destination = files.join("large-output.bin");
+    let content = vec![42; 128 * 1024];
+    std::fs::write(&source, &content).unwrap();
+
+    let copied = copy_visible_projection(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &FileRoots::new(&files),
+        &destination,
+        &source,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(copied, content.len() as u64);
+    assert_eq!(std::fs::read(destination).unwrap(), content);
 }
 
 #[tokio::test]
@@ -67,9 +112,15 @@ async fn an_edit_is_appended_as_an_operator_version_and_written_to_the_file() {
     let (workspace, files) = temp_dirs();
     let store = seeded(&workspace, &files).await;
 
-    let saved = save_operator_version(&workspace, FileRoots::new(&files), "a-1", "# v2")
-        .await
-        .unwrap();
+    let saved = save_operator_version(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &workspace,
+        FileRoots::new(&files),
+        "a-1",
+        "# v2",
+    )
+    .await
+    .unwrap();
     assert_eq!(
         saved,
         SavedVersion {
@@ -95,9 +146,15 @@ async fn an_unchanged_body_appends_nothing() {
     let (workspace, files) = temp_dirs();
     let store = seeded(&workspace, &files).await;
 
-    let saved = save_operator_version(&workspace, FileRoots::new(&files), "a-1", "# v1")
-        .await
-        .unwrap();
+    let saved = save_operator_version(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &workspace,
+        FileRoots::new(&files),
+        "a-1",
+        "# v1",
+    )
+    .await
+    .unwrap();
     assert_eq!(
         saved,
         SavedVersion {
@@ -111,9 +168,15 @@ async fn an_unchanged_body_appends_nothing() {
 #[tokio::test]
 async fn a_missing_artifact_is_an_error() {
     let (workspace, files) = temp_dirs();
-    let err = save_operator_version(&workspace, FileRoots::new(&files), "nope", "x")
-        .await
-        .unwrap_err();
+    let err = save_operator_version(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &workspace,
+        FileRoots::new(&files),
+        "nope",
+        "x",
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("not found"), "{err}");
 }
 
@@ -123,7 +186,13 @@ async fn an_image_filed_through_the_service_gets_a_card_and_a_copy_in_files() {
     let action = workspace.parent().unwrap().join("projects");
     std::fs::create_dir_all(&action).unwrap();
     std::fs::write(action.join("chart.png"), b"png-bytes").unwrap();
-    let artifacts = artifacts_service(&workspace, FileRoots::new(&files), Some(&action), None);
+    let artifacts = artifacts_service(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &workspace,
+        FileRoots::new(&files),
+        Some(&action),
+        None,
+    );
 
     let saved = artifacts
         .create(
@@ -156,7 +225,13 @@ async fn a_file_outside_the_allowed_folders_is_refused() {
     let elsewhere = workspace.parent().unwrap().join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();
     std::fs::write(elsewhere.join("x.pdf"), b"x").unwrap();
-    let artifacts = artifacts_service(&workspace, FileRoots::new(&files), None, None);
+    let artifacts = artifacts_service(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &workspace,
+        FileRoots::new(&files),
+        None,
+        None,
+    );
     let err = artifacts
         .create(
             ArtifactKind::File,
@@ -173,7 +248,13 @@ async fn a_file_outside_the_allowed_folders_is_refused() {
 #[tokio::test]
 async fn deleting_an_artifact_removes_its_card() {
     let (workspace, files) = temp_dirs();
-    let artifacts = artifacts_service(&workspace, FileRoots::new(&files), None, None);
+    let artifacts = artifacts_service(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &workspace,
+        FileRoots::new(&files),
+        None,
+        None,
+    );
     let saved = artifacts
         .create(
             ArtifactKind::Markdown,
@@ -244,7 +325,13 @@ async fn a_file_in_an_earlier_files_folder_can_still_be_revised() {
     std::fs::write(&old, b"v1").unwrap();
     // The files folder moved; the earlier one stays trusted.
     let roots = FileRoots::new(&files).with_trusted([earlier.clone()]);
-    let artifacts = artifacts_service(&workspace, roots, None, None);
+    let artifacts = artifacts_service(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &workspace,
+        roots,
+        None,
+        None,
+    );
     let id = artifacts
         .create(
             ArtifactKind::File,
@@ -277,7 +364,13 @@ async fn a_protected_file_inside_the_working_folder_is_refused() {
     let ssh = action.join(".ssh");
     std::fs::create_dir_all(&ssh).unwrap();
     std::fs::write(ssh.join("id_ed25519"), b"PRIVATE").unwrap();
-    let artifacts = artifacts_service(&workspace, FileRoots::new(&files), Some(&action), None);
+    let artifacts = artifacts_service(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &workspace,
+        FileRoots::new(&files),
+        Some(&action),
+        None,
+    );
 
     let err = artifacts
         .create(

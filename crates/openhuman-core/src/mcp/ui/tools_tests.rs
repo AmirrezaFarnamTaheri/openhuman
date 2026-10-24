@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(unix)]
 use crate::core::runtime::DispatchCtx;
 
 fn tempdir() -> tempfile::TempDir {

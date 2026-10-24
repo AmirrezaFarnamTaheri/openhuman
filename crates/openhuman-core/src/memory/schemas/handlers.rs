@@ -136,20 +136,14 @@ pub(super) fn local_start(ctx: DispatchCtx, params: Map<String, Value>) -> Contr
         let key = local_cortex::ensure_running(&config)
             .await
             .map_err(|error| error.to_string())?;
-        let params = EngineSetParams {
-            engine: engine::CORTEXDB_ENGINE.to_string(),
-            endpoint: Some(local_cortex::MANAGED_ENDPOINT.to_string()),
-            api_key: Some(key),
-        };
-        ops::apply_engine_set(&mut config, &params).map_err(|error| error.to_string())?;
+        ops::apply_managed_local_engine(&mut config, &key).map_err(|error| error.to_string())?;
         config.components.memory = true;
         save(&config).await.map_err(|error| error.to_string())?;
         engine::invalidate();
         to_json(ops::engine_get(&config).await)
     })
 }
-
-
+pub(super) fn recall(ctx: DispatchCtx, params: Map<String, Value>) -> ControllerFuture {
     rpc::<RecallParams, _>(
         ctx,
         params,

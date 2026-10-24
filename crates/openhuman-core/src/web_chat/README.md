@@ -200,11 +200,12 @@ endless heartbeat stream (#4746):
   build is never idle. What it catches is silence nothing else bounds: session
   checkout, the persistence plumbing, or a harness that stopped with no call
   open.
-- The **wall-clock backstop** is the fixed total ceiling, 3600 s by default
-  (`agent::turn_deadline`, `OPENHUMAN_WEB_TURN_TIMEOUT_SECS`, `0` disables it
-  and the derived deadlines). The harness winds the turn down at 3480 s and
-  writes the grounded close, and its own `max_wall_clock_ms` is clamped to
-  3540 s, so a busy turn still delivers an answer before the backstop drops it.
+- The **wall-clock backstop** is opt-in. No total-turn ceiling is applied by
+  default. Set `OPENHUMAN_AGENT_TURN_TIMEOUT_SECS` or
+  `OPENHUMAN_WEB_TURN_TIMEOUT_SECS` to configure one; `0` disables it. When
+  configured, the harness winds down before the backstop and writes a grounded
+  close. The separate idle guard still catches a turn with no progress and no
+  model or tool call in flight.
 
 The backstop used to be 900 s and did both jobs, so a turn that was working
 steadily was wound down at 780 s like a wedged one.

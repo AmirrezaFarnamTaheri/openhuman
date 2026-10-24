@@ -17,6 +17,7 @@ This matrix comes from the default-feature compiled capability-report example. R
 | `http-server` | Yes |
 | `inbound-queues` | Yes |
 | `inference` | No |
+| `langfuse` | No |
 | `mcp` | Yes |
 | `media` | Yes |
 | `modules` | Yes |

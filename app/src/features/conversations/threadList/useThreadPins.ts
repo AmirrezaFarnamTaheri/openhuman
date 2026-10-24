@@ -18,10 +18,12 @@ const debug = debugFactory('conversations:pins');
  * carries the persisted labels; a failed write drops the override, so the row
  * snaps back to what the core actually stored.
  */
-export function useThreadPins(): {
-  isPinned: (thread: Thread) => boolean;
-  togglePin: (thread: Thread, pinned: boolean) => void;
-} {
+export function useThreadPins(
+  persistLabels?: (
+    thread: Thread,
+    update: (labels: readonly string[] | undefined) => string[]
+  ) => Promise<void>
+): { isPinned: (thread: Thread) => boolean; togglePin: (thread: Thread, pinned: boolean) => void } {
   const dispatch = useAppDispatch();
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map());
 
@@ -41,9 +43,12 @@ export function useThreadPins(): {
           return next;
         });
       debug('toggle pin thread=%s pinned=%s', thread.id, pinned);
-      void threadApi
-        .updateLabels(thread.id, labelsWithPin(thread.labels, pinned))
-        .then(() => dispatch(loadThreads()).unwrap())
+      const operation = persistLabels
+        ? persistLabels(thread, labels => labelsWithPin(labels, pinned))
+        : threadApi
+            .updateLabels(thread.id, labelsWithPin(thread.labels, pinned))
+            .then(() => dispatch(loadThreads()).unwrap());
+      void operation
         .catch((error: unknown) => {
           debug(
             'pin update failed thread=%s: %s',
@@ -53,7 +58,7 @@ export function useThreadPins(): {
         })
         .finally(clearOverride);
     },
-    [dispatch]
+    [dispatch, persistLabels]
   );
 
   return { isPinned, togglePin };

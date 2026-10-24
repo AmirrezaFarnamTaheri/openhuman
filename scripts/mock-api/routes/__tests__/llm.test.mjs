@@ -113,7 +113,7 @@ test("matches request rules against path and authorization header", () => {
   assert.equal(body.choices[0].message.content, "matched via request rule");
 });
 
-test("streams request-rule scripts for root chat completions path", async () => {
+test("streams request-rule scripts for root chat completions path", { timeout: 5_000 }, async () => {
   setMockBehaviors(
     {
       llmRequestRules: JSON.stringify([
@@ -188,7 +188,7 @@ test("returns false for non-LLM routes", () => {
   assert.equal(handleLlmCompletions(ctx), false);
 });
 
-test("streams reasoning deltas for reasoning-family models", async () => {
+test("streams reasoning deltas for reasoning-family models", { timeout: 5_000 }, async () => {
   const ctx = makeCtx({
     url: "/chat/completions",
     parsedBody: {
@@ -199,14 +199,14 @@ test("streams reasoning deltas for reasoning-family models", async () => {
   });
 
   assert.equal(handleLlmCompletions(ctx), true);
-  await new Promise((resolve) => setTimeout(resolve, 220));
+  await ctx.res.finished;
 
   assert.match(ctx.res.body, /reasoning_content/);
   assert.match(ctx.res.body, /Recommendation:/);
   assert.match(ctx.res.body, /data: \[DONE\]/);
 });
 
-test("keyword stream scripts preserve reasoning and tool-event order", async () => {
+test("keyword stream scripts preserve reasoning and tool-event order", { timeout: 5_000 }, async () => {
   setMockBehaviors(
     {
       llmKeywordRules: JSON.stringify([
@@ -243,7 +243,7 @@ test("keyword stream scripts preserve reasoning and tool-event order", async () 
   // `safeDelayMs` deliberately normalizes zero to the default cadence, so
   // wait for this tiny four-event script to finish rather than sampling it
   // halfway through its SSE writes.
-  await new Promise((resolve) => setTimeout(resolve, 180));
+  await ctx.res.finished;
   const thinking = ctx.res.body.indexOf("first reason");
   const narration = ctx.res.body.indexOf("then narrate");
   const tool = ctx.res.body.indexOf("call_trace_1");

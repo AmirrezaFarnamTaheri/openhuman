@@ -97,6 +97,7 @@ pub async fn engine_get(config: &Config) -> EngineView {
                 engine: Some(bound.id.clone()),
                 endpoint: Some(bound.endpoint.clone()),
                 has_key: engine::has_key(config, &bound.id),
+                managed_local: engine::is_managed_cortexdb(config),
                 status,
                 reason,
                 fetch_modes: bound.engine.descriptor().fetch_modes.clone(),
@@ -110,6 +111,7 @@ pub async fn engine_get(config: &Config) -> EngineView {
             let id = id.or(configured);
             EngineView {
                 has_key: id.as_deref().is_some_and(|id| engine::has_key(config, id)),
+                managed_local: engine::is_managed_cortexdb(config),
                 engine: id,
                 endpoint,
                 status: EngineStatus::Off,
@@ -144,12 +146,31 @@ pub fn apply_engine_set(config: &mut Config, params: &EngineSetParams) -> Result
             "unknown memory engine `{engine_id}`"
         )));
     }
+    if let Some(endpoint) = params.endpoint.as_deref().map(str::trim) {
+        if !endpoint.is_empty() {
+            validate_endpoint(endpoint)?;
+        }
+    }
+    if engine_id == TINYHUMANS_ENGINE && params.api_key.is_some() {
+        return Err(Error::InvalidRequest(
+            ("the tinyhumans engine uses your sign-in, not an API key").into(),
+        ));
+    }
+    if engine_id != CORTEXDB_ENGINE && engine_id != TINYHUMANS_ENGINE && params.api_key.is_some() {
+        return Err(Error::InvalidRequest(
+            ("this engine takes no API key").into(),
+        ));
+    }
+    if engine_id == CORTEXDB_ENGINE && (params.endpoint.is_some() || params.api_key.is_some()) {
+        if let Some(settings) = config.memory.engines.get_mut(CORTEXDB_ENGINE) {
+            settings.managed_local = false;
+        }
+    }
     if let Some(endpoint) = params.endpoint.as_deref() {
         let endpoint = endpoint.trim();
         if endpoint.is_empty() {
             config.memory.engines.remove(engine_id);
         } else {
-            validate_endpoint(endpoint)?;
             config
                 .memory
                 .engines
@@ -164,20 +185,27 @@ pub fn apply_engine_set(config: &mut Config, params: &EngineSetParams) -> Result
                 engine::clear_cortexdb_key(config)?;
             }
             CORTEXDB_ENGINE => engine::store_cortexdb_key(config, key)?,
-            TINYHUMANS_ENGINE => {
-                return Err(Error::InvalidRequest(
-                    ("the tinyhumans engine uses your sign-in, not an API key").into(),
-                ));
-            }
-            _ => {
-                return Err(Error::InvalidRequest(
-                    ("this engine takes no API key").into(),
-                ));
-            }
+            TINYHUMANS_ENGINE => unreachable!("validated above"),
+            _ => unreachable!("validated above"),
         }
     }
     config.memory.engine = engine_id.to_string();
     tracing::info!(engine = %engine_id, "[memory:ops] engine selected");
+    Ok(())
+}
+
+/// Select OpenHuman's managed local CortexDB without replacing a separately
+/// configured cloud/manual CortexDB credential.
+pub(crate) fn apply_managed_local_engine(config: &mut Config, key: &str) -> Result<()> {
+    let settings = config
+        .memory
+        .engines
+        .entry(CORTEXDB_ENGINE.to_string())
+        .or_default();
+    settings.endpoint = Some(super::local_cortex::MANAGED_ENDPOINT.to_string());
+    settings.managed_local = true;
+    engine::store_managed_cortexdb_key(config, key)?;
+    config.memory.engine = CORTEXDB_ENGINE.to_string();
     Ok(())
 }
 

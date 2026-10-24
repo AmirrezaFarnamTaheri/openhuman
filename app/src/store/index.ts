@@ -23,6 +23,7 @@ import {
 } from './artifactsPersistFilter';
 import channelConnectionsReducer from './channelConnectionsSlice';
 import chatRuntimeReducer from './chatRuntimeSlice';
+import composerEnterReducer from './composerEnterSlice';
 import connectivityReducer from './connectivitySlice';
 import coreModeReducer from './coreModeSlice';
 import followupSuggestionsReducer from './followupSuggestionsSlice';
@@ -162,6 +163,15 @@ const persistedThreadReducer = persistReducer(threadPersistConfig, threadReducer
 const layoutPersistConfig = { key: 'layout', storage, whitelist: ['panels'] };
 const persistedLayoutReducer = persistReducer(layoutPersistConfig, layoutReducer);
 
+// What the Enter key does in the composer. App-wide and per user: it is a
+// property of the person, not of a conversation, and it should survive a
+// restart the way every other preference does.
+const composerEnterPersistConfig = { key: 'composerEnter', storage, whitelist: ['enterAction'] };
+const persistedComposerEnterReducer = persistReducer(
+  composerEnterPersistConfig,
+  composerEnterReducer
+);
+
 // Persist the mascot appearance fields, the custom GIF override, the selected
 // mascot id (so the chosen GitHub-manifest mascot survives a reload — the
 // slice's REHYDRATE guard re-validates it), and the chosen voice mode (so
@@ -245,6 +255,7 @@ export const store = configureStore({
     connectivity: connectivityReducer,
     thread: persistedThreadReducer,
     layout: persistedLayoutReducer,
+    composerEnter: persistedComposerEnterReducer,
     chatRuntime: persistedChatRuntimeReducer,
     // In-memory only: the core's run queue for running turns.
     queue: queueReducer,

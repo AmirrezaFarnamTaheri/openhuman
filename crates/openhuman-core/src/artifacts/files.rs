@@ -27,6 +27,8 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use tokio::io::AsyncWriteExt;
+
 use super::store::{artifacts_root, get_artifact};
 use super::types::{ArtifactMeta, ArtifactStatus};
 use crate::security::SecurityPolicy;
@@ -125,6 +127,229 @@ impl From<&FileRoots> for FileRoots {
     }
 }
 
+/// Replace a visible artifact projection only inside a folder vouched for by
+/// the host. Artifact records and version data remain in their storage backend;
+/// this is the explicit publication boundary for the operator-visible Files
+/// folders.
+pub(crate) async fn write_visible_projection(
+    ctx: &crate::core::runtime::DispatchCtx,
+    roots: &FileRoots,
+    destination: &Path,
+    bytes: &[u8],
+) -> Result<u64, String> {
+    let destination = resolve_visible_projection_destination(roots, destination).await?;
+    let (staged, mut output) = StagedProjection::create(destination)
+        .map_err(|error| format!("opening visible artifact failed: {error}"))?;
+    output
+        .write_all(bytes)
+        .await
+        .map_err(|error| format!("writing visible artifact failed: {error}"))?;
+    staged.publish(ctx, output).await?;
+    Ok(bytes.len() as u64)
+}
+
+/// Copy a file-backed artifact into its validated Files projection without
+/// buffering the entire artifact in memory.
+pub(crate) async fn copy_visible_projection(
+    ctx: &crate::core::runtime::DispatchCtx,
+    roots: &FileRoots,
+    destination: &Path,
+    source: &Path,
+) -> Result<u64, String> {
+    let destination = resolve_visible_projection_destination(roots, destination).await?;
+    let mut input = tokio::fs::File::open(source)
+        .await
+        .map_err(|error| format!("opening artifact source failed: {error}"))?;
+    let (staged, mut output) = StagedProjection::create(destination)
+        .map_err(|error| format!("opening visible artifact failed: {error}"))?;
+    let copied = tokio::io::copy(&mut input, &mut output)
+        .await
+        .map_err(|error| format!("copying visible artifact failed: {error}"))?;
+    staged.publish(ctx, output).await?;
+    Ok(copied)
+}
+
+struct ProjectionDestination {
+    parent: cap_std::fs::Dir,
+    name: std::ffi::OsString,
+}
+
+/// Only a fresh inode receives bytes. Rename replaces a directory entry, so a
+/// hardlink or a leaf symlink swapped after validation cannot redirect writes.
+/// Relative operations remain bound to the admitted parent directory handle.
+struct StagedProjection {
+    destination: ProjectionDestination,
+    temporary: String,
+}
+
+impl StagedProjection {
+    fn create(destination: ProjectionDestination) -> std::io::Result<(Self, tokio::fs::File)> {
+        let temporary = format!(".openhuman-{}.tmp", uuid::Uuid::new_v4());
+        let file = destination
+            .parent
+            .open_with(&temporary, &artifact_open_options())?;
+        Ok((
+            Self {
+                destination,
+                temporary,
+            },
+            tokio::fs::File::from_std(file.into_std()),
+        ))
+    }
+
+    async fn publish(
+        self,
+        ctx: &crate::core::runtime::DispatchCtx,
+        mut output: tokio::fs::File,
+    ) -> Result<(), String> {
+        output
+            .flush()
+            .await
+            .map_err(|error| format!("flushing visible artifact failed: {error}"))?;
+        output
+            .sync_all()
+            .await
+            .map_err(|error| format!("syncing visible artifact failed: {error}"))?;
+        drop(output.into_std().await);
+        ctx.spawn_blocking(move || {
+            self.destination.parent.rename(
+                &self.temporary,
+                &self.destination.parent,
+                &self.destination.name,
+            )
+        })
+        .await
+        .map_err(|error| format!("publishing visible artifact failed: {error}"))?
+        .map_err(|error| format!("publishing visible artifact failed: {error}"))
+    }
+}
+
+impl Drop for StagedProjection {
+    fn drop(&mut self) {
+        // After publication this name no longer exists. On failure discard only
+        // the fresh staging entry through the same anchored directory handle.
+        let _ = self.destination.parent.remove_file(&self.temporary);
+    }
+}
+
+async fn resolve_visible_projection_destination(
+    roots: &FileRoots,
+    destination: &Path,
+) -> Result<ProjectionDestination, String> {
+    if !destination.is_absolute() || has_parent_component(destination) {
+        return Err("visible artifact must be inside a trusted Files folder".into());
+    }
+    let file_name = destination
+        .file_name()
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "visible artifact must be inside a trusted Files folder".to_string())?;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| "visible artifact must be inside a trusted Files folder".to_string())?;
+
+    let mut resolved_destination = None;
+    for root in roots.trusted() {
+        if !root.is_absolute() || has_parent_component(root) || !destination.starts_with(root) {
+            continue;
+        }
+        let canonical_root = root
+            .canonicalize()
+            .map_err(|_| "trusted Files folder could not be resolved".to_string())?;
+        let canonical_parent = parent
+            .canonicalize()
+            .map_err(|_| "visible artifact parent could not be resolved".to_string())?;
+        if !canonical_parent.starts_with(&canonical_root) {
+            continue;
+        }
+        let target = canonical_parent.join(file_name);
+        if crate::security::SecurityPolicy::is_always_forbidden(&target) {
+            return Err("visible artifact is in a protected location".into());
+        }
+        match tokio::fs::symlink_metadata(&target).await {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err("visible artifact may not replace a symlink".into());
+            }
+            Ok(_) => {
+                let resolved = target
+                    .canonicalize()
+                    .map_err(|_| "visible artifact could not be resolved".to_string())?;
+                if !resolved.starts_with(&canonical_root)
+                    || crate::security::SecurityPolicy::is_always_forbidden(&resolved)
+                {
+                    return Err("visible artifact resolves outside its trusted Files folder".into());
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("visible artifact could not be checked: {error}")),
+        }
+        let parent = open_projection_parent(&canonical_parent)
+            .map_err(|error| format!("opening visible artifact parent failed: {error}"))?;
+        resolved_destination = Some(ProjectionDestination {
+            parent,
+            name: file_name.to_owned(),
+        });
+        break;
+    }
+    resolved_destination
+        .ok_or_else(|| "visible artifact must be inside a trusted Files folder".to_string())
+}
+
+/// Walk the already-canonical path from its filesystem root, refusing links at
+/// every component. Opening the whole path ambiently after validation would
+/// let a root/ancestor swap redirect the handle before capability confinement.
+fn open_projection_parent(path: &Path) -> std::io::Result<cap_std::fs::Dir> {
+    use cap_fs_ext::DirExt;
+    let mut anchor = PathBuf::new();
+    let mut names = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir if names.is_empty() => {
+                anchor.push(component.as_os_str());
+            }
+            Component::Normal(name) => names.push(name),
+            _ => {
+                return Err(std::io::Error::other(
+                    "invalid canonical artifact directory",
+                ))
+            }
+        }
+    }
+    if !anchor.is_absolute() {
+        return Err(std::io::Error::other("artifact directory must be absolute"));
+    }
+    let mut directory = cap_std::fs::Dir::open_ambient_dir(anchor, cap_std::ambient_authority())?;
+    for name in names {
+        directory = directory.open_dir_nofollow(name)?;
+    }
+    Ok(directory)
+}
+
+/// The shared exclusive-creation policy for reservations and staged publication.
+/// Neither path truncates an existing inode or follows a destination leaf link.
+fn artifact_open_options() -> cap_std::fs::OpenOptions {
+    let mut options = cap_std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use cap_std::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options
+}
+
+pub(super) async fn open_artifact_file(path: &Path) -> std::io::Result<tokio::fs::File> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("artifact parent is missing"))?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| std::io::Error::other("artifact name is missing"))?;
+    let directory = open_projection_parent(&parent.canonicalize()?)?;
+    directory
+        .open_with(name, &artifact_open_options())
+        .map(|file| tokio::fs::File::from_std(file.into_std()))
+}
+
 /// Collision suffixes tried before falling back to an id-tagged name.
 const MAX_COLLISION_SUFFIX: u32 = 1000;
 
@@ -153,12 +378,7 @@ pub(crate) async fn reserve_file(
         .chain(std::iter::once(format!("{stem}-{id}.{ext}")));
     for name in candidates {
         let candidate = files_dir.join(&name);
-        match tokio::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&candidate)
-            .await
-        {
+        match open_artifact_file(&candidate).await {
             Ok(_) => {
                 log::debug!("[artifacts] reserve_file: id={id} claimed {name:?}");
                 return Ok(candidate);
@@ -331,3 +551,7 @@ pub(crate) async fn remove_empty_placeholder(
 #[cfg(test)]
 #[path = "files_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "files_publication_tests.rs"]
+mod publication_tests;

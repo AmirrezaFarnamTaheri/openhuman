@@ -1,7 +1,12 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EMPTY_SETTINGS } from '../aiPanelTypes';
+import {
+  cachedModelCatalog,
+  invalidateModelCatalogCache,
+  loadModelCatalog,
+} from '../../../../../services/modelCatalogCache';
+import { type CloudProvider, EMPTY_SETTINGS } from '../aiPanelTypes';
 import { useCloudProviderEditorSubmit } from '../useCloudProviderEditorSubmit';
 
 const api = vi.hoisted(() => ({
@@ -630,5 +635,41 @@ describe('provider save concurrency and rollback isolation', () => {
     expect(api.loadAISettings).not.toHaveBeenCalled();
     expect(api.flushCloudProviders).not.toHaveBeenCalled();
     expect(persist).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('provider editor catalog commit ordering', () => {
+  it('invalidates reads made while a credential-only edit was being persisted', async () => {
+    invalidateModelCatalogCache();
+    const existing: CloudProvider = {
+      id: 'private',
+      slug: 'private',
+      label: 'Private',
+      endpoint: 'https://private.example/v1',
+      authStyle: 'bearer',
+      maskedKey: '••••',
+    };
+    const settings = { ...EMPTY_SETTINGS, cloudProviders: [existing] };
+    const persist = vi.fn(async () => {
+      await loadModelCatalog('private', async () => [
+        { id: 'old-account-model', owned_by: 'private' },
+      ]);
+    });
+    const { result } = renderHook(() =>
+      useCloudProviderEditorSubmit({
+        editing: existing,
+        draft: settings,
+        saved: settings,
+        persist,
+        t: key => key,
+        onDone: () => {},
+      })
+    );
+    await act(async () => {
+      await result.current(existing, 'replacement', { skipProbe: true });
+    });
+    expect(persist).toHaveBeenCalledOnce();
+    expect(api.setCloudProviderKey).toHaveBeenCalledWith('private', 'replacement');
+    expect(cachedModelCatalog('private')).toBeUndefined();
   });
 });

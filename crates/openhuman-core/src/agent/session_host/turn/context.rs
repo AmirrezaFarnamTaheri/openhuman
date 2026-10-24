@@ -2,6 +2,7 @@
 
 use super::super::types::OpenHumanSessionHost;
 use crate::agent::prompts::{PromptContext, PromptTool};
+use crate::agent_registry::agents::orchestrator as orchestrator_prompt;
 use tinytools::render_tool_policy_boundary;
 
 use anyhow::Result;
@@ -12,14 +13,56 @@ impl OpenHumanSessionHost {
     /// [`Self::build_system_prompt_with_flow_archetype`] with an explicitly
     /// fetched archetype.
     pub fn build_system_prompt(&self) -> Result<String> {
-        self.build_system_prompt_with_flow_archetype(None)
+        let identities = crate::integrations::render_connected_identities(&self.dispatch_ctx());
+        let mcp_servers = if self.mcp_prompt_available() {
+            orchestrator_prompt::render_connected_mcp_servers(&self.dispatch_ctx())
+        } else {
+            String::new()
+        };
+        self.build_system_prompt_with_connections(None, identities, mcp_servers)
     }
 
     /// Builds the system prompt with an optional TinyFlows archetype already
     /// fetched by an async caller using its scoped runtime config.
-    pub(crate) fn build_system_prompt_with_flow_archetype(
+    pub(crate) async fn build_system_prompt_with_flow_archetype(
         &self,
         flow_archetype_text: Option<&str>,
+    ) -> Result<String> {
+        let identities =
+            crate::integrations::render_connected_identities_async(&self.dispatch_ctx()).await;
+        let mcp_servers = if self.mcp_prompt_available() {
+            orchestrator_prompt::render_connected_mcp_servers_async(&self.dispatch_ctx()).await
+        } else {
+            String::new()
+        };
+        self.build_system_prompt_with_connections(flow_archetype_text, identities, mcp_servers)
+    }
+
+    fn mcp_prompt_available(&self) -> bool {
+        if !self.prompt_builder.needs_connected_mcp_snapshot() {
+            return false;
+        }
+        let mut visible = self.tool_policy_session.visible_tool_names_for_prompt();
+        let mut discovery_tools = Vec::new();
+        crate::agent::prompts::swap_deferred_for_discovery_bridge(
+            &mut discovery_tools,
+            &mut visible,
+            &self.deferred_tool_names,
+        );
+        orchestrator_prompt::mcp_tools_reachable(
+            &visible,
+            self.all_tool_refs()
+                .into_iter()
+                .filter(|tool| !self.permanent_tool_names.contains(tool.name()))
+                .map(|tool| tool.name()),
+        )
+    }
+
+    fn build_system_prompt_with_connections(
+        &self,
+        flow_archetype_text: Option<&str>,
+        connected_identities_md: String,
+        connected_mcp_servers_md: String,
     ) -> Result<String> {
         // `visible_tool_specs` holds shared `Arc<ToolSpec>` leaves. Materialise
         // the canonical dialect input for this prompt build.
@@ -70,9 +113,8 @@ impl OpenHumanSessionHost {
             visible_tool_names: &prompt_visible_tool_names,
             tool_call_format: self.tool_dispatcher.tool_call_format(),
             connected_integrations: &self.connected_integrations,
-            connected_identities_md: crate::integrations::render_connected_identities(
-                &self.dispatch_ctx(),
-            ),
+            connected_identities_md,
+            connected_mcp_servers_md,
             user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
             personality_roster: vec![], // TODO: build_personality_roster(&workspace_dir)
             agents_md_global: agents_md.global,

@@ -89,19 +89,4 @@ describe('App.tsx boot-time service wiring (lines 50-51)', () => {
     expect(stopInternetStatusListenerMock).toHaveBeenCalled();
     expect(stopCoreHealthMonitorMock).toHaveBeenCalled();
   });
-
-  it('reads a direct workflow hash when boot explicitly creates the data router', async () => {
-    const { createAppDataRouter } = await import('../App');
-    const previousUrl = window.location.href;
-    window.history.replaceState(null, '', '/#/flows/draft?template=review');
-
-    const router = createAppDataRouter();
-    try {
-      expect(router.state.location.pathname).toBe('/flows/draft');
-      expect(router.state.location.search).toBe('?template=review');
-    } finally {
-      router.dispose();
-      window.history.replaceState(null, '', previousUrl);
-    }
-  });
 });

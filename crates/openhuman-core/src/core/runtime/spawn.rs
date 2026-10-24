@@ -56,9 +56,11 @@ impl DispatchCtx {
         R: Send + 'static,
     {
         let ctx = self.core().cloned();
-        let handle = tokio::runtime::Handle::current();
         tokio::task::spawn_blocking(move || match ctx {
-            Some(ctx) => handle.block_on(CoreContext::scope(ctx, async move { f() })),
+            // Install only the context here. A blocking operation may itself
+            // enter the runtime (for example the durable memory write queue),
+            // which must not be nested inside our own `Handle::block_on`.
+            Some(ctx) => CoreContext::sync_scope(ctx, f),
             None => f(),
         })
     }

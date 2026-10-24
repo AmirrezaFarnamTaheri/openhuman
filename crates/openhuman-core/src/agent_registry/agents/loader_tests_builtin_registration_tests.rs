@@ -9,6 +9,13 @@ fn all_builtins_parse() {
     // rather than the raw `BUILTINS` length.
     let expected = BUILTINS.iter().filter(|b| builtin_enabled(b)).count();
     assert_eq!(defs.len(), expected);
+    for definition in &defs {
+        assert_eq!(
+            definition.extensions.prompt_needs_connected_mcp,
+            definition.id == "orchestrator",
+            "only the orchestrator prompt consumes connected-MCP metadata"
+        );
+    }
 }
 
 #[test]
@@ -192,6 +199,7 @@ fn every_builtin_has_a_prompt_body() {
                     tool_call_format: ToolCallFormat::PFormat,
                     connected_integrations: &empty_integrations,
                     connected_identities_md: String::new(),
+                    connected_mcp_servers_md: String::new(),
                     user_identity: None,
                     personality_roster: vec![],
                     agents_md_global: None,

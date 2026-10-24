@@ -204,6 +204,26 @@ describe('AssistantUiToolCallCard', () => {
     expect(card).toHaveTextContent('Send email');
     expect(card).not.toHaveTextContent('GMAIL_SEND_EMAIL');
   });
+
+  it('shows a coding skill search as an action with flat arguments and preserved output lines', async () => {
+    const output = '2 matches\nsrc/first.rs:4: first\nsrc/second.rs:9: second';
+    render(
+      <AssistantUiToolCallCard
+        toolName="use_skill"
+        args={{ skill: 'coding', tool: 'grep', args: { path: 'src', pattern: 'needle' } }}
+        status="success"
+        result={output}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Searched code/ }));
+    const input = screen.getByTestId('assistant-ui-tool-input');
+    expect(input).toHaveTextContent('src');
+    expect(input).not.toHaveTextContent('Args');
+    expect(input).not.toHaveTextContent('Skill');
+    expect(screen.getByTestId('assistant-ui-tool-output').querySelector('pre')?.textContent).toBe(
+      output
+    );
+  });
 });
 
 describe('formatElapsed', () => {

@@ -1,5 +1,15 @@
 [
   {
+    "file": "crates/openhuman-core/src/security/credentials/profiles/revision.rs",
+    "scope": "",
+    "name": "REVISIONS",
+    "type": "OnceLock<Mutex<HashMap<StoreKey,uuid::Uuid>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Contains only random invalidation tokens, keyed by storage backend identity and tenant scope or canonical configuration directory. No credentials are retained in this map.",
+    "verification": "security/credentials/profiles/revision_tests.rs: profile_revisions_change_only_for_the_saved_store; backend_revision_identity_follows_scope_instead_of_config_directory"
+  },
+  {
     "file": "crates/openhuman-core/src/mcp/ui/cache.rs",
     "scope": "",
     "name": "STORE",

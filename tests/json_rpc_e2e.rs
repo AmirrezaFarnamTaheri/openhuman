@@ -6,6 +6,9 @@
 #[path = "support/tinyhumans_boot.rs"]
 mod tinyhumans_boot;
 
+#[path = "support/mcp_http.rs"]
+mod mcp_http;
+
 #[path = "support/env_guard.rs"]
 mod env_guard;
 #[path = "support/scripted_stack.rs"]
@@ -8582,12 +8585,12 @@ async fn public_paths_accessible_without_token() {
     // headers, etc.). The invariant here is that the auth middleware does NOT
     // reject them with 401.
     //
-    // NOTE: `/events` and `/ws/dictation` enforce their own credential inside
+    // NOTE: `/events` and `/ws/live-voice` enforce their own credential inside
     // the handler (bind token / bearer / `?token=`), so an unauthenticated GET
-    // to those returns 401 from the HANDLER (not the middleware). `/events`
+    // to those returns 401 at the route boundary. `/events`
     // requires a `client_id` query param, so an empty request is rejected by
     // Axum's extractor (400) before the handler's own auth runs — it stays in
-    // this `!= 401` group. `/ws/dictation` is asserted separately below now
+    // this `!= 401` group. `/ws/live-voice` is asserted separately below now
     // that it is authenticated at the upgrade boundary (C4 / issue #1924).
     for path in ["/events"] {
         let resp = client
@@ -8603,18 +8606,18 @@ async fn public_paths_accessible_without_token() {
         );
     }
 
-    // `/ws/dictation` is now authenticated at the upgrade boundary (C4 /
+    // `/ws/live-voice` is now authenticated at the upgrade boundary (C4 /
     // issue #1924): an unauthenticated request (no bearer header, no
-    // `?token=`) must be rejected with 401 by the handler before any upgrade.
+    // `?token=`) must be rejected with 401 before any upgrade.
     let resp = client
-        .get(format!("{base}/ws/dictation"))
+        .get(format!("{base}/ws/live-voice"))
         .send()
         .await
-        .unwrap_or_else(|e| panic!("GET /ws/dictation: {e}"));
+        .unwrap_or_else(|e| panic!("GET /ws/live-voice: {e}"));
     assert_eq!(
         resp.status(),
         StatusCode::UNAUTHORIZED,
-        "/ws/dictation must reject unauthenticated upgrades with 401 (got {})",
+        "/ws/live-voice must reject unauthenticated upgrades with 401 (got {})",
         resp.status()
     );
 
@@ -9231,10 +9234,10 @@ async fn mcp_clients_lifecycle() {
 
 /// MCP clients **happy path** over real JSON-RPC: declare in `mcp.json` →
 /// connect → tool_call → update_env (reconnect) → disconnect against a real
-/// stdio MCP subprocess (the `test-mcp-stub` binary).
+/// loopback HTTP MCP fixture.
 ///
-/// No npx, no network, no catalog: the server is declared through
-/// `mcp_clients_config_set` with a `command` pointing at the stub binary, which
+/// No external service or catalog: the server is declared through
+/// `mcp_clients_config_set` with a loopback URL, which
 /// is how a user adds any server now — the registry is browse-only.
 #[tokio::test]
 async fn mcp_clients_declare_connect_tool_call_happy_path() {
@@ -9254,7 +9257,8 @@ async fn mcp_clients_declare_connect_tool_call_happy_path() {
     let user_scoped_dir = openhuman_home.join("users").join("local");
     write_min_config(&user_scoped_dir, &mock_origin);
 
-    let stub_path = env!("CARGO_BIN_EXE_test-mcp-stub");
+    let mcp_server = mcp_http::echo_server().await;
+    let mcp_url = mcp_server.uri();
 
     let (rpc_addr, rpc_join) = serve_on_ephemeral(build_core_http_router(false)).await;
     let rpc_base = format!("http://{}", rpc_addr);
@@ -9265,7 +9269,7 @@ async fn mcp_clients_declare_connect_tool_call_happy_path() {
         &rpc_base,
         9920,
         "openhuman.mcp_clients_config_set",
-        json!({ "mcpServers": { "echo": { "command": stub_path } } }),
+        json!({ "mcpServers": { "echo": { "url": mcp_url } } }),
     )
     .await;
     let declared_body = peel_logs_envelope(assert_no_jsonrpc_error(
@@ -9278,13 +9282,13 @@ async fn mcp_clients_declare_connect_tool_call_happy_path() {
         "config_set should report the new server as added: {declared_body}"
     );
     assert_eq!(
-        declared_body["mcpServers"]["echo"]["command"],
-        json!(stub_path),
-        "config_set should render the declared command back: {declared_body}"
+        declared_body["mcpServers"]["echo"]["url"],
+        json!(mcp_url),
+        "config_set should render the declared endpoint back: {declared_body}"
     );
     let server_id = installed_server_id(&rpc_base, 9926, "echo").await;
 
-    // ── 2. connect spawns the stub and lists its one `echo` tool ─────────────
+    // ── 2. connect opens the server and lists its one `echo` tool ─────────────
     let connect = post_json_rpc(
         &rpc_base,
         9921,
@@ -9385,7 +9389,7 @@ async fn mcp_clients_declare_connect_tool_call_happy_path() {
         "echo tool_call after reconfigure should round-trip the input payload: {tc2_inner}"
     );
 
-    // ── 5. disconnect cleans up the subprocess ───────────────────────────────
+    // ── 5. disconnect closes the module connection ───────────────────────────────
     let disconnect = post_json_rpc(
         &rpc_base,
         9924,
@@ -9428,7 +9432,8 @@ async fn mcp_clients_reconfigure_then_retire_over_rpc() {
     write_min_config(&openhuman_home, &mock_origin);
     write_min_config(&openhuman_home.join("users").join("local"), &mock_origin);
 
-    let stub_path = env!("CARGO_BIN_EXE_test-mcp-stub");
+    let mcp_server = mcp_http::echo_server().await;
+    let mcp_url = mcp_server.uri();
     let (rpc_addr, rpc_join) = serve_on_ephemeral(build_core_http_router(false)).await;
     let rpc_base = format!("http://{}", rpc_addr);
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -9438,7 +9443,7 @@ async fn mcp_clients_reconfigure_then_retire_over_rpc() {
         &rpc_base,
         9950,
         "openhuman.mcp_clients_config_set",
-        json!({ "mcpServers": { "echo-reconf": { "command": stub_path } } }),
+        json!({ "mcpServers": { "echo-reconf": { "url": mcp_url } } }),
     )
     .await;
     assert_no_jsonrpc_error(&declared, "mcp_clients_config_set (declare)");
@@ -12239,13 +12244,10 @@ async fn json_rpc_channel_web_chat_with_speak_reply_invokes_reply_speech_inner()
 
 // ── Model resolution and voice settings ─────────────────────────────────
 
-/// E2E: voice-server settings round-trip over JSON-RPC — Phase 2 always-on
-/// toggle + "Hey Tiny" wake word. Regression guard for the bug where the
-/// Settings toggle silently did nothing because `always_on_enabled` was absent
-/// from the `update_voice_server_settings` controller param schema (rejected as
-/// "unknown param 'always_on_enabled'" before reaching the handler).
+/// Live voice settings persist partial patches and explicit null overrides
+/// across JSON-RPC requests without opening a microphone.
 #[tokio::test]
-async fn json_rpc_voice_server_settings_roundtrip_always_on_and_wake_word() {
+async fn json_rpc_live_voice_settings_roundtrip_preserves_and_clears_overrides() {
     let _env_lock = json_rpc_e2e_env_lock_async().await;
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path();
@@ -12262,64 +12264,50 @@ async fn json_rpc_voice_server_settings_roundtrip_always_on_and_wake_word() {
     let rpc_base = format!("http://{}", rpc_addr);
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // GET defaults — wake_word "Hey Tiny", always-on off.
     let initial = post_json_rpc(
         &rpc_base,
         7401,
-        "openhuman.config_get_voice_server_settings",
+        "openhuman.voice_live_settings_get",
         json!({}),
     )
     .await;
-    let initial_outer = assert_no_jsonrpc_error(&initial, "get_voice_server_settings initial");
-    assert_eq!(
-        initial_outer
-            .get("result")
-            .and_then(|r| r.get("always_on_enabled"))
-            .and_then(Value::as_bool),
-        Some(false),
-        "default always_on_enabled should be false, envelope: {initial_outer}"
-    );
-    assert_eq!(
-        initial_outer
-            .get("result")
-            .and_then(|r| r.get("wake_word"))
-            .and_then(Value::as_str),
-        Some("Hey Tiny"),
-        "default wake_word should be 'Hey Tiny', envelope: {initial_outer}"
-    );
-
-    // UPDATE — change the wake word and pass `always_on_enabled` (the param that
-    // used to be rejected). Kept false so the test never opens a real mic.
+    let initial = peel_logs_envelope(assert_no_jsonrpc_error(&initial, "live voice defaults"));
+    assert_eq!(initial["default_provider"], "gemini-hosted");
     let update = post_json_rpc(
         &rpc_base,
         7402,
-        "openhuman.config_update_voice_server_settings",
-        json!({ "always_on_enabled": false, "wake_word": "Computer" }),
+        "openhuman.voice_live_settings_set",
+        json!({ "gemini": { "voice": "Kore", "language": "en-US" } }),
     )
     .await;
-    assert_no_jsonrpc_error(
+    let updated = peel_logs_envelope(assert_no_jsonrpc_error(
         &update,
-        "update_voice_server_settings (always_on_enabled + wake_word)",
-    );
-
-    // GET again — wake word persisted, no error.
-    let after = post_json_rpc(
+        "persist live voice overrides",
+    ));
+    assert_eq!(updated["gemini"]["voice"], "Kore");
+    assert_eq!(updated["gemini"]["language"], "en-US");
+    let patch = post_json_rpc(
         &rpc_base,
         7403,
-        "openhuman.config_get_voice_server_settings",
+        "openhuman.voice_live_settings_set",
+        json!({ "gemini": { "voice": null } }),
+    )
+    .await;
+    assert_no_jsonrpc_error(&patch, "clear one live voice override");
+    let after = post_json_rpc(
+        &rpc_base,
+        7404,
+        "openhuman.voice_live_settings_get",
         json!({}),
     )
     .await;
-    let after_outer = assert_no_jsonrpc_error(&after, "get_voice_server_settings after update");
-    assert_eq!(
-        after_outer
-            .get("result")
-            .and_then(|r| r.get("wake_word"))
-            .and_then(Value::as_str),
-        Some("Computer"),
-        "wake_word should persist, envelope: {after_outer}"
-    );
-
+    let after = peel_logs_envelope(assert_no_jsonrpc_error(
+        &after,
+        "read persisted live voice overrides",
+    ));
+    assert!(after["gemini"]["voice"].is_null());
+    assert_eq!(after["gemini"]["language"], "en-US");
+    assert_eq!(after["default_provider"], initial["default_provider"]);
     rpc_join.abort();
 }
 

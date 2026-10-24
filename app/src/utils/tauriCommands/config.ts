@@ -124,6 +124,7 @@ export interface ModelSettingsUpdate {
 }
 
 export interface RuntimeSettingsUpdate {
+  shell_hide_window?: boolean | null;
   kind?: string | null;
   reasoning_enabled?: boolean | null;
   /** Default thinking level for agent turns; `''` clears it to the provider default. */

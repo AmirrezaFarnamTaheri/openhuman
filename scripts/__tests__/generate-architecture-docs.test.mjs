@@ -2,6 +2,7 @@
 // Run: node --test scripts/__tests__/generate-architecture-docs.test.mjs
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import {
@@ -102,5 +103,5 @@ test('App.tsx still reflects the post-CoreState/ChatRuntime provider chain', () 
   assert.ok(!names.includes('AIProvider'), 'AIProvider was removed pre-audit');
   assert.ok(!names.includes('SkillProvider'), 'SkillProvider was removed pre-audit');
   // Sanity: the doc path the gate guards actually exists.
-  assert.ok(FRONTEND_DOC.endsWith('docs/gitbooks/en/developing/architecture/frontend.md'));
+  assert.ok(FRONTEND_DOC.endsWith(join('docs', 'gitbooks', 'en', 'developing', 'architecture', 'frontend.md')));
 });

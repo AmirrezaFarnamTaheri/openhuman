@@ -335,19 +335,12 @@ test("the storage area arms only the storage-drivers lane, with the sqlite and f
       .sort();
     const inLane = [...e2e.matchAll(/--test (\S+)/g)].map((m) => m[1]).sort();
     assert.deepEqual(inLane, onDisk, profile);
-    // MongoDB runs the shared storage targets that support its feature set.
-    // SQLite-only targets belong to the driver lane above, not MongoDB.
-    const mongo = fs.readFileSync(
-      path.join(repoRoot, ".github/workflows/storage-mongodb.yml"),
-      "utf8",
-    );
-    const inMongo = [...mongo.matchAll(/--test (\S+)/g)]
-      .map((m) => m[1])
-      .sort();
-    assert.deepEqual(
-      inMongo,
-      onDisk.filter((target) => target !== "storage_default_import_e2e"),
-      "storage-mongodb.yml",
+    // Per-driver conformance belongs to tinystoragedrivers' own CI. The
+    // product lane validates the host composition on SQLite and file storage.
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, ".github/workflows/storage-mongodb.yml")),
+      false,
+      "do not restore the removed duplicate MongoDB owner workflow",
     );
     if (profile === "hosted") {
       assert.deepEqual(

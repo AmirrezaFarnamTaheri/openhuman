@@ -427,58 +427,64 @@ async fn generate_title_falls_back_to_first_user_message_when_assistant_missing(
 
 #[tokio::test]
 async fn thread_delete_removes_persisted_turn_state_snapshot() {
-    let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
-    let workspace = tempfile::tempdir().expect("workspace");
-    let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
-    let thread_id = "thread-delete";
-    create_thread_with_title(&workspace, thread_id, "Chat Jan 1 1:00 AM").await;
-    let dir = crate::config::Config::load_or_init()
-        .await
-        .expect("load config")
-        .workspace_dir;
+    crate::core::runtime::CoreContext::scope(
+        crate::core::runtime::CoreContext::for_test(crate::core::runtime::DomainSet::full(), None),
+        async {
+            let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
+            let workspace = tempfile::tempdir().expect("workspace");
+            let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
+            let thread_id = "thread-delete";
+            create_thread_with_title(&workspace, thread_id, "Chat Jan 1 1:00 AM").await;
+            let dir = crate::config::Config::load_or_init()
+                .await
+                .expect("load config")
+                .workspace_dir;
 
-    let snapshot = TurnState::started(thread_id, "req-1", 4, "2026-01-01T00:00:00Z");
-    let store = crate::storage::sessions::turn_states_for(&dir);
-    store.put(&snapshot).expect("put snapshot");
-    assert!(store.get(thread_id).unwrap().is_some());
+            let snapshot = TurnState::started(thread_id, "req-1", 4, "2026-01-01T00:00:00Z");
+            let store = crate::storage::sessions::turn_states_for(&dir);
+            store.put(&snapshot).expect("put snapshot");
+            assert!(store.get(thread_id).unwrap().is_some());
 
-    // Queue a finished background sub-agent result for this thread; deleting the
-    // thread must discard it so it's never delivered into a dead thread.
-    use crate::agent::orchestration::background_completions as bg;
-    bg::record_completion(
-        &crate::core::runtime::DispatchCtx::ambient(),
-        &dir,
-        "sess-del",
-        "sub-del-1",
-        "researcher",
-        "result",
-        Some(thread_id.to_string()),
-    )
-    .await;
-    assert_eq!(bg::pending_for(&dir, thread_id).len(), 1);
+            // Queue a finished background sub-agent result for this thread; deleting the
+            // thread must discard it so it's never delivered into a dead thread.
+            use crate::agent::orchestration::background_completions as bg;
+            bg::record_completion(
+                &crate::core::runtime::DispatchCtx::ambient(),
+                &dir,
+                "sess-del",
+                "sub-del-1",
+                "researcher",
+                "result",
+                Some(thread_id.to_string()),
+            )
+            .await;
+            assert_eq!(bg::pending_for(&dir, thread_id).len(), 1);
 
-    thread_delete(
-        &DispatchCtx::process_default(),
-        DeleteConversationThreadRequest {
-            thread_id: thread_id.to_string(),
-            deleted_at: "2026-01-01T00:02:00Z".into(),
+            thread_delete(
+                &DispatchCtx::ambient(),
+                DeleteConversationThreadRequest {
+                    thread_id: thread_id.to_string(),
+                    deleted_at: "2026-01-01T00:02:00Z".into(),
+                },
+            )
+            .await
+            .expect("delete thread");
+
+            assert_eq!(
+                bg::pending_for(&dir, thread_id).len(),
+                0,
+                "queued completion for the deleted thread should be discarded"
+            );
+
+            let turn_state = turn_state_get(GetTurnStateRequest {
+                thread_id: thread_id.to_string(),
+            })
+            .await
+            .expect("turn_state_get");
+            assert!(turn_state.value.data.unwrap().turn_state.is_none());
         },
     )
-    .await
-    .expect("delete thread");
-
-    assert_eq!(
-        bg::pending_for(&dir, thread_id).len(),
-        0,
-        "queued completion for the deleted thread should be discarded"
-    );
-
-    let turn_state = turn_state_get(GetTurnStateRequest {
-        thread_id: thread_id.to_string(),
-    })
-    .await
-    .expect("turn_state_get");
-    assert!(turn_state.value.data.unwrap().turn_state.is_none());
+    .await;
 }
 
 #[tokio::test]
@@ -691,32 +697,38 @@ async fn thread_update_title_rejects_empty_and_whitespace_only_titles() {
 
 #[tokio::test]
 async fn thread_delete_forgets_its_conversation_memory_or_queues_it() {
-    let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
-    let workspace = tempfile::tempdir().expect("workspace");
-    let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
-    let thread_id = "thread-delete-memory";
-    create_thread_with_title(&workspace, thread_id, "Chat Jan 1 1:00 AM").await;
-    let dir = crate::config::Config::load_or_init()
-        .await
-        .expect("load config")
-        .workspace_dir;
+    crate::core::runtime::CoreContext::scope(
+        crate::core::runtime::CoreContext::for_test(crate::core::runtime::DomainSet::full(), None),
+        async {
+            let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
+            let workspace = tempfile::tempdir().expect("workspace");
+            let _workspace_guard = EnvVarGuard::set("OPENHUMAN_WORKSPACE", workspace.path());
+            let thread_id = "thread-delete-memory";
+            create_thread_with_title(&workspace, thread_id, "Chat Jan 1 1:00 AM").await;
+            let dir = crate::config::Config::load_or_init()
+                .await
+                .expect("load config")
+                .workspace_dir;
 
-    thread_delete(
-        &DispatchCtx::process_default(),
-        DeleteConversationThreadRequest {
-            thread_id: thread_id.to_string(),
-            deleted_at: "2026-01-01T00:02:00Z".into(),
+            thread_delete(
+                &DispatchCtx::ambient(),
+                DeleteConversationThreadRequest {
+                    thread_id: thread_id.to_string(),
+                    deleted_at: "2026-01-01T00:02:00Z".into(),
+                },
+            )
+            .await
+            .expect("delete thread");
+
+            // Signed out in tests (memory off): the forget is queued for the next
+            // sign-in instead of being skipped.
+            assert_eq!(
+                crate::memory::deletion::pending(&dir),
+                vec![crate::memory::deletion::PendingDeletion::Thread {
+                    thread_id: thread_id.to_string()
+                }]
+            );
         },
     )
-    .await
-    .expect("delete thread");
-
-    // Signed out in tests (memory off): the forget is queued for the next
-    // sign-in instead of being skipped.
-    assert_eq!(
-        crate::memory::deletion::pending(&dir),
-        vec![crate::memory::deletion::PendingDeletion::Thread {
-            thread_id: thread_id.to_string()
-        }]
-    );
+    .await;
 }

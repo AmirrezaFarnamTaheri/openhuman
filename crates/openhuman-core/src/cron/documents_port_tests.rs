@@ -3,6 +3,68 @@ use crate::storage::{MemoryStorage, Scope, StorageBackend};
 use serde_json::json;
 use tinyflows_bus::schedule::{DOCUMENT_INTERFACE, DOCUMENT_METHOD};
 
+/// The synchronous cron API runs on the process-wide storage bridge. A
+/// ScheduleDocuments callback invoked by that operation must not synchronously
+/// re-enter the same bridge, even when no storage backend was pre-installed.
+/// Run in a child because a regression would deadlock the shared bridge and
+/// poison unrelated tests in the enclosing library suite.
+#[cfg(feature = "storage-sqlite")]
+#[test]
+fn document_callback_does_not_reenter_the_shared_storage_bridge() {
+    const CHILD: &str = "OPENHUMAN_CRON_PORT_BRIDGE_CHILD";
+    const NAME: &str = "document_callback_does_not_reenter_the_shared_storage_bridge";
+    let module = module_path!().split_once("::").unwrap().1;
+    let test = format!("{module}::{NAME}");
+
+    if std::env::var(CHILD).as_deref() != Ok(test.as_str()) {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &test, "--nocapture", "--test-threads=1"])
+            .env(CHILD, &test)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn isolated bridge regression");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(35);
+        loop {
+            if let Some(status) = child.try_wait().expect("poll isolated test") {
+                let output = child.wait_with_output().expect("read isolated test");
+                assert!(
+                    status.success()
+                        && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+                    "callback bridge test failed; status={status}\nstdout:\n{}\nstderr:\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                return;
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().expect("kill stalled bridge regression");
+                let output = child.wait_with_output().expect("read stalled child");
+                panic!(
+                    "ScheduleDocuments callback deadlocked the storage bridge\nstdout:\n{}\nstderr:\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    let temp = tempfile::tempdir().unwrap();
+    let mut config = Config::default();
+    config.workspace_dir = temp.path().to_path_buf();
+    let port = DocumentsPort {
+        scope: DocScope::for_scope(&config, Scope::local()),
+    };
+    let reply: Value = crate::storage::block_on_anyhow(async move {
+        port.handle(json!({"op": "capabilities"}))
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))
+    })
+    .expect("callback resolves backend without re-entering bridge");
+    assert_eq!(reply["record_metadata"], true);
+}
+
 async fn port() -> (tinybus::Proxy, CallbackAddress) {
     let (proxy, address, _) = port_with_backend().await;
     (proxy, address)

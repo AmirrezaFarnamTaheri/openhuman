@@ -15,6 +15,9 @@
 mod env_guard;
 #[path = "support/linked_modules.rs"]
 mod linked_modules;
+#[cfg(feature = "mcp")]
+#[path = "support/mcp_http.rs"]
+mod mcp_http;
 #[path = "support/scripted_stack.rs"]
 mod scripted_stack;
 use env_guard::EnvVarGuard;
@@ -1503,9 +1506,11 @@ fn pre_create_for_approval(home: &Path, filename: &str) -> std::path::PathBuf {
 // file_write on an existing file parks at the approval gate and publishes
 // approval_request over SSE.
 //
-// LLM request ordering (2 calls total):
+// LLM request ordering (4 calls total):
 //   request[0] = orchestrator → file_write tool call (approval parks)
-//   request[1] = orchestrator → text completion after the decision
+//   request[1] = orchestrator → provisional text after the decision
+//   request[2] = verify-before-finish → file_read of the approved write
+//   request[3] = orchestrator → final text after independent verification
 
 /// Orchestrator calls file_write (on an existing file) → approval gate parks →
 /// approval_request surfaces over SSE → approve_once resumes → orchestrator
@@ -1532,8 +1537,10 @@ async fn approval_gate_approve_flow_inner() {
             "file_write",
             json!({ "path": "approval-canary.txt", "content": "APPROVED_WRITE_CANARY" }),
         ),
-        // request[1]: Orchestrator text after approval.
-        text_completion("Done. File written: APPROVED_WRITE_CANARY"),
+        // request[1]: The write succeeded; verify-before-finish requires a readback.
+        text_completion("File written; I will verify its contents."),
+        tool_call_completion("file_read", json!({ "path": "approval-canary.txt" })),
+        text_completion("Done. Verified file contents: APPROVED_WRITE_CANARY"),
     ]);
     let stack = boot_stack_with_config(SUPERVISED_AUTONOMY_CONFIG).await;
     bind_thread_action_dir(
@@ -1603,7 +1610,16 @@ async fn approval_gate_approve_flow_inner() {
         .unwrap_or_else(|| panic!("chat_done missing full_response: {done}"));
     assert!(
         full_response.contains("APPROVED_WRITE_CANARY"),
-        "full_response must contain APPROVED_WRITE_CANARY; got: {full_response}"
+        "full_response must contain APPROVED_WRITE_CANARY; got: {full_response}; captured upstream requests: {}",
+        serde_json::to_string(&with_captured(|requests| requests.clone())).unwrap()
+    );
+
+    let requests = with_captured(|requests| requests.clone());
+    let verification = tool_result_text(&requests, "file_read")
+        .expect("the approved write must be independently verified before completion");
+    assert!(
+        verification.contains("APPROVED_WRITE_CANARY"),
+        "the verification read must return the approved contents: {verification}"
     );
 
     // The file was actually written under the temp HOME (action_dir = $HOME/OpenHuman/projects/).
@@ -1693,7 +1709,8 @@ async fn approval_gate_deny_flow_inner() {
         .unwrap_or_else(|| panic!("chat_done missing full_response: {done}"));
     assert!(
         full_response.contains("DENIAL_ACK_CANARY"),
-        "full_response must contain DENIAL_ACK_CANARY; got: {full_response}"
+        "full_response must contain DENIAL_ACK_CANARY; got: {full_response}; captured upstream requests: {}",
+        serde_json::to_string(&with_captured(|requests| requests.clone())).unwrap()
     );
     assert_model_saw_the_refusal(&with_captured(|c| c.clone()));
 
@@ -1774,7 +1791,8 @@ async fn approval_gate_timeout_inner() {
         .unwrap_or_else(|| panic!("chat_done missing full_response: {done}"));
     assert!(
         full_response.contains("TIMEOUT_ACK_CANARY"),
-        "full_response must contain TIMEOUT_ACK_CANARY after TTL auto-deny; got: {full_response}"
+        "full_response must contain TIMEOUT_ACK_CANARY after TTL auto-deny; got: {full_response}; captured upstream requests: {}",
+        serde_json::to_string(&with_captured(|requests| requests.clone())).unwrap()
     );
     assert_model_saw_the_expiry(&with_captured(|c| c.clone()));
 
@@ -3362,7 +3380,6 @@ fn packed_tool_call_completion(pack: &str, tool: &str, args: Value) -> Value {
 /// delegate's summary of the same call can never match. Panics on an
 /// `unknown tool` result: that error echoes the call's arguments, so a canary
 /// passed as an argument would otherwise read as a pass.
-#[cfg(any(feature = "skills", feature = "mcp"))]
 fn tool_result_text(requests: &[Value], tool_name: &str) -> Option<String> {
     let call_id = format!("call_{tool_name}");
     let legacy_result = requests
@@ -4060,7 +4077,11 @@ async fn agent_calls_a_tool_on_an_mcp_server_installed_from_the_registry_inner()
     );
 
     // Declared in mcp.json (the registry is browse-only) and connected.
-    let server_id = declare_and_connect_registry_echo_server(&stack.rpc_base, 801).await;
+    // Use loopback HTTP for the registry path: untrusted stdio correctly
+    // requires native jail enforcement, which hosted Linux does not provide.
+    let mcp_upstream = mcp_http::echo_server().await;
+    let server_id =
+        declare_and_connect_registry_echo_server(&stack.rpc_base, 801, &mcp_upstream.uri()).await;
 
     // Used: the orchestrator discovers the schema, then calls the tool itself.
     reset_script(vec![
@@ -4118,17 +4139,20 @@ async fn agent_calls_a_tool_on_an_mcp_server_installed_from_the_registry_inner()
     stack.shutdown();
 }
 
-/// Declare the registry's echo server in `mcp.json` the way a user who found
-/// it in the registry tab would — by its command, pointed at the stub — through
+/// Declare the registry's echo server in `mcp.json` by its HTTP URL through
 /// the settings RPCs, connect it, and return its server id.
 #[cfg(feature = "mcp")]
-async fn declare_and_connect_registry_echo_server(rpc_base: &str, first_rpc_id: i64) -> String {
+async fn declare_and_connect_registry_echo_server(
+    rpc_base: &str,
+    first_rpc_id: i64,
+    url: &str,
+) -> String {
     let declared = post_json_rpc(
         rpc_base,
         first_rpc_id,
         "openhuman.mcp_clients_config_set",
         json!({ "mcpServers": { REGISTRY_MCP_SERVER: {
-            "command": env!("CARGO_BIN_EXE_test-mcp-stub"),
+            "url": url,
             // Off until the explicit connect below, so the background connect
             // config_set would otherwise start cannot race it.
             "enabled": false
@@ -4278,7 +4302,8 @@ async fn orchestrator_calls_a_connected_mcp_tool_directly_inner() {
     reset_script(Vec::new());
     let stack = boot_stack().await;
     // Connecting also writes the tool cache the orchestrator's surface reads.
-    declare_and_connect_registry_echo_server(&stack.rpc_base, 940).await;
+    let mcp_upstream = mcp_http::echo_server().await;
+    declare_and_connect_registry_echo_server(&stack.rpc_base, 940, &mcp_upstream.uri()).await;
 
     reset_script(vec![
         tool_call_completion(

@@ -86,7 +86,22 @@ fn classify(
     })
 }
 fn provider_decision(error: &ProviderError) -> Option<RetryDecision> {
-    classify(error.status, error.code.as_deref(), error.retry_after_ms)
+    // A partial answer belongs to the caller. Never replace it with another
+    // credential's replay, even if the terminal status normally permits retry.
+    if error.partial_message.is_some() {
+        return None;
+    }
+    classify(error.status, error.code.as_deref(), error.retry_after_ms).or_else(|| {
+        // Typed transient transport/server failures may try another credential
+        // before any content is exposed. They are not evidence of a bad key or
+        // exhausted quota, so preserve its eligibility for a later call.
+        (error.retryable && matches!(error.status, None | Some(408) | Some(500..=599))).then_some(
+            RetryDecision {
+                failure: KeyFailure::Other,
+                after_ms: error.retry_after_ms,
+            },
+        )
+    })
 }
 fn model_decision(error: &tinyinference_llm::Error) -> Option<RetryDecision> {
     match error {

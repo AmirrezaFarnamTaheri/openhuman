@@ -211,6 +211,7 @@ pub(super) fn handle_update_runtime_settings(
     Box::pin(async move {
         let update = deserialize_params::<RuntimeSettingsUpdate>(params)?;
         let patch = config_rpc::RuntimeSettingsPatch {
+            shell_hide_window: update.shell_hide_window,
             kind: update.kind,
             reasoning_enabled: update.reasoning_enabled,
             reasoning_effort: update.reasoning_effort,

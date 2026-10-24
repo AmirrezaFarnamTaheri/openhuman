@@ -1,8 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { cn } from '../../../../lib/cn';
 import { useT } from '../../../../lib/i18n/I18nContext';
 import { listProviderModels, type ModelInfo } from '../../../../services/api/aiSettingsApi';
+import {
+  cachedModelCatalog,
+  invalidateModelCatalogCache,
+  loadModelCatalog,
+  modelCatalogIdentity,
+  modelCatalogProviderRevision,
+  modelCatalogRevision,
+  ModelCatalogSupersededError,
+  subscribeModelCatalog,
+} from '../../../../services/modelCatalogCache';
 import Alert from '../../../ui/Alert';
 import Button from '../../../ui/Button';
 import { ModalShell } from '../../../ui/ModalShell';
@@ -16,6 +26,11 @@ import {
 } from './aiPanelTypes';
 import { ModelEntryField, useModelEntryMode } from './ModelEntryField';
 import { ProviderSwatch } from './ProviderListRow';
+
+export {
+  cachedModelCatalog,
+  invalidateModelCatalogCache,
+} from '../../../../services/modelCatalogCache';
 
 type TFn = (key: string, fallback?: string) => string;
 
@@ -169,21 +184,25 @@ export function ProviderModelPickerDialog({
     initial?.source ?? sources[0] ?? null
   );
   const [model, setModel] = useState(initial?.model ?? '');
-  const [catalog, setCatalog] = useState<ModelInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogRequest, setCatalogRequest] = useState(0);
+  const cacheRevision = useSyncExternalStore(
+    subscribeModelCatalog,
+    modelCatalogRevision,
+    modelCatalogRevision
+  );
+  const identity = modelCatalogIdentity();
+  const [remoteCatalog, setRemoteCatalog] = useState<{
+    identity: string;
+    slug: string;
+    revision: number;
+    models: ModelInfo[];
+    loading: boolean;
+    error: string | null;
+  } | null>(null);
   const isLocalSource = source?.kind === 'local';
-
   const selectedCloudProvider =
     source?.kind === 'cloud'
       ? cloudProviders.find(provider => provider.slug === source.providerSlug)
       : undefined;
-  const modelEntryMode = useModelEntryMode({
-    endpoint: selectedCloudProvider?.endpoint,
-    model,
-    catalogIds: catalog.map(candidate => candidate.id),
-  });
 
   /**
    * Slug whose `/models` listing backs the right-hand pane, or null when the
@@ -207,38 +226,71 @@ export function ProviderModelPickerDialog({
     return null;
   }, [source]);
 
-  // Local models are supplied by the host, not fetched. Kept separate so a new
-  // array identity re-mirrors the list without re-triggering a network call.
-  useEffect(() => {
-    if (isLocalSource) setCatalog(localModels);
-  }, [isLocalSource, localModels]);
+  const providerRevision = modelCatalogProviderRevision(fetchSlug);
+  const [selectionScope, setSelectionScope] = useState({ identity, fetchSlug, providerRevision });
+  if (
+    selectionScope.identity !== identity ||
+    selectionScope.fetchSlug !== fetchSlug ||
+    selectionScope.providerRevision !== providerRevision
+  ) {
+    setSelectionScope({ identity, fetchSlug, providerRevision });
+    if (selectionScope.identity !== identity) {
+      setSource(sources[0] ?? null);
+      setModel('');
+      setQuery('');
+    } else if (fetchSlug && selectionScope.fetchSlug === fetchSlug) {
+      // Clear a previously selected private model before the next UI commit.
+      // Edits to an unrelated provider leave manual model entries intact.
+      setModel('');
+      setQuery('');
+    }
+  }
+  const remoteCatalogIsCurrent =
+    remoteCatalog?.identity === identity &&
+    remoteCatalog.slug === fetchSlug &&
+    remoteCatalog.revision === providerRevision;
+  const catalog: ModelInfo[] = isLocalSource
+    ? localModels
+    : remoteCatalogIsCurrent
+      ? remoteCatalog.models
+      : [];
+  const loading = Boolean(fetchSlug) && (!remoteCatalogIsCurrent || remoteCatalog.loading);
+  const catalogError = remoteCatalogIsCurrent ? remoteCatalog.error : null;
+  const modelEntryMode = useModelEntryMode({
+    endpoint: selectedCloudProvider?.endpoint,
+    model,
+    catalogIds: catalog.map(candidate => candidate.id),
+  });
 
   useEffect(() => {
-    if (!fetchSlug) {
-      if (!isLocalSource) setCatalog([]);
+    if (!fetchSlug) return;
+    let active = true;
+    const scope = { identity, slug: fetchSlug, revision: providerRevision };
+    const cached = cachedModelCatalog(fetchSlug);
+    if (cached) {
+      setRemoteCatalog({ ...scope, models: cached, loading: false, error: null });
       return;
     }
-    let active = true;
-    setLoading(true);
-    setCatalog([]);
-    setCatalogError(null);
-    void listProviderModels(fetchSlug)
+    setRemoteCatalog({ ...scope, models: [], loading: true, error: null });
+    void loadModelCatalog(fetchSlug, () => listProviderModels(fetchSlug))
       .then(models => {
         if (!active) return;
-        setCatalog(models);
-        setLoading(false);
+        setRemoteCatalog({ ...scope, models, loading: false, error: null });
       })
-      .catch(() => {
-        if (active) {
-          setLoading(false);
-          setCatalogError('Could not load models from this provider.');
+      .catch(error => {
+        if (active && !(error instanceof ModelCatalogSupersededError)) {
+          setRemoteCatalog({
+            ...scope,
+            models: [],
+            loading: false,
+            error: 'Could not load models from this provider.',
+          });
         }
       });
     return () => {
       active = false;
     };
-  }, [catalogRequest, fetchSlug, isLocalSource]);
-
+  }, [cacheRevision, fetchSlug, identity, providerRevision]);
   // Search both provider names and the active provider's catalog. Keep the
   // selected provider visible so its model results remain usable.
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -400,7 +452,12 @@ export function ProviderModelPickerDialog({
               catalog={visibleCatalog}
               catalogLoading={loading}
               catalogError={catalogError}
-              onRetry={() => setCatalogRequest(request => request + 1)}
+              onRetry={() => {
+                // An explicit retry must actually re-list the provider, so the
+                // cache entry is dropped first — otherwise the cached catalog
+                // would be served and the retry would look like a no-op.
+                if (fetchSlug) invalidateModelCatalogCache(fetchSlug);
+              }}
               label={t('settings.ai.modelLabel')}
               placeholder={t('settings.ai.picker.modelIdPlaceholder')}
               analyticsId="settings-ai-model-picker-manual-entry"

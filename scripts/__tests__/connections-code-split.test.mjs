@@ -15,8 +15,30 @@ test("Connections and Memory keep nested views within the supported desktop rout
   }
 });
 
-test("top-level route splitting retains a loading boundary", () => {
-  const routes = source("AppRoutes.tsx");
-  assert.match(routes, /lazy\(\(\) => import\('\.\/pages\/Skills'\)\)/);
-  assert.match(routes, /<Suspense\s+fallback=/);
+function checkRouteLoading(routes) {
+  if (/\blazy\s*\(/.test(routes)) {
+    const imports = [...routes.matchAll(/\bimport\s*\(([^)]*)\)/g)];
+    assert.ok(imports.length > 0);
+    for (const [call, path] of imports) {
+      assert.match(path, /^['"]\.\/pages\/[\w/-]+['"]$/);
+      assert.ok(routes.includes(`lazy(() => ${call})`));
+    }
+    assert.match(routes, /lazy\(\(\) => import\(['"]\.\/pages\/[\w/-]+['"]\)\)/);
+    assert.match(routes, /<Suspense\s+fallback=/);
+  } else {
+    assert.match(routes, /import Skills from ['"]\.\/pages\/Skills['"]/);
+    assert.doesNotMatch(routes, /\bimport\s*\(/);
+  }
+}
+
+test("top-level routes use static imports or literal lazy imports with a loading boundary", () => {
+  checkRouteLoading(source("AppRoutes.tsx"));
+});
+
+test("a split route without a loading boundary is rejected", () => {
+  const split = "const Skills = lazy(() => import('./pages/Skills'));";
+  assert.throws(() => checkRouteLoading(split));
+  assert.doesNotThrow(() => checkRouteLoading(split + '<Suspense fallback={<Loading />}>'));
+  assert.throws(() => checkRouteLoading("const Skills = lazy(() => import(path));<Suspense fallback={null}>"));
+  assert.throws(() => checkRouteLoading(split + "const Other = lazy(() => import(path));<Suspense fallback={null}>"));
 });

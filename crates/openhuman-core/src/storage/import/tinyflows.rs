@@ -272,19 +272,7 @@ fn catalog_migration_ready(
 }
 
 #[cfg(feature = "flows")]
-fn flow_import_marker_done(backend: &Arc<dyn StorageBackend>, config: &Config) -> Result<bool> {
-    let markers = Repo::on(
-        backend,
-        &crate::storage::tenant_scope(None),
-        "storage::import",
-        marker_spec,
-    )?;
-    let step = marker_step(FLOWS_DOMAIN, &config.workspace_dir);
-    import_state::is_done(&markers, MARKER_OWNER, &step)
-}
-
-#[cfg(feature = "flows")]
-pub(crate) fn legacy_flow_import_pending(
+pub(crate) async fn legacy_flow_import_pending(
     backend: &Arc<dyn StorageBackend>,
     config: &Config,
     scope: &Scope,
@@ -292,7 +280,11 @@ pub(crate) fn legacy_flow_import_pending(
     if scope != &Scope::local() || !flow_sources_present(&config.workspace_dir.join("flows")) {
         return Ok(false);
     }
-    Ok(!flow_import_marker_done(backend, config)?)
+    // Use the asynchronous primitive directly, including when a module
+    // callback is already running on the storage blocking bridge.
+    let scoped = backend.for_scope(&crate::storage::tenant_scope(None))?;
+    let step = marker_step(FLOWS_DOMAIN, &config.workspace_dir);
+    Ok(!import_state::done(&scoped, MARKER_OWNER, &step).await?)
 }
 
 /// Make the acting scope safe for workflow calls, retrying a failed Catalog
@@ -320,6 +312,7 @@ pub(crate) async fn ensure_flow_scope_ready(config: &Config) -> std::result::Res
     }
     if !fallback
         && legacy_flow_import_pending(&backend, config, &scope)
+            .await
             .map_err(|error| format!("check the legacy flow import marker: {error:#}"))?
     {
         return Err(
@@ -354,7 +347,16 @@ async fn migrate_owner_stores(
     backend: Arc<dyn StorageBackend>,
     config: Config,
 ) -> (Vec<Report>, bool) {
-    let scopes = crate::storage::boot::scopes_to_migrate(&backend).await;
+    let mut scopes = crate::storage::boot::scopes_to_migrate(&backend).await;
+    // A legacy agent cron store may be its scope's first data. Prepare that
+    // scope before importing it, rather than discovering it on the next boot.
+    for (agent, _) in agent_cron_dirs(&config.workspace_dir) {
+        let scope = crate::storage::scope_for_agent(&agent);
+        if !scopes.contains(&scope) {
+            scopes.push(scope);
+        }
+    }
+    scopes.sort_by(|left, right| left.as_str().cmp(right.as_str()));
     #[cfg(feature = "flows")]
     let local = Scope::local();
     #[cfg(feature = "flows")]

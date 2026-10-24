@@ -240,7 +240,8 @@ async function filesUnder(root, predicate) {
   const found = [];
   async function visit(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const path = resolve(directory, entry.name);
+      // Contract maps and baselines use repository paths on every platform.
+      const path = resolve(directory, entry.name).replaceAll("\\", "/");
       if (entry.isDirectory()) await visit(path);
       else if (predicate(path)) found.push(path);
     }
@@ -626,7 +627,7 @@ const claudeCodeBridge = rustCode(
 function add(rule, path, line, text) {
   findings.push({
     rule,
-    path: relative(repoRoot, path),
+    path: relative(repoRoot, path).replaceAll("\\", "/"),
     line,
     text: text.trim(),
   });
@@ -637,7 +638,7 @@ for (const path of await filesUnder(
   openhumanCratesRoot,
   (path) => path.endsWith(".rs") && /\/src\//.test(path),
 )) {
-  const rel = relative(repoRoot, path);
+  const rel = relative(repoRoot, path).replaceAll("\\", "/");
   const source = await readFile(path, "utf8");
   const sdkContractLines = sanctionedSdkReexportLines(rel, rustCode(source));
   const lines = codeLines(source);
@@ -757,7 +758,7 @@ for (const path of await filesUnder(
     for (const name of openhumanDomainTypes) {
       if (
         isClaudeCodeBridgeMessage(
-          relative(repoRoot, path),
+          relative(repoRoot, path).replaceAll("\\", "/"),
           name,
           claudeCodeBridge,
           text,

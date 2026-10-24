@@ -199,6 +199,7 @@ The compiled capability report describes this build:
     "http-server": true,
     "inbound-queues": true,
     "inference": false,
+    "langfuse": false,
     "mcp": true,
     "media": true,
     "modules": true,

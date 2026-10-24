@@ -256,3 +256,28 @@ fn typed_quarantine_validation_is_cached_per_backend_scope_name_and_type() {
         "a different requested value type gets its own validation"
     );
 }
+
+#[test]
+fn failed_typed_quarantine_is_retried_after_the_conflict_is_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let legacy = dir.path().join("jobs.json");
+    let backup = legacy.with_extension("json.corrupt");
+    let invalid = br#"{"job":false}"#;
+    std::fs::write(&legacy, invalid).unwrap();
+    std::fs::write(&backup, b"previous backup").unwrap();
+    let backend: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
+    let kv = StateKv::on_backend(&backend, &Scope::local(), "test_owner", "state").unwrap();
+
+    assert!(kv
+        .import_file_quarantining::<BTreeMap<String, u32>>("jobs", &legacy)
+        .is_err());
+    assert_eq!(std::fs::read(&legacy).unwrap(), invalid);
+    assert_eq!(std::fs::read(&backup).unwrap(), b"previous backup");
+
+    std::fs::remove_file(&backup).unwrap();
+    kv.import_file_quarantining::<BTreeMap<String, u32>>("jobs", &legacy)
+        .unwrap();
+    assert!(!legacy.exists());
+    assert_eq!(std::fs::read(backup).unwrap(), invalid);
+    assert!(kv.get::<BTreeMap<String, u32>>("jobs").unwrap().is_none());
+}

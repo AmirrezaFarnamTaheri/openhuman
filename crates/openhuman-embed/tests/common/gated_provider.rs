@@ -77,6 +77,20 @@ impl GatedProvider {
         Self { addr, shared }
     }
 
+    /// Read counters from an external watchdog without waiting on the executor.
+    pub fn diagnostic_state(&self) -> String {
+        let Ok(counters) = self.shared.counters.try_lock() else {
+            return "counters unavailable".to_string();
+        };
+        format!(
+            "chat_requests={}, in_flight={}, peak_in_flight={}, gate_open={}",
+            counters.chat_requests,
+            counters.in_flight,
+            counters.peak_in_flight,
+            counters.hold_until.is_none(),
+        )
+    }
+
     /// `http://127.0.0.1:<port>`, like `MockServer::uri`.
     pub fn uri(&self) -> String {
         format!("http://{}", self.addr)

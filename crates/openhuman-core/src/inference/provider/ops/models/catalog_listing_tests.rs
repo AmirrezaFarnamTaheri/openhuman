@@ -490,6 +490,52 @@ async fn public_model_catalogue_does_not_verify_api_key() {
 }
 
 #[tokio::test]
+async fn inconclusive_anonymous_probe_keeps_successful_catalogue_unverified() {
+    use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .and(header("authorization", "Bearer candidate-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{ "id": "nvidia/model", "object": "model" }]
+        })))
+        .with_priority(1)
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(503))
+        .with_priority(10)
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut config = crate::config::Config::default();
+    config.cloud_providers.push(CloudProviderCreds {
+        slug: "nvidia".into(),
+        endpoint: format!("{}/v1", server.uri()),
+        auth_style: AuthStyle::Bearer,
+        ..Default::default()
+    });
+    let response =
+        list_configured_models_with_candidate_key_from_config("nvidia", &config, "candidate-key")
+            .await
+            .expect(
+                "the keyed catalogue response is usable even when the anonymous check is transient",
+            );
+
+    assert_eq!(response.value["models"][0]["id"], "nvidia/model");
+    assert_eq!(response.value["fleet_probe"]["authenticated"], false);
+    assert_eq!(response.value["fleet_probe"]["public_catalogue"], false);
+    assert_eq!(response.value["fleet_probe"]["checked_keys"], 1);
+    assert_eq!(response.value["fleet_probe"]["rejected_keys"], 0);
+}
+
+#[tokio::test]
 async fn private_catalogue_proves_key_only_when_anonymous_control_is_rejected() {
     use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
     use wiremock::matchers::{header, method, path};

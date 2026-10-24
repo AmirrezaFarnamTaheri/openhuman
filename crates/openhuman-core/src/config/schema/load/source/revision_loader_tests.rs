@@ -202,7 +202,7 @@ async fn recovery_restores_the_bootstrap_file_when_document_cas_conflicts() {
     let external = config_at(tmp.path(), "concurrent-document-writer");
     external.save().await.unwrap();
 
-    let error = super::super::super::super::branches::save_recovered(&recovered, source.as_ref())
+    let error = crate::config::schema::load::branches::save_recovered(&recovered, source.as_ref())
         .await
         .unwrap_err();
     assert!(

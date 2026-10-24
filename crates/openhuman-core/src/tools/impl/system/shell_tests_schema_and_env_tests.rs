@@ -15,7 +15,12 @@ async fn configured_shell_fails_closed_when_tinybox_analysis_is_disabled() {
         .prepare_authorization(&json!({"command": "cat ~/.ssh/id_rsa"}))
         .await
         .expect_err("hosted shell authorization requires TinyBox analysis");
-    assert_eq!(error.to_string(), "command analysis is unavailable");
+    assert!(
+        error
+            .to_string()
+            .starts_with("command analysis is unavailable"),
+        "analysis failure must remain a closed refusal: {error}"
+    );
 }
 
 #[cfg(feature = "modules")]

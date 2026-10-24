@@ -37,6 +37,7 @@ media = ["openhuman-embed/media", "dep:tinyinference-image", "dep:tinyinference-
 flows = ["openhuman-embed/flows"]
 skills = ["openhuman-embed/skills"]
 mcp = ["openhuman-embed/mcp"]
+structural-code = ["openhuman-embed/structural-code"]
 crash-reporting = ["openhuman-embed/crash-reporting"]
 channels = ["openhuman-embed/channels"]
 file-logging = ["openhuman-embed/file-logging"]

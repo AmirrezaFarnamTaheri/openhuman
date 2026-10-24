@@ -77,8 +77,8 @@ pub enum AgentError {
         source: std::io::Error,
     },
 
-    /// A module-owned agent resource did not acknowledge cleanup, so its
-    /// workspace could not be purged safely.
+    /// Session construction or module-owned cleanup is still running, so
+    /// the agent's workspace could not be purged safely.
     #[error("agent cleanup is still pending; its workspace was retained")]
     CleanupPending,
 

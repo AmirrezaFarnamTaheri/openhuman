@@ -103,6 +103,7 @@ fn dynamic_child_prompt_lists_text_dialect_catalogue_once() {
             tool_call_format: format,
             connected_integrations: &integrations,
             connected_identities_md: String::new(),
+            connected_mcp_servers_md: String::new(),
             user_identity: None,
             personality_roster: vec![],
             agents_md_global: None,

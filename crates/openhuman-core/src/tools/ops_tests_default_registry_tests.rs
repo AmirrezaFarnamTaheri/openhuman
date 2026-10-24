@@ -84,9 +84,8 @@ fn every_packed_tool_name_resolves_to_a_registered_tool() {
     // `wallet_encode_erc20_transfer`, `wallet_execute_prepared`) whose backing
     // functions exist only as `wallet.*` RPC methods, never as agent tools.
     //
-    // Packs whose tools sit behind a non-default Cargo feature are skipped
-    // entirely — see `pack_is_assertable` below. Within an asserted pack every
-    // name must resolve.
+    // The complete pack check runs under the product feature set below. Every
+    // name in an asserted pack must resolve.
     let tmp = TempDir::new().unwrap();
     let security = Arc::new(SecurityPolicy::default());
     let browser = BrowserConfig {
@@ -130,10 +129,11 @@ fn every_packed_tool_name_resolves_to_a_registered_tool() {
             .filter_map(|d| d.delegate_name)
             .collect();
 
-    // `PACKS` is unconditional, but most packs' tools are behind Cargo features
-    // that are NOT in `default` — `flows`, `mcp`, `skills`, `web3`, `documents`,
-    // `voice`. Under a partial feature set "missing" means "compiled out", not
-    // "stale", and asserting there reports the pack's REAL tools as missing.
+    // `PACKS` is unconditional, but packs' tools can be compiled out with Cargo
+    // features — `flows`, `mcp`, `skills`, `web3`, `documents`, `voice`, and
+    // `structural-code`. Under a partial feature set "missing" means "compiled
+    // out", not "stale", and asserting there reports the pack's REAL tools as
+    // missing.
     // That is what the `Rust Feature-Gate Smoke (gates off)` lane caught twice.
     //
     // A stale name is a property of the `PACKS` table, not of the build, so
@@ -146,12 +146,12 @@ fn every_packed_tool_name_resolves_to_a_registered_tool() {
     // signal here.
     if !cfg!(all(
         feature = "flows",
-        feature = "structural-code",
         feature = "mcp",
         feature = "skills",
         feature = "web3",
         feature = "documents",
         feature = "voice",
+        feature = "structural-code",
     )) {
         return;
     }

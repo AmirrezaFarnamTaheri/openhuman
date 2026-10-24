@@ -36,7 +36,7 @@ use super::provider::resolve_subagent_source;
 
 #[path = "runner_prompt.rs"]
 mod runner_prompt;
-use runner_prompt::load_typed_prompt_source;
+use runner_prompt::{load_typed_prompt_source, LoadedConfig};
 
 /// Runtime spawn-hierarchy gate decision for one delegation hop.
 ///
@@ -408,21 +408,6 @@ fn workspace_descriptor_for_subagent(
     )
 }
 
-/// One spawn's snapshot of the host config, loaded once by [`run_subagent`].
-///
-/// `Config::load_or_init()` is **not cached** — it re-resolves the config dirs
-/// and re-reads `config.toml` on every call. `run_typed_mode` needed it in six
-/// places, so a single sub-agent spawn used to hit the disk six times and could
-/// observe six *different* configs if the file changed mid-spawn.
-///
-/// The error is captured as a `String` rather than dropped to `Option` so the
-/// sites that log it can say why the config was unavailable; every site
-/// degrades without it.
-///
-/// Threading this in as a parameter (rather than loading it inside the runtime)
-/// is `docs/specs/plan-agents.md` Phase 3: the sub-agent runner is slated to
-/// move into TinyAgents, and a generic runtime has no config file to load.
-type LoadedConfig = Result<std::sync::Arc<crate::config::Config>, String>;
 // ─────────────────────────────────────────────────────────────────────────────
 // Typed mode — narrow prompt, filtered tools, cheaper model
 // ─────────────────────────────────────────────────────────────────────────────
@@ -650,14 +635,21 @@ async fn run_typed_mode(
         visible_tool_names: &visible_tool_names,
         tool_call_format: prompt_tool_call_format,
         connected_integrations: &connected_integrations_for_prompt,
-        connected_identities_md: options.run_context.connected_identities_md(),
+        connected_identities_md: options.run_context.connected_identities_md().await,
+        connected_mcp_servers_md: String::new(),
         user_identity: crate::security::credentials::identity::peek_credential_user_identity(),
         personality_roster: vec![],
         agents_md_global: agents_md.global.clone(),
         agents_md_local: agents_md.local.clone(),
     };
 
-    let archetype_prompt_body = load_typed_prompt_source(definition, config, prompt_ctx).await?;
+    let archetype_prompt_body = load_typed_prompt_source(
+        definition,
+        config,
+        prompt_ctx,
+        &options.run_context.dispatch_ctx(),
+    )
+    .await?;
     let system_prompt = match &definition.system_prompt {
         // The whole prompt, with no sub-agent sections around it.
         PromptSource::Dynamic(_) | PromptSource::Verbatim(_) => archetype_prompt_body,

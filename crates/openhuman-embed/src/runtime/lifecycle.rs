@@ -23,8 +23,7 @@ struct RemovalSlot<'a> {
 impl Drop for RemovalSlot<'_> {
     fn drop(&mut self) {
         if !self.finished {
-            self.inner.teardown("agent_removed");
-            self.inner.defer_cleanup(self.purge);
+            self.inner.defer_removal(self.purge);
         }
     }
 }
@@ -85,6 +84,10 @@ impl Runtime {
     /// flight end with the same error, waited on for up to ten seconds; its
     /// state slots are cleared, its original MCP object is closed, and its context deregistered, so
     /// its cron jobs stay dormant. The id is free for reuse once cleanup ends.
+    /// A synchronous session constructor retains its workspace until it exits.
+    /// If it exceeds the ten-second wait, removal returns
+    /// [`AgentError::CleanupPending`]; teardown and any requested purge run
+    /// after the last constructor finishes, keeping the id reserved meanwhile.
     /// Cancelling an already-started removal still tears down the old instance
     /// and performs a requested purge before releasing its id.
     /// A failed close returns [`AgentError::McpCleanup`] and leaves the id and
@@ -150,6 +153,9 @@ impl Runtime {
             .lifecycle
             .mark_removed_with("agent_removed", || inner.deny_approvals("agent_removed"))
         {
+            if inner.lifecycle.merge_deferred_removal(purge) {
+                return Err(AgentError::CleanupPending);
+            }
             return Err(AgentError::UnknownId(id.to_string()));
         }
         let mut removal = RemovalSlot {
@@ -165,6 +171,9 @@ impl Runtime {
                 "[embed][runtime] agent id={id} still had turns unwinding after {}s",
                 REMOVE_IDLE_WAIT.as_secs()
             );
+        }
+        if inner.lifecycle.is_constructing() {
+            return Err(AgentError::CleanupPending);
         }
         inner.teardown("agent_removed");
         inner.reserve_cleanup(purge);

@@ -116,14 +116,13 @@ pub fn all_tools_with_runtime(
         Box::new(ApplyPatchTool::new(security.clone())),
         Box::new(CsvExportTool::new(security.clone())),
     ];
-    // Build one shared parser/cache and publication lock behind the same
-    // filesystem policy as ordinary file tools. User/group filters below
-    // apply to these tools too; the lightweight three-tool registry stays small.
     #[cfg(feature = "structural-code")]
-    tools.extend(
-        tinytools_std::code_tools(security.clone())
-            .expect("built-in structural tools have valid bounds and catalog"),
-    );
+    match tinytools_std::code::code_tools(security.clone()) {
+        Ok(code_tools) => tools.extend(code_tools),
+        Err(error) => {
+            tracing::error!(%error, "[tools] structural code tools could not be initialized")
+        }
+    }
     tools.extend(crate::agent::registration::dialogue_tools(
         action_dir,
         root_config,

@@ -23,19 +23,20 @@ fn tool_results_carry_their_duration() {
 }
 
 #[test]
-fn local_providers_get_longer_ceilings_than_hosted_ones() {
+fn local_providers_get_longer_model_call_limits_than_hosted_ones() {
     let hosted = run_policy_for_provider(10, false, false, None);
     let local = run_policy_for_provider(10, false, true, None);
     // Env overrides win over both defaults, so compare only without one.
     if std::env::var_os("OPENHUMAN_MODEL_CALL_TIMEOUT_SECS").is_none()
         && std::env::var_os("OPENHUMAN_AGENT_TURN_TIMEOUT_SECS").is_none()
+        && std::env::var_os("OPENHUMAN_WEB_TURN_TIMEOUT_SECS").is_none()
     {
         assert_eq!(hosted.limits.max_model_call_ms, Some(900_000));
         assert_eq!(local.limits.max_model_call_ms, Some(3_600_000));
-        assert_eq!(hosted.limits.max_wall_clock_ms, Some(3_600_000));
-        assert_eq!(local.limits.max_wall_clock_ms, Some(14_400_000));
+        assert_eq!(hosted.limits.max_wall_clock_ms, None);
+        assert_eq!(local.limits.max_wall_clock_ms, None);
+        assert!(local.limits.max_model_call_ms > hosted.limits.max_model_call_ms);
     }
-    assert!(local.limits.max_model_call_ms < local.limits.max_wall_clock_ms);
     // Stream-silence hang detection is identical for both.
     assert_eq!(
         hosted.limits.stream_idle_timeout_ms,
@@ -51,6 +52,31 @@ fn local_web_backstop_sits_above_the_local_turn_ceiling() {
         backstop,
         turn_secs.map(|s| s + tinyagents_harness::turn_policy::LOCAL_WEB_TURN_BACKSTOP_GRACE_SECS)
     );
+}
+
+#[test]
+fn turn_timeout_override_is_opt_in_and_ignores_invalid_values() {
+    assert_eq!(selected_turn_timeout(None, None), None);
+    assert_eq!(
+        selected_turn_timeout(Some("0"), Some("120")),
+        Some("0".into())
+    );
+    assert_eq!(
+        selected_turn_timeout(Some("not-a-number"), Some("120")),
+        Some("120".into())
+    );
+    assert_eq!(
+        selected_turn_timeout(Some("60"), Some("120")),
+        Some("60".into())
+    );
+    assert_eq!(selected_turn_timeout(Some("not-a-number"), None), None);
+}
+
+#[test]
+fn turn_budget_guidance_matches_the_configured_limit() {
+    assert!(turn_budget_guidance(None).contains("No overall wall-clock time limit"));
+    assert!(turn_budget_guidance(None).contains("do not end the turn"));
+    assert!(turn_budget_guidance(Some(120_000)).contains("120 seconds"));
 }
 
 #[test]
@@ -94,14 +120,15 @@ fn local_runtimes_and_private_endpoints_are_self_hosted() {
 }
 
 #[test]
-fn hosted_openai_keeps_the_hosted_ceilings_in_the_policy() {
+fn hosted_openai_keeps_the_hosted_model_call_limit_in_the_policy() {
     if std::env::var_os("OPENHUMAN_MODEL_CALL_TIMEOUT_SECS").is_some()
         || std::env::var_os("OPENHUMAN_AGENT_TURN_TIMEOUT_SECS").is_some()
+        || std::env::var_os("OPENHUMAN_WEB_TURN_TIMEOUT_SECS").is_some()
     {
         return;
     }
     let local = provider_is_self_hosted("openai", Some("https://api.openai.com/v1"));
     let policy = run_policy_for_provider(10, false, local, None);
     assert_eq!(policy.limits.max_model_call_ms, Some(900_000));
-    assert_eq!(policy.limits.max_wall_clock_ms, Some(3_600_000));
+    assert_eq!(policy.limits.max_wall_clock_ms, None);
 }

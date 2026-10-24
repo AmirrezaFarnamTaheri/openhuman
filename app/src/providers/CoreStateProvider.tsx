@@ -27,6 +27,7 @@ import {
   updateCoreLocalState,
 } from '../services/coreStateApi';
 import { daemonHealthService } from '../services/daemonHealthService';
+import { invalidateModelCatalogCache, modelCatalogIdentity } from '../services/modelCatalogCache';
 import { installShellSessionEventBridge } from '../services/session/shellSessionEvents';
 import { socketService } from '../services/socketService';
 import { store } from '../store';
@@ -268,6 +269,16 @@ function toSignedOutSnapshot(snapshot: CoreAppSnapshot): CoreAppSnapshot {
 
 export default function CoreStateProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CoreState>(() => getCoreStateSnapshot());
+  const catalogIdentity = modelCatalogIdentity(state.snapshot);
+  const previousCatalogIdentity = useRef(catalogIdentity);
+  useEffect(() => {
+    if (previousCatalogIdentity.current !== catalogIdentity) {
+      previousCatalogIdentity.current = catalogIdentity;
+      // Notify open pickers only after the new identity has committed. A
+      // pre-commit notification would fetch using the preceding user scope.
+      invalidateModelCatalogCache();
+    }
+  }, [catalogIdentity]);
   const snapshotRequestIdRef = useRef(0);
   const teamsRequestIdRef = useRef(0);
   const logoutGuardUntilRef = useRef(0);

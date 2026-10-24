@@ -22,7 +22,9 @@ mod keychain;
 mod lock;
 mod migration;
 mod persistence;
+mod revision;
 pub(crate) use persistence::STORAGE_SECRET_NAME as PROFILES_SECRET_NAME;
+pub(crate) use revision::profile_revision;
 mod store_core;
 
 const CURRENT_SCHEMA_VERSION: u32 = 1;

@@ -145,16 +145,25 @@ async fn ids_that_name_another_file_are_refused() {
     let workspace = tempfile::tempdir().unwrap();
     let config = config_in(workspace.path());
     for id in ["../x", "a/b", "..", ".hidden"] {
-        assert!(read_body(&config, id).await.is_err(), "{id:?}");
+        assert!(
+            read_body(&crate::core::runtime::DispatchCtx::unbound(), &config, id)
+                .await
+                .is_err(),
+            "{id:?}"
+        );
     }
 }
 
 #[tokio::test]
 async fn an_unknown_artifact_is_not_found() {
     let workspace = tempfile::tempdir().unwrap();
-    let err = read_body(&config_in(workspace.path()), "missing")
-        .await
-        .unwrap_err();
+    let err = read_body(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &config_in(workspace.path()),
+        "missing",
+    )
+    .await
+    .unwrap_err();
     assert!(err.contains("not found"), "{err}");
 }
 
@@ -183,7 +192,13 @@ async fn an_artifact_made_before_versioning_opens_from_its_legacy_record() {
         .await
         .unwrap();
 
-    let body = read_body(&config, &meta.id).await.unwrap();
+    let body = read_body(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &config,
+        &meta.id,
+    )
+    .await
+    .unwrap();
     assert_eq!(body.title, "Old notes");
     assert_eq!(body.kind, "file");
     assert_eq!(body.body, "# from before");

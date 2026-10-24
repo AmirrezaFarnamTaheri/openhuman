@@ -38,6 +38,7 @@ import {
   openhumanLocalAiDiagnostics,
   openhumanLocalAiStatus,
 } from '../../utils/tauriCommands/localAi';
+import { invalidateModelCatalogCache } from '../modelCatalogCache';
 
 // ─── Domain types — what the AIPanel consumes ──────────────────────────────
 
@@ -110,6 +111,45 @@ export interface ModelInfo {
   /** Charged price in USD per 1M tokens, when the listing publishes it. */
   input_per_1m?: number | null;
   output_per_1m?: number | null;
+}
+
+/**
+ * Split a user-entered API key field into individual keys.
+ *
+ * The user pastes or types several keys in one go ("key-a, key-b") and
+ * expects them all to be used. The core's `key_pool::parse_api_keys` already
+ * accepts a comma-, semicolon- or newline-separated group, so the STORED value
+ * is one string holding the whole group — the rotation pool splits it there.
+ *
+ * This helper mirrors that split on the UI side so the dialog can tell the
+ * user how many keys it found, and so a value that is only separators is
+ * rejected before it is stored.
+ *
+ * Deliberately the same separators as the Rust side (`key_pool.rs`): comma,
+ * semicolon, CR, LF. Duplicates are collapsed, empty segments dropped, and
+ * each key is trimmed.
+ */
+export function splitApiKeyGroup(raw: string): string[] {
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const segment of raw.split(/[,;\r\n]/)) {
+    const value = segment.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    keys.push(value);
+  }
+  return keys;
+}
+
+/**
+ * How many keys a user's API-key field holds, for the dialog's hint line.
+ *
+ * `0` for an empty field, `1` for a plain single key, `n` for a rotation
+ * group. Callers render this so the user knows a pasted group was picked up
+ * rather than stored as one broken key.
+ */
+export function countApiKeys(raw: string): number {
+  return splitApiKeyGroup(raw).length;
 }
 
 interface ProviderModelTestResult {
@@ -454,6 +494,15 @@ export async function saveAISettings(prev: AISettings, next: AISettings): Promis
     return;
   }
   await openhumanUpdateModelSettings(patch);
+  if (patch.cloud_providers) {
+    const before = new Map(prev.cloudProviders.map(provider => [provider.slug, provider]));
+    const after = new Map(next.cloudProviders.map(provider => [provider.slug, provider]));
+    for (const slug of new Set([...before.keys(), ...after.keys()])) {
+      if (JSON.stringify(before.get(slug)) !== JSON.stringify(after.get(slug))) {
+        invalidateModelCatalogCache(slug);
+      }
+    }
+  }
 }
 
 /** Order-insensitive structural equality for two model registries. */
@@ -494,6 +543,7 @@ export async function setCloudProviderKey(slug: string, apiKey: string): Promise
     token: apiKey,
     setActive: true,
   });
+  invalidateModelCatalogCache(slug);
 }
 
 /**
@@ -748,6 +798,7 @@ export async function clearCloudProviderKey(slug: string): Promise<void> {
   // Clear the new-style key. Legacy bare-slug entries are left as-is
   // since we can't be sure they aren't used by other things.
   await authRemoveProviderCredentials({ provider: authKeyForSlug(slug), profile: 'default' });
+  invalidateModelCatalogCache(slug);
 }
 
 export async function startOpenAiCodexOAuth(): Promise<OpenAiCodexOAuthStartResult> {
@@ -771,10 +822,12 @@ export async function completeOpenAiCodexOAuth(callbackUrl: string): Promise<voi
     method: 'openhuman.inference_openai_oauth_complete',
     params: { callback_url: callback },
   });
+  invalidateModelCatalogCache('openai');
 }
 
 export async function importOpenAiCodexCliAuth(): Promise<void> {
   await callCoreRpc({ method: 'openhuman.inference_openai_oauth_import_codex_cli', params: {} });
+  invalidateModelCatalogCache('openai');
 }
 
 /**
@@ -787,6 +840,7 @@ export async function importOpenAiCodexCliAuth(): Promise<void> {
  */
 export async function flushCloudProviders(providers: CloudProviderCreds[]): Promise<void> {
   await openhumanUpdateModelSettings({ cloud_providers: providers });
+  invalidateModelCatalogCache();
 }
 
 /**
@@ -848,36 +902,46 @@ export async function listProviderModels(
   return res?.result?.models ?? [];
 }
 
-/** Confirm a multi-token credential group has at least one working key.
- * Unlike the normal picker, connection onboarding requires explicit backend
- * proof that /models authenticated, even if an earlier key was rejected.
+/** Probe a multi-token credential group against the provider catalogue.
+ * Authentication is confirmed when the endpoint requires a key. A public
+ * catalogue is reported separately because it cannot verify the credentials.
  * A missing fleet_probe marker is not evidence of successful authentication.
  */
 export async function probeProviderModelFleet(
   providerId: string
-): Promise<{ rejectedKeys: number }> {
+): Promise<{ rejectedKeys: number; verification?: 'public_catalogue' | 'inconclusive_catalogue' }> {
   const response = await callCoreRpc<{
     result?: {
       models?: ModelInfo[];
-      fleet_probe?: { authenticated?: boolean; checked_keys?: number; rejected_keys?: number };
+      fleet_probe?: {
+        authenticated?: boolean;
+        public_catalogue?: boolean;
+        checked_keys?: number;
+        rejected_keys?: number;
+      };
     };
   }>({ method: 'openhuman.inference_list_models', params: { provider_id: providerId } });
   const verified = response?.result?.fleet_probe;
   const checkedKeys = verified?.checked_keys;
   const rejectedKeys = verified?.rejected_keys;
-  if (
-    !verified?.authenticated ||
+  const invalidProbeCounts =
     typeof checkedKeys !== 'number' ||
     !Number.isInteger(checkedKeys) ||
     checkedKeys < 1 ||
     typeof rejectedKeys !== 'number' ||
     !Number.isInteger(rejectedKeys) ||
     rejectedKeys < 0 ||
-    rejectedKeys >= checkedKeys
-  ) {
+    rejectedKeys >= checkedKeys;
+  if (invalidProbeCounts) {
     throw new Error('Credential group authentication was not confirmed by the provider catalogue.');
   }
-  return { rejectedKeys };
+  if (verified?.authenticated) return { rejectedKeys };
+  if (verified?.public_catalogue) return { rejectedKeys, verification: 'public_catalogue' };
+  // The core only returns fleet_probe after a successful /models response.
+  // If the anonymous control request failed for a non-auth reason, the
+  // catalogue cannot prove that the key is required, but it also did not
+  // reject the key. Preserve it and let an actual model request verify it.
+  return { rejectedKeys, verification: 'inconclusive_catalogue' };
 }
 
 /** Sanitized model-fleet health snapshot: never contains raw API keys. */

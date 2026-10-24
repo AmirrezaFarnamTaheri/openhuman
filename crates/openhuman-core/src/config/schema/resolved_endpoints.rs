@@ -16,7 +16,7 @@
 
 /// Endpoints and identity resolved by a registered config enricher. Every
 /// field is `None`/empty until an enricher fills it.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ResolvedEndpoints {
     /// The origin of the host's control plane (REST API base URL).
     pub control_plane_url: Option<String>,

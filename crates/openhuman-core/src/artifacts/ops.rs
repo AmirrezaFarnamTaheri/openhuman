@@ -281,11 +281,13 @@ mod tests;
 /// (the preview panel's autosave). See
 /// [`super::tiny_store::save_operator_version`].
 pub async fn ai_save_artifact_version(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     artifact_id: &str,
     body: &str,
 ) -> Result<Outcome<Value>, String> {
     let saved = super::tiny_store::save_operator_version(
+        ctx,
         &config.workspace_dir,
         super::files::FileRoots::from_config(config),
         artifact_id,
@@ -308,6 +310,7 @@ pub async fn ai_save_artifact_version(
 /// recorded on the version. A version that already has a live link of the same
 /// kind returns it without uploading again.
 pub async fn ai_share_artifact(
+    ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     artifact_id: &str,
     version: Option<u32>,
@@ -316,6 +319,7 @@ pub async fn ai_share_artifact(
     let publisher = super::artifact_publisher(config)
         .ok_or_else(|| "sign in to share artifacts".to_string())?;
     let artifacts = super::tiny_store::artifacts_service(
+        ctx,
         &config.workspace_dir,
         super::files::FileRoots::from_config(config),
         None,

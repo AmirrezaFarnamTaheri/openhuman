@@ -57,6 +57,7 @@ fn validate_path_within_root_fails_on_nonexistent_candidate() {
 }
 
 #[test]
+#[cfg(unix)]
 fn validate_path_within_root_blocks_symlink_escape() {
     let root = tempfile::tempdir().unwrap();
     let prompts_dir = root.path().join("prompts");
@@ -66,14 +67,7 @@ fn validate_path_within_root_blocks_symlink_escape() {
     std::fs::write(&outside, b"sensitive").unwrap();
     // Create a symlink inside prompts/ pointing outside.
     let link = prompts_dir.join("evil.md");
-    #[cfg(unix)]
     std::os::unix::fs::symlink(&outside, &link).unwrap();
-    #[cfg(not(unix))]
-    {
-        // Skip symlink test on non-Unix where symlink creation may require
-        // elevated privileges.
-        return;
-    }
     let result = validate_path_within_root(&link, &prompts_dir);
     assert!(
         result.is_err(),

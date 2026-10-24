@@ -65,6 +65,10 @@ pub struct AgentExt {
     /// Runtime only: never serialised and not authorable in TOML.
     #[serde(skip)]
     pub prompt_builder: Option<PromptBuilder>,
+    /// Whether the dynamic prompt consumes a connected-MCP snapshot.
+    /// Runtime only: follows the builder when an embedder renames a builtin.
+    #[serde(skip)]
+    pub prompt_needs_connected_mcp: bool,
     /// Original builtin archetype whose prompt is loaded through TinyFlows.
     /// Runtime only: actor ids may change when an embedder clones a builtin.
     #[serde(skip)]
@@ -80,6 +84,7 @@ impl Default for AgentExt {
             tokenjuice_compression: AgentTokenjuiceCompression::default(),
             searches_connected_mcp: false,
             prompt_builder: None,
+            prompt_needs_connected_mcp: false,
             tinyflows_prompt_owner: None,
         }
     }
@@ -114,9 +119,18 @@ fn same_definition(a: &AgentDefinition, b: &AgentDefinition) -> bool {
 pub trait AgentDefinitionExt {
     /// The prompt builder behind a `PromptSource::Dynamic(())` marker.
     fn prompt_fn(&self) -> Result<PromptBuilder>;
+    /// Whether the selected source still uses its builtin MCP-aware builder.
+    fn prompt_needs_connected_mcp(&self) -> bool;
 }
 
 impl AgentDefinitionExt for AgentDefinition {
+    fn prompt_needs_connected_mcp(&self) -> bool {
+        matches!(
+            &self.system_prompt,
+            tinyagents_definition::PromptSource::Dynamic(())
+        ) && self.extensions.prompt_needs_connected_mcp
+    }
+
     fn prompt_fn(&self) -> Result<PromptBuilder> {
         self.extensions.prompt_builder.ok_or_else(|| {
             anyhow::anyhow!(

@@ -100,6 +100,7 @@ pub(super) struct MemorySettingsUpdate {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct RuntimeSettingsUpdate {
+    pub(super) shell_hide_window: Option<bool>,
     pub(super) kind: Option<String>,
     pub(super) reasoning_enabled: Option<bool>,
     pub(super) reasoning_effort: Option<String>,

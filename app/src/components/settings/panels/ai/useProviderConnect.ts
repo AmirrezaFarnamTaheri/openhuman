@@ -20,6 +20,7 @@ import {
   type ProviderAuthError,
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
+import { invalidateModelCatalogCache } from '../../../../services/modelCatalogCache';
 import { openhumanUpdateLocalAiSettings } from '../../../../utils/tauriCommands/config';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
 import {
@@ -274,11 +275,19 @@ export function useProviderConnect({
             const groupedKeys = isKeyProvider && parseFleetApiKeys(trimmed).length > 1;
             try {
               if (groupedKeys) {
-                // This is a *verified result* from the Rust catalog probe,
-                // which tests each candidate on 401/403 before reporting a
-                // successful group. A count of submitted keys alone proves nothing.
+                // The Rust catalog probe tries another candidate after 401/403.
+                // Some providers expose a public catalogue, which cannot verify
+                // keys; that case is saved with an explicit advisory below.
                 const probe = await probeProviderModelFleet(slug);
-                if (probe.rejectedKeys > 0) {
+                if (probe.verification) {
+                  setProviderSaveNotice({
+                    slug,
+                    message: t(
+                      'settings.ai.fleet.credentialGroupUnverified',
+                      'The provider catalogue could not confirm authentication for this key group. It was saved and will be checked when a model request is sent.'
+                    ),
+                  });
+                } else if (probe.rejectedKeys > 0) {
                   setProviderSaveNotice({
                     slug,
                     message: t(
@@ -360,6 +369,9 @@ export function useProviderConnect({
         }
         onConnected();
       } finally {
+        // Configuration and credential writes may have been compensated.
+        // Discard every read begun against an intermediate route as well.
+        invalidateModelCatalogCache(slug);
         setBusyAction(null);
         finishOperation();
       }

@@ -93,10 +93,11 @@ fn policy_set_schema_exposes_all_recall_policy_fields() {
 
 #[test]
 fn every_function_resolves_through_its_handler_entry() {
-    let expected_handlers: [(&str, crate::core::all::ControllerHandler); 35] = [
+    let expected_handlers: [(&str, crate::core::all::ControllerHandler); 36] = [
         ("engines_list", handlers::engines_list),
         ("engine_get", handlers::engine_get),
         ("engine_set", handlers::engine_set),
+        ("local_start", handlers::local_start),
         ("policy_get", handlers::policy_get),
         ("policy_set", handlers::policy_set),
         ("pack_preview", handlers::pack_preview),

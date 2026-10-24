@@ -202,6 +202,7 @@ fn parse_builtin(b: &BuiltinAgent) -> Result<AgentDefinition> {
     // Install the host-owned function-driven prompt builder.
     def.system_prompt = PromptSource::Dynamic(());
     def.extensions.prompt_builder = Some(b.prompt_fn);
+    def.extensions.prompt_needs_connected_mcp = b.id == "orchestrator";
     def.extensions.tinyflows_prompt_owner = match b.id {
         "workflow_builder" | "flow_discovery" => Some(b.id.to_owned()),
         _ => None,

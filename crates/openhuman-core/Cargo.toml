@@ -346,6 +346,9 @@ axum = { version = "0.8", default-features = false, features = ["http1", "json",
 sentry = { version = "0.47.0", default-features = false, optional = true, features = ["backtrace", "contexts", "panic", "tracing", "debug-images", "httpdate"] }
 url = "2"
 tempfile = "3"
+# Anchored publication of user-visible artifact files without following replaced links.
+cap-std = "4.0.3"
+cap-fs-ext = "4.0.3"
 fs2 = "0.4"
 # Streams the layout-migration archive (`storage::layout::archive`), a `.tar.zst`.
 zstd = "0.13"
@@ -589,7 +592,7 @@ storage-file = []
 # costs no new native builds. It matches `scripts/ci/product-features.txt`. This
 # does NOT move the kernel floor: that profile is
 # `--no-default-features --features flows` and never reads this list.
-default = ["media", "skills", "flows", "mcp", "channels", "http-server", "scheduler-gate", "file-logging", "modules", "tinymemes", "inbound-queues", "storage-sqlite"]
+default = ["structural-code", "media", "skills", "flows", "mcp", "channels", "http-server", "scheduler-gate", "file-logging", "modules", "tinymemes", "inbound-queues", "storage-sqlite"]
 # The core's domain-owned HTTP surfaces (#5048): the `/v1` OpenAI-compatible
 # router (`inference::http`), the `openhuman text-input run` dev server, and the MCP
 # Streamable-HTTP transport (`mcp::server::http`, additionally gated by `mcp`).
@@ -780,6 +783,8 @@ skills = ["tinyskills/registry", "dep:tinyskills-drivers"]
 # the orchestrator prompt sanitises *skill* descriptions through it. The gate
 # follows the real dependency graph, not the directory name.
 mcp = ["modules"]
+# Native structural inspection and revision-checked edits from TinyTools.
+structural-code = ["tinytools-std/code"]
 # Sentry crash/error reporting: the `sentry::init` guard + secret-scrubbing
 # `before_send` hook (src/main.rs), the sentry-tracing bridge layer
 # (core::logging), the ~24 `before_send` Event classifiers + the two

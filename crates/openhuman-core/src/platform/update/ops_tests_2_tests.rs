@@ -1,10 +1,9 @@
 use super::*;
-use crate::config::test_env::EnvVarGuard;
 use crate::config::TEST_ENV_LOCK;
 use crate::core::runtime::DispatchCtx;
 use tempfile::TempDir;
 
-async fn write_update_policy(tmp: &TempDir, update: UpdateConfig) {
+async fn write_update_policy(tmp: &TempDir, update: UpdateConfig) -> crate::config::Config {
     let mut cfg = crate::config::Config {
         workspace_dir: tmp.path().join("workspace"),
         action_dir: tmp.path().join("workspace"),
@@ -13,6 +12,7 @@ async fn write_update_policy(tmp: &TempDir, update: UpdateConfig) {
     };
     cfg.update = update;
     cfg.save().await.expect("save config");
+    cfg
 }
 
 // ── validate_download_url ─────────────────────────────────────
@@ -88,17 +88,8 @@ fn validate_asset_name_rejects_unprefixed_asset() {
 
 // ── update_apply rejection paths ──────────────────────────────
 
-// `update_apply` reads the mutation-policy config from disk, whose
-// path is resolved through the process-global `OPENHUMAN_WORKSPACE`
-// env var. Tests that don't lock against the disabled-mutations
-// case can race with it: the disabled test sets the env var, the
-// sibling test (running on another thread) clears or shadows it
-// between `EnvVarGuard::set` and the await inside
-// `update_apply`, and the disabled test then loads a default
-// policy (where `rpc_mutations_enabled = true`), proceeds past the
-// gate, and fails its `contains("rpc_mutations_enabled=false")`
-// assertion. Take `TEST_ENV_LOCK` in every test that calls
-// `update_apply` so the three cases serialise on the same mutex.
+// The URL-validation cases retain the environment lock because they use the
+// process context. The mutation-policy case below supplies its own config.
 #[tokio::test]
 async fn update_apply_rejects_non_github_url_before_network_call() {
     let _guard = TEST_ENV_LOCK.lock().await;
@@ -135,10 +126,9 @@ async fn update_apply_rejects_unsafe_asset_name() {
 
 #[tokio::test]
 async fn update_apply_rejects_when_rpc_mutations_disabled() {
-    let _guard = TEST_ENV_LOCK.lock().await;
+    use crate::core::runtime::{CoreContext, DomainSet};
     let tmp = TempDir::new().unwrap();
-    let _workspace_guard = EnvVarGuard::workspace_unlocked(tmp.path());
-    write_update_policy(
+    let config = write_update_policy(
         &tmp,
         UpdateConfig {
             rpc_mutations_enabled: false,
@@ -146,9 +136,10 @@ async fn update_apply_rejects_when_rpc_mutations_disabled() {
         },
     )
     .await;
+    let ctx = DispatchCtx::new(CoreContext::for_test_with_config(DomainSet::full(), config));
 
     let outcome = update_apply(
-        &DispatchCtx::process_default(),
+        &ctx,
         "https://github.com/owner/repo/releases/download/v1/x".to_string(),
         "openhuman-core-x86_64.tar.gz".to_string(),
         None,

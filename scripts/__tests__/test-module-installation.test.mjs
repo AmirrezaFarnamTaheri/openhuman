@@ -159,6 +159,11 @@ test("linked TinyDocs E2E enables its required local feature", () => {
     e2eBranch >= 0,
     "the Rust E2E runner gives linked TinyDocs an explicit branch",
   );
+  assert.match(
+    e2eSource.slice(e2eBranch, e2eSource.indexOf("\n  fi\n", e2eBranch)),
+    /\[ "\$suite" = "inbound_linked_e2e" \]/,
+    "the inbound linked suite receives its required features too",
+  );
   const e2eEnd = e2eSource.indexOf("\n  fi\n", e2eBranch);
   assert.ok(
     e2eEnd > e2eBranch,
@@ -166,7 +171,7 @@ test("linked TinyDocs E2E enables its required local feature", () => {
   );
   assert.match(
     e2eSource.slice(e2eBranch, e2eEnd),
-    /--features "\$PRODUCT_FEATURES,linked-modules"/,
+    /--features "\$PRODUCT_FEATURES,linked-modules,inbound-queues"/,
     "the E2E target runs with linked-modules in addition to product features",
   );
 });
@@ -404,7 +409,7 @@ for (const [runner, archiveVariable, directoryVariable] of [
 }
 
 for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
-  test(`${runner} supplies the TinyMCP artifact and executes ignored registry cases`, () => {
+  test(`${runner} supplies the TinyMCP artifact and executes the enabled registry cases`, () => {
     const source = readFileSync(
       new URL(`../${runner}`, import.meta.url),
       "utf8",
@@ -507,11 +512,12 @@ for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
           run.split("\n")[0].split(":").includes(moduleDir),
           "the pinned TinyMCP release directory is on the module search path",
         );
-        assert.match(
+        assert.doesNotMatch(
           run,
           /^ARG=--ignored$/m,
-          "ignored cases must actually execute",
+          "the released-module cases run without an ignored-only filter",
         );
+        assert.match(run, /^ARG=mcp_registry_e2e$/m);
         assert.match(run, /^ARG=--test-threads=1$/m);
       }
       assert.match(

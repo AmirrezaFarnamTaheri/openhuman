@@ -88,6 +88,7 @@ openhuman-rpc = { path = "../openhuman-rpc", default-features = false, features 
     "flows",
     "skills",
     "mcp",
+    "structural-code",
     "crash-reporting",
     "http-server",
     "scheduler-gate",
@@ -406,11 +407,15 @@ debug = false
 #
 # Scope is intentionally narrow and low-risk (kept in sync with the root
 # crate's `Cargo.toml` so both Cargo worlds get the same discipline):
-#   * `package."*"` targets dependencies only — the shell + core crates keep
-#     full debuginfo, so panics/backtraces still resolve to file:line.
+#   * Workspace crates keep line tables so panics/backtraces resolve to
+#     file:line without growing the core archive past COFF's offset range.
+#     `package."*"` disables dependency debuginfo entirely.
 #   * Only the unoptimised `dev`/`test` profiles change; `release`/`ci` are
 #     untouched, so shipped bundles and Sentry symbolication are unaffected.
 #   * No artifact paths, features, or runtime behaviour change.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.dev.package."*"]
 debug = false
 

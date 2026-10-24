@@ -433,6 +433,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Ultimi 7 giorni',
   'chat.sidebar.group.previous30Days': 'Ultimi 30 giorni',
   'chat.sidebar.group.older': 'Meno recenti',
+  'chat.sidebar.archived': 'Archiviate',
+  'chat.sidebar.restoreThread': 'Ripristina',
   'chat.sidebar.pinThread': 'Fissa conversazione',
   'chat.sidebar.unpinThread': 'Sblocca conversazione',
   'chat.sidebar.unread': 'Nuova risposta',
@@ -2429,6 +2431,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Un gruppo di provider supporta al massimo 128 chiavi API.',
   'settings.ai.fleet.partialKeyVerified':
     "Alcune chiavi API sono state rifiutate, ma un'altra è stata verificata. Controlla lo stato delle chiavi.",
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman non ha potuto confermare questo gruppo di chiavi tramite il catalogo del provider. Le chiavi sono state salvate e verranno controllate quando verrà inviata una richiesta al modello.',
   'settings.ai.apiKeyFieldLabel': 'Etichetta campo chiave API',
   'settings.ai.apiKeyRequired': 'Incolla la tua chiave API per continuare.',
   'settings.ai.apiKeyStoredEncrypted': 'Chiave API memorizzata crittografata',
@@ -3863,6 +3867,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Cerca lavori...',
   'settings.developerMenu.eventLog.column.time': 'Tempo',
   'settings.developerMenu.eventLog.column.event': 'Evento',
+  'settings.agentAccess.totalTimeout.label': 'Limite totale del turno',
+  'settings.agentAccess.totalTimeout.desc':
+    'Per impostazione predefinita non è previsto un limite di tempo totale. Imposta OPENHUMAN_AGENT_TURN_TIMEOUT_SECS per sceglierne uno; 0 lo disattiva. Restano attive le protezioni per le singole azioni e le chiamate bloccate.',
   'settings.agentAccess.group.approvals': 'Approvazioni',
   'settings.agentAccess.group.fileSystem': 'Sistema file',
   'settings.agentAccess.group.limits': 'Limiti',
@@ -5187,6 +5194,9 @@ const messages: TranslationMap = {
     'La configurazione gestita richiede il login a OpenHuman e non è disponibile in modalità locale.',
   'onboarding.custom.localDefaultDisabledReason':
     'La configurazione gestita richiede un account OpenHuman. In una sessione locale configuri ogni servizio da solo.',
+  'settings.agentAccess.hideShellWindows.label': 'Nascondi le finestre del terminale',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Nasconde le finestre native del terminale in Windows per le nuove sessioni.',
 };
 
 export default messages;

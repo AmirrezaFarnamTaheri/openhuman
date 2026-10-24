@@ -41,8 +41,6 @@ pub use types::McpToolSpec;
 // Re-exports needed by the companion test module via `use super::*`.
 // Guarded by `#[cfg(test)]` so they do not pollute the production namespace.
 #[cfg(all(test, feature = "mcp"))]
-pub use crate::config::rpc as config_rpc;
-#[cfg(all(test, feature = "mcp"))]
 pub use crate::core::all;
 #[cfg(all(test, feature = "mcp"))]
 pub(crate) use params::build_rpc_params_for_test;

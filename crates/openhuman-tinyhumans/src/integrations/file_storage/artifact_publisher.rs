@@ -93,6 +93,9 @@ async fn upload_body(
             .file
             .as_ref()
             .map_or(version.body.as_str(), |f| f.key.as_str());
+        if version.file.is_some() && !Path::new(path).is_absolute() && version_files.is_none() {
+            anyhow::bail!("cannot read a managed artifact without its workspace");
+        }
         let joined = version_files.map(|dir| dir.join(path));
         let path = joined.as_deref().unwrap_or_else(|| Path::new(path));
         // The record was checked when written; check again on what the path

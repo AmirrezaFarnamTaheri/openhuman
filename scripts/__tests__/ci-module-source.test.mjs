@@ -1,7 +1,7 @@
 // Self-test for scripts/ci/check-ci-module-source.mjs (openhuman#7604).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -37,6 +37,18 @@ test("enabling the linked-modules feature is flagged", () => {
     scan("cargo test --features linked-modules", "w.yml").length,
     1,
   );
+});
+
+test("the auditor may inspect a linked graph but may not build it", () => {
+  const file = "scripts/ci/check-module-boundaries.mjs";
+  const source = readFileSync(join(REPO_ROOT, file), "utf8");
+  assert.deepEqual(scan(source, file), []);
+  const build = source.replace("treeGraph(cargoText(root, 'tree', [", "treeGraph(cargoText(root, 'build', [");
+  assert.ok(scan(build, file).some(hit => hit.rule === "linked-modules-feature"));
+  assert.ok(scan(source + "\ncargo build --features linked-modules\n", file).length > 0);
+  const sameLine = source.replace("  ], execute));", "  ], execute)); execute('cargo', ['build', '--features', 'linked-modules']);");
+  assert.ok(scan(sameLine, file).some(hit => hit.rule === "linked-modules-feature"));
+  assert.ok(scan(source, "other.mjs").length > 0);
 });
 
 test("running the local module build script from CI is flagged", () => {

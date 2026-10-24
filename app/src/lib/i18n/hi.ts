@@ -426,6 +426,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'पिछले 7 दिन',
   'chat.sidebar.group.previous30Days': 'पिछले 30 दिन',
   'chat.sidebar.group.older': 'पुरानी',
+  'chat.sidebar.archived': 'संग्रहीत',
+  'chat.sidebar.restoreThread': 'पुनर्स्थापित करें',
   'chat.sidebar.pinThread': 'बातचीत पिन करें',
   'chat.sidebar.unpinThread': 'बातचीत अनपिन करें',
   'chat.sidebar.unread': 'नया जवाब',
@@ -2391,6 +2393,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'एक प्रदाता समूह में अधिकतम 128 API कुंजियाँ हो सकती हैं।',
   'settings.ai.fleet.partialKeyVerified':
     'कुछ API कुंजियाँ अस्वीकृत हुईं, लेकिन दूसरी कुंजी सत्यापित हुई। कुंजियों की स्थिति जाँचें।',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman प्रदाता की मॉडल सूची से इस कुंजी समूह की पुष्टि नहीं कर सका। कुंजियाँ सहेज दी गई हैं और मॉडल अनुरोध भेजे जाने पर जाँची जाएँगी।',
   'settings.ai.apiKeyFieldLabel': 'API key फील्ड लेबल',
   'settings.ai.apiKeyRequired': 'जारी रखने के लिए अपनी API key पेस्ट करें।',
   'settings.ai.apiKeyStoredEncrypted': 'API key एन्क्रिप्टेड रूप में स्टोर है',
@@ -3795,6 +3799,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'नौकरी खोजें...',
   'settings.developerMenu.eventLog.column.time': 'समय',
   'settings.developerMenu.eventLog.column.event': 'घटना',
+  'settings.agentAccess.totalTimeout.label': 'पूरे टर्न की समय सीमा',
+  'settings.agentAccess.totalTimeout.desc':
+    'डिफ़ॉल्ट रूप से पूरे टर्न की कोई कुल समय सीमा नहीं है। सीमा तय करने के लिए OPENHUMAN_AGENT_TURN_TIMEOUT_SECS सेट करें; 0 इसे बंद करता है। अलग-अलग कार्रवाइयों और अटकी हुई कॉल के सुरक्षा उपाय लागू रहते हैं।',
   'settings.agentAccess.group.approvals': 'स्वीकृति',
   'settings.agentAccess.group.fileSystem': 'फ़ाइल प्रणाली',
   'settings.agentAccess.group.limits': 'सीमा',
@@ -5111,6 +5118,9 @@ const messages: TranslationMap = {
   'onboarding.custom.localDefaultDisabledReason':
     'प्रबंधित सेटअप के लिए OpenHuman खाता आवश्यक है। लोकल सेशन में आपको हर सेवा खुद कॉन्फ़िगर करनी होती है।',
   'settings.layout.contrast.strong': 'मज़बूत',
+  'settings.agentAccess.hideShellWindows.label': 'शेल विंडो छिपाएँ',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Windows पर नए शेल सत्रों के लिए मूल टर्मिनल विंडो छिपाएँ।',
 };
 
 export default messages;

@@ -11,10 +11,10 @@
 /// (tinymemory v1.13.4 deleted the in-process engine's process-global client
 /// this used to read synchronously — see
 /// `integrations::composio::identity_store`'s module docs), which makes it
-/// async. This function's ~7 call sites build a `PromptContext` struct
-/// literal from a mix of sync and async functions, so rather than threading
-/// `async`/`.await` through every one of them, this stays sync and uses a
-/// `block_in_place` + current-runtime-handle bridge. Best-effort: no runtime, a
+/// async. Legacy synchronous prompt builders use this `block_in_place` +
+/// current-runtime-handle bridge; async callers should await
+/// [`render_connected_identities_async`] before acquiring prompt locks.
+/// Best-effort: no runtime, a
 /// single-threaded runtime, or a config-load/driver failure all render an
 /// empty section rather than panicking or blocking a prompt on a memory read.
 pub fn render_connected_identities(ctx: &crate::core::runtime::DispatchCtx) -> String {
@@ -24,10 +24,12 @@ pub fn render_connected_identities(ctx: &crate::core::runtime::DispatchCtx) -> S
     if handle.runtime_flavor() != tokio::runtime::RuntimeFlavor::MultiThread {
         return String::new();
     }
-    tokio::task::block_in_place(|| handle.block_on(render_section(ctx)))
+    tokio::task::block_in_place(|| handle.block_on(render_connected_identities_async(ctx)))
 }
 
-async fn render_section(ctx: &crate::core::runtime::DispatchCtx) -> String {
+/// Read identities without parking a runtime worker. Async prompt preparation
+/// uses this before taking its prompt or tool-surface locks.
+pub async fn render_connected_identities_async(ctx: &crate::core::runtime::DispatchCtx) -> String {
     let config = match ctx.load_config().await {
         Ok(config) => config,
         Err(error) => {

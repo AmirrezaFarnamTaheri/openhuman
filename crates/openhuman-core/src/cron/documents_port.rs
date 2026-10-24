@@ -139,6 +139,20 @@ impl DocScope {
         Ok(Arc::clone(scoped.documents()))
     }
 
+    /// The module bus calls this from an async handler while a synchronous
+    /// ScheduleStore caller can be waiting on the shared storage bridge. Never
+    /// synchronously re-enter that bridge from the callback.
+    async fn callback_documents(&self) -> Result<Arc<dyn DocumentStore>, StorageError> {
+        let backend = match &self.backend {
+            Some(backend) => Arc::clone(backend),
+            None => crate::storage::local::backend_for_callback(&self.workspace_dir)
+                .await
+                .map_err(|error| StorageError::unavailable(error.to_string()))?,
+        };
+        let scoped = backend.for_scope(&self.scope)?;
+        Ok(Arc::clone(scoped.documents()))
+    }
+
     /// Whether this scope can atomically update the schedule store's admission
     /// policy. An unenforced host can skip clearing an absent policy when the
     /// backend lacks transactions; the module refuses writes if a policy
@@ -214,7 +228,7 @@ fn encode<T: serde::Serialize>(value: T) -> Result<Value, StorageError> {
 
 impl DocumentsPort {
     async fn handle(&self, request: Value) -> Result<Value, StorageError> {
-        let documents = self.scope.documents()?;
+        let documents = self.scope.callback_documents().await?;
         let op = text(&request, "op")?.to_string();
         tracing::trace!(%op, "[cron:documents] request");
         match op.as_str() {
@@ -400,12 +414,33 @@ fn path_for(key: &str) -> String {
 }
 
 /// The address the module calls for `scope`'s documents, serving the object on
-/// first use.
+/// first use. Registration and its cache update run on the process-lifetime
+/// module runtime, so a blocked or cancelled caller cannot retain the shared
+/// registration lock or leave a served object outside the cache.
 ///
 /// # Errors
 ///
 /// When the module bus is unavailable.
 pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
+    #[cfg(feature = "modules")]
+    {
+        let runtime = crate::modules::runtime::runtime()
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+            .context("initialize the schedule document port runtime")?;
+        let scope = scope.clone();
+        runtime
+            .spawn(async move { register_address(&scope).await })
+            .await
+            .context("schedule document port registration task did not finish")?
+    }
+    #[cfg(not(feature = "modules"))]
+    {
+        register_address(scope).await
+    }
+}
+
+async fn register_address(scope: &DocScope) -> Result<CallbackAddress> {
     let key = scope.key();
     let mut served = SERVED.lock().await;
     if let Some(address) = served.get(&key) {
@@ -421,6 +456,8 @@ pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
     .await
     .map_err(|error| anyhow::anyhow!(error))
     .context("serve the schedule document port")?;
+    #[cfg(all(test, feature = "modules"))]
+    registration_tests::after_serve(&path).await;
     tracing::debug!(scope = %scope.scope.as_str(), %path, "[cron:documents] port served");
     let address = CallbackAddress {
         destination: module::HOST_BUS_NAME.to_string(),
@@ -433,3 +470,7 @@ pub(crate) async fn address(scope: &DocScope) -> Result<CallbackAddress> {
 #[cfg(all(test, feature = "modules"))]
 #[path = "documents_port_tests.rs"]
 mod tests;
+
+#[cfg(all(test, feature = "modules"))]
+#[path = "documents_port_registration_tests.rs"]
+mod registration_tests;

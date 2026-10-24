@@ -348,8 +348,8 @@ jobs:
           # Bake the core Sentry DSN into the binary via `option_env!` in
           # src/main.rs. Without this the standalone CLI ships with Sentry
           # disabled and the symbols uploaded below have nothing to attach
-          # to. Same DSN as `release-packages.yml` uses for the Linux arm64
-          # tarball — there is one openhuman-core Sentry project that all
+          # to. Same DSN as the release-production Linux CLI tarballs use —
+          # there is one openhuman-core Sentry project that all
           # standalone-CLI surfaces report to. Prefer the namespaced GH
           # var, fall back to the legacy unprefixed one during transition.
           OPENHUMAN_CORE_SENTRY_DSN: ${{ vars.OPENHUMAN_CORE_SENTRY_DSN || vars.OPENHUMAN_SENTRY_DSN }}

@@ -320,11 +320,10 @@ Capability {
         name: "Always Allow a Tool",
         domain: "security",
         category: CapabilityCategory::Settings,
-        description: "On an approval prompt, choose \"Always allow\" to stop being asked for that \
-                      tool. The choice is saved to your allow-list and persists across restarts; \
-                      remove it any time under Settings → Agent OS access to be prompted again. \
-                      Policy still blocks forbidden paths and high-risk commands regardless.",
-        how_to: "Click \"Always allow\" on an approval prompt; manage the list in Settings → Agent OS access.",
+        description: "Add a tool to the always-allowed list in Agent OS access, or choose \
+                      \"Always allow\" on its approval prompt. The list persists across restarts; \
+                      remove an entry to restore prompts. Existing policy restrictions still apply.",
+        how_to: "Settings → Agent OS access → Always-allowed tools > add a tool name, or use an approval prompt's Always allow action.",
         status: CapabilityStatus::Stable,
         privacy: None,
     },

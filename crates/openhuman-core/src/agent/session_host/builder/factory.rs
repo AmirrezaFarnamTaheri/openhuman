@@ -311,28 +311,15 @@ impl OpenHumanSessionHost {
         // with the later `provider` move into the builder.
         let dispatcher_choice = config.agent.tool_dispatcher.clone();
 
-        // Build prompt builder — either the default "orchestrator /
-        // main agent" layout that bootstraps from workspace identity
-        // files, OR a narrow per-agent builder that injects the target
-        // definition's archetype body and respects its `omit_*` flags.
-        //
-        // The narrow path is selected whenever we resolved a
-        // non-orchestrator definition from the registry. The orchestrator
-        // continues to use `with_defaults` so its prompt stays
-        // byte-identical to the legacy CLI/REPL behaviour except for the
-        // tool-scope tightening we already landed in earlier commits.
-        // Every agent with a resolved definition (built-in or workspace
-        // override) goes through the per-agent pipeline — the legacy
-        // `with_defaults()` branch only fires when the registry is
-        // unavailable (pre-startup, tests). `PromptSource::Dynamic`
-        // agents install a [`DynamicPromptSection`] that re-runs the
-        // builder against the live [`PromptContext`] at `build_system_prompt`
-        // time, so late integrations and the flow archetype land in the prompt.
-        // `Inline`/`File` sources still resolve to just the archetype
-        // body and get wrapped by [`SystemPromptBuilder::for_subagent`].
+        // Every resolved definition uses its selected prompt source; defaults
+        // apply only when the registry is unavailable. Dynamic builders consume
+        // the prepared PromptContext at render time, including scoped metadata
+        // and the flow archetype. Inline/File sources get the standard subagent
+        // sections, while Verbatim preserves the supplied body.
         let prompt_builder = match target_def {
             Some(def) => match &def.system_prompt {
-                PromptSource::Dynamic(()) => SystemPromptBuilder::from_dynamic(def.prompt_fn()?),
+                PromptSource::Dynamic(()) => SystemPromptBuilder::from_dynamic(def.prompt_fn()?)
+                    .with_connected_mcp_snapshot(def.prompt_needs_connected_mcp()),
                 PromptSource::Verbatim(text) => SystemPromptBuilder::verbatim(text.clone()),
                 PromptSource::Inline(text) => SystemPromptBuilder::for_subagent(
                     text.clone(),
