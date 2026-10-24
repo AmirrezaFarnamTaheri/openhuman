@@ -125,13 +125,30 @@ jobs:
             test "$test_status" -eq 101
             case "$case_name" in
               synchronous_retry_does_not_block_registration_owner)
-                rg -F "registration must finish without the blocked caller runtime" "ci-out/red-$case_name.log"
+                expected_failure="registration must finish without the blocked caller runtime"
                 ;;
               cancelled_caller_runtime_keeps_one_registration)
-                rg -F "registration survives its caller runtime" "ci-out/red-$case_name.log"
+                expected_failure="registration survives its caller runtime"
                 ;;
             esac
-            rg -F "0 passed; 1 failed" "ci-out/red-$case_name.log"
+            python3 - "$expected_failure" "ci-out/red-$case_name.log" "$case_name" <<'PY'
+          import pathlib
+          import sys
+
+          expected, log_path, case_name = sys.argv[1:]
+          source_path = pathlib.Path("crates/openhuman-core/src/cron/documents_port_registration_tests.rs")
+          matches = [
+              number for number, line in enumerate(source_path.read_text().splitlines(), 1)
+              if line.strip() == f'.expect("{expected}");'
+          ]
+          assert len(matches) == 1, matches
+          site = f"module panicked at {source_path.name}:{matches[0]}:"
+          log = pathlib.Path(log_path).read_text()
+          assert expected in log or site in log, f"missing intended failure: {site}"
+          assert f"cron::documents_port::registration_tests::{case_name}" in log
+          assert "0 passed; 1 failed" in log, "the exact regression did not fail"
+          print(f"PR17_EXPECTED_PANIC_SITE {site}")
+          PY
             printf 'PR17_EXPECTED_REGRESSION_FAILURE %s status=%s\n' "$case_name" "$test_status"
           done
       - name: Restore the candidate and pass the two regressions
