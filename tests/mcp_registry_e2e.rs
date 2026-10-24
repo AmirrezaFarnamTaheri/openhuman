@@ -88,9 +88,7 @@ fn http_server(url: &str) -> Value {
 
 #[tokio::test]
 async fn explicitly_trusted_stdio_server_still_uses_the_real_subprocess() {
-    use openhuman_core::tools::implementations::network::{
-        mcp_call_tool, McpListServersTool, McpListToolsTool,
-    };
+    use openhuman_core::tools::{mcp_call_tool, McpListServersTool, McpListToolsTool};
     use std::sync::Arc;
     use tinytools::Tool;
 

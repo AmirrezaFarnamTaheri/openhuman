@@ -15,6 +15,8 @@
 mod env_guard;
 #[path = "support/linked_modules.rs"]
 mod linked_modules;
+#[path = "support/mcp_http.rs"]
+mod mcp_http;
 #[path = "support/scripted_stack.rs"]
 mod scripted_stack;
 use env_guard::EnvVarGuard;
@@ -1534,6 +1536,9 @@ async fn approval_gate_approve_flow_inner() {
         ),
         // request[1]: Orchestrator text after approval.
         text_completion("Done. File written: APPROVED_WRITE_CANARY"),
+        // request[2]: verify-before-finish confirms the executed write before
+        // the terminal response is accepted.
+        text_completion("Verified. File written: APPROVED_WRITE_CANARY"),
     ]);
     let stack = boot_stack_with_config(SUPERVISED_AUTONOMY_CONFIG).await;
     bind_thread_action_dir(
@@ -4063,7 +4068,11 @@ async fn agent_calls_a_tool_on_an_mcp_server_installed_from_the_registry_inner()
     );
 
     // Declared in mcp.json (the registry is browse-only) and connected.
-    let server_id = declare_and_connect_registry_echo_server(&stack.rpc_base, 801).await;
+    // Use loopback HTTP for the registry path: untrusted stdio correctly
+    // requires native jail enforcement, which hosted Linux does not provide.
+    let mcp_upstream = mcp_http::echo_server().await;
+    let server_id =
+        declare_and_connect_registry_echo_server(&stack.rpc_base, 801, &mcp_upstream.uri()).await;
 
     // Used: the orchestrator discovers the schema, then calls the tool itself.
     reset_script(vec![
@@ -4125,13 +4134,17 @@ async fn agent_calls_a_tool_on_an_mcp_server_installed_from_the_registry_inner()
 /// it in the registry tab would — by its command, pointed at the stub — through
 /// the settings RPCs, connect it, and return its server id.
 #[cfg(feature = "mcp")]
-async fn declare_and_connect_registry_echo_server(rpc_base: &str, first_rpc_id: i64) -> String {
+async fn declare_and_connect_registry_echo_server(
+    rpc_base: &str,
+    first_rpc_id: i64,
+    url: &str,
+) -> String {
     let declared = post_json_rpc(
         rpc_base,
         first_rpc_id,
         "openhuman.mcp_clients_config_set",
         json!({ "mcpServers": { REGISTRY_MCP_SERVER: {
-            "command": env!("CARGO_BIN_EXE_test-mcp-stub"),
+            "url": url,
             // Off until the explicit connect below, so the background connect
             // config_set would otherwise start cannot race it.
             "enabled": false
@@ -4281,7 +4294,8 @@ async fn orchestrator_calls_a_connected_mcp_tool_directly_inner() {
     reset_script(Vec::new());
     let stack = boot_stack().await;
     // Connecting also writes the tool cache the orchestrator's surface reads.
-    declare_and_connect_registry_echo_server(&stack.rpc_base, 940).await;
+    let mcp_upstream = mcp_http::echo_server().await;
+    declare_and_connect_registry_echo_server(&stack.rpc_base, 940, &mcp_upstream.uri()).await;
 
     reset_script(vec![
         tool_call_completion(
