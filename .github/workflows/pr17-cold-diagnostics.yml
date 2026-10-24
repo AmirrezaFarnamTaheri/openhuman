@@ -1,0 +1,199 @@
+---
+name: PR17 TinyBus owner validation
+
+on:
+  push:
+    branches: [codex/pr17-tinybus-owner-validation-20261024]
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: pr17-tinybus-owner-validation
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  owner-gates:
+    name: Validate TinyBus from an owned fixture directory
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+      RUST_MIN_STACK: "16777216"
+      GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
+    steps:
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout the current PR source
+        uses: actions/checkout@v7
+        with:
+          ref: 46c467ca5b9963b8dc0c3973c8a9be2f3f9ac275
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out pinned submodules
+        run: bash scripts/ci/checkout-submodules.sh
+      - name: Create a private local checkout with trusted ownership
+        run: |
+          set -euo pipefail
+          mkdir -p ci-out
+          pr17_owner_root=$(mktemp -d /tmp/pr17-tinybus-owner.XXXXXX)
+          pr17_owner_repo="$pr17_owner_root/repo"
+          git clone --local --no-hardlinks --no-checkout "$GITHUB_WORKSPACE/vendor/tinybus" "$pr17_owner_repo"
+          git -C "$pr17_owner_repo" checkout --detach aa36051e2d384b09a1fb7871758fcf22c2a7e709
+          printf 'PR17_TINYBUS_OWNED=%s\n' "$pr17_owner_repo" >> "$GITHUB_ENV"
+          python3 - "$pr17_owner_repo" <<'PY'
+          import json
+          import os
+          import stat
+          import sys
+          from pathlib import Path
+          
+          path = Path(sys.argv[1]) / "crates/tinybus"
+          for parent in [path, *path.parents]:
+              info = parent.lstat()
+              assert stat.S_ISDIR(info.st_mode), str(parent)
+              assert info.st_uid in (0, os.getuid()), (str(parent), info.st_uid, os.getuid())
+              print("PR17_OWNER_ANCESTRY " + json.dumps({"path": str(parent), "uid": info.st_uid, "mode": oct(stat.S_IMODE(info.st_mode)), "test_uid": os.getuid()}))
+          PY
+      - name: Restore TinyBus build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.PR17_TINYBUS_OWNED }} -> target
+          cache-on-failure: true
+          shared-key: pr17-tinybus-pending
+      - name: Verify both directory fixtures on the unmodified implementation
+        working-directory: ${{ env.PR17_TINYBUS_OWNED }}
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test "$(git rev-parse HEAD)" = aa36051e2d384b09a1fb7871758fcf22c2a7e709
+          bash "$GITHUB_WORKSPACE/scripts/ci-cancel-aware.sh" cargo test --locked -p tinybus --all-features --lib --no-run
+          pr17_baseline_index=0
+          for test_name in \
+            module::host::tests::a_lazy_manifest_registers_an_unmapped_library_and_the_first_call_loads_it \
+            module::host::tests::a_bundle_marker_equal_to_the_pin_admits_the_extraction_without_its_archive; do
+            pr17_baseline_index=$((pr17_baseline_index + 1))
+            timeout --signal=TERM --kill-after=15s 60s \
+              bash "$GITHUB_WORKSPACE/scripts/ci-cancel-aware.sh" cargo test --locked \
+              -p tinybus --all-features --lib "$test_name" -- --exact \
+              2>&1 | tee "$GITHUB_WORKSPACE/ci-out/owner-baseline-$pr17_baseline_index.log"
+          done
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          for path in sorted((Path(os.environ["GITHUB_WORKSPACE"]) / "ci-out").glob("owner-baseline-*.log")):
+              text = path.read_text()
+              assert "test result: ok. 1 passed; 0 failed;" in text, path.name
+          print("PR17_OWNER_BASELINE_VERIFIED both original directory fixtures pass in the owned checkout")
+          PY
+      - name: Apply and record the same request-progress repair
+        id: candidate
+        run: |
+          set -euo pipefail
+          cat > ci-out/tinybus-pending-candidate.json <<'JSON'
+          {"pin":"aa36051e2d384b09a1fb7871758fcf22c2a7e709","source_bytes":67300,"repair":[["use tokio::sync::{Mutex, RwLock, broadcast, mpsc, oneshot};","use tokio::sync::{RwLock, broadcast, mpsc, oneshot};"],["    pending: Mutex<HashMap<u64, PendingReply>>,","    // Bookkeeping never suspends. An async mutex could reserve its permit for\n    // a caller that stops polling and also block reply dispatch and timeouts.\n    // Wake or drop pending senders only after releasing this data lock.\n    pending: std::sync::Mutex<HashMap<u64, PendingReply>>,"],["            pending: Mutex::new(HashMap::new()),","            pending: std::sync::Mutex::new(HashMap::new()),"],["        self.inner.pending.lock().await.insert(\n            serial,\n            PendingReply {\n                sender: tx,\n                expected,\n                bus_control,\n                confidential: message.header.confidential,\n                unverified_direct: self.unique_name().is_none(),\n            },\n        );","        let replaced = self\n            .inner\n            .pending\n            .lock()\n            .unwrap_or_else(std::sync::PoisonError::into_inner)\n            .insert(\n                serial,\n                PendingReply {\n                    sender: tx,\n                    expected,\n                    bus_control,\n                    confidential: message.header.confidential,\n                    unverified_direct: self.unique_name().is_none(),\n                },\n            );\n        drop(replaced);"],["        if let Err(e) = self.enqueue(message).await {\n            self.inner.pending.lock().await.remove(&serial);\n            return Err(e);\n        }","        if let Err(e) = self.enqueue(message).await {\n            let removed = self\n                .inner\n                .pending\n                .lock()\n                .unwrap_or_else(std::sync::PoisonError::into_inner)\n                .remove(&serial);\n            drop(removed);\n            return Err(e);\n        }"],["                self.inner.pending.lock().await.remove(&serial);","                let removed = self\n                    .inner\n                    .pending\n                    .lock()\n                    .unwrap_or_else(std::sync::PoisonError::into_inner)\n                    .remove(&serial);\n                drop(removed);"],["                    refuse_call(&inner, serial, &refusal).await;","                    refuse_call(&inner, serial, &refusal);"],["async fn refuse_call(inner: &Inner, serial: u64, refusal: &Error) {\n    let Some(pending) = inner.pending.lock().await.remove(&serial) else {","fn refuse_call(inner: &Inner, serial: u64, refusal: &Error) {\n    let pending = inner\n        .pending\n        .lock()\n        .unwrap_or_else(std::sync::PoisonError::into_inner)\n        .remove(&serial);\n    let Some(pending) = pending else {"],["                let mut pending = inner.pending.lock().await;\n                if pending\n                    .get(&serial)\n                    .is_some_and(|waiter| waiter.accepts(&message, brokered))\n                    && let Some(waiter) = pending.remove(&serial)\n                {\n                    let _ = waiter.sender.send(message);\n                }","                let waiter = {\n                    let mut pending = inner\n                        .pending\n                        .lock()\n                        .unwrap_or_else(std::sync::PoisonError::into_inner);\n                    if pending\n                        .get(&serial)\n                        .is_some_and(|waiter| waiter.accepts(&message, brokered))\n                    {\n                        pending.remove(&serial)\n                    } else {\n                        None\n                    }\n                };\n                if let Some(waiter) = waiter {\n                    let _ = waiter.sender.send(message);\n                }"],["    inner.pending.lock().await.clear();","    let pending = {\n        let mut pending = inner\n            .pending\n            .lock()\n            .unwrap_or_else(std::sync::PoisonError::into_inner);\n        std::mem::take(&mut *pending)\n    };\n    drop(pending);"]],"existing":["    assert!(client.inner.pending.lock().await.is_empty());","    assert!(\n        client\n            .inner\n            .pending\n            .lock()\n            .unwrap_or_else(std::sync::PoisonError::into_inner)\n            .is_empty()\n    );"],"declaration":"\n#[cfg(test)]\n#[path = \"connection_pending_tests.rs\"]\nmod pending_tests;\n","test":"//! Independent RPCs must progress when another caller stops polling.\n\nuse super::*;\nuse std::sync::Mutex as StdMutex;\nuse std::task::{Wake, Waker};\n\ntype Call = Pin<Box<dyn Future<Output = Result<Value>> + Send>>;\n\nconst PROGRESS_LIMIT: Duration = Duration::from_secs(5);\n\nfn fixture_call(label: &'static str) -> Message {\n    Message::method_call(\n        BusName::new(\":1.2\").unwrap(),\n        ObjectPath::new(\"/fixture\").unwrap(),\n        InterfaceName::new(\"ai.tinyhumans.Fixture\").unwrap(),\n        MemberName::new(\"Await\").unwrap(),\n        serde_json::json!([label]),\n    )\n}\n\nfn call(connection: Connection, label: &'static str) -> Call {\n    // A cooperative-budget yield must not replace the synchronization point\n    // exercised here. The future still uses the real connection and transport.\n    Box::pin(tokio::task::unconstrained(async move {\n        connection.call_raw(fixture_call(label), DEFAULT_TIMEOUT).await\n    }))\n}\n\nstruct NoopWake;\n\nimpl Wake for NoopWake {\n    fn wake(self: Arc<Self>) {}\n}\n\n/// Poll a second real call once when the first call's reply wakes its caller.\n/// The second call remains alive but is deliberately never polled again.\nstruct PollOnReply {\n    parked: StdMutex<Option<Call>>,\n    observed: StdMutex<Option<oneshot::Sender<bool>>>,\n    fired: AtomicBool,\n}\n\nimpl PollOnReply {\n    fn poll_once(&self) {\n        if self.fired.swap(true, Ordering::SeqCst) {\n            return;\n        }\n        let mut call = self.parked.lock().unwrap().take().unwrap();\n        let waker = Waker::from(Arc::new(NoopWake));\n        let mut context = Context::from_waker(&waker);\n        let pending = call.as_mut().poll(&mut context).is_pending();\n        *self.parked.lock().unwrap() = Some(call);\n        let observed = self.observed.lock().unwrap().take();\n        if let Some(observed) = observed {\n            let _ = observed.send(pending);\n        }\n    }\n\n    fn release(&self) {\n        let parked = self.parked.lock().unwrap().take();\n        drop(parked);\n    }\n}\n\nimpl Wake for PollOnReply {\n    fn wake(self: Arc<Self>) {\n        self.poll_once();\n    }\n\n    fn wake_by_ref(self: &Arc<Self>) {\n        self.poll_once();\n    }\n}\n\n#[tokio::test]\nasync fn unpolled_caller_does_not_block_independent_replies() {\n    let (a, b) = crate::transport::memory::MemoryTransport::pair();\n    let requester = Connection::attach(Arc::new(a));\n    let responder = Arc::new(b);\n    let (observed_tx, observed_rx) = oneshot::channel();\n    let hook = Arc::new(PollOnReply {\n        parked: StdMutex::new(Some(call(requester.clone(), \"parked\"))),\n        observed: StdMutex::new(Some(observed_tx)),\n        fired: AtomicBool::new(false),\n    });\n    let waker = Waker::from(Arc::clone(&hook));\n    let mut first = call(requester.clone(), \"first\");\n    assert!(\n        first\n            .as_mut()\n            .poll(&mut Context::from_waker(&waker))\n            .is_pending()\n    );\n\n    let delivered = tokio::time::timeout(PROGRESS_LIMIT, responder.recv())\n        .await\n        .expect(\"the first request must reach the local transport\")\n        .unwrap()\n        .unwrap();\n    assert_eq!(delivered.body, serde_json::json!([\"first\"]));\n    let mut response = Message::method_return(&delivered.header, delivered.body.clone());\n    response.header.serial = 1;\n    responder.send(response).await.unwrap();\n    assert!(\n        tokio::time::timeout(PROGRESS_LIMIT, observed_rx)\n            .await\n            .expect(\"the real reply must wake its caller\")\n            .expect(\"the reply observer must report the parked poll\"),\n        \"the second call must remain pending after its first poll\"\n    );\n\n    // The first call and the parked call are both retained without further\n    // polling. A third caller must still use this same connection successfully.\n    let progress = tokio::time::timeout(PROGRESS_LIMIT, async {\n        let independent = call(requester.clone(), \"independent\");\n        let respond = async {\n            for serial in 2..=3 {\n                let delivered = responder.recv().await.unwrap().unwrap();\n                let mut response =\n                    Message::method_return(&delivered.header, delivered.body.clone());\n                response.header.serial = serial;\n                responder.send(response).await.unwrap();\n            }\n        };\n        let (reply, ()) = tokio::join!(independent, respond);\n        reply\n    })\n    .await;\n\n    // In the broken implementation the parked future owns a reserved mutex\n    // permit. Drop it before asserting, so failure releases that permit and\n    // does not strand the connection's background tasks during test cleanup.\n    hook.release();\n    drop(first);\n    let reply = progress\n        .expect(\"an unpolled caller must not monopolize pending reply bookkeeping\")\n        .expect(\"the independent call must succeed\");\n    assert_eq!(reply, serde_json::json!([\"independent\"]));\n}\n"}
+          JSON
+          cat > ci-out/tinybus-owner-apply.py <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+          
+          data = json.loads(Path("ci-out/tinybus-pending-candidate.json").read_text())
+          root = Path(os.environ["PR17_TINYBUS_OWNED"])
+          assert subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip() == data["pin"]
+          path = root / "crates/tinybus/src/connection.rs"
+          source = path.read_text()
+          declaration = data["declaration"]
+          if source.endswith(declaration):
+              source = source[:-len(declaration)]
+          assert len(source.encode()) == data["source_bytes"], len(source.encode())
+          assert sys.argv[1] in ("red", "fixed")
+          if sys.argv[1] == "fixed":
+              assert len(data["repair"]) == 10
+              for old, new in data["repair"]:
+                  assert source.count(old) == 1, (old[:100], source.count(old))
+                  source = source.replace(old, new, 1)
+              existing_path = root / "crates/tinybus/src/connection_tests.rs"
+              existing = existing_path.read_text()
+              old, new = data["existing"]
+              assert existing.count(old) == 1
+              existing_path.write_text(existing.replace(old, new, 1))
+              assert "pending.lock().await" not in source
+          else:
+              assert source.count("pending.lock().await") == 6
+          path.write_text(source + declaration)
+          (root / "crates/tinybus/src/connection_pending_tests.rs").write_text(data["test"])
+          print("PR17_TINYBUS_CANDIDATE phase=" + sys.argv[1] + " pin=" + data["pin"])
+          PY
+          python3 -m py_compile ci-out/tinybus-owner-apply.py
+          python3 ci-out/tinybus-owner-apply.py fixed
+          rustfmt --edition 2024 --config skip_children=true \
+            "$PR17_TINYBUS_OWNED/crates/tinybus/src/connection.rs" \
+            "$PR17_TINYBUS_OWNED/crates/tinybus/src/connection_tests.rs" \
+            "$PR17_TINYBUS_OWNED/crates/tinybus/src/connection_pending_tests.rs"
+          git -C "$PR17_TINYBUS_OWNED" diff --check
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+          
+          root = Path(os.environ["PR17_TINYBUS_OWNED"])
+          paths = ["crates/tinybus/src/connection.rs", "crates/tinybus/src/connection_tests.rs", "crates/tinybus/src/connection_pending_tests.rs"]
+          for relative in paths:
+              print("PR17_TINYBUS_FORMATTED_FILE " + json.dumps({"path": relative, "content": (root / relative).read_text()}))
+          patch = subprocess.check_output(["git", "-C", str(root), "diff", "--", *paths[:2]], text=True)
+          new = subprocess.run(["git", "-C", str(root), "diff", "--no-index", "--", "/dev/null", paths[2]], text=True, stdout=subprocess.PIPE)
+          assert new.returncode == 1, new.returncode
+          Path("ci-out/tinybus-pending-repair.patch").write_text(patch + new.stdout)
+          PY
+      - name: Run all TinyBus tests and documentation tests
+        working-directory: ${{ env.PR17_TINYBUS_OWNED }}
+        if: ${{ always() && steps.candidate.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          bash "$GITHUB_WORKSPACE/scripts/ci-cancel-aware.sh" cargo test --locked --all-features \
+            2>&1 | tee "$GITHUB_WORKSPACE/ci-out/owner-tests.log"
+      - name: Run Clippy for every target and feature
+        working-directory: ${{ env.PR17_TINYBUS_OWNED }}
+        if: ${{ always() && steps.candidate.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          bash "$GITHUB_WORKSPACE/scripts/ci-cancel-aware.sh" cargo clippy --locked --all-targets --all-features -- -D warnings \
+            2>&1 | tee "$GITHUB_WORKSPACE/ci-out/owner-clippy.log"
+      - name: Check the minimal-feature build
+        working-directory: ${{ env.PR17_TINYBUS_OWNED }}
+        if: ${{ always() && steps.candidate.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          bash "$GITHUB_WORKSPACE/scripts/ci-cancel-aware.sh" cargo check --locked --no-default-features \
+            2>&1 | tee "$GITHUB_WORKSPACE/ci-out/owner-minimal.log"
+      - name: Verify repository formatting
+        working-directory: ${{ env.PR17_TINYBUS_OWNED }}
+        if: ${{ always() && steps.candidate.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check 2>&1 | tee "$GITHUB_WORKSPACE/ci-out/owner-format.log"
+      - name: Upload complete owner validation and the reviewable patch
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr17-tinybus-owner-validation
+          path: ci-out/
+          retention-days: 14
+          if-no-files-found: warn
