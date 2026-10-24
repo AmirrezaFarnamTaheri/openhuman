@@ -139,8 +139,10 @@ jobs:
           RUNNER
           chmod +x ci-out/storage-debug-runner.sh
           export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="$GITHUB_WORKSPACE/ci-out/storage-debug-runner.sh"
+          diagnostic_failure=0
           for attempt in 1 2 3; do
             printf 'Storage diagnostic attempt %s\n' "$attempt"
+            set +e
             bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
               --features storage-sqlite,storage-file --lib -- \
               storage:: cron:: flows:: security::approval:: security::devices:: \
@@ -151,7 +153,16 @@ jobs:
               config::schema::load::source:: \
               --skip cron::bus_host::tests:: --skip cron::documents_port::tests:: \
               2>&1 | tee "ci-out/storage-attempt-$attempt.log"
+            attempt_status=${PIPESTATUS[0]}
+            set -e
+            printf 'PR17_STORAGE_ATTEMPT_STATUS attempt=%s status=%s\n' "$attempt" "$attempt_status"
+            if [ "$attempt_status" -eq 101 ]; then
+              diagnostic_failure=101
+            elif [ "$attempt_status" -ne 0 ]; then
+              exit "$attempt_status"
+            fi
           done
+          exit "$diagnostic_failure"
       - name: Upload diagnostic evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
