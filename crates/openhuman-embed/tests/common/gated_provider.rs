@@ -47,6 +47,7 @@ impl Shared {
 }
 
 /// A running gated provider. The server task lives as long as the runtime.
+#[derive(Clone)]
 pub struct GatedProvider {
     addr: SocketAddr,
     shared: Arc<Shared>,
@@ -75,6 +76,20 @@ impl GatedProvider {
             }
         });
         Self { addr, shared }
+    }
+
+    /// Read counters from an external watchdog without waiting on the executor.
+    pub fn diagnostic_state(&self) -> String {
+        let Ok(counters) = self.shared.counters.try_lock() else {
+            return "counters unavailable".to_string();
+        };
+        format!(
+            "requests={}, in_flight={}, peak={}, gate_open={}",
+            counters.chat_requests,
+            counters.in_flight,
+            counters.peak_in_flight,
+            counters.hold_until.is_none(),
+        )
     }
 
     /// `http://127.0.0.1:<port>`, like `MockServer::uri`.

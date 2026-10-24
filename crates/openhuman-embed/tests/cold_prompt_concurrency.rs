@@ -7,7 +7,7 @@ use common::gated_provider::GatedProvider;
 use common::{offline_config, stub_backend};
 use openhuman_embed::{Access, AgentSpec, Provider, Runtime, Workspace};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 const AGENTS: usize = 100;
@@ -56,11 +56,24 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
     // the sole worker and blocking thread are both starved by the regression.
     let stage = Arc::new(AtomicUsize::new(0));
     let completed_turns = Arc::new(AtomicUsize::new(0));
+    let started_turns = Arc::new(AtomicUsize::new(0));
+    let heartbeat_ticks = Arc::new(AtomicUsize::new(0));
+    let provider_probe = Arc::new(OnceLock::<GatedProvider>::new());
+    let heartbeat_counter = Arc::clone(&heartbeat_ticks);
+    let heartbeat = executor.spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            heartbeat_counter.fetch_add(1, Ordering::SeqCst);
+        }
+    });
     let scenario_stage = Arc::clone(&stage);
     let scenario_completed_turns = Arc::clone(&completed_turns);
+    let scenario_started_turns = Arc::clone(&started_turns);
+    let scenario_provider_probe = Arc::clone(&provider_probe);
     let scenario = executor.spawn(async move {
         let backend = stub_backend().await;
         let provider = GatedProvider::start(REPLY).await;
+        assert!(scenario_provider_probe.set(provider.clone()).is_ok());
         scenario_stage.store(1, Ordering::SeqCst);
         let mut config = offline_config();
         config.modules.allow_download = false;
@@ -98,7 +111,11 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
         let mut turns = tokio::task::JoinSet::new();
         for agent in &agents {
             let agent = agent.clone();
-            turns.spawn(async move { agent.turn("Answer once.").send().await });
+            let started = Arc::clone(&scenario_started_turns);
+            turns.spawn(async move {
+                started.fetch_add(1, Ordering::SeqCst);
+                agent.turn("Answer once.").send().await
+            });
         }
         while let Some(outcome) = turns.join_next().await {
             let outcome = outcome
@@ -128,12 +145,26 @@ fn cold_prompts_complete_with_one_worker_and_one_blocking_thread() {
             // The linked module's panic hook omits assertion payloads.
             let phase = STAGES[stage.load(Ordering::SeqCst)];
             let completed = completed_turns.load(Ordering::SeqCst);
+            let started = started_turns.load(Ordering::SeqCst);
+            let ticks = heartbeat_ticks.load(Ordering::SeqCst);
+            let provider = provider_probe
+                .get()
+                .map(GatedProvider::diagnostic_state)
+                .unwrap_or_else(|| "provider not started".to_string());
             eprintln!(
                 "cold prompt regression did not complete: {error}; \
-                 stage={phase}, completed_turns={completed}/{AGENTS}; all {AGENTS} \
+                 stage={phase}, started_turns={started}/{AGENTS}, \
+                 completed_turns={completed}/{AGENTS}, heartbeat_ticks={ticks}, \
+                 provider=({provider}); all {AGENTS} \
                  cold turns must overlap with one worker and one blocking thread"
             );
+            // The isolated diagnostic workflow runs this binary under GDB.
+            // Abort only there so the debugger can capture every worker stack.
+            if std::env::var_os("OPENHUMAN_COLD_PROMPT_BACKTRACE").is_some() {
+                std::process::abort();
+            }
             panic!("cold prompt preparation did not finish within {HANG_GUARD:?}");
         })
         .expect("cold-prompt test task");
+    heartbeat.abort();
 }

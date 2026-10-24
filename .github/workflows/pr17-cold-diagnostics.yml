@@ -1,0 +1,119 @@
+---
+name: PR17 cold prompt diagnostics
+
+on:
+  push:
+    branches: [codex/pr17-cold-diagnostics-20261024]
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: pr17-cold-diagnostics
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cold-prompt:
+    name: Diagnose instrumented cold prompt concurrency
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
+      options: --init
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      RUST_MIN_STACK: "67108864"
+      RUST_BACKTRACE: "1"
+      GH_TOKEN: ${{ github.token }}
+      NPM_CONFIG_STORE_DIR: .pnpm-store
+      OPENHUMAN_XDG_ROOT: /tmp/openhuman-pr17-cold
+    steps:
+      - name: Reclaim container build space
+        run: rm -rf /__t/* || true
+      - name: Checkout exact diagnostic source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Trust checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out pinned submodules
+        run: bash scripts/ci/checkout-submodules.sh
+      - name: Restore Rust diagnostic build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+          cache-on-failure: false
+          shared-key: pr17-cold-diagnostics
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install debugger and test dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends gdb jq python3-tomli
+          bash scripts/ci-cancel-aware.sh pnpm install --frozen-lockfile
+      - name: Prepare test environment and pinned modules
+        run: |
+          touch .env app/.env
+          mkdir -p ci-out "$OPENHUMAN_XDG_ROOT"
+          chmod 700 "$OPENHUMAN_XDG_ROOT"
+          module_root="/tmp/openhuman-pr17-modules-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          bash scripts/ci/self-hosted/install-test-modules.sh "$module_root" "$module_root/modules.env"
+          cat "$module_root/modules.env" >> "$GITHUB_ENV"
+      - name: Compile and diagnose the unchanged concurrency contract
+        env:
+          OPENHUMAN_COLD_PROMPT_BACKTRACE: "1"
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          if command -v rustup >/dev/null 2>&1; then
+            diagnostic_cargo="$(rustup which cargo)"
+            export PATH="$(dirname "$diagnostic_cargo"):$PATH"
+          fi
+          unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS
+          coverage_env="$(bash scripts/ci-cancel-aware.sh cargo llvm-cov show-env --sh)"
+          eval "$coverage_env"
+          product_features="$(bash scripts/ci/product-features.sh --core)"
+          bash scripts/ci-cancel-aware.sh cargo test \
+            --features "$product_features" \
+            --target-dir "${CARGO_LLVM_COV_TARGET_DIR}/llvm-cov-target" \
+            -p openhuman-embed --test cold_prompt_concurrency \
+            --no-run --message-format=json-render-diagnostics > ci-out/cold-build.jsonl
+          cold_binary="$(jq -r 'select(.reason == "compiler-artifact" and .target.name == "cold_prompt_concurrency" and .executable != null) | .executable' ci-out/cold-build.jsonl | tail -n 1)"
+          test -n "$cold_binary"
+          test -x "$cold_binary"
+          cat > ci-out/cold.gdb <<'GDB'
+          set pagination off
+          set confirm off
+          set print frame-arguments none
+          set print elements 0
+          set disable-randomization off
+          handle SIGPIPE nostop noprint pass
+          run
+          python
+          if gdb.selected_inferior().threads():
+              gdb.execute("thread apply all bt 40")
+              gdb.execute("continue")
+          end
+          GDB
+          bash scripts/ci-cancel-aware.sh gdb -nx -nh --batch --return-child-result \
+            -x ci-out/cold.gdb --args "$cold_binary" \
+            --exact cold_prompts_complete_with_one_worker_and_one_blocking_thread \
+            --nocapture 2>&1 | tee ci-out/cold-stack.log
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr17-cold-prompt-diagnostics
+          path: ci-out/
+          retention-days: 7
+          if-no-files-found: warn
