@@ -51,7 +51,7 @@ jobs:
           workspaces: |
             . -> target
             crates/openhuman-app -> target
-          cache-on-failure: false
+          cache-on-failure: true
           shared-key: ci-fast-storage
       - name: Install debugger
         run: |
@@ -72,7 +72,8 @@ jobs:
           bash scripts/ci-cancel-aware.sh cargo test -p openhuman \
             --features storage-sqlite,storage-file --lib \
             --no-run --message-format=json-render-diagnostics > ci-out/storage-build.jsonl
-          mapfile -t binaries < <(jq -r 'select(.reason == "compiler-artifact" and .executable != null and (.target.kind | index("lib"))) | .executable' ci-out/storage-build.jsonl | sort -u)
+          jq -c 'select(.reason == "compiler-artifact" and .executable != null) | {target: .target.name, kind: .target.kind, test: .profile.test, executable: .executable}' ci-out/storage-build.jsonl
+          mapfile -t binaries < <(jq -r 'select(.reason == "compiler-artifact" and .profile.test == true and .target.name == "openhuman_core" and .executable != null) | .executable' ci-out/storage-build.jsonl | sort -u)
           test "${#binaries[@]}" -eq 1
           test -x "${binaries[0]}"
           printf '%s\n' "${binaries[0]}" > ci-out/storage-executable.txt
