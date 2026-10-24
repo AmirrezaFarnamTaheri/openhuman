@@ -182,6 +182,27 @@ pub async fn backend_for_async(workspace_dir: &Path) -> Result<Arc<dyn StorageBa
         .context("join the workspace storage opener")?
 }
 
+/// Resolve a workspace backend while serving an asynchronous module callback.
+///
+/// A synchronous caller may already be running on the process-wide storage
+/// bridge while awaiting this callback. Calling `backend_for` here (directly
+/// or through `backend_for_async`'s blocking task) would enqueue another job
+/// on that same bridge and deadlock both sides. Drive the shared OnceCell
+/// initializer on the callback's asynchronous runtime instead.
+///
+/// The installed backend still wins, and each lookup still observes workspace
+/// invalidation/rebinding rather than retaining a stale backend handle.
+pub(crate) async fn backend_for_callback(workspace_dir: &Path) -> Result<Arc<dyn StorageBackend>> {
+    if let Some(backend) = installed() {
+        return Ok(backend);
+    }
+    initialized_backend(
+        workspace_backend(workspace_dir),
+        workspace_dir.to_path_buf(),
+    )
+    .await
+}
+
 /// The storage a store uses for this call: [`backend_for`] `workspace_dir`
 /// under the acting scope ([`current_scope`]).
 ///
