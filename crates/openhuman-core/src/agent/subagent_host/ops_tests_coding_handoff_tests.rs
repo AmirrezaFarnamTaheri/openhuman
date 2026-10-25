@@ -1,5 +1,4 @@
 use super::*;
-use crate::agent::subagent_host::run_subagent;
 
 #[tokio::test]
 async fn coding_handoff_reaches_the_actual_child_prompt_without_executing_references() {
@@ -24,7 +23,7 @@ async fn coding_handoff_reaches_the_actual_child_prompt_without_executing_refere
         },
     );
 
-    let outcome = run_subagent(&def, "Report what remains unverified", options)
+    let outcome = run_host_from_test_options(&def, "Report what remains unverified", options)
         .await
         .unwrap();
 
@@ -65,7 +64,8 @@ async fn invalid_coding_context_refuses_before_lifecycle_files_or_provider_calls
             ..Default::default()
         },
     );
-    let result = run_subagent(&make_def_named_tools(&[]), "must not run", options).await;
+    let result =
+        run_host_from_test_options(&make_def_named_tools(&[]), "must not run", options).await;
 
     assert!(matches!(result, Err(SubagentRunError::InvalidContext(_))));
     assert!(provider.captured.lock().is_empty());
@@ -74,7 +74,7 @@ async fn invalid_coding_context_refuses_before_lifecycle_files_or_provider_calls
 
 #[tokio::test]
 async fn subagent_entry_rejects_invalid_coding_context_before_parent_lookup() {
-    let result = run_subagent(
+    let result = run_host_from_test_options(
         &make_def_named_tools(&[]),
         "must not run",
         SubagentRunOptions {

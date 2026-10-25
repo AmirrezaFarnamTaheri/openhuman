@@ -8,17 +8,14 @@ mod coding_handoff;
 
 use async_trait::async_trait;
 use openhuman_core::agent::harness::ParentExecutionContext;
-use openhuman_core::agent::orchestration::tools::{
-    SpawnAsyncSubagentTool, SpawnParallelAgentsTool, SpawnSubagentTool,
+use openhuman_core::agent::orchestration::tools::SpawnSubagentTool;
+use openhuman_core::agent::subagent_host::{
+    OpenHumanSubagentHost, SubagentRunError, SubagentRunOptions, SubagentRunOutcome,
 };
-use openhuman_core::agent::subagent_host::{run_subagent, SubagentRunError, SubagentRunOptions};
 use openhuman_core::agent_registry::host_definition::{AgentDefinition, AgentDefinitionRegistry};
 use openhuman_core::config::AgentConfig;
-use openhuman_core::security::SecurityPolicy;
-use openhuman_core::tools::DelegateTool;
 use parking_lot::Mutex;
 use serde_json::json;
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use tinyagents_definition::{ModelSpec, PromptSource, ToolScope};
@@ -122,6 +119,23 @@ fn definition() -> AgentDefinition {
     definition
 }
 
+async fn run_subagent(
+    definition: &AgentDefinition,
+    input: &str,
+    options: SubagentRunOptions,
+) -> Result<SubagentRunOutcome, SubagentRunError> {
+    let root =
+        options
+            .run_context
+            .clone()
+            .into_tinyagents(tinyagents_harness::context::RunConfig::new(
+                "coding-handoff-integration",
+            ));
+    OpenHumanSubagentHost::new(definition.clone(), options)
+        .run(&root, input.to_owned())
+        .await
+}
+
 #[test]
 fn production_lifecycle_delivers_reports_and_refuses_invalid_context_before_admission() {
     // The production agent runner also uses a larger stack than libtest's
@@ -213,32 +227,12 @@ async fn check_production_lifecycle() {
 }
 
 #[tokio::test]
-async fn public_spawn_and_delegate_tools_validate_before_model_or_workspace_work() {
+async fn public_spawn_tool_validates_before_model_or_workspace_work() {
     let malformed = "[coding_handoff]\nnot JSON";
-    let tools: Vec<(Box<dyn Tool>, serde_json::Value)> = vec![
-        (
-            Box::new(SpawnSubagentTool::new()),
-            json!({"agent_id": "critic", "prompt": "review", "context": malformed}),
-        ),
-        (
-            Box::new(SpawnAsyncSubagentTool::new()),
-            json!({"agent_id": "critic", "prompt": "review", "context": malformed, "fresh": true}),
-        ),
-        (
-            Box::new(SpawnParallelAgentsTool::new()),
-            json!({"tasks": [
-                {"agent_id": "critic", "prompt": "review", "context": "ordinary"},
-                {"agent_id": "critic", "prompt": "review", "context": malformed, "isolation": "worktree"}
-            ]}),
-        ),
-        (
-            Box::new(DelegateTool::new(
-                HashMap::new(),
-                Arc::new(SecurityPolicy::default()),
-            )),
-            json!({"agent": "not-configured", "prompt": "review", "context": malformed}),
-        ),
-    ];
+    let tools: Vec<(Box<dyn Tool>, serde_json::Value)> = vec![(
+        Box::new(SpawnSubagentTool::new()),
+        json!({"agent_id": "critic", "prompt": "review", "context": malformed}),
+    )];
     for (tool, arguments) in tools {
         let result = tool.execute(arguments).await.expect("tool result");
         assert!(result.is_error, "{} must reject", tool.name());

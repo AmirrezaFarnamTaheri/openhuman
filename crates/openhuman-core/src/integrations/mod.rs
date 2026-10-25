@@ -11,6 +11,7 @@
 pub(crate) mod announcement_notes;
 pub mod composio;
 mod connected_identities;
+pub mod gmail;
 pub(crate) mod recorded_tools;
 pub mod task_sources;
 pub use connected_identities::{render_connected_identities, render_connected_identities_async};

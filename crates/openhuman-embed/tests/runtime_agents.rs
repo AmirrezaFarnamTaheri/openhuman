@@ -14,8 +14,9 @@ mod common;
 use common::{chat_completion, offline_config, runtime, stub_backend};
 use openhuman_embed::{
     Access, AgentDefinitionSpec, AgentError, AgentSpec, HostTurnTools, MemoryBinding, Provider,
-    Runtime, SandboxModeSpec, ToolScopeSpec, Workspace,
+    Runtime, SandboxModeSpec, SessionStoreProvider, ToolScopeSpec, Workspace,
 };
+use tinyagents_session::InMemorySessionStores;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -114,6 +115,7 @@ fn one_runtime_hosts_independently_configured_agents() {
             #[allow(unused_variables)]
             let skills = skills_fixture();
             let beta_action = tempfile::tempdir().expect("beta action dir");
+            let session_store = std::sync::Arc::new(InMemorySessionStores::new());
 
             // Managed inference uses the host-installed chat-model registry,
             // not the runtime's backend_url as a model endpoint. Point the
@@ -126,6 +128,7 @@ fn one_runtime_hosts_independently_configured_agents() {
                     .workspace(Workspace::Ephemeral)
                     .backend_url(backend.uri())
                     .api_key(API_KEY)
+                    .session_store(session_store.clone())
                     .build()
                     .await
                     .expect("runtime builds"),
@@ -412,9 +415,9 @@ fn one_runtime_hosts_independently_configured_agents() {
             // Transcripts are keyed by agent and live in the agent's own store
             // under the workspace, and a thread resumes its own history.
             let listing = |agent_id: &str, session_id: &str| -> Vec<String> {
-                tinyagents_session::port::WorkspaceStores::open(&workspace_dir, agent_id)
-                    .expect("the agent's workspace store")
-                    .transcripts()
+                session_store
+                    .for_agent(agent_id)
+                    .transcripts
                     .thread_transcripts(session_id, None)
                     .map(|found| found.roots.into_iter().map(|root| root.stem).collect())
                     .unwrap_or_default()

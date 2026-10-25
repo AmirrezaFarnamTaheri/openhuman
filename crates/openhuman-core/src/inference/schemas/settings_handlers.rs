@@ -24,39 +24,6 @@ pub(super) struct InferenceModelRouteUpdate {
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct InferenceCloudProviderUpdate {
-    id: Option<String>,
-    slug: String,
-    #[serde(default)]
-    label: Option<String>,
-    endpoint: String,
-    #[serde(default)]
-    auth_style: Option<String>,
-    /// Alternate image/vision base URL for this provider.
-    #[serde(default)]
-    image_endpoint: Option<String>,
-    /// Model-id-specific image URL overrides, keyed within the provider group.
-    #[serde(default)]
-    model_image_endpoints: std::collections::HashMap<String, String>,
-    /// Credential strategy: round_robin | least_busy | priority_weighted.
-    #[serde(default)]
-    rotation_strategy: Option<String>,
-    #[serde(default)]
-    tool_call_codec: crate::config::schema::cloud_providers::ToolCallCodec,
-    #[serde(default)]
-    model_transports:
-        std::collections::HashMap<String, crate::config::schema::cloud_providers::ModelTransport>,
-    #[serde(default)]
-    ca_cert_pem: Option<String>,
-    // keep until v0.66 (review after 2027-01-11): incoming RPC discriminator
-    // remains accepted until shipped-client parameter coverage exists.
-    #[serde(rename = "type", default)]
-    legacy_type: Option<String>,
-    #[serde(default)]
-    default_model: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 pub(super) struct InferenceUpdateModelSettingsParams {
     api_url: Option<String>,
     inference_url: Option<String>,
@@ -64,7 +31,7 @@ pub(super) struct InferenceUpdateModelSettingsParams {
     default_model: Option<String>,
     default_temperature: Option<f64>,
     model_routes: Option<Vec<InferenceModelRouteUpdate>>,
-    cloud_providers: Option<Vec<InferenceCloudProviderUpdate>>,
+    cloud_providers: Option<Vec<crate::config::ops::CloudProviderUpdate>>,
     #[serde(default)]
     model_registry: Option<Vec<crate::config::schema::ModelRegistryEntry>>,
     primary_cloud: Option<String>,
@@ -109,15 +76,25 @@ pub(super) fn handle_inference_resolve_model(
     Box::pin(async move {
         let p = deserialize_params::<InferenceResolveModelParams>(params)?;
         let config = ctx.load_config().await?;
-        let resolved =
-            crate::inference::provider::factory::resolve_model_for_hint(&p.hint, &config);
+        let resolved_context = ctx.resolved();
+        let extensions = resolved_context
+            .as_deref()
+            .map(crate::core::runtime::CoreContext::extensions);
+        let resolved = crate::inference::provider_model::resolve_provider_model_hint_for(
+            extensions,
+            crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+            &p.hint,
+            &config,
+        );
         // Whether the resolved model accepts image input — drives the chat UI's
         // image-attachment affordance. Managed OpenHuman tiers consult the
         // core-owned per-tier map, which returns `true` for the reasoning and
         // vision tiers (and their `hint:` aliases) and `false` for every other
         // tier; custom/BYOK models are covered by the user's per-model
         // `model_registry.vision` flag.
-        let vision = crate::inference::model_context::model_supports_vision(&resolved, &config);
+        let vision = crate::inference::model_context::model_supports_vision_in(
+            extensions, &resolved, &config,
+        );
         to_json(Outcome::new(
             serde_json::json!({ "model": resolved, "vision": vision }),
             vec![],
@@ -131,7 +108,7 @@ pub(super) fn handle_inference_status(
 ) -> ControllerFuture {
     Box::pin(async move {
         let config = ctx.load_config().await?;
-        to_json(crate::inference::rpc::inference_status(&config).await?)
+        to_json(crate::inference::ops::inference_status(&config).await?)
     })
 }
 
@@ -140,7 +117,7 @@ pub(super) fn handle_inference_get_client_config(
     _params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(
-        async move { to_json(crate::inference::rpc::inference_get_client_config(&ctx).await?) },
+        async move { to_json(crate::inference::ops::inference_get_client_config(&ctx).await?) },
     )
 }
 
@@ -212,109 +189,7 @@ pub(super) fn handle_inference_update_model_settings(
             }),
             cloud_providers: update
                 .cloud_providers
-                .map(|entries| {
-                    use crate::config::schema::cloud_providers::{
-                        generate_provider_id, is_slug_reserved, builtin_cloud_provider, AuthStyle,
-                        CloudProviderCreds,
-                    };
-                    let reserved_count = entries
-                        .iter()
-                        .filter(|e| {
-                            let t = e.slug.trim();
-                            !t.is_empty() && is_slug_reserved(t)
-                        })
-                        .count();
-                    if reserved_count > 0 {
-                        log::debug!(
-                            "[inference] update_model_settings: dropping {} reserved cloud provider slug(s)",
-                            reserved_count
-                        );
-                    }
-                    entries
-                        .into_iter()
-                        // Silently drop entries whose (non-empty) slug is reserved —
-                        // typically the migration-seeded "openhuman" / "cloud" /
-                        // "pid" built-ins that the frontend echoes back on every
-                        // save (see `migrations::unify_ai_provider_settings`).
-                        // Empty slugs still fall through so the explicit
-                        // validation error below fires for actual frontend
-                        // bugs. `apply_model_settings` re-injects the existing
-                        // reserved entries from the stored config so they
-                        // aren't dropped on save.
-                        .filter(|entry| {
-                            let trimmed = entry.slug.trim();
-                            trimmed.is_empty() || !is_slug_reserved(trimmed)
-                        })
-                        .map(|entry| {
-                            let slug = entry.slug.trim().to_string();
-                            if slug.is_empty() {
-                                return Err("cloud provider slug must not be empty".to_string());
-                            }
-                            let legacy_provider = entry.legacy_type.as_deref()
-                                .map(str::trim)
-                                .and_then(builtin_cloud_provider);
-                            let legacy_auth = legacy_provider
-                                .map(|provider| provider.auth_style.as_str())
-                                .unwrap_or("bearer");
-                            let endpoint = if entry.endpoint.is_empty() {
-                                legacy_provider.map(|provider| provider.endpoint.to_string())
-                                    .unwrap_or(entry.endpoint)
-                            } else {
-                                entry.endpoint
-                            };
-                            let auth_style = match entry
-                                .auth_style
-                                .as_deref()
-                                .unwrap_or(legacy_auth)
-                                .to_ascii_lowercase()
-                                .as_str()
-                            {
-                                "bearer" => AuthStyle::Bearer,
-                                "anthropic" => AuthStyle::Anthropic,
-                                "openhuman_jwt" | "openhumanjwt" => AuthStyle::OpenhumanJwt,
-                                "none" => AuthStyle::None,
-                                other => {
-                                    return Err(format!(
-                                        "unknown auth_style '{}'; valid: bearer, anthropic, openhuman_jwt, none",
-                                        other
-                                    ))
-                                }
-                            };
-                            let id = entry
-                                .id
-                                .filter(|s| !s.trim().is_empty())
-                                .unwrap_or_else(|| generate_provider_id(&slug));
-                            let label = entry
-                                .label
-                                .filter(|s| !s.trim().is_empty())
-                                .unwrap_or_else(|| slug.clone());
-                            let (image_endpoint, model_image_endpoints, rotation_strategy) =
-                                crate::config::schema::cloud_providers::normalize_fleet_config(
-                                    entry.image_endpoint,
-                                    entry.model_image_endpoints,
-                                    entry.rotation_strategy,
-                                )?;
-                            let provider = CloudProviderCreds {
-                                id,
-                                slug,
-                                label,
-                                endpoint,
-                                auth_style,
-                                image_endpoint,
-                                model_image_endpoints,
-                                rotation_strategy,
-                                tool_call_codec: entry.tool_call_codec,
-                                model_transports:
-                                    crate::config::schema::cloud_providers::normalize_model_transports_for_auth(
-                                        entry.model_transports,
-                                        auth_style,
-                                    )?,
-                                default_model: entry.default_model,
-                            };
-                            Ok(provider)
-                        })
-                        .collect::<Result<Vec<_>, String>>()
-                })
+                .map(crate::config::ops::build_cloud_provider_creds)
                 .transpose()?,
             model_registry: update.model_registry,
             primary_cloud: update.primary_cloud,
@@ -326,7 +201,7 @@ pub(super) fn handle_inference_update_model_settings(
             memory_provider: update.memory_provider,
             embeddings_provider: update.embeddings_provider,
         };
-        to_json(crate::inference::rpc::inference_update_model_settings(&ctx, patch).await?)
+        to_json(crate::inference::ops::inference_update_model_settings(&ctx, patch).await?)
     })
 }
 
@@ -352,28 +227,20 @@ pub(super) fn handle_inference_update_local_settings(
             usage_embeddings: update.usage_embeddings,
             api_key: update.api_key,
         };
-        to_json(crate::inference::rpc::inference_update_local_settings(&ctx, patch).await?)
+        to_json(crate::inference::ops::inference_update_local_settings(&ctx, patch).await?)
     })
 }
 
 pub(super) fn handle_inference_list_models(
-    _ctx: DispatchCtx,
+    ctx: DispatchCtx,
     params: Map<String, Value>,
 ) -> ControllerFuture {
     Box::pin(async move {
         let request = deserialize_params::<InferenceListModelsParams>(params)?;
         if request.candidate_api_key.is_some() || request.candidate_provider.is_some() {
-            return to_json(
-                crate::inference::provider::ops::list_configured_models_with_candidate_key(
-                    &request.provider_id,
-                    request.candidate_api_key.as_deref().unwrap_or(""),
-                    request.candidate_provider,
-                    request.candidate_ca_cert_pem,
-                )
-                .await?,
-            );
+            return to_json(crate::inference::provider::models::catalog_listing::list_configured_models_with_candidate_key(&request.provider_id, request.candidate_api_key.as_deref().unwrap_or(""), request.candidate_provider, request.candidate_ca_cert_pem).await?);
         }
-        to_json(crate::inference::rpc::inference_list_models(&request.provider_id).await?)
+        to_json(crate::inference::ops::inference_list_models(&ctx, &request.provider_id).await?)
     })
 }
 
@@ -381,7 +248,7 @@ pub(super) fn handle_inference_provider_auth_errors(
     _ctx: DispatchCtx,
     _params: Map<String, Value>,
 ) -> ControllerFuture {
-    Box::pin(async move { to_json(crate::inference::rpc::inference_provider_auth_errors().await?) })
+    Box::pin(async move { to_json(crate::inference::ops::inference_provider_auth_errors().await?) })
 }
 
 pub(super) fn handle_inference_diagnostics(
@@ -390,7 +257,7 @@ pub(super) fn handle_inference_diagnostics(
 ) -> ControllerFuture {
     Box::pin(async move {
         let config = ctx.load_config().await?;
-        to_json(crate::inference::rpc::inference_diagnostics(&config).await?)
+        to_json(crate::inference::ops::inference_diagnostics(&config).await?)
     })
 }
 

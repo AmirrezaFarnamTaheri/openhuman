@@ -300,6 +300,8 @@ test("the storage area covers every driver suite in isolated hosted jobs or one 
           "storage-session:storage-session-store-tests",
         ]
       : [
+          "frontend:pnpm-install",
+          "rust-cov:prune-coverage-binaries",
           "storage-drivers:test-modules",
           "storage-drivers:storage-e2e",
           "storage-drivers:storage-lib-tests",
@@ -349,6 +351,7 @@ test("the storage area covers every driver suite in isolated hosted jobs or one 
       false,
       "do not restore the removed duplicate MongoDB owner workflow",
     );
+
     if (profile === "hosted") {
       assert.deepEqual(
         hostedMatrix(plan).map((group) => group.group),
@@ -393,6 +396,33 @@ test("hosted matrix only spins up groups with active lanes", () => {
     buildPlan({ profile: "hosted", areas: { ...NONE, installPs1: true } }),
   );
   assert.equal(pester.find((g) => g.group === "pester").container, "");
+});
+
+test("a browser-spec-only change runs the full-inventory skip guard without scripts area", () => {
+  const frontendOnly = buildPlan({
+    profile: "hosted",
+    areas: { ...NONE, frontend: true },
+  });
+  assert.equal(
+    frontendOnly.lanes
+      .find((lane) => lane.name === "frontend")
+      .checks.find((check) => check.name === "browser-test-skip-guard").run,
+    "node scripts/ci/check-browser-test-skips.mjs",
+  );
+  assert.equal(
+    frontendOnly.lanes
+      .find((lane) => lane.name === "frontend")
+      .checks.find((check) => check.name === "e2e-runner-ownership")?.run,
+    "pnpm e2e:ownership:check",
+  );
+
+  const filters = fs.readFileSync(
+    path.join(repoRoot, ".github/ci-paths-filter.yml"),
+    "utf8",
+  );
+  const frontendFilter = filters.split("\nscripts:\n")[0];
+  assert.match(frontendFilter, /'app\/test\/\*\*'/);
+  assert.match(frontendFilter, /'scripts\/ci\/check-browser-test-skips\.mjs'/);
 });
 
 test("private lanes reuse checkout targets, preserve mold through RUSTFLAGS resets, and omit wrappers", () => {
@@ -442,6 +472,7 @@ test("private gates-off, storage, and Tauri execute equivalent coverage suites w
   const checks = Object.fromEntries(
     plan.lanes.flatMap((l) => l.checks.map((c) => [c.name, c])),
   );
+  assert.match(checks["gate-contract-tests"].run, /core::schema_test_support::/);
   assert.match(
     checks["gate-contract-tests-features"].run,
     /--features modules,mcp,e2e-test-support/,
@@ -482,12 +513,12 @@ test("private auxiliary coverage reports after failed tests and preserves the fa
   fs.symlinkSync(
     path.join(repoRoot, "scripts"),
     path.join(dir, "scripts"),
-    "dir",
+    process.platform === "win32" ? "junction" : "dir",
   );
   fs.symlinkSync(
     path.join(repoRoot, ".config"),
     path.join(dir, ".config"),
-    "dir",
+    process.platform === "win32" ? "junction" : "dir",
   );
   fs.mkdirSync(path.join(dir, "ci-out"));
   fs.writeFileSync(
@@ -502,7 +533,7 @@ test("private auxiliary coverage reports after failed tests and preserves the fa
     cwd: dir,
     env: {
       ...process.env,
-      PATH: `${dir}:${process.env.PATH}`,
+      PATH: `${dir}${path.delimiter}${process.env.PATH}`,
       CARGO_CALLS: calls,
       NEXTEST_REPORT_DIR: path.join(dir, "reports"),
       NEXTEST_EXPECTED_TARGETS: path.join(dir, "expected-targets"),
@@ -514,7 +545,7 @@ test("private auxiliary coverage reports after failed tests and preserves the fa
       .readFileSync(path.join(dir, "expected-targets"), "utf8")
       .trim()
       .split("\n").length,
-    11,
+    12,
   );
   const commands = fs.readFileSync(calls, "utf8").trim().split("\n");
   assert.equal(commands.length, 3);
@@ -548,7 +579,7 @@ test("missing native fixtures prevent the whole storage command and its report f
         cwd: dir,
         env: {
           ...process.env,
-          PATH: `${dir}:${process.env.PATH}`,
+          PATH: `${dir}${path.delimiter}${process.env.PATH}`,
           CARGO_CALLS: calls,
           NEXTEST_EXPECTED_TARGETS: path.join(dir, "expected-targets"),
         },

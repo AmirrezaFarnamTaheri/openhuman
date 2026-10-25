@@ -18,6 +18,7 @@
 //! always has its versioned record.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use tiny_artifacts::{ArtifactKind, Artifacts, Author, Content};
 
@@ -82,19 +83,20 @@ impl Production {
             legacy_kind_for_extension(&extension.to_ascii_lowercase())
         };
         let target = revise.filter(|id| !id.trim().is_empty());
-        let (meta, path) = super::store::create_artifact_regenerating(
-            workspace_dir,
-            files.clone(),
-            legacy_kind,
-            title,
-            extension,
-            tool_call_id,
-            target,
-            chat,
-        )
-        .await?;
+        let (meta, path) = ctx
+            .enter(super::store::create_artifact_regenerating(
+                workspace_dir,
+                files.clone(),
+                legacy_kind,
+                title,
+                extension,
+                tool_call_id,
+                target,
+                chat,
+            ))
+            .await?;
 
-        let artifacts = artifacts_service(ctx, workspace_dir, files.clone(), None, chat);
+        let artifacts = artifacts_service(workspace_dir, files.clone(), None, chat, ctx);
         let mut production = Self {
             ctx: ctx.clone(),
             artifacts,
@@ -239,11 +241,24 @@ impl Production {
             Ok(Some(record)) if record.latest().is_some() => record,
             _ => return self.fail_card(reason).await,
         };
+        let ctx = self.ctx.clone();
+        let scoped = crate::storage::sessions::artifact_scoped_for_in(&self.workspace_dir, &ctx);
+        let file_store = scoped.as_ref().map(|scoped| {
+            let storage = super::tiny_store::storage_bundle(scoped);
+            Arc::new(tiny_artifacts::BlobFileStore::new(&storage))
+                as Arc<dyn tiny_artifacts::FileStore>
+        });
         let bridge = super::tiny_store::LegacyUiBridge::new(
-            &self.ctx,
             &self.workspace_dir,
             self.files.clone(),
+            super::tiny_store::guarded_roots(super::tiny_store::file_roots(
+                &self.workspace_dir,
+                &self.files,
+                None,
+            )),
+            file_store,
             self.chat.as_ref(),
+            &ctx,
         );
         if let Err(err) = bridge.show_newest(&record).await {
             tracing::warn!(
@@ -258,14 +273,16 @@ impl Production {
 
     /// Fail the card directly (when the record could not take the change).
     async fn fail_card(&self, reason: &str) {
-        let _ = super::store::fail_artifact(
-            &self.workspace_dir,
-            self.files.clone(),
-            &self.id,
-            reason,
-            self.chat.as_ref(),
-        )
-        .await;
+        let _ = self
+            .ctx
+            .enter(super::store::fail_artifact(
+                &self.workspace_dir,
+                self.files.clone(),
+                &self.id,
+                reason,
+                self.chat.as_ref(),
+            ))
+            .await;
     }
 }
 

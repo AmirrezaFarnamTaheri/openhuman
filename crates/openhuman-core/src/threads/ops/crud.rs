@@ -471,13 +471,29 @@ async fn thread_delete_inner(
     request: DeleteConversationThreadRequest,
 ) -> Result<Outcome<ApiEnvelope<DeleteConversationThreadResponse>>, String> {
     let dir: PathBuf = config.workspace_dir.clone();
-    let deleted = conversations::blocking::delete_thread(
+    crate::agent::orchestration::completion_owners::begin_thread_deletion(
+        &ctx,
+        &dir,
+        &request.thread_id,
+    )?;
+    let deleted = match conversations::blocking::delete_thread(
         ctx.clone(),
         dir.clone(),
         request.thread_id.clone(),
         request.deleted_at.clone(),
     )
-    .await?;
+    .await
+    {
+        Ok(deleted) => deleted,
+        Err(error) => {
+            crate::agent::orchestration::completion_owners::release_thread_deletion(
+                &ctx,
+                &dir,
+                &request.thread_id,
+            );
+            return Err(error);
+        }
+    };
     // Invalidate the in-process web-channel session BEFORE the
     // turn-state cleanup. The snapshot deletion is fallible and
     // returns early on error; if invalidation ran after, an active
@@ -489,25 +505,62 @@ async fn thread_delete_inner(
     // completion in the gap between the two calls, then discard anything already
     // queued for delivery. Both target a thread that's being deleted, so there's
     // nowhere left to deliver to — abort + cleanup is the whole behavior.
-    let cancelled_legacy =
-        crate::agent::orchestration::running_subagents::cancel_for_thread(&ctx, &request.thread_id);
-    let jobs = crate::core::runtime::slot_for::<
-        tinyagents_orchestration::subagent::SubAgentJobRegistry,
-    >(&ctx);
-    let cancelled_driver =
-        crate::agent::orchestration::subagent_sessions::cancel_driver_jobs_for_thread(
-            &crate::agent::orchestration::subagent_sessions::SubagentSessionStore::new(dir.clone()),
+    let (cancelled_legacy, cancelled_driver) = if ctx.resolved().is_none() {
+        if !crate::agent::orchestration::completion_owners::driver_tasks_for_thread(
+            &ctx,
             &dir,
-            &jobs,
             &request.thread_id,
         )
-        .len();
+        .is_empty()
+        {
+            crate::agent::orchestration::background_completions::delete_parent_for_thread(
+                &ctx,
+                &dir,
+                &request.thread_id,
+            )?;
+            return Err("cannot resolve core context to settle thread-owned driver jobs".into());
+        }
+        (0, 0)
+    } else {
+        let cancelled_legacy =
+            match crate::agent::orchestration::running_subagents::cancel_for_thread(
+                &ctx,
+                &request.thread_id,
+            )
+            .await
+            {
+                Ok(cancelled) => cancelled,
+                Err(error) => {
+                    crate::agent::orchestration::background_completions::delete_parent_for_thread(
+                        &ctx,
+                        &dir,
+                        &request.thread_id,
+                    )
+                    .map_err(|close_error| format!("{error}; {close_error}"))?;
+                    return Err(error);
+                }
+            };
+        let jobs = crate::core::runtime::slot_for::<
+            tinyagents_orchestration::subagent::SubAgentJobRegistry,
+        >(&ctx);
+        let cancelled_driver =
+            crate::agent::orchestration::subagent_sessions::cancel_driver_jobs_for_thread(
+                &crate::agent::orchestration::subagent_sessions::SubagentSessionStore::new(
+                    dir.clone(),
+                ),
+                &dir,
+                &jobs,
+                &request.thread_id,
+            )
+            .len();
+        (cancelled_legacy, cancelled_driver)
+    };
     let cancelled = cancelled_legacy + cancelled_driver;
-    let discarded = crate::agent::orchestration::background_completions::discard_for_thread(
+    let discarded = crate::agent::orchestration::background_completions::delete_parent_for_thread(
         &ctx,
         &dir,
         &request.thread_id,
-    );
+    )?;
     log::debug!(
         "[threads] thread_delete thread_id={} cancelled_subagents={} discarded_completions={}",
         request.thread_id,

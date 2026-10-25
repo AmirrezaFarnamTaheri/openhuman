@@ -295,7 +295,7 @@ JS
         cwd: dir,
         env: {
           ...process.env,
-          PATH: `${dir}/bin:${process.env.PATH}`,
+          PATH: `${dir}/bin${path.delimiter}${process.env.PATH}`,
           MOCK_CALLS: `${dir}/calls`,
           OH_COV_RUNNER: "nextest",
           OH_COV_SHARD: shard,
@@ -429,7 +429,7 @@ for (const platform of ["Linux", "Darwin", "MINGW64_NT-10.0", "Windows_NT"]) {
       [
         `if target_expected_in_coverage composio_list_tools_stack_overflow_regression '${platform}'; then exit 11; fi`,
         `if target_expected_in_coverage windows_sandbox_env_e2e '${platform}'; then ${windows ? ":" : "exit 12"}; else ${windows ? "exit 13" : ":"}; fi`,
-        `target_expected_in_coverage json_rpc_e2e '${platform}'`,
+        `target_expected_in_coverage json_rpc_threads_e2e '${platform}'`,
         `target_expected_in_coverage future_empty_suite '${platform}'`,
       ].join("\n"),
     );
@@ -517,7 +517,7 @@ test("coverage suites record why cargo rebuilt and drop the verbose noise", () =
       ["explain_rebuilds"],
       "",
       [
-        `printf '%s\\n' '       Dirty libc v0.2.189: the file \`build.rs\` has changed' '     Running \`rustc --crate-name libc\`' '       Fresh memchr v2.7.4' '   Compiling libc v0.2.189' 'test output' | explain_rebuilds ${JSON.stringify(path.join(dir, "suite.log"))}`,
+        `printf '%s\\n' '       Dirty libc v0.2.189: the file \`build.rs\` has changed' '     Running \`rustc --crate-name libc\`' '       Fresh memchr v2.7.4' '   Compiling libc v0.2.189' 'test output' | explain_rebuilds ${JSON.stringify(path.join(dir, "suite.log").replaceAll("\\", "/"))}`,
       ].join("\n"),
     );
     assert.equal(result.status, 0, result.output);
@@ -532,4 +532,13 @@ test("coverage suites record why cargo rebuilt and drop the verbose noise", () =
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("the nextest coverage run scales the model retry backoff down, overridably", () => {
+  const source = fs.readFileSync(runner, "utf8");
+  const block = source.slice(source.indexOf('if [ "${OH_COV_RUNNER:-cargo}" = "nextest" ]; then\n  # One process per test'));
+  assert.match(
+    block.split("\nfi\n")[0],
+    /export OPENHUMAN_MODEL_RETRY_BACKOFF_MS="\$\{OPENHUMAN_MODEL_RETRY_BACKOFF_MS:-100\}"/,
+  );
 });

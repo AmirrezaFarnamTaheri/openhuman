@@ -26,7 +26,6 @@ use tinytools::Tool;
 pub(crate) struct ChannelTurnParts {
     pub(crate) model: String,
     pub(crate) provider_name: String,
-    pub(crate) provider_runtime_options: provider::ProviderRuntimeOptions,
     pub(crate) tools_registry: Arc<Vec<Box<dyn Tool>>>,
     pub(crate) system_prompt: ChannelSystemPrompt,
     pub(crate) skills: Vec<Workflow>,
@@ -80,12 +79,6 @@ fn default_tool_descs(config: &Config) -> Vec<(&'static str, &'static str)> {
         "pushover",
         "Send a Pushover notification to your device. Requires PUSHOVER_TOKEN and PUSHOVER_USER_KEY in .env file.",
     ));
-    if !config.agents.is_empty() {
-        tool_descs.push((
-            "delegate",
-            "Delegate a subtask to a specialized agent. Use when: a task benefits from a different model (e.g. fast summarization, deep reasoning, code generation). The sub-agent runs a single prompt and returns its response.",
-        ));
-    }
     tool_descs
 }
 
@@ -111,15 +104,6 @@ pub(super) fn build_channel_turn_parts_with_inference(
     security: &Arc<SecurityPolicy>,
     descs: PromptToolDescs,
 ) -> Result<ChannelTurnParts> {
-    let provider_runtime_options = provider::ProviderRuntimeOptions {
-        auth_profile_override: None,
-        openhuman_dir: inference_config
-            .config_path
-            .parent()
-            .map(std::path::PathBuf::from),
-        secrets_encrypt: inference_config.secrets.encrypt,
-        reasoning_enabled: inference_config.runtime.reasoning_enabled,
-    };
     let (model, provider_name) = match resolve_chat_workload(inference_config) {
         ChatWorkloadResolution::Cloud => {
             let (_chat, model) = provider::create_chat_model_with_model_id_in(
@@ -128,7 +112,7 @@ pub(super) fn build_channel_turn_parts_with_inference(
                 inference_config,
                 inference_config.default_temperature,
             )?;
-            (model, provider::INFERENCE_BACKEND_ID.to_string())
+            (model, provider::factory::INFERENCE_BACKEND_ID.to_string())
         }
         ChatWorkloadResolution::Workload {
             provider_string,
@@ -177,7 +161,6 @@ pub(super) fn build_channel_turn_parts_with_inference(
             &config.browser,
             &config.http_request,
             &config.action_dir,
-            &config.agents,
             config,
             None,
         )
@@ -239,7 +222,6 @@ pub(super) fn build_channel_turn_parts_with_inference(
     Ok(ChannelTurnParts {
         model,
         provider_name,
-        provider_runtime_options,
         tools_registry,
         system_prompt,
         skills,
@@ -272,7 +254,6 @@ pub(crate) fn runtime_context(
         api_url: inference_config.api_url.clone(),
         inference_url: inference_config.inference_url.clone(),
         reliability: Arc::new(config.reliability.clone()),
-        provider_runtime_options: parts.provider_runtime_options,
         workspace_dir: Arc::new(config.workspace_dir.clone()),
         message_timeout_secs,
         multimodal: inference_config.multimodal.clone(),

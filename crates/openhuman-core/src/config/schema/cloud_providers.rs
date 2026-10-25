@@ -2,7 +2,7 @@
 //!
 //! Each entry in `Config::cloud_providers` represents one configured LLM
 //! backend. Providers are keyed by a user-chosen `slug` (e.g. `"openai"`,
-//! `"my-deepseek"`). The factory in `inference::provider::factory`
+//! `"my-deepseek"`). Inference routing in `config::ops::primary_cloud`
 //! resolves workload-to-provider strings against this list at runtime using
 //! the grammar `"<slug>:<model>"`.
 //!
@@ -11,11 +11,22 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use std::sync::LazyLock;
+use std::sync::Arc;
 
+use crate::core::slots::HookSlot;
 use tinyinference_providers::builtin::{
-    BuiltinAuthStyle, BUILTIN_CLOUD_PROVIDERS as UPSTREAM_BUILTINS,
+    BuiltinAuthStyle, BuiltinCloudProvider as UpstreamBuiltinCloudProvider, BuiltinPresets,
+    BUILTIN_CLOUD_PROVIDERS as UPSTREAM_BUILTINS,
 };
+
+static HOSTED_PRESETS: HookSlot<BuiltinCloudProvider> =
+    HookSlot::new("config::hosted_cloud_presets");
+pub type HostedCloudIdentityClassifier = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+pub type HostedAuthStyleClassifier = Arc<dyn Fn(AuthStyle) -> bool + Send + Sync>;
+static HOSTED_CLOUD_IDENTITY: HookSlot<HostedCloudIdentityClassifier> =
+    HookSlot::new("config::hosted_cloud_identity");
+static HOSTED_AUTH_STYLE: HookSlot<HostedAuthStyleClassifier> =
+    HookSlot::new("config::hosted_auth_style");
 
 /// A built-in cloud provider preset in the host's [`AuthStyle`] vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,19 +37,66 @@ pub struct BuiltinCloudProvider {
     pub auth_style: AuthStyle,
 }
 
-/// The managed OpenHuman route. It is the one preset `tinyinference-providers`
-/// deliberately omits: managed gateway policy is host-owned.
-const OPENHUMAN_PRESET: BuiltinCloudProvider = BuiltinCloudProvider {
-    slug: "openhuman",
-    label: "OpenHuman",
-    endpoint: "https://api.openhuman.ai/v1",
-    auth_style: AuthStyle::OpenhumanJwt,
-};
+/// Register an additional cloud preset supplied by a host.
+pub fn register_hosted_cloud_preset(id: impl Into<String>, preset: BuiltinCloudProvider) {
+    HOSTED_PRESETS.register(id, preset);
+}
 
-impl From<&'static tinyinference_providers::builtin::BuiltinCloudProvider>
-    for BuiltinCloudProvider
-{
-    fn from(preset: &'static tinyinference_providers::builtin::BuiltinCloudProvider) -> Self {
+/// Register a host preset for one runtime context.
+pub fn register_hosted_cloud_preset_in(
+    extensions: &crate::core::slots::Extensions,
+    id: impl Into<String>,
+    preset: BuiltinCloudProvider,
+) {
+    HOSTED_PRESETS.register_in(extensions, id, preset);
+}
+
+/// Register host-owned auth-style classification without making it core
+/// inference policy.
+pub fn register_hosted_cloud_provider_policy(
+    identity: HostedCloudIdentityClassifier,
+    auth_style: HostedAuthStyleClassifier,
+) {
+    HOSTED_CLOUD_IDENTITY.register("default", identity);
+    HOSTED_AUTH_STYLE.register("default", auth_style);
+}
+
+/// Register hosted-provider classification for one runtime context.
+pub fn register_hosted_cloud_provider_policy_in(
+    extensions: &crate::core::slots::Extensions,
+    identity: HostedCloudIdentityClassifier,
+    auth_style: HostedAuthStyleClassifier,
+) {
+    HOSTED_CLOUD_IDENTITY.register_in(extensions, "default", identity);
+    HOSTED_AUTH_STYLE.register_in(extensions, "default", auth_style);
+}
+
+/// Whether the installed host owns this reserved cloud-provider identity.
+pub fn is_hosted_cloud_identity(slug: &str) -> bool {
+    HOSTED_CLOUD_IDENTITY
+        .get("default")
+        .is_some_and(|classify| classify(slug))
+}
+
+/// Whether the installed host owns this passive compatibility auth style.
+pub fn is_hosted_auth_style(style: AuthStyle) -> bool {
+    HOSTED_AUTH_STYLE
+        .get("default")
+        .is_some_and(|classify| classify(style))
+}
+
+/// Whether the selected runtime or process host owns this compatibility auth style.
+pub(crate) fn is_hosted_auth_style_for(
+    extensions: Option<&crate::core::slots::Extensions>,
+    style: AuthStyle,
+) -> bool {
+    HOSTED_AUTH_STYLE
+        .get_for(extensions, "default")
+        .is_some_and(|classify| classify(style))
+}
+
+impl From<&tinyinference_providers::builtin::BuiltinCloudProvider> for BuiltinCloudProvider {
+    fn from(preset: &tinyinference_providers::builtin::BuiltinCloudProvider) -> Self {
         Self {
             slug: preset.slug,
             label: preset.label,
@@ -51,198 +109,74 @@ impl From<&'static tinyinference_providers::builtin::BuiltinCloudProvider>
     }
 }
 
-/// Every built-in preset: the managed OpenHuman route followed by the
-/// provider-neutral catalog from `tinyinference-providers`
-/// ([`UPSTREAM_BUILTINS`]), mapped onto the host's [`AuthStyle`].
-pub const EXTRA_CLOUD_PROVIDERS: &[BuiltinCloudProvider] = &[
-    // 9Router is a user-managed local OpenAI-compatible inference gateway.
-    // The gateway owns its own upstream accounts and separate API-key policy.
-    BuiltinCloudProvider {
-        slug: "9router",
-        label: "9Router (Local Gateway)",
-        endpoint: "http://127.0.0.1:20128/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    // 9Router peer-derived API-key-only upstream presets. Non-key sessions
-    // still require their own native credential/admission protocols.
-    BuiltinCloudProvider {
-        slug: "hyperbolic",
-        label: "Hyperbolic",
-        endpoint: "https://api.hyperbolic.xyz/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "chutes",
-        label: "Chutes AI",
-        endpoint: "https://llm.chutes.ai/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "featherless",
-        label: "Featherless AI",
-        endpoint: "https://api.featherless.ai/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "poolside",
-        label: "Poolside",
-        endpoint: "https://inference.poolside.ai/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "morph",
-        label: "Morph",
-        endpoint: "https://api.morphllm.com/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "perplexity",
-        label: "Perplexity API",
-        endpoint: "https://api.perplexity.ai",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "tencent-hunyuan",
-        label: "Tencent Hunyuan",
-        endpoint: "https://api.hunyuan.cloud.tencent.com/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "xiaomi-mimo",
-        label: "Xiaomi MiMo (API Key)",
-        endpoint: "https://api.xiaomimimo.com/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    // Key-only OpenAI-compatible peers with documented public base URLs.
-    // Model availability and per-model transport features are not implied.
-    BuiltinCloudProvider {
-        slug: "cohere",
-        label: "Cohere",
-        endpoint: "https://api.cohere.ai/compatibility/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "tokenrouter",
-        label: "TokenRouter",
-        endpoint: "https://api.tokenrouter.io/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    // Region-scoped ModelArk access; AP and EU keys are not interchangeable.
-    BuiltinCloudProvider {
-        slug: "byteplus-modelark-ap",
-        label: "BytePlus ModelArk (Asia Pacific)",
-        endpoint: "https://ark.ap-southeast.bytepluses.com/api/v3",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "byteplus-modelark-eu",
-        label: "BytePlus ModelArk (Europe)",
-        endpoint: "https://ark.eu-west.bytepluses.com/api/v3",
-        auth_style: AuthStyle::Bearer,
-    },
-    // Opt-in loopback gateway; OpenHuman never forwards Codex OAuth credentials.
-    BuiltinCloudProvider {
-        slug: "prodex",
-        label: "Prodex Gateway",
-        endpoint: "http://127.0.0.1:4000/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "llmtr",
-        label: "LLMTR",
-        endpoint: "https://llmtr.com/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "tokendance",
-        label: "TokenDance",
-        endpoint: "https://tokendance.space/gateway/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "siliconflow",
-        label: "SiliconFlow",
-        endpoint: "https://api.siliconflow.cn/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "qwen-pay-as-you-go",
-        label: "Qwen Pay-As-You-Go",
-        endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "qwen-token-plan",
-        label: "Qwen Token Plan",
-        endpoint: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    // Verified direct OpenAI-compatible provider endpoints; capability and
-    // free-tier eligibility remain model/account-specific and must be discovered.
-    BuiltinCloudProvider {
-        slug: "aionlabs",
-        label: "Aion Labs",
-        endpoint: "https://api.aionlabs.ai/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "sambanova",
-        label: "SambaNova",
-        endpoint: "https://api.sambanova.ai/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "ovhcloud",
-        label: "OVHcloud AI Endpoints",
-        endpoint: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "nebius",
-        label: "Nebius Token Factory",
-        endpoint: "https://api.tokenfactory.nebius.com/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "llm7",
-        label: "LLM7.io",
-        endpoint: "https://api.llm7.io/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-    BuiltinCloudProvider {
-        slug: "synthetic",
-        label: "Synthetic",
-        endpoint: "https://api.synthetic.new/openai/v1",
-        auth_style: AuthStyle::Bearer,
-    },
-];
+#[path = "cloud_provider_presets.rs"]
+mod extra_presets;
+pub use extra_presets::EXTRA_CLOUD_PROVIDERS;
 
-pub static BUILTIN_CLOUD_PROVIDERS: LazyLock<Vec<BuiltinCloudProvider>> = LazyLock::new(|| {
-    let mut presets: Vec<_> = std::iter::once(OPENHUMAN_PRESET)
-        .chain(UPSTREAM_BUILTINS.iter().map(BuiltinCloudProvider::from))
-        .collect();
-    for extra in EXTRA_CLOUD_PROVIDERS {
-        if !presets.iter().any(|current| current.slug == extra.slug) {
-            presets.push(*extra);
-        }
-    }
-    presets
-});
-
-pub(crate) fn builtin_cloud_provider(type_str: &str) -> Option<&'static BuiltinCloudProvider> {
-    BUILTIN_CLOUD_PROVIDERS
+/// Every built-in preset: host-provided entries followed by the
+/// provider-neutral catalog from `tinyinference-providers`.
+pub fn builtin_cloud_providers() -> Vec<BuiltinCloudProvider> {
+    let hosted = HOSTED_PRESETS
+        .entries_context_first()
+        .into_iter()
+        .map(|(_, preset)| preset)
+        .chain(EXTRA_CLOUD_PROVIDERS.iter().copied())
+        .collect::<Vec<_>>();
+    // Keep the product's managed entry first for settings presentation. The
+    // owner catalog itself remains generic-first for exact-slug lookup.
+    hosted
         .iter()
-        .find(|provider| provider.slug == type_str)
+        .copied()
+        .filter(|preset| {
+            !UPSTREAM_BUILTINS
+                .iter()
+                .any(|generic| generic.slug == preset.slug)
+        })
+        .chain(UPSTREAM_BUILTINS.iter().map(BuiltinCloudProvider::from))
+        .collect::<Vec<_>>()
 }
 
-/// Whether `slug` matches a built-in cloud provider preset.
-///
-/// The chat factory uses this to decide capability defaults (e.g. whether the
-/// provider exposes the OpenAI Responses API) only for providers we ship and
-/// therefore know the API surface of. Custom / user-defined slugs are treated
-/// as unknown and keep the permissive defaults.
-pub fn is_builtin_cloud_slug(slug: &str) -> bool {
-    builtin_cloud_provider(slug).is_some()
+/// Generic provider catalog extended with the host's registered preset
+/// metadata. Host auth policy remains in the owning host registry.
+pub fn builtin_presets() -> BuiltinPresets {
+    let hosted = HOSTED_PRESETS
+        .entries_context_first()
+        .into_iter()
+        .map(|(_, preset)| preset)
+        .chain(EXTRA_CLOUD_PROVIDERS.iter().copied())
+        .collect::<Vec<_>>();
+    BuiltinPresets::new(hosted.iter().map(|preset| UpstreamBuiltinCloudProvider {
+        slug: preset.slug,
+        label: preset.label,
+        endpoint: preset.endpoint,
+        // Only route/catalog metadata is consumed from this generic catalog;
+        // persisted OpenhumanJwt remains in the host's schema and is never
+        // converted into runtime bearer authentication.
+        auth_style: match preset.auth_style {
+            AuthStyle::Anthropic => BuiltinAuthStyle::Anthropic,
+            AuthStyle::Bearer | AuthStyle::OpenhumanJwt | AuthStyle::None => {
+                BuiltinAuthStyle::Bearer
+            }
+        },
+    }))
+}
+
+/// Looks up a provider preset, giving the generic catalog precedence over
+/// host additions with the same slug.
+pub fn builtin_cloud_provider(type_str: &str) -> Option<BuiltinCloudProvider> {
+    if let Some(preset) = BuiltinPresets::default().builtin_cloud_provider(type_str) {
+        return Some(BuiltinCloudProvider::from(preset));
+    }
+    let hosted = HOSTED_PRESETS
+        .entries_context_first()
+        .into_iter()
+        .map(|(_, preset)| preset)
+        .chain(EXTRA_CLOUD_PROVIDERS.iter().copied())
+        .collect::<Vec<_>>();
+    if let Some(preset) = hosted.iter().find(|preset| preset.slug == type_str) {
+        return Some(*preset);
+    }
+    None
 }
 
 /// Whether a built-in cloud provider exposes the OpenAI **Responses API**
@@ -268,7 +202,7 @@ pub fn builtin_cloud_supports_responses_api(slug: &str) -> bool {
 /// Extract the lowercased authority host from an endpoint URL, dropping the
 /// scheme, any userinfo, the port, and the path. Returns `None` when no host
 /// can be parsed. Tolerant of a missing scheme and of IPv6 literals.
-pub fn endpoint_host(endpoint: &str) -> Option<String> {
+fn endpoint_host(endpoint: &str) -> Option<String> {
     let s = endpoint.trim();
     // Drop the scheme (`https://…`); tolerate a bare `host/path` form.
     let after_scheme = s.split_once("://").map(|(_, rest)| rest).unwrap_or(s);
@@ -320,7 +254,7 @@ pub fn host_is_builtin_cloud_provider(host: &str) -> bool {
     if host.is_empty() || host_is_loopback(&host) {
         return false;
     }
-    BUILTIN_CLOUD_PROVIDERS
+    builtin_cloud_providers()
         .iter()
         .any(|p| endpoint_host(p.endpoint).as_deref() == Some(host.as_str()))
 }
@@ -362,7 +296,7 @@ pub fn endpoint_host_is_chat_completions_only(endpoint: &str) -> bool {
         None
     };
     let mut matched_chat_only = false;
-    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
+    for provider in builtin_cloud_providers().iter() {
         if endpoint_host(provider.endpoint).as_deref() == Some(host.as_str())
             && local_origin.as_ref().is_none_or(|origin| {
                 url::Url::parse(provider.endpoint).is_ok_and(|preset| preset.origin() == *origin)
@@ -397,6 +331,20 @@ pub enum AuthStyle {
 }
 
 impl AuthStyle {
+    /// Parse the RPC compatibility spellings for a provider authentication style.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value.to_ascii_lowercase().as_str() {
+            "bearer" => Ok(Self::Bearer),
+            "anthropic" => Ok(Self::Anthropic),
+            "openhuman_jwt" | "openhumanjwt" => Ok(Self::OpenhumanJwt),
+            "none" => Ok(Self::None),
+            other => Err(format!(
+                "unknown auth_style '{}'; valid: bearer, anthropic, openhuman_jwt, none",
+                other
+            )),
+        }
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Bearer => "bearer",
@@ -655,7 +603,7 @@ pub fn normalize_fleet_config(
 /// never reaches `make_cloud_provider_by_slug`. When no `cloud_providers`
 /// row exists (config drift, upgrade from a build that only persisted
 /// `config.local_ai.base_url`, flush-vs-probe race),
-/// `inference::provider::ops::list_configured_models`
+/// `inference::provider::models::catalog_listing::list_configured_models`
 /// falls back to a synthetic entry via `synthesize_local_runtime_entry`
 /// (Sentry TAURI-RUST-28Z fix). The same fallback applies to `lmstudio`.
 pub fn is_slug_reserved(s: &str) -> bool {
@@ -668,36 +616,7 @@ pub fn is_slug_reserved(s: &str) -> bool {
 /// The random suffix is not cryptographically strong — it only needs to be
 /// unique within a single user's config file.
 pub fn generate_provider_id(slug: &str) -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    // Cheap pseudo-random from timestamp nanoseconds — adequate for local
-    // config uniqueness without pulling in a PRNG crate.
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    let chars: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
-    let mut suffix = String::with_capacity(5);
-    let mut seed = nanos as usize;
-    for _ in 0..5 {
-        suffix.push(chars[seed % chars.len()] as char);
-        seed = seed
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        seed = (seed >> 33) ^ seed;
-    }
-    // Sanitise slug to only alphanumeric + '-' for the id prefix.
-    let safe_slug: String = slug
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .take(20)
-        .collect();
-    format!("p_{}_{}", safe_slug, suffix)
+    super::generate_provider_id_with_prefix("p", slug)
 }
 
 #[cfg(test)]

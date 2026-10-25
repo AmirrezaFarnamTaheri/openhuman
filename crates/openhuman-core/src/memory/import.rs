@@ -292,6 +292,19 @@ async fn launch(
                 started: false,
             });
         }
+        if paused.is_some() {
+            // An automatic resume that meets a peer run (layout migration or
+            // conversation backfill) defers: the checkpoint stays resumable
+            // and the next resume attempt retries, instead of recording the
+            // contention as a failed resume.
+            tracing::debug!(
+                "[memory:import] peer run holds the workspace; deferring the interrupted-import resume"
+            );
+            return Ok(LaunchOutcome {
+                state: status(config),
+                started: false,
+            });
+        }
         let action = match mode {
             Mode::Import => "import",
             Mode::Retry | Mode::ResumeRetry => "retry",

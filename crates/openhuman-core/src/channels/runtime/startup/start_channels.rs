@@ -265,7 +265,10 @@ async fn start_channels_inner(
     // Remote-control turn state (`/status` shows "in progress") for every
     // channel with the `remote_control` capability.
     let _turn_state_handle = bus.subscribe(Arc::new(
-        crate::channels::host::ChannelTurnStateSubscriber::with_config(Arc::new(config.clone())),
+        crate::channels::host::ChannelTurnStateSubscriber::with_config(
+            Arc::clone(&channels_by_name),
+            Arc::new(config.clone()),
+        ),
     ));
     // In-chat approvals (sub-issue 2 of #3098) for every channel with the
     // `chat_approvals` capability: `Prompt`-class tool calls are gated for the
@@ -321,7 +324,12 @@ async fn start_channels_inner(
     tokio::select! {
         biased;
         _ = session.cancelled() => {},
-        _ = run_message_dispatch_loop(rx, runtime_ctx, max_in_flight_messages) => {},
+        _ = run_message_dispatch_loop(
+            rx,
+            runtime_ctx,
+            max_in_flight_messages,
+            config.inbound_debounce.clone(),
+        ) => {},
     }
     if let Some(runtime) = module_runtime.as_mut() {
         runtime.close().await?;

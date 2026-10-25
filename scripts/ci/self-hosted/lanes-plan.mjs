@@ -79,10 +79,11 @@ const STORAGE_E2E_TARGETS = [
   "storage_approvals_e2e",
   "storage_domains_e2e",
   "storage_flows_e2e",
+  "storage_flows_fallback_e2e",
   "storage_secrets_e2e",
   "storage_scope_e2e",
   "storage_agent_scopes_e2e",
-  "storage_delegation_e2e",
+  "storage_legacy_profile_boot_e2e",
   "storage_default_import_e2e",
   "storage_desktop_upgrade_e2e",
   "storage_layout_migration_e2e",
@@ -316,10 +317,15 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
       checks: [
         {
           name: "pnpm-install",
-          // ex63: also for a core change, so rust-core-coverage's mock backend
-          // (scripts/mock-api-server.mjs imports `ws`) can start when no
-          // frontend file changed. One install per VM: lanes share a checkout.
-          when: areas.frontend || areas.i18n || areas.scripts || (ex63 && core),
+          // ex63: also whenever rust-core-coverage runs (a core or storage
+          // change), so its mock backend (scripts/mock-api-server.mjs imports
+          // `ws`) can start when no frontend file changed. One install per VM:
+          // lanes share a checkout.
+          when:
+            areas.frontend ||
+            areas.i18n ||
+            areas.scripts ||
+            (ex63 && (core || areas.storage)),
           run: "pnpm install --frozen-lockfile",
         },
         {
@@ -360,6 +366,18 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             : "pnpm --filter openhuman-app lint",
         },
         {
+          name: "browser-test-skip-guard",
+          when: areas.frontend,
+          needs: ["pnpm-install"],
+          run: "node scripts/ci/check-browser-test-skips.mjs",
+        },
+        {
+          name: "e2e-runner-ownership",
+          when: areas.frontend,
+          needs: ["pnpm-install"],
+          run: "pnpm e2e:ownership:check",
+        },
+        {
           name: "i18n",
           when: areas.i18n,
           needs: ["pnpm-install"],
@@ -375,7 +393,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           name: "scripts-self-tests",
           when: areas.scripts,
           needs: ["pnpm-install"],
-          run: "pnpm test:scripts",
+          run: "pnpm test:scripts && pnpm e2e:ownership:check && node scripts/ci/check-browser-test-skips.mjs",
         },
         {
           name: "python-script-tests",
@@ -419,7 +437,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         // deps the mock backend needs itself (ex63 reuses frontend's install).
         {
           name: "pnpm-install",
-          when: !ex63 && core,
+            when: !ex63 && core,
           run: "pnpm install --frozen-lockfile",
         },
         {
@@ -444,7 +462,16 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             OH_COV_TUI: "1",
             ...(ex63 ? { OH_COV_RUNNER: "nextest" } : {}),
           },
-          run: "bash scripts/ci/rust-coverage.sh",
+          run: withModules("bash scripts/ci/rust-coverage.sh"),
+        },
+        // ex63: lcov-core.info is written (even after a failed suite), so drop
+        // its ~90 GB of instrumented test executables and profiles before the
+        // next lanes build on the same 320 GB disk. No `needs`: it must run
+        // after a failure too.
+        {
+          name: "prune-coverage-binaries",
+          when: ex63 && (core || areas.storage),
+          run: "bash scripts/ci/self-hosted/prune-coverage-binaries.sh target/ci-private-coverage",
         },
       ],
     },
@@ -476,6 +503,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           when: core,
           run: "cargo check -p openhuman-embed --no-default-features",
         },
+        // Hosts such as Chottu run modules with neither legacy storage import
+        // nor the encrypted secrets file; both are gated separately.
+        {
+          name: "embed-check-no-default-modules",
+          when: core,
+          run: "bash scripts/ci-cancel-aware.sh cargo check -p openhuman-embed --no-default-features --features modules",
+        },
         // Consumers such as TinySweeper enable tracing without native modules.
         {
           name: "embed-check-no-default-langfuse",
@@ -502,9 +536,10 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           name: "embed-offline-examples",
           when: core,
           needs: ["test-modules"],
-          // Retain release-mode fleet benchmarking on the well provisioned
-          // private runner. Hosted PR CI tests the exact same behavior in
-          // debug; a cold release/LTO build exceeded its 30-minute timeout.
+          env: { RUST_MIN_STACK: "67108864" },
+          // Dev profile: the release-declared linux_fleet measurement then
+          // shares the plain dev build instead of a thin-LTO one nothing else
+          // can reuse (and that would need cleaning afterwards).
           run: ex63
             ? "node scripts/run-embed-examples.mjs"
             : "node scripts/run-embed-examples.mjs --ci-smoke",
@@ -531,7 +566,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features --lib --" +
             " core::all:: core::cli:: core::invoke:: core::session_expiry:: core::legacy_aliases:: core::runtime::" +
             " agent::session_host::runtime_session::tool_surface:: agent_registry::agents::loader:: commands::ops::tests:: memory::people::contacts_gate_tests::" +
-            " memory::layout_migration:: config::schema::load::source::tests::revision_loader_tests::" +
+            " doctor::checks:: core::schema_test_support:: memory::layout_migration:: config::schema::load::source::tests::revision_loader_tests::" +
             " openhuman::config:: openhuman::platform::socket::event_handlers:: tools::schemas:: tools::ops::tests::" +
             " tools::sources::tests:: web_chat::run_task::tests::",
         },
@@ -549,7 +584,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features" +
             " --features modules,mcp,e2e-test-support --lib --" +
             " modules::runtime:: modules::registry:: modules::storage_grant_tinywallet::" +
-            " modules::storage_grant_tinyconnectors::" +
+            " modules::storage_grant_tinyconnectors:: modules::tinyflows::" +
+            " doctor::checks::" +
             " cron::bus_host::tests:: cron::documents_port::tests::" +
             " mcp::server::resources:: test_support::introspect:: --test-threads=1",
         },

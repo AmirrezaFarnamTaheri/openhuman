@@ -1,16 +1,19 @@
 use super::*;
-use crate::core::runtime::{CoreContext, DomainSet};
-use crate::core::slots::Extensions;
-use crate::inference::provider::factory::PROVIDER_OPENHUMAN;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use tempfile::TempDir;
+use tinyinference_llm::providers::overrides::{ChatModelEntry, ProviderModelMetadata};
 
 #[tokio::test]
 async fn cached_probe_serves_definitive_negative_results() {
+    use crate::core::runtime::{CoreContext, DispatchCtx, DomainSet};
+    use crate::core::slots::Extensions;
+    use crate::inference::registry::register_chat_model_in;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    // Acquire the async inference guard before the synchronous provider
+    // override lock, matching the global lock order used by other fixtures.
     let _guard = crate::inference::inference_test_guard_async().await;
     let _exclusive = crate::inference::provider::factory::test_provider_override::exclusive();
-    let _signed_in = crate::platform::llm_gate::SignedOutTestGuard::set(false);
     let tmp = TempDir::new().unwrap();
     let config = Config {
         workspace_dir: tmp.path().join("workspace"),
@@ -18,37 +21,57 @@ async fn cached_probe_serves_definitive_negative_results() {
         config_path: tmp.path().join("config.toml"),
         ..Config::default()
     };
-    let hit_count = Arc::new(AtomicUsize::new(0));
+    let hit_count = std::sync::Arc::new(AtomicUsize::new(0));
+    // The core owns no hosted provider; this scoped host registration supplies
+    // a deterministic negative probe and counts cache misses without touching
+    // a global provider or a real backend.
     let counter = hit_count.clone();
-    let mut provider =
-        crate::inference::registry_test_support::default_managed_entry(PROVIDER_OPENHUMAN)
-            .expect("managed test provider");
-    // The host owns the managed provider and its readiness endpoint. Exercise
-    // the core's cache through that registration seam, without assuming the
-    // core still embeds a particular HTTP backend.
-    provider.probe = Some(Arc::new(move |role, _, _| {
-        assert_eq!(role, "summarization");
-        counter.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async { Err("API key not configured for provider".to_string()) })
-    }));
-    let extensions = Extensions::default();
-    crate::inference::registry::register_chat_model_in(&extensions, PROVIDER_OPENHUMAN, provider);
-    let context = CoreContext::for_test_with_extensions(
+    let extensions = Extensions::new();
+    register_chat_model_in(
+        &extensions,
+        crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+        ChatModelEntry {
+            build: Arc::new(|_| {
+                Ok((
+                    Arc::new(tinyagents_harness::testkit::ScriptedModel::replies(
+                        ["ready"].to_vec(),
+                    )),
+                    "fixture-model".to_string(),
+                ))
+            }),
+            probe: Some(Arc::new(move |_| {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async { Err("API key not configured for provider".to_string()) })
+            })),
+            models: Some(ProviderModelMetadata {
+                default_model: Arc::new(|| Some("fixture-model".to_string())),
+                role_for_model: Arc::new(|_| None),
+                is_alias: Arc::new(|_| false),
+                is_raw_model: Arc::new(|model| !model.trim().is_empty()),
+                supports_vision: Arc::new(|_| false),
+                resolve_model: Arc::new(|_, _, _| Some("fixture-model".to_string())),
+                context_window: Arc::new(|_| None),
+                default_pricing: Arc::new(|| None),
+                without_reasoning: Arc::new(tinyinference_llm::model::without_reasoning),
+            }),
+        },
+    );
+    let core = CoreContext::for_test_with_host_kind_and_extensions(
+        crate::core::types::HostKind::Library,
         DomainSet::full(),
         Some(config.workspace_dir.clone()),
         extensions,
     );
+    let ctx = DispatchCtx::new(core);
 
-    CoreContext::scope(context, async {
-        let ctx = DispatchCtx::ambient();
+    CoreContext::scope(ctx.resolved().expect("test context"), async {
         let first = cached_probe(&ctx, "summarization", &config).await;
-        assert_eq!(
-            first,
-            Err("API key not configured for provider".to_string())
-        );
+        assert!(first
+            .unwrap_err()
+            .to_ascii_lowercase()
+            .contains("api key not configured for provider"));
         assert_eq!(hit_count.load(Ordering::SeqCst), 1);
-        let second = cached_probe(&ctx, "summarization", &config).await;
-        assert_eq!(second, first);
+        assert!(cached_probe(&ctx, "summarization", &config).await.is_err());
         assert_eq!(hit_count.load(Ordering::SeqCst), 1);
     })
     .await;

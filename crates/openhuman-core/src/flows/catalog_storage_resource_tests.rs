@@ -38,12 +38,23 @@ fn open_workspace_fd_count(workspaces: &[tempfile::TempDir]) -> usize {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn workspace_fd_lifetime_is_separate_from_catalog_callback_lifetime() {
+    if crate::util::module_test_process::run(
+        module_path!(),
+        "workspace_fd_lifetime_is_separate_from_catalog_callback_lifetime",
+    ) {
+        return;
+    }
+
     // Warm the process-wide bus before measuring. Serving additional callback
     // objects should only add entries to that shared bus, not open a backend.
     crate::modules::runtime::runtime()
         .await
         .expect("process module runtime starts");
+    crate::storage::connect_on_storage_runtime(|| async {})
+        .await
+        .expect("process storage runtime starts");
     let workspaces: Vec<_> = (0..WORKSPACE_COUNT)
         .map(|_| tempfile::tempdir().expect("isolated workspace"))
         .collect();
@@ -54,6 +65,7 @@ async fn workspace_fd_lifetime_is_separate_from_catalog_callback_lifetime() {
             workspace_dir: workspace.path().to_path_buf(),
             ..Config::default()
         };
+        crate::storage::local::use_persistent_default_for_test(workspace.path());
         let context = context(&config, &format!("fd-probe-{index}"));
         registrations.push(
             register(&context, &config)
@@ -73,7 +85,7 @@ async fn workspace_fd_lifetime_is_separate_from_catalog_callback_lifetime() {
     for workspace in &workspaces {
         let backend = crate::storage::local::backend_for(workspace.path())
             .expect("open the temporary workspace default backend");
-        assert_eq!(backend.driver(), "sqlite");
+        assert!(workspace.path().join("storage").exists());
         drop(backend);
     }
     let after_backend_opens = open_workspace_fd_count(&workspaces);

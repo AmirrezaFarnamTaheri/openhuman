@@ -195,9 +195,14 @@ impl OpenHumanTurnPrelude {
         }))
     }
 
-    /// Logs the committed reply (spawned; never delays the commit) and
-    /// publishes `ConversationTurnCommitted`.
-    pub(super) fn memory_post_turn(&self, receipt: &CommitReceipt<OpenHumanRunContext>) {
+    /// Logs the committed reply (spawned; never delays the commit), queues a
+    /// plan that finished this turn's notes as learnings, and publishes
+    /// `ConversationTurnCommitted`.
+    pub(super) fn memory_post_turn(
+        &self,
+        receipt: &CommitReceipt<OpenHumanRunContext>,
+        finished_plan: Option<crate::agent::tinyagents::state_block::FinishedPlan>,
+    ) {
         let (user_text, pending) = {
             let mut mutable = self
                 .mutable
@@ -258,6 +263,16 @@ impl OpenHumanTurnPrelude {
                 pending.channel,
             )
             .await;
+            if let Some(finished) = finished_plan {
+                crate::memory::lifecycle::plan_notes::learn_plan_notes(
+                    config.clone(),
+                    &pending.identity,
+                    Some(prelude.action_dir.display().to_string()),
+                    &finished.plan,
+                    finished.goal.as_deref(),
+                )
+                .await;
+            }
         };
         self.dispatch_ctx()
             .spawn(deferred_memory_work(profile_context, work));

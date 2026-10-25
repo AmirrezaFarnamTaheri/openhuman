@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   retryServiceUnavailable,
+  retryableFailureUrls,
   serviceUnavailableUrls,
 } from "../ci/retry-markdown-links.mjs";
 
@@ -9,6 +10,7 @@ const unavailable =
   "* [503] <https://example.test/docs#anchor> | Service Unavailable\n";
 const internalError =
   "* [500] <https://example.test/docs#anchor> | Internal Server Error\n";
+const timeout = "* [TIMEOUT] <https://example.test/docs#anchor> | Request timed out\n";
 const missing = "* [404] <https://example.test/missing> | Not Found\n";
 const timedOut =
   "* [TIMEOUT] <https://www.gnu.org/licenses/license-list.en.html#apache2> | Request timed out\n";
@@ -141,6 +143,27 @@ test("persistent HTTP 429 remains a failure after bounded retries", async () => 
   assert.equal(calls.length, 3);
 });
 
+test("transient request timeouts are retried", async () => {
+  const { calls, check } = checker([
+    { status: 2, report: timeout },
+    { status: 0, report: "" },
+  ]);
+  const waits = [];
+  assert.equal(
+    await retryServiceUnavailable({
+      initialReport: timeout,
+      check,
+      wait: async (ms) => waits.push(ms),
+    }),
+    0,
+  );
+  assert.deepEqual(calls, [
+    ["https://example.test/docs#anchor"],
+    ["https://example.test/docs#anchor"],
+  ]);
+  assert.deepEqual(waits, [5000, 10000]);
+});
+
 test("persistent 503 remains a failure after bounded retries", async () => {
   const { calls, check } = checker(
     Array.from({ length: 3 }, () => ({ status: 2, report: unavailable })),
@@ -189,7 +212,7 @@ test("a permanent error discovered on retry remains a failure", async () => {
 });
 
 test("retry inputs deduplicate repeated failures without dropping URL fragments", () => {
-  assert.deepEqual(serviceUnavailableUrls(unavailable.repeat(3)), [
+  assert.deepEqual(retryableFailureUrls(unavailable.repeat(3)), [
     "https://example.test/docs#anchor",
   ]);
 });

@@ -1,0 +1,728 @@
+//! The `list_configured_models` RPC entry point: resolves a provider id to a
+//! `cloud_providers` entry or registered host catalog, falls back to local
+//! runtime entries, and probes the selected endpoint with the appropriate
+//! credential. Candidate probes stay separate from saved keys and sessions.
+
+use super::local_runtime::synthesize_local_runtime_entry;
+use crate::inference::provider::factory::resolve_codex_routing as resolve_openai_codex_routing;
+use std::sync::Arc;
+use tinyinference_core::sanitize::sanitize_api_error;
+use tinyinference_llm::catalog::{
+    is_openrouter_provider, merge_openai_codex_model_hints, parse_models_response,
+    validate_openrouter_key as validate_openrouter_api_key, ModelInfo,
+};
+use tinyinference_llm::providers::openai::codex::{
+    openai_codex_client_version, openai_codex_user_agent, OpenAiCodexRouting,
+    OPENAI_CODEX_ACCOUNT_HEADER, OPENAI_CODEX_ORIGINATOR, OPENAI_CODEX_ORIGINATOR_HEADER,
+};
+
+use crate::config::schema::AuthStyle;
+
+/// Resolve the API key used to probe a provider's `/models` endpoint.
+///
+/// Cloud providers store their key in auth-profiles.json (via `lookup_key_for_slug`),
+/// but the OMLX local-runtime chip persists its Bearer key in
+/// `config.local_ai.api_key`. When the slug-scoped lookup comes back empty for omlx,
+/// fall back to that local-runtime key so the reachability probe still sends
+/// `Authorization: Bearer` (otherwise the OMLX server returns 401).
+pub(super) fn resolve_local_runtime_key(
+    slug: &str,
+    looked_up: String,
+    config: &crate::config::Config,
+) -> String {
+    let looked_up = looked_up.trim().to_string();
+    if !looked_up.is_empty() {
+        return looked_up;
+    }
+    if slug == "omlx" {
+        return config
+            .local_ai
+            .api_key
+            .clone()
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+    }
+    looked_up
+}
+
+/// Whether a provider entry can be probed at `{endpoint}/models`.
+///
+/// Claude Code is a local CLI provider, and a `cli://…` endpoint is a
+/// placeholder rather than an API base. Any other scheme (`ftp://…`) is a
+/// misconfiguration and is left to the request path to surface as an error.
+/// An endpoint that does not parse as `scheme://host` at all is left to the
+/// request path so a genuine misconfiguration still surfaces as an error.
+fn endpoint_hosts_models_listing(slug: &str, endpoint: &str) -> bool {
+    if slug == "claude-code" {
+        return false;
+    }
+    match reqwest::Url::parse(endpoint.trim()) {
+        Ok(url) if url.has_host() => url.scheme() != "cli",
+        _ => true,
+    }
+}
+
+/// Only authorization failures are informative about an individual
+/// credential; network failures and server errors are not key-specific.
+fn should_try_next_catalog_key(status: u16, has_more: bool) -> bool {
+    has_more && matches!(status, 401 | 403)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CatalogueCredentialRequirement {
+    Required,
+    Public,
+    Inconclusive,
+}
+
+/// A 200 response to /models is proof of catalogue reachability, NOT proof
+/// of an accepted API key: some vendors intentionally expose a public model
+/// catalogue. Check whether an otherwise identical request with no credential
+/// is rejected. This is only an authentication-evidence probe; it cannot prove
+/// inference access and must never send the candidate secret.
+async fn catalogue_credential_requirement(
+    client: &reqwest::Client,
+    models_url: &str,
+    auth_style: AuthStyle,
+) -> CatalogueCredentialRequirement {
+    let mut request = client.get(models_url);
+    if auth_style == AuthStyle::Anthropic {
+        request = request.header("anthropic-version", "2023-06-01");
+    }
+    match request.send().await {
+        Ok(response) if matches!(response.status().as_u16(), 401 | 403) => {
+            CatalogueCredentialRequirement::Required
+        }
+        Ok(response) if response.status().is_success() => CatalogueCredentialRequirement::Public,
+        _ => CatalogueCredentialRequirement::Inconclusive,
+    }
+}
+
+/// OpenRouter's /key preflight returns a sanitized error string. Only
+/// explicit HTTP auth failures permit trying another key.
+fn should_retry_openrouter_key(error: &str, has_more: bool) -> bool {
+    has_more
+        && (error.starts_with("OpenRouter key validation returned 401:")
+            || error.starts_with("OpenRouter key validation returned 403:"))
+}
+
+pub fn append_query_param(url: &str, key: &str, value: &str) -> String {
+    if let Ok(mut parsed) = reqwest::Url::parse(url) {
+        parsed.query_pairs_mut().append_pair(key, value);
+        return parsed.to_string();
+    }
+
+    let separator = if url.contains('?') { '&' } else { '?' };
+    format!("{url}{separator}{key}={value}")
+}
+
+/// The key and HTTP client a registered catalog listing is handed for `entry`
+/// (when the provider id matched a configured entry).
+fn catalog_request(
+    config: &crate::config::Config,
+    entry: Option<&crate::config::schema::cloud_providers::CloudProviderCreds>,
+) -> Result<crate::inference::registry::CatalogHostRequest, String> {
+    let service_key = "providers.list_models";
+    let slug = entry.map(|e| e.slug.trim()).unwrap_or_default();
+    let provider_key = match entry {
+        Some(entry) => {
+            let looked_up =
+                crate::inference::provider::factory::lookup_key_for_slug(&entry.slug, config)
+                    .unwrap_or_default();
+            resolve_local_runtime_key(&entry.slug, looked_up, config)
+        }
+        None => String::new(),
+    };
+    // Registered catalogs also receive credentials, so keep the same
+    // no-redirect policy as direct provider probes.
+    let client = crate::util::tls::credentialed_client_builder(
+        service_key,
+        config
+            .cloud_provider_ca_certs
+            .get(slug)
+            .map(String::as_str)
+            .filter(|pem| !pem.is_empty()),
+    )?
+    .timeout(std::time::Duration::from_secs(30))
+    .connect_timeout(std::time::Duration::from_secs(10))
+    .build()
+    .map_err(|_| "Could not build secure provider catalogue probe client".to_string())?;
+    Ok(crate::inference::registry::CatalogHostRequest {
+        provider_key,
+        client,
+    })
+}
+
+/// The empty listing the managed provider answers with when no hosted catalog
+/// is registered.
+fn no_managed_catalog() -> crate::core::Outcome<serde_json::Value> {
+    log::info!(
+        "[providers][list_models] managed catalog unavailable: no catalog provider registered; returning an empty list"
+    );
+    crate::core::Outcome::new(
+        serde_json::json!({ "models": Vec::<ModelInfo>::new() }),
+        vec!["no hosted backend; managed catalog is empty".to_string()],
+    )
+}
+
+pub async fn list_configured_models(
+    provider_id: &str,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    let config = crate::config::ops::load_config_with_timeout().await?;
+
+    list_configured_models_from_config(provider_id, &config).await
+}
+
+/// Probe a candidate credential without altering the saved auth-profile store.
+/// This is used by provider editing before replacing an encrypted account key.
+/// Apply an uncommitted provider edit to the in-memory probe snapshot.
+/// Neither the configured endpoints nor the credential store is changed.
+fn apply_candidate_provider_preview(
+    config: &mut crate::config::Config,
+    provider_id: &str,
+    entry: crate::config::schema::cloud_providers::CloudProviderCreds,
+    ca_cert_pem: Option<String>,
+) -> Result<(), String> {
+    use crate::config::schema::cloud_providers::is_slug_reserved;
+    if is_slug_reserved(&entry.slug) || entry.slug != provider_id {
+        return Err("Candidate provider must match a non-reserved provider slug".into());
+    }
+    if entry.endpoint.len() > 8192 || entry.slug.len() > 128 {
+        return Err("Candidate provider identifier or endpoint exceeds maximum length".into());
+    }
+    if !entry.id.is_empty()
+        && config
+            .cloud_providers
+            .iter()
+            .any(|existing| existing.id == entry.id && existing.slug != entry.slug)
+    {
+        return Err("Candidate provider id conflicts with a different provider".into());
+    }
+    // Validate controls through the same Rust normalizers as saved settings.
+    crate::config::schema::cloud_providers::normalize_fleet_config(
+        entry.image_endpoint.clone(),
+        entry.model_image_endpoints.clone(),
+        entry.rotation_strategy.clone(),
+    )?;
+    crate::config::schema::cloud_providers::normalize_model_transports(
+        entry.model_transports.clone(),
+    )?;
+    if let Some(pem) = ca_cert_pem {
+        let checked = crate::config::rpc::collect_provider_ca_certs([(
+            entry.slug.as_str(),
+            Some(pem.as_str()),
+        )])?;
+        if pem.is_empty() {
+            config.cloud_provider_ca_certs.remove(&entry.slug);
+        } else if let Some(value) = checked.get(&entry.slug) {
+            config
+                .cloud_provider_ca_certs
+                .insert(entry.slug.clone(), value.clone());
+        }
+    }
+    config
+        .cloud_providers
+        .retain(|existing| existing.slug != entry.slug);
+    config.cloud_providers.push(entry);
+    Ok(())
+}
+
+pub async fn list_configured_models_with_candidate_key(
+    provider_id: &str,
+    candidate_key: &str,
+    preview: Option<crate::config::schema::cloud_providers::CloudProviderCreds>,
+    preview_ca_cert_pem: Option<String>,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    // Preserve the dispatch's embedded/tenant config and the normal load
+    // timeout before applying an unsaved candidate to this private snapshot.
+    let mut config = crate::config::ops::load_config_with_timeout().await?;
+    if let Some(entry) = preview {
+        apply_candidate_provider_preview(&mut config, provider_id, entry, preview_ca_cert_pem)?;
+    } else if preview_ca_cert_pem.is_some() {
+        return Err("CA preview requires a candidate provider entry".into());
+    }
+    list_configured_models_with_candidate_key_from_config(provider_id, &config, candidate_key).await
+}
+
+pub async fn list_configured_models_from_config(
+    provider_id: &str,
+    config: &crate::config::Config,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    list_configured_models_inner(provider_id, config, None).await
+}
+
+pub async fn list_configured_models_with_candidate_key_from_config(
+    provider_id: &str,
+    config: &crate::config::Config,
+    candidate_key: &str,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    list_configured_models_inner(provider_id, config, Some(candidate_key)).await
+}
+
+async fn list_configured_models_inner(
+    provider_id: &str,
+    config: &crate::config::Config,
+    candidate_key: Option<&str>,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    let provider_id = provider_id.trim().to_string();
+    if provider_id.is_empty() {
+        return Err("provider_id must not be empty".to_string());
+    }
+
+    log::debug!("[providers][list_models] provider_id={}", provider_id);
+
+    // Candidate checks are isolated from saved credentials and host sessions.
+    // Only normal listings may dispatch to a host's registered catalog.
+    if candidate_key.is_none() {
+        // A registered catalog (`inference::registry`) answers before any entry
+        // resolution; nothing registered => the built-in listing below.
+        if let Some(catalog) = crate::inference::registry::catalog(&provider_id) {
+            log::debug!(
+                "[providers][list_models] provider_id={provider_id} served by a registered catalog"
+            );
+            let entry = config
+                .cloud_providers
+                .iter()
+                .find(|e| e.id == provider_id || e.slug == provider_id);
+            let request = catalog_request(config, entry)?;
+            return run_registered_catalog(&provider_id, config, request, catalog).await;
+        }
+        if provider_id == crate::inference::provider::factory::PROVIDER_OPENHUMAN {
+            return Ok(no_managed_catalog());
+        }
+    }
+
+    // Explicit `cloud_providers` entry wins (e.g. a user-pointed remote
+    // ollama box at https://ollama.example.com/v1). Falling back to the
+    // local-runtime synthesis below only happens when no entry matches.
+    let entry = config
+        .cloud_providers
+        .iter()
+        .find(|e| e.id == provider_id || e.slug == provider_id)
+        .cloned()
+        .or_else(|| synthesize_local_runtime_entry(&provider_id, config))
+        .ok_or_else(|| format!("no cloud provider with id or slug '{}' found", provider_id))?;
+
+    // Ordinary saved BYOK keys need the same safety boundary as one-shot
+    // candidate keys. Reject unsafe destinations before loading any credential
+    // or constructing an authenticated request.
+    if matches!(
+        entry.auth_style,
+        crate::config::schema::cloud_providers::AuthStyle::Bearer
+            | crate::config::schema::cloud_providers::AuthStyle::Anthropic
+    ) && !crate::inference::provider::factory::credentialed_endpoint_is_safe(&entry.endpoint)
+    {
+        return Err(
+            "Credentialed provider endpoints require HTTPS or loopback HTTP without URL credentials"
+                .into(),
+        );
+    }
+
+    // Candidate credentials are never persisted or mixed with existing account
+    // keys. Only explicitly configured BYOK providers can be tested. Reject
+    // plaintext remote endpoints and credential-bearing URLs before any I/O.
+    if let Some(candidate) = candidate_key {
+        let auth_ok = matches!(
+            entry.auth_style,
+            crate::config::schema::cloud_providers::AuthStyle::Bearer
+                | crate::config::schema::cloud_providers::AuthStyle::Anthropic
+        );
+        let anonymous = candidate.is_empty()
+            && entry.auth_style == crate::config::schema::cloud_providers::AuthStyle::None;
+        let url = reqwest::Url::parse(&entry.endpoint)
+            .map_err(|_| "Candidate probe requires a valid HTTP(S) endpoint".to_string())?;
+        if (!auth_ok && !anonymous) || entry.slug == "openhuman" {
+            return Err(
+                "Candidate credential probing requires an API-key provider or an anonymous endpoint"
+                    .into(),
+            );
+        }
+        // Anonymous endpoints may use remote plaintext HTTP because no key is
+        // ever sent; credentialed endpoints must use HTTPS or local loopback.
+        if !matches!(url.scheme(), "http" | "https")
+            || (auth_ok
+                && !crate::inference::provider::factory::credentialed_endpoint_is_safe(
+                    &entry.endpoint,
+                ))
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+        {
+            return Err(
+                "Candidate provider requires a valid HTTP(S) URL; credentialed providers require HTTPS or loopback HTTP without URL credentials"
+                    .into(),
+            );
+        }
+        if candidate.len() > 256 * 1024 {
+            return Err("Candidate credential exceeds 256 KiB".into());
+        }
+    }
+
+    // An entry that authenticates with the managed session is the managed
+    // catalog: the registered provider lists it, and with none registered
+    // there is nothing to list.
+    if entry.auth_style == crate::config::schema::cloud_providers::AuthStyle::OpenhumanJwt {
+        return match crate::inference::registry::catalog(
+            crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+        ) {
+            Some(catalog) => {
+                let request = catalog_request(config, Some(&entry))?;
+                run_registered_catalog(
+                    crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+                    config,
+                    request,
+                    catalog,
+                )
+                .await
+            }
+            None => Ok(no_managed_catalog()),
+        };
+    }
+
+    // Sentry TAURI-RUST-114C/114D: the app stores Claude Code with the cosmetic
+    // endpoint `cli://claude-code`. It runs as a local CLI and has no `/models`
+    // listing, and reqwest cannot build a request for a non-http(s) URL, so the
+    // probe failed with "builder error" on every picker open. Such a provider
+    // has no remote catalog: answer with an empty one.
+    if !endpoint_hosts_models_listing(&entry.slug, &entry.endpoint) {
+        log::debug!(
+            "[providers][list_models] slug={} has no http(s) /models listing; returning an empty list",
+            entry.slug
+        );
+        return Ok(crate::core::Outcome::new(
+            serde_json::json!({ "models": Vec::<ModelInfo>::new() }),
+            vec![format!(
+                "provider '{}' has no remote model catalog",
+                entry.slug
+            )],
+        ));
+    }
+
+    use crate::config::schema::cloud_providers::AuthStyle;
+    let raw_api_key = if let Some(candidate) = candidate_key {
+        candidate.to_owned()
+    } else {
+        let looked_up =
+            crate::inference::provider::factory::lookup_key_for_slug(&entry.slug, config)
+                .unwrap_or_default();
+        resolve_local_runtime_key(&entry.slug, looked_up, config)
+    };
+
+    // A candidate API key must never be interpreted as an existing Codex OAuth
+    // session or cause the stored OAuth account to enter the probe.
+    let bearer_is_oauth = candidate_key.is_none()
+        && entry.slug == "openai"
+        && crate::inference::provider::factory::openai_bearer_is_oauth(config);
+    // Authenticate individual candidates for /models, not a combined bearer.
+    // Managed sessions and Codex OAuth are never interpreted as key groups.
+    let candidates = if candidate_key.is_some() && raw_api_key.is_empty() {
+        // Probe an anonymous/local endpoint without ever loading an existing
+        // stored credential: absence of a new key must not leak the old key
+        // to a newly edited origin during a preview.
+        vec![String::new()]
+    } else if candidate_key.is_some() {
+        // Keep candidate health separate from committed account health; the
+        // probe cannot evict or cool down the actual provider's credentials.
+        let keys = crate::inference::provider::factory::model_fleet_probe_keys(
+            &format!(
+                "{}:{}:candidate-catalog",
+                config.workspace_dir.display(),
+                entry.slug
+            ),
+            raw_api_key,
+        );
+        if keys.is_empty() || keys.len() > 128 {
+            return Err("Candidate credential group must contain 1-128 distinct keys".into());
+        }
+        if keys
+            .iter()
+            .any(|key| key.len() > 4096 || key.chars().any(char::is_control))
+        {
+            return Err(
+                "Candidate credential contains invalid characters or an oversized key".into(),
+            );
+        }
+        keys
+    } else if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        && !bearer_is_oauth
+    {
+        crate::inference::provider::factory::model_fleet_probe_keys(
+            &format!("{}:{}:catalog", config.workspace_dir.display(), entry.slug),
+            raw_api_key,
+        )
+    } else {
+        vec![raw_api_key]
+    };
+    let api_key = candidates.first().cloned().unwrap_or_default();
+
+    let routing =
+        resolve_openai_codex_routing(config, &entry.slug, &entry.endpoint, &api_key, bearer_is_oauth)
+            .unwrap_or_else(|err| {
+            log::warn!(
+                "[providers][list_models] openai codex routing unavailable; continuing with configured endpoint: {err}"
+            );
+            OpenAiCodexRouting::standard(&entry.endpoint)
+        });
+
+    let mut models_url = format!("{}/models", routing.endpoint);
+    let codex_client_version = routing.using_oauth.then(openai_codex_client_version);
+    if let Some(client_version) = codex_client_version.as_deref() {
+        models_url = append_query_param(&models_url, "client_version", client_version);
+    }
+
+    log::debug!(
+        "[providers][list_models] fetching url={} slug={} codex_oauth={} account_id_header={}",
+        models_url,
+        entry.slug,
+        routing.using_oauth,
+        routing.account_id.is_some()
+    );
+
+    // This probe carries provider credentials, including custom x-api-key
+    // headers that reqwest does not strip from redirects. Reuse the native
+    // no-redirect transport builder with the same TLS roots, proxy and CA.
+    let client = crate::util::tls::credentialed_client_builder(
+        "providers.list_models",
+        config
+            .cloud_provider_ca_certs
+            .get(entry.slug.trim())
+            .map(String::as_str)
+            .filter(|pem| !pem.is_empty()),
+    )?
+    .timeout(std::time::Duration::from_secs(30))
+    .connect_timeout(std::time::Duration::from_secs(10))
+    .build()
+    .map_err(|_| "Could not build secure provider catalogue probe client".to_string())?;
+
+    // This is a safe read-only GET: when the current key is rejected with
+    // 401/403, try only the remaining distinct credentials. A successful
+    // catalogue response proves reachability; authentication needs its own
+    // evidence below. Do not
+    // retry 5xx/timeouts or turn pool cardinality into an auth assertion.
+    let mut rejected_keys: usize = 0;
+    let mut checked_keys: usize = 0;
+    let mut authenticated = false;
+    let mut public_catalogue = false;
+    let mut successful_response = None;
+
+    for (position, candidate_key) in candidates.iter().enumerate() {
+        let has_more = position + 1 < candidates.len();
+        checked_keys += 1;
+        // An explicit authenticated /key validation is stronger evidence than
+        // a /models response. For every other vendor, compare to an anonymous
+        // control request before calling the key verified.
+        let using_key_preflight = is_openrouter_provider(&entry.slug, &entry.endpoint);
+        if using_key_preflight {
+            match validate_openrouter_api_key(&client, &routing.endpoint, candidate_key).await {
+                Ok(()) => {}
+                Err(error) if should_retry_openrouter_key(&error, has_more) => {
+                    rejected_keys += 1;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+
+        let mut request = client.get(&models_url);
+        if routing.using_oauth {
+            request = request
+                .header(
+                    reqwest::header::USER_AGENT,
+                    openai_codex_user_agent("OpenHuman", env!("CARGO_PKG_VERSION")),
+                )
+                .header(OPENAI_CODEX_ORIGINATOR_HEADER, OPENAI_CODEX_ORIGINATOR);
+        }
+
+        request = match entry.auth_style {
+            AuthStyle::Bearer => {
+                if !candidate_key.is_empty() {
+                    let mut r =
+                        request.header("Authorization", format!("Bearer {}", candidate_key));
+                    if let Some(account_id) = routing.account_id.as_deref() {
+                        r = r.header(OPENAI_CODEX_ACCOUNT_HEADER, account_id);
+                    }
+                    r
+                } else {
+                    request
+                }
+            }
+            AuthStyle::Anthropic => {
+                let mut r = request.header("anthropic-version", "2023-06-01");
+                if !candidate_key.is_empty() {
+                    r = r.header("x-api-key", candidate_key.as_str());
+                }
+                r
+            }
+            // Managed catalogs returned through their registered provider above.
+            AuthStyle::OpenhumanJwt => request,
+            AuthStyle::None => request,
+        };
+
+        let attempt = request
+            .send()
+            .await
+            .map_err(|e| format!("[providers][list_models] HTTP request failed: {}", e))?;
+
+        if should_try_next_catalog_key(attempt.status().as_u16(), has_more) {
+            rejected_keys += 1;
+            continue;
+        }
+
+        let credential_requirement = if using_key_preflight {
+            CatalogueCredentialRequirement::Required
+        } else if attempt.status().is_success() && !candidate_key.is_empty() {
+            catalogue_credential_requirement(&client, &models_url, entry.auth_style).await
+        } else {
+            CatalogueCredentialRequirement::Inconclusive
+        };
+        let supports_key_auth =
+            matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic);
+        authenticated = supports_key_auth
+            && !candidate_key.is_empty()
+            && attempt.status().is_success()
+            && credential_requirement == CatalogueCredentialRequirement::Required;
+        public_catalogue = supports_key_auth
+            && !candidate_key.is_empty()
+            && attempt.status().is_success()
+            && credential_requirement == CatalogueCredentialRequirement::Public;
+        successful_response = Some(attempt);
+        break;
+    }
+
+    let response = successful_response.ok_or_else(|| {
+        "No credential in the provider group produced a catalogue response".to_string()
+    })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        let sanitized = sanitize_api_error(&body);
+        let truncated = crate::util::truncate_with_ellipsis(&sanitized, 300);
+        // TAURI-RUST-8X3: a 404 from the `<base>/models` probe means the
+        // configured base URL does not host an OpenAI-compatible `/models`
+        // listing (wrong base, a model-only proxy, or a missing `/v1`
+        // suffix). Append an actionable hint so the model-dropdown probe
+        // surfaces *recovery guidance* inline instead of the bare Go-style
+        // `404 page not found`. The `provider returned 404` prefix is kept
+        // verbatim so the `is_provider_user_state_message` classifier anchor
+        // (which demotes this preventable user-state case out of Sentry)
+        // still matches — see `crates/openhuman-core/src/core/observability.rs`.
+        if status.as_u16() == 404 {
+            return Err(format!(
+                "provider returned 404: {} — the configured base URL does not expose a `/models` endpoint; check the provider's base URL (it usually ends in `/v1`)",
+                truncated
+            ));
+        }
+        return Err(format!(
+            "provider returned {}: {}",
+            status.as_u16(),
+            truncated
+        ));
+    }
+
+    // TAURI-RUST-12: `response.json()` discards the body when decoding fails,
+    // so Sentry just sees `error decoding response body` with no clue what the
+    // server actually sent. In practice the offending body is HTML from a
+    // captive portal / corporate proxy login page, an upstream load-balancer
+    // 502 served as HTML with a `200 OK`, or a JSON parser tripping on a
+    // wrong-path endpoint. Read the body as text first, then parse, and
+    // surface a sanitized + truncated snippet so the failure is diagnosable
+    // from the error string alone.
+    let raw_body = response.text().await.map_err(|e| {
+        format!(
+            "[providers][list_models] failed to read response body: {}",
+            e
+        )
+    })?;
+    let body: serde_json::Value = serde_json::from_str(&raw_body).map_err(|e| {
+        let sanitized = sanitize_api_error(&raw_body);
+        let snippet = crate::util::truncate_with_ellipsis(&sanitized, 300);
+        format!(
+            "[providers][list_models] failed to parse JSON: {} (body: {})",
+            e, snippet
+        )
+    })?;
+
+    // OpenAI-compatible servers occasionally return HTTP 200 with an error
+    // payload instead of a 4xx (LM Studio does this for unknown paths like
+    // `/v11/models` — body `{"error":"Unexpected endpoint or method..."}`).
+    // Treat any top-level `error` field as a failure so the AI-panel probe
+    // doesn't silently accept a typo'd endpoint.
+    if let Some(err_field) = body.get("error") {
+        let msg = err_field
+            .as_str()
+            .map(|s| s.to_string())
+            .or_else(|| {
+                err_field
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| err_field.to_string());
+        let sanitized = sanitize_api_error(&msg);
+        return Err(format!("provider returned error payload: {}", sanitized));
+    }
+
+    // Parse the OpenAI-compatible `/models` envelope into typed model
+    // entries. See `parse_models_response` for the distinct error shapes
+    // returned for "missing field" vs "field present but wrong type"
+    // (TAURI-RUST-4Y). The ChatGPT Codex backend uses a sibling `models`
+    // array keyed by `slug`, so that shape is accepted here too.
+    let mut models = parse_models_response(&body).map_err(|error| error.to_string())?;
+    if routing.using_oauth {
+        merge_openai_codex_model_hints(&mut models);
+    }
+
+    log::info!(
+        "[providers][list_models] slug={} fetched {} models",
+        entry.slug,
+        models.len()
+    );
+
+    Ok(crate::core::Outcome::new(
+        serde_json::json!({
+            "models": models,
+            "fleet_probe": {
+                "authenticated": authenticated,
+                "public_catalogue": public_catalogue,
+                "checked_keys": checked_keys,
+                "rejected_keys": rejected_keys,
+            }
+        }),
+        vec![format!("fetched {} models", models.len())],
+    ))
+}
+
+#[cfg(test)]
+#[path = "catalog_listing_tests.rs"]
+mod model_fleet_probe_tests;
+
+async fn run_registered_catalog(
+    provider_id: &str,
+    config: &crate::config::Config,
+    request: crate::inference::registry::CatalogHostRequest,
+    catalog: tinyinference_llm::providers::overrides::CatalogEntry<
+        crate::inference::registry::ProviderContext,
+    >,
+) -> Result<crate::core::Outcome<serde_json::Value>, String> {
+    let context = crate::inference::registry::ProviderContext::for_catalog(config, request);
+    let call = context.catalog.as_ref().expect("catalog context");
+    let logs = Arc::clone(&call.logs);
+    let listing =
+        (catalog.list)(tinyinference_llm::providers::overrides::CatalogRequest { context }).await?;
+    let logs = std::mem::take(
+        &mut *logs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    );
+    log::debug!(
+        "[providers][list_models] provider_id={provider_id} served by native provider catalog"
+    );
+    Ok(crate::core::Outcome::new(listing, logs))
+}
+
+#[cfg(test)]
+#[path = "catalog_listing_tests.rs"]
+mod tests;

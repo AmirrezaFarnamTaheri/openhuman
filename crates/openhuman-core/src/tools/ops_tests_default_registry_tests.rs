@@ -14,7 +14,6 @@ fn all_tools_registers_the_memory_tool_while_memory_is_on() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
 
@@ -58,7 +57,6 @@ fn whatsapp_data_tools_are_gone_in_every_build() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let names = tool_names(&tools);
@@ -104,7 +102,6 @@ fn every_packed_tool_name_resolves_to_a_registered_tool() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let registered: std::collections::HashSet<&str> = tools.iter().map(|t| t.name()).collect();
@@ -170,7 +167,7 @@ fn every_packed_tool_name_resolves_to_a_registered_tool() {
             continue;
         }
         for name in pack.tools {
-            if registered.contains(name) || delegates.contains(*name) {
+            if registered.contains(name) {
                 continue;
             }
             missing.push(format!("{}::{}", pack.id, name));
@@ -178,8 +175,7 @@ fn every_packed_tool_name_resolves_to_a_registered_tool() {
     }
     assert!(
         missing.is_empty(),
-        "every tool named in a pack must resolve to a registered tool (or be a \
-         delegate name); these do not: {missing:?}"
+        "every tool named in a pack must resolve to a registered tool; these do not: {missing:?}"
     );
 }
 
@@ -221,7 +217,6 @@ fn document_tools_registered_when_feature_on() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let names = tool_names(&tools);
@@ -253,7 +248,6 @@ fn document_tools_absent_when_feature_off() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let names = tool_names(&tools);
@@ -281,7 +275,6 @@ fn all_tools_registers_gitbooks_when_enabled() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let names: Vec<&str> = tools.iter().map(|t| t.name()).collect();
@@ -370,7 +363,6 @@ fn all_tools_skips_gitbooks_when_disabled() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let names: Vec<&str> = tools.iter().map(|t| t.name()).collect();
@@ -402,7 +394,6 @@ fn all_tools_default_registry_contains_expected_baseline_surface() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let names = tool_names(&tools);
@@ -418,12 +409,9 @@ fn all_tools_default_registry_contains_expected_baseline_surface() {
         "apply_patch",
         "csv_export",
         "spawn_subagent",
-        "spawn_async_subagent",
-        "spawn_parallel_agents",
+        "spawn_subagent",
         "ask_user_clarification",
         "read_workspace_state",
-        "wait",
-        "wait_loop",
         "todo",
         "plan_exit",
         "current_time",
@@ -449,6 +437,9 @@ fn all_tools_default_registry_contains_expected_baseline_surface() {
         "image_info",
     ];
     assert_contains_all(&names, &expected);
+    assert!(!names
+        .iter()
+        .any(|name| matches!(name.as_str(), "wait" | "wait_loop")));
 }
 #[test]
 fn all_tools_default_registry_has_no_duplicate_tool_names() {
@@ -468,7 +459,6 @@ fn all_tools_default_registry_has_no_duplicate_tool_names() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let names = tool_names(&tools);
@@ -500,7 +490,6 @@ fn all_tools_excludes_browser_when_disabled() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let names: Vec<&str> = tools.iter().map(|t| t.name()).collect();
@@ -534,7 +523,6 @@ async fn document_tool_writes_into_the_configured_files_folder() {
         &browser,
         &http,
         tmp.path(),
-        &HashMap::new(),
         &cfg,
     );
     let tool = tools

@@ -46,19 +46,9 @@ pub struct ModelSettingsPatch {
 
 /// Collect and validate provider CA bundles from either settings RPC surface.
 /// Slugs are normalized here so the map keys match normalized provider entries.
-pub fn collect_provider_ca_certs<'a>(
-    providers: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
-) -> Result<std::collections::HashMap<String, String>, String> {
-    let mut certs = std::collections::HashMap::new();
-    for (slug, pem) in providers {
-        let Some(pem) = pem else { continue };
-        if !pem.is_empty() {
-            crate::util::tls::parse_ca_bundle(pem)?;
-        }
-        certs.insert(slug.trim().to_string(), pem.to_string());
-    }
-    Ok(certs)
-}
+#[path = "model_ca.rs"]
+mod ca;
+pub use ca::collect_provider_ca_certs;
 
 #[derive(Debug, Clone, Default)]
 pub struct MemorySettingsPatch {
@@ -301,7 +291,10 @@ pub async fn apply_model_settings(
             Some(trimmed.to_string())
         };
         if let Some(ref m) = config.default_model {
-            if crate::inference::provider::factory::is_known_openhuman_tier(m) {
+            if crate::inference::registry::provider_model_is_alias(
+                crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+                m,
+            ) {
                 log::warn!(
                     "[config][model-settings] default_model '{}' is a retired tier slug or \
                      role hint, not a catalog model — managed turns run on the platform \
@@ -549,7 +542,7 @@ pub async fn apply_runtime_settings(
         let parsed = if effort.is_empty() {
             None
         } else {
-            let parsed = crate::agent::tinyagents::parse_reasoning_effort(effort)
+            let parsed = tinyinference_llm::model::ReasoningEffort::parse(effort)
                 .ok_or_else(|| format!("unknown reasoning_effort '{effort}'"))?;
             Some(parsed.as_str().to_string())
         };

@@ -39,10 +39,12 @@ fn full_product_features_enabled() -> bool {
         ("scheduler-gate", cfg!(feature = "scheduler-gate")),
         ("file-logging", cfg!(feature = "file-logging")),
         ("hosting", cfg!(feature = "hosting")),
-        ("tinymemes", cfg!(feature = "tinymemes")),
         ("inbound-queues", cfg!(feature = "inbound-queues")),
         ("storage-sqlite", cfg!(feature = "storage-sqlite")),
         ("structural-code", cfg!(feature = "structural-code")),
+        ("storage-file", cfg!(feature = "storage-file")),
+        ("secret-file", cfg!(feature = "secret-file")),
+        ("legacy-import", cfg!(feature = "legacy-import")),
     ];
     let declared: std::collections::BTreeSet<_> = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -156,7 +158,6 @@ fn full_tool_catalog_names() -> Vec<String> {
             &browser,
             &http,
             tmp.path(),
-            &HashMap::new(),
             &cfg,
         )
     });

@@ -407,10 +407,10 @@ pub(super) fn register_domain_subscribers(
             // `run_tool_call_loop` directly.
             crate::agent::bus::register_agent_handlers();
             // Background-completion delivery: when a detached sub-agent
-            // (spawn_async_subagent) finishes, surface its result back into the
+            // (spawn_subagent) finishes, surface its result back into the
             // originating chat as an idle-gated, batched, system-injected turn.
             crate::agent::orchestration::background_delivery::register_background_delivery();
-            // Run-ledger finalizer: detached `spawn_async_subagent` runs outlive
+            // Run-ledger finalizer: detached `spawn_subagent` runs outlive
             // their parent turn, so their terminal `AgentProgress` never reaches
             // the per-turn progress bridge that settles the ledger. This
             // global-bus subscriber settles `agent_runs` from

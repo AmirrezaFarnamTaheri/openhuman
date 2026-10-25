@@ -22,10 +22,20 @@ mod keychain;
 mod lock;
 mod migration;
 mod persistence;
+mod readonly;
 mod revision;
 pub(crate) use persistence::STORAGE_SECRET_NAME as PROFILES_SECRET_NAME;
 pub(crate) use revision::profile_revision;
 mod store_core;
+pub use readonly::ReadOnlyAuthProfileError;
+
+pub(crate) fn load_profile_read_only(
+    config: &crate::config::Config,
+    provider: &str,
+    profile_override: Option<&str>,
+) -> Result<Option<AuthProfile>, ReadOnlyAuthProfileError> {
+    readonly::load_profile(config, provider, profile_override)
+}
 
 const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -210,6 +220,11 @@ impl Default for AuthProfilesData {
 /// Prefix used for keychain entries that store auth profile secrets.
 /// Full key format (as handled by the keyring module): `"{user_id}:auth:{profile_id}"`.
 const KEYCHAIN_AUTH_PREFIX: &str = "auth:";
+
+/// The logical key used for an auth profile's secret payload.
+pub(crate) fn auth_profile_secret_key(profile_id: &str) -> String {
+    format!("{KEYCHAIN_AUTH_PREFIX}{profile_id}")
+}
 
 /// Derive a stable keychain user-id from a state directory path.
 ///

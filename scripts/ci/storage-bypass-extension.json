@@ -421,16 +421,6 @@
   },
   {
     "rule": "file-mutation",
-    "path": "crates/openhuman-core/src/tinymemes/docs.rs",
-    "line": 81,
-    "text": "match std::fs::rename(&path, &migrated) {",
-    "occurrence": 1,
-    "classification": "classic",
-    "reason": "Retires the legacy JSON document by renaming it only after the native document-port write succeeds; the native document remains authoritative after adoption.",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/7431"
-  },
-  {
-    "rule": "file-mutation",
     "path": "crates/openhuman-core/src/web3/wallet/ops/state.rs",
     "line": 156,
     "text": "if let Err(rename_error) = fs::rename(path, &quarantine_path) {",

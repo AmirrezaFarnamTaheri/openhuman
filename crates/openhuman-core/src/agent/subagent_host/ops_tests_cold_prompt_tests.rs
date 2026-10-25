@@ -1,7 +1,6 @@
 //! The typed child prompt shares the main turn's asynchronous identity read.
 
 use super::*;
-use crate::agent::subagent_host::run_subagent;
 use crate::core::runtime::{CoreContext, DomainSet};
 use std::time::Duration;
 
@@ -34,7 +33,7 @@ fn typed_subagent_prompt_completes_with_one_worker_and_one_blocking_thread() {
         options.run_context = options.run_context.with_core(Some(Arc::clone(&core)));
 
         let outcome = CoreContext::scope(core, async {
-            run_subagent(
+            run_host_from_test_options(
                 &make_def_named_tools(&[]),
                 "Return the requested answer.",
                 options,

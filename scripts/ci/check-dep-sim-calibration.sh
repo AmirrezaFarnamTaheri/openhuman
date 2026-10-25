@@ -115,7 +115,7 @@ cd "$(dirname "$0")/../.."
 # 316 -> 317: storage-file adds the first-party file driver.
 # 317 -> 318: pre-core registry vocabulary adds the pure tinycomputer-bus.
 
-# This matches the current `flows:334:311:3` entry in
+# This matches the current `flows:338:315:3` entry in
 # scripts/kernel-floor.limits; its preceding entries are historical.
 # 318 -> 313: connector implementation cut (-8) and explicit flows loader (+3).
 # 313 -> 304: current-main runtime removal and combined released module cuts.
@@ -136,7 +136,16 @@ cd "$(dirname "$0")/../.."
 # 309 -> 311 on 2026-10-19: `tinyagents-hooks` and `tinystoragedrivers-schema`
 # are split out of tinyagents-harness and tinystoragedrivers-core; see the
 # 334/311/3 entry in `kernel-floor.limits`.
+# 311 -> 315 on 2026-10-20: tinymemory 2.0.0 makes `async-lock`,
+# `event-listener` and `event-listener-strategy` unconditional; see the
+# 338/315/3 entry in `kernel-floor.limits`.
+# 315 -> 300 on 2026-10-21: the flows profile includes the harness-owned
+# tinyagents-harness-tools API and sysinfo disk diagnostics; see the
+# 320/300/3 entry in `kernel-floor.limits`.
+# 300 -> 303 on 2026-10-24: #8198 adds two names and the TinyStorageDrivers v2
+# split (#8229/#8231) nets one more; see the 331/303/3 entry in
+# `kernel-floor.limits`.
 # See kernel-floor.limits.
-EXPECTED_NAMES=298
+EXPECTED_NAMES=303
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"

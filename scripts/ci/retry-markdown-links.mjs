@@ -4,18 +4,20 @@ import { spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
-const TRANSIENT_LINK_STATUSES = new Set(["429", "500", "502", "503", "504", "TIMEOUT"]);
+const RETRYABLE_FAILURE_STATUSES = new Set(["429", "TIMEOUT", "500", "502", "503", "504"]);
 
-/** Extract URLs only when every reported failure is transient (HTTP 429/5xx or timeout). */
-export function serviceUnavailableUrls(report) {
+/** Extract URLs only when every reported link failure is a retryable timeout or HTTP 5xx. */
+export function retryableFailureUrls(report) {
   const failures = [...report.matchAll(/^\*\s+\[([^\]]+)\]\s+<([^>]+)>/gm)];
   if (
     !failures.length ||
-    failures.some(([, status]) => !TRANSIENT_LINK_STATUSES.has(status))
+    failures.some(([, status]) => !RETRYABLE_FAILURE_STATUSES.has(status))
   )
     return null;
   return [...new Set(failures.map(([, , url]) => url))];
 }
+
+export const serviceUnavailableUrls = retryableFailureUrls;
 
 /** Recheck a failed sweep without accepting unsuccessful HTTP responses. */
 export async function retryServiceUnavailable({
@@ -24,7 +26,7 @@ export async function retryServiceUnavailable({
   wait = delay,
   log = console.info,
 }) {
-  let urls = serviceUnavailableUrls(initialReport);
+  let urls = retryableFailureUrls(initialReport);
   if (!urls) {
     log("[link-retry] reason=ineligible-report status=1");
     return 1;
@@ -43,7 +45,7 @@ export async function retryServiceUnavailable({
       log("[link-retry] reason=recovered status=0");
       return 0;
     }
-    urls = serviceUnavailableUrls(result.report);
+    urls = retryableFailureUrls(result.report);
     if (!urls) {
       log(`[link-retry] reason=non-transient-failure status=${status}`);
       return status;
