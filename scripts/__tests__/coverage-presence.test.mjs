@@ -56,7 +56,7 @@ function run(files, coveredPaths, args, allowlist = null, extraEnv = {}) {
   const lcov = path.join(cwd, "cov.info");
   fs.writeFileSync(
     lcov,
-    coveredPaths.map((p) => `SF:${cwd}/${p}\nDA:1,1\nend_of_record\n`).join(""),
+    coveredPaths.map((p) => `SF:${p.startsWith("/") ? p : `${cwd}/${p}`}\nDA:1,1\nend_of_record\n`).join(""),
   );
 
   const env = { ...process.env, ...extraEnv };
@@ -352,6 +352,20 @@ for (const fallback of [false, true]) {
     );
     assert.equal(complete.status, 0, complete.output);
     assert.match(complete.output, /checked 3 eligible/);
+
+    const containerComplete = run(
+      files,
+      [
+        `/__w/openhuman/openhuman/${core}`,
+        `/__w/openhuman/openhuman/${rootSource}`,
+        `/__w/openhuman/openhuman/${nestedSource}`,
+      ],
+      ["--all"],
+      null,
+      env,
+    );
+    assert.equal(containerComplete.status, 0, containerComplete.output);
+    assert.match(containerComplete.output, /checked 3 eligible/);
   });
 }
 

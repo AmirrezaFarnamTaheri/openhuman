@@ -140,6 +140,9 @@ for line in sys.stdin:
     marker = path.rfind("/crates/openhuman-session/src/")
     if marker != -1:
         print(path[marker + 1 :])
+    marker = path.rfind("/crates/openhuman-tinyhumans/src/")
+    if marker != -1:
+        print(path[marker + 1 :])
     marker = path.rfind("/crates/openhuman-tui/src/")
     if marker != -1:
         print(path[marker + 1 :])
