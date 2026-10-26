@@ -78,7 +78,8 @@ fn fixture() -> (tempfile::TempDir, Config, DocScope) {
         workspace_dir: workspace.path().to_path_buf(),
         ..Config::default()
     };
-    let backend: Arc<dyn StorageBackend> = Arc::new(crate::storage::MemoryStorage::new());
+    let backend: Arc<dyn StorageBackend> =
+        Arc::new(tinystoragedrivers_testkit::MemoryBackend::new());
     let scope = DocScope::on_backend(&config, backend, Scope::local());
     (workspace, config, scope)
 }

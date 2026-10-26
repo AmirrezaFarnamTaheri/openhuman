@@ -606,7 +606,7 @@ fn additional_fork_cloud_presets_are_represented_exactly_once() {
         "qwen-token-plan",
     ] {
         let rows: Vec<_> = builtin_cloud_providers()
-            .iter()
+            .into_iter()
             .filter(|p| p.slug == slug)
             .collect();
         assert_eq!(rows.len(), 1, "{slug} must have one canonical preset");
@@ -659,7 +659,7 @@ fn llmtr_preset_uses_provider_native_bearer_endpoint() {
 #[test]
 fn prodex_gateway_is_a_builtin_responses_capable_bearer_provider() {
     let rows: Vec<_> = builtin_cloud_providers()
-        .iter()
+        .into_iter()
         .filter(|provider| provider.slug == "prodex")
         .collect();
     assert_eq!(rows.len(), 1, "one canonical Prodex entry");

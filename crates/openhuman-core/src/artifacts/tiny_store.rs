@@ -527,13 +527,13 @@ pub fn artifacts_service_with_publisher(
     publisher: Option<&super::ArtifactPublisherBinder>,
     ctx: &crate::core::runtime::DispatchCtx,
 ) -> Artifacts {
-    let scoped = crate::storage::sessions::artifact_scoped_for_in(workspace_dir, &ctx);
+    let scoped = crate::storage::sessions::artifact_scoped_for_in(workspace_dir, ctx);
     build_artifacts_service_with_scope(
         workspace_dir,
         files,
         action_dir,
         chat,
-        &ctx,
+        ctx,
         scoped,
         publisher,
     )

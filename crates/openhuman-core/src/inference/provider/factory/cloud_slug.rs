@@ -116,7 +116,7 @@ type CloudSlugInspectionChatModelResult = Option<
 
 #[path = "cloud_slug_resolution.rs"]
 mod resolution;
-use resolution::inspection_output_budget_capability;
+pub(super) use resolution::inspection_output_budget_capability;
 #[cfg(test)]
 pub(super) use resolution::lookup_failure;
 #[cfg(test)]

@@ -429,7 +429,8 @@ async fn one_object_is_served_per_scope_and_reused() {
 async fn explicit_backend_store_callbacks_release_their_storage_after_the_call() {
     let config = Config::default();
     module::proxy(&config).await.expect("module attaches");
-    let backend: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
+    let backend: Arc<dyn StorageBackend> =
+        Arc::new(tinystoragedrivers_testkit::MemoryBackend::new());
     let weak = Arc::downgrade(&backend);
     let scope = DocScope::on_backend(&config, backend, Scope::local());
     let (first_address, mut first) = store_address(&scope).await.unwrap();

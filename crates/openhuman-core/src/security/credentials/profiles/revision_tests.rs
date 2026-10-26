@@ -36,9 +36,9 @@ fn backend_revision_identity_follows_scope_instead_of_config_directory() {
     let first = Path::new("first-config");
     let second = Path::new("second-config");
     let backend: Arc<dyn crate::storage::StorageBackend> =
-        Arc::new(crate::storage::MemoryStorage::new());
+        Arc::new(tinystoragedrivers_testkit::MemoryBackend::new());
     let replacement: Arc<dyn crate::storage::StorageBackend> =
-        Arc::new(crate::storage::MemoryStorage::new());
+        Arc::new(tinystoragedrivers_testkit::MemoryBackend::new());
     assert!(
         key_for_scope(first, Some((&backend, "tenant-a")))
             == key_for_scope(second, Some((&backend, "tenant-a")))

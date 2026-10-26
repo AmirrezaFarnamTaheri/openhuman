@@ -321,7 +321,8 @@ fn failed_typed_quarantine_is_retried_after_the_conflict_is_removed() {
     let invalid = br#"{"job":false}"#;
     std::fs::write(&legacy, invalid).unwrap();
     std::fs::write(&backup, b"previous backup").unwrap();
-    let backend: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
+    let backend: Arc<dyn StorageBackend> =
+        Arc::new(tinystoragedrivers_testkit::MemoryBackend::new());
     let kv = StateKv::on_backend(&backend, &Scope::local(), "test_owner", "state").unwrap();
 
     assert!(kv

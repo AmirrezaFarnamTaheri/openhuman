@@ -198,6 +198,7 @@ async fn native_turn_preserves_deepseek_route_metadata_after_cloud_resolution() 
             endpoint: "https://api.deepseek.com/v1".into(),
             auth_style: AuthStyle::Bearer,
             default_model: Some("deepseek-chat".into()),
+            ..Default::default()
         }],
         ..Default::default()
     };

@@ -15,7 +15,13 @@ use crate::security::policy::CommandClass;
 #[cfg(test)]
 use crate::util::floor_char_boundary;
 #[cfg(test)]
-use tinybox_core::shell::analysis::analyze_command;
+fn analyze_command(command: &str) -> CommandAnalysis {
+    use tinybox_core::shell::scan;
+    CommandAnalysis::from_shell_analysis(tinybox_bus::ShellAnalysis {
+        segments: scan::split_unquoted_segments(&scan::strip_quoted_heredoc_bodies(command)),
+        redirection: scan::contains_unquoted_char(&scan::strip_heredoc_bodies(command), '>'),
+    })
+}
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
 /// Deny broad recursive scans of OS trees before running a shell command.

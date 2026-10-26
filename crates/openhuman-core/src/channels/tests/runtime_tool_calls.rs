@@ -105,6 +105,7 @@ async fn process_channel_message_handles_models_command_without_llm_call() {
             endpoint: "https://api.openhuman.ai/v1".to_string(),
             auth_style: crate::config::schema::AuthStyle::OpenhumanJwt,
             default_model: Some("default-model".to_string()),
+            ..Default::default()
         });
 
     let runtime_ctx = Arc::new(ChannelRuntimeContext {

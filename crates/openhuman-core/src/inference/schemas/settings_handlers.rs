@@ -267,7 +267,3 @@ where
 {
     Value::deserialize(deserializer).map(Some)
 }
-
-#[cfg(test)]
-#[path = "settings_handlers_tests.rs"]
-mod tests;

@@ -112,6 +112,7 @@ fn fixture_managed_entry(id: &str) -> CloudProviderCreds {
         endpoint: "https://fixture.managed.test/v1".to_string(),
         auth_style: AuthStyle::OpenhumanJwt,
         default_model: Some("fixture/managed-default".into()),
+        ..Default::default()
     }
 }
 

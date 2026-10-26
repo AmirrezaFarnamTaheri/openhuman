@@ -533,7 +533,7 @@ fn write_to_not_yet_existing_path_in_workspace_still_allowed() {
 #[cfg(feature = "modules")]
 #[test]
 fn shell_analysis_rejects_unbounded_system_scans_even_when_policy_disabled() {
-    use crate::modules::tinybox::contract::{CommandAnalysis, CommandSegment};
+    use crate::security::policy::{CommandAnalysis, CommandSegment};
     let policy = SecurityPolicy {
         enabled: false,
         ..SecurityPolicy::default()

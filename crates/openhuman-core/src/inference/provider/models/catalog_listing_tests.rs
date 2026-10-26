@@ -79,10 +79,11 @@ async fn candidate_probe_uses_new_key_without_overwriting_existing_profile() {
 async fn candidate_probe_stays_isolated_from_a_registered_catalog() {
     use crate::config::schema::cloud_providers::{AuthStyle, CloudProviderCreds};
     use crate::core::runtime::{CoreContext, DomainSet};
-    use crate::inference::registry::{register_catalog_in, CatalogEntry};
+    use crate::inference::registry::register_catalog_in;
     use crate::security::credentials::AuthService;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use tinyinference_llm::providers::overrides::CatalogEntry;
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
