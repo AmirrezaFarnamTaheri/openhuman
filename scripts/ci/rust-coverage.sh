@@ -358,7 +358,10 @@ if [ "$UNIFIED_NEXTEST" = 0 ]; then
 suite "openhuman-embed" llvm_cov_embed --no-report --no-fail-fast -p openhuman-embed --all-targets
 suite "openhuman-tinyhumans" llvm_cov_product_facade --no-report --no-fail-fast -p openhuman-tinyhumans --all-targets
 fi
-suite "openhuman-rpc" llvm_cov_package --no-report --no-fail-fast -p openhuman-rpc --all-targets \
+# These host-composition tests replace the process-wide backend/session slots.
+# Cargo's shared libtest process must not run those transitions concurrently.
+# Nextest already gives each test its own process.
+RUST_TEST_THREADS=1 suite "openhuman-rpc" llvm_cov_package --no-report --no-fail-fast -p openhuman-rpc --all-targets \
   --features storage-sqlite,secret-file
 if [ "${OH_COV_RUNNER:-cargo}" = "nextest" ]; then
   # Contributor/default features are distinct from product features. Keep both

@@ -65,6 +65,7 @@ impl HostAgentResolver for Host {
 fn config(tmp: &TempDir) -> Config {
     let workspace = tmp.path().join("workspace");
     std::fs::create_dir_all(&workspace).unwrap();
+    #[cfg(feature = "storage-sqlite")]
     crate::storage::local::use_persistent_default_for_test(&workspace);
     let config = Config {
         workspace_dir: workspace.clone(),

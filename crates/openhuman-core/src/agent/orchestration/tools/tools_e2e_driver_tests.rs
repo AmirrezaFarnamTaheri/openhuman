@@ -1,6 +1,7 @@
 use super::*;
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn force_fresh_cancels_old_driver_before_creating_a_new_session() {
     use crate::agent::orchestration::subagent_sessions::open_for_context;
     use crate::agent::tinyagents::host::OpenHumanRunContext;

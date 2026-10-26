@@ -124,6 +124,7 @@ fn workspace_scope_is_stable_before_creation_and_across_profile_layouts() {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn first_workspace_open_transfers_only_its_old_profile_queue_and_rechecks_after_marker() {
     use crate::config::schema::profile_layout::{LayoutVersion, ProfileLayout};
     use crate::memory::deletion::PendingDeletion;
@@ -246,6 +247,7 @@ async fn first_workspace_open_transfers_only_its_old_profile_queue_and_rechecks_
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn a_matching_active_agent_scope_is_a_legacy_source() {
     use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet};
     use crate::tools::toolpacks::ToolGroups;
@@ -321,6 +323,7 @@ async fn a_matching_active_agent_scope_is_a_legacy_source() {
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn layout_import_places_legacy_retry_queue_in_its_workspace_scope() {
     let tmp = tempfile::tempdir().unwrap();
     let queue_file = super::legacy_path(tmp.path(), "pending_deletions");

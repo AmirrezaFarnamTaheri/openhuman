@@ -2,6 +2,7 @@ use super::*;
 use std::collections::BTreeMap;
 
 fn config_in(dir: &tempfile::TempDir) -> Config {
+    #[cfg(feature = "storage-sqlite")]
     crate::storage::local::use_persistent_default_for_test(dir.path());
     Config {
         workspace_dir: dir.path().to_path_buf(),

@@ -266,6 +266,7 @@ fn all_builtin_agent_definitions_have_expected_effective_max_iterations() {
         // Extended policy (or high `max_iterations`) -> effective cap raised.
         ("orchestrator", 200),
         ("task_manager_agent", 50),
+        ("planner", 50),
         // Gated with `flows` (#4797) — absent from a slim build.
         #[cfg(feature = "flows")]
         ("flow_discovery", 50),
@@ -274,6 +275,7 @@ fn all_builtin_agent_definitions_have_expected_effective_max_iterations() {
         // Strict policy, declared `max_iterations` below the old global
         // default (10) -> effective cap lowered.
         ("image_agent", 8),
+        ("critic", 5),
         ("morning_briefing", 8),
         ("summarizer", 1),
         ("trigger_reactor", 6),

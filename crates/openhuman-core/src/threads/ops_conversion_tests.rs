@@ -426,6 +426,7 @@ async fn generate_title_falls_back_to_first_user_message_when_assistant_missing(
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn thread_delete_removes_persisted_turn_state_snapshot() {
     let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let workspace = tempfile::tempdir().expect("workspace");
@@ -483,6 +484,7 @@ async fn thread_delete_removes_persisted_turn_state_snapshot() {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn thread_delete_queues_memory_before_snapshot_cleanup_error() {
     use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet};
     use crate::threads::store::CreateConversationThread;
@@ -587,6 +589,7 @@ async fn thread_delete_queues_memory_before_snapshot_cleanup_error() {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn threads_purge_removes_every_turn_state_snapshot() {
     let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let workspace = tempfile::tempdir().expect("workspace");
@@ -693,6 +696,7 @@ async fn thread_update_title_rejects_empty_and_whitespace_only_titles() {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn thread_delete_forgets_its_conversation_memory_or_queues_it() {
     let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let workspace = tempfile::tempdir().expect("workspace");

@@ -1,6 +1,7 @@
 use super::*;
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn driver_cancel_uses_the_typed_terminal_for_lossy_idle_sessions() {
     use crate::agent::orchestration::subagent_sessions::{
         cancel_driver_job_by_task, mark_finished, upsert_running, DurableSubagentStatus,

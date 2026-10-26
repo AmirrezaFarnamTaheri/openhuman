@@ -16,6 +16,7 @@ fn explicit_scratch_workspace_cannot_activate_operator_user() {
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn first_user_activation_queues_prelogin_purge_in_the_removed_workspace() {
     crate::core::runtime::CoreContext::sync_scope(
         crate::core::runtime::CoreContext::for_test(crate::core::runtime::DomainSet::full(), None),

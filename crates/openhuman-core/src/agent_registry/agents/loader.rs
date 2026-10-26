@@ -58,6 +58,16 @@ pub const BUILTINS: &[BuiltinAgent] = &[
         prompt_fn: super::orchestrator::build,
     },
     BuiltinAgent {
+        id: "planner",
+        toml: include_str!("planner/agent.toml"),
+        prompt_fn: |_| Ok(include_str!("planner/prompt.md").to_owned()),
+    },
+    BuiltinAgent {
+        id: "critic",
+        toml: include_str!("critic/agent.toml"),
+        prompt_fn: |_| Ok(include_str!("critic/prompt.md").to_owned()),
+    },
+    BuiltinAgent {
         id: "task_manager_agent",
         toml: include_str!("task_manager_agent/agent.toml"),
         prompt_fn: super::task_manager_agent::build,

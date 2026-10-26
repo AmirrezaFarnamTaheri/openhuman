@@ -5,7 +5,8 @@ use crate::storage::test_support::memory_backend;
 #[cfg(feature = "storage-sqlite")]
 use crate::storage::test_support::sqlite_backend;
 #[cfg(feature = "storage-sqlite")]
-use crate::storage::{CollectionSpec, Scope};
+use crate::storage::CollectionSpec;
+use crate::storage::Scope;
 use std::collections::BTreeMap;
 
 fn snapshot_tree(root: &std::path::Path) -> BTreeMap<std::path::PathBuf, Vec<u8>> {

@@ -24,11 +24,13 @@ fn test_config(tmp: &TempDir) -> Config {
         ..Config::default()
     };
     std::fs::create_dir_all(&config.workspace_dir).unwrap();
+    #[cfg(feature = "storage-sqlite")]
     crate::storage::local::use_persistent_default_for_test(&config.workspace_dir);
     config
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn remove_job_does_not_write_to_stdout() {
     use std::process::Command;
 

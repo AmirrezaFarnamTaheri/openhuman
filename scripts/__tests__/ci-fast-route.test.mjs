@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -15,7 +15,10 @@ const script = fileURLToPath(
 // A fake `gh api` that answers from fixture JSON through the real jq, and a
 // no-op `sleep` so the 3-minute poll finishes at once.
 function route({ runs = [], jobs = {}, env = {} }) {
-  const dir = mkdtempSync(join(tmpdir(), "ci-fast-route-"));
+  const dir = mkdtempSync(join(tmpdir(), "ci-fast-route-")).replaceAll(
+    "\\",
+    "/",
+  );
   try {
     writeFileSync(
       join(dir, "runs.json"),
@@ -49,9 +52,9 @@ jq -r "$filter" "$file"
       encoding: "utf8",
       env: {
         ...process.env,
-        PATH: `${dir}:${process.env.PATH}`,
+        PATH: `${dir}${delimiter}${process.env.PATH}`,
         GH_TOKEN: "fixture",
-        REPO: "fixture/repo",
+        REPO: "tinyhumansai/openhuman",
         HEAD_SHA: "abc123",
         AUTHOR: "alice",
         ACTOR: "alice",
@@ -60,7 +63,11 @@ jq -r "$filter" "$file"
         ...env,
       },
     });
-    assert.equal(result.status, 0, result.stderr);
+    assert.equal(
+      result.status,
+      0,
+      result.stderr || String(result.error || "route failed"),
+    );
     return {
       output: Object.fromEntries(
         readFileSync(output, "utf8")
@@ -81,6 +88,13 @@ const memberJobs = [
   { name: "Lanes / CI Fast (EX63)", conclusion: null },
 ];
 const outsiderJobs = [routeJob, { name: "Lanes", conclusion: "skipped" }];
+
+test("a personal fork uses hosted runners without polling upstream routing", () => {
+  const result = route({ env: { REPO: "fixture/repo" } });
+  assert.equal(result.output.outsider, "true");
+  assert.equal(result.output.source, "fallback");
+  assert.equal(result.calls, "");
+});
 
 test("a draft PR runs on GitHub-hosted runners without asking ci-fast.yml", () => {
   const { output, calls } = route({

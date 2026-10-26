@@ -121,6 +121,7 @@ async fn run_turn_failing_from(
         fail_from_call,
     });
     let (mut agent, tmp) = build_agent_with(provider.clone(), tools, Box::new(NativeDialect));
+    #[cfg(feature = "storage-sqlite")]
     crate::storage::local::use_persistent_default_for_test(tmp.path());
     let outcome = agent.turn("do the thing").await;
     assert_eq!(

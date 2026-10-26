@@ -312,6 +312,7 @@ async fn batches_are_stored_accepted_and_the_last_one_visible() {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn a_peer_driver_blocks_backfill_without_claiming_its_slot_or_state() {
     #[derive(Clone, Copy)]
     enum Peer {

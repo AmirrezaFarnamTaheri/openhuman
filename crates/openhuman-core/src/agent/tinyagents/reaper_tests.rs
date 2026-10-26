@@ -69,6 +69,7 @@ async fn a_shared_backend_leaves_running_work_alone() {
 /// set up. The parent seeds the store and verifies the sweep; only the child
 /// touches the singletons, and it exits with them.
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn a_build_only_runtime_is_swept_before_it_can_be_invoked() {
     if std::env::var_os(REAPER_BOOT_CHILD_ENV).is_some() {
         boot_child().await;
@@ -141,6 +142,7 @@ async fn boot_child() {
     let root = std::path::PathBuf::from(
         std::env::var_os("OPENHUMAN_WORKSPACE").expect("parent exports OPENHUMAN_WORKSPACE"),
     );
+    #[cfg(feature = "storage-sqlite")]
     crate::storage::local::use_persistent_default_for_test(&root.join("workspace"));
     let built = CoreBuilder::new(HostKind::Cli)
         .services(ServiceSet::none())

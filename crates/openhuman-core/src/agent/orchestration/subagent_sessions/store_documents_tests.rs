@@ -82,6 +82,7 @@ fn scopes_do_not_see_each_others_sessions() {
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn the_store_uses_the_workspace_default_with_no_backend_installed() {
     let dir = tempfile::tempdir().unwrap();
     crate::storage::local::use_persistent_default_for_test(dir.path());
@@ -157,6 +158,7 @@ fn a_stale_snapshot_does_not_revert_a_newer_session() {
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn a_legacy_session_file_is_imported_once_and_left_byte_identical() {
     let dir = tempfile::tempdir().unwrap();
     crate::storage::local::use_persistent_default_for_test(dir.path());
@@ -186,6 +188,7 @@ fn a_legacy_session_file_is_imported_once_and_left_byte_identical() {
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn workspaces_sharing_a_backend_each_import_their_own_legacy_file() {
     let fixture = crate::storage::test_support::sqlite_backend().unwrap();
     let docs = opened_docs_in(&fixture.backend, "local");
@@ -205,6 +208,7 @@ fn workspaces_sharing_a_backend_each_import_their_own_legacy_file() {
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn a_late_importer_rechecks_the_marker_under_the_claim() {
     let fixture = crate::storage::test_support::sqlite_backend().unwrap();
     let docs = opened_docs_in(&fixture.backend, "local");

@@ -211,6 +211,7 @@ async fn a_failed_archive_gives_the_lease_back() {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn provisioning_waits_out_another_nodes_lease() {
     let tmp = tempfile::tempdir().unwrap();
     let backend_fixture = crate::storage::test_support::sqlite_backend().unwrap();

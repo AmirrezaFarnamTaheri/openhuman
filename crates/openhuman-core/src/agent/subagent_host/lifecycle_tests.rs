@@ -288,6 +288,7 @@ async fn legacy_durable_session_resolves_its_key_only_from_owned_checkpoint() {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn tiny_session_port_recovers_legacy_key_from_owned_pause_and_hides_foreign_rows() {
     use tinyagents_orchestration::subagent::SubagentSessionStore as _;
 

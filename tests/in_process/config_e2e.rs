@@ -198,7 +198,6 @@ fn config_schema_defaults_cover_dashboard_capability_memory_and_security_shapes(
     }
 }
 
-
 #[test]
 fn config_active_user_and_daemon_public_helpers_cover_path_branches() {
     let tmp = tempdir().expect("tempdir");
@@ -233,7 +232,6 @@ fn config_active_user_and_daemon_public_helpers_cover_path_branches() {
     );
     assert!(daemon.security.audit.enabled);
 }
-
 
 #[test]
 fn config_proxy_public_paths_normalize_validate_and_apply_scope() {
@@ -368,7 +366,6 @@ fn config_proxy_public_paths_normalize_validate_and_apply_scope() {
     openhuman_core::config::set_runtime_proxy_config(ProxyConfig::default());
 }
 
-
 #[tokio::test]
 async fn config_loaders_resolve_user_workspace_markers_and_ignore_workspace_when_scoped() {
     let _lock = env_lock_async().await;
@@ -486,7 +483,6 @@ async fn config_loaders_resolve_user_workspace_markers_and_ignore_workspace_when
     assert_eq!(explicit.default_model.as_deref(), Some("scoped-env-model"));
 }
 
-
 #[tokio::test]
 async fn config_default_path_loader_ignores_workspace_override_and_projects_dir_trims() {
     let _lock = env_lock_async().await;
@@ -540,7 +536,6 @@ async fn config_default_path_loader_ignores_workspace_override_and_projects_dir_
         home.join("OpenHuman").join("projects")
     );
 }
-
 
 #[tokio::test]
 async fn config_env_overlay_public_loader_applies_runtime_and_tool_overrides() {
@@ -664,7 +659,6 @@ async fn config_env_overlay_public_loader_applies_runtime_and_tool_overrides() {
         Some("summary-env")
     );
 }
-
 
 #[tokio::test]
 async fn config_save_and_load_encrypts_channel_secret_fields() {
@@ -850,7 +844,6 @@ async fn config_save_and_load_encrypts_channel_secret_fields() {
     );
 }
 
-
 #[tokio::test]
 async fn worker_a_controller_schemas_are_fully_exposed() {
     let _lock = env_lock_async().await;
@@ -904,6 +897,7 @@ async fn worker_a_controller_schemas_are_fully_exposed() {
         (
             "auth",
             vec![
+                "openhuman.auth_activate_provider_credentials",
                 "openhuman.auth_clear_credential",
                 "openhuman.auth_create_channel_link_token",
                 "openhuman.auth_get_session_token",
@@ -1033,7 +1027,6 @@ async fn worker_a_controller_schemas_are_fully_exposed() {
 
     harness.join.abort();
 }
-
 
 #[tokio::test]
 async fn config_controller_mutations_round_trip_over_json_rpc() {
@@ -1314,7 +1307,6 @@ async fn config_controller_mutations_round_trip_over_json_rpc() {
 
     harness.join.abort();
 }
-
 
 #[tokio::test]
 async fn config_runtime_flags_settings_readbacks_and_validation_paths_are_exercised() {
@@ -1633,7 +1625,6 @@ async fn config_runtime_flags_settings_readbacks_and_validation_paths_are_exerci
 
     harness.join.abort();
 }
-
 
 #[tokio::test]
 async fn config_auto_approve_public_helper_persists_once_and_is_idempotent() {

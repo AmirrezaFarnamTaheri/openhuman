@@ -101,6 +101,7 @@ async fn the_same_agent_key_is_isolated_between_operator_and_profile_scopes() {
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn reserved_generation_writes_use_the_tenant_backends_atomic_condition() {
     use tinyagents_session::transcript::{
         SessionRef, TranscriptMessage, TranscriptMeta, TranscriptTurn,

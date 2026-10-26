@@ -34,22 +34,13 @@ async fn get_schema_memory_entries_match_the_pre_refactor_raw_bytes() {
             if value["namespace"] != "memory" || value["function"] == "local_start" {
                 return None;
             }
-            // Removing the retired Composio source kind deliberately updated
-            // two comments. Check the current text, then normalize just those
-            // comments to keep the original wire-schema byte snapshot useful.
-            let mut raw = method.get().to_owned();
+            // The upstream byte snapshot already reflects removal of the
+            // retired Composio source kind. Compare the actual wire bytes.
+            let raw = method.get().to_owned();
             if value["function"] == "sources_add" {
-                for (name, current, historical) in [
-                    (
-                        "kind",
-                        "folder | file | link | github | rss.",
-                        "folder | file | link | github | rss | composio.",
-                    ),
-                    (
-                        "target",
-                        "Path, URL, owner/repo or feed URL.",
-                        "Path, URL, owner/repo, feed URL or Composio toolkit.",
-                    ),
+                for (name, current) in [
+                    ("kind", "folder | file | link | github | rss."),
+                    ("target", "Path, URL, owner/repo or feed URL."),
                 ] {
                     let field = value["inputs"]
                         .as_array()
@@ -58,10 +49,6 @@ async fn get_schema_memory_entries_match_the_pre_refactor_raw_bytes() {
                         .find(|field| field["name"] == name)
                         .expect("historical source input exists");
                     assert_eq!(field["comment"], current);
-                    raw = raw.replace(
-                        &serde_json::to_string(current).unwrap(),
-                        &serde_json::to_string(historical).unwrap(),
-                    );
                 }
             }
             Some(raw)

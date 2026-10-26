@@ -46,6 +46,7 @@ fn an_unusual_module_id_is_hashed_inside_its_tenant() {
 }
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn a_module_write_under_a_stale_lease_is_fenced_by_the_host() {
     use crate::storage::fence::{FenceRegistry, LeaseFence};
     use crate::storage::fenced_backend::FencedBackend;

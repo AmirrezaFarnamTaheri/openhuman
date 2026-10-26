@@ -98,6 +98,7 @@ async fn call_tool_validates_memory_arguments_before_dispatch() {
 /// `call_tool`, not from whichever context the task happens to be scoped to,
 /// and two sessions running side by side never see each other's.
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn call_tool_judges_the_policy_of_the_explicit_context_across_scopes() {
     use crate::core::runtime::{CoreContext, DispatchCtx, DomainSet};
     use crate::security::AutonomyLevel;
