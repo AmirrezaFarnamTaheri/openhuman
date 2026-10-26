@@ -46,6 +46,21 @@ const ALL = Object.fromEntries(Object.keys(AREA_ENV).map((k) => [k, true]));
 const NONE = Object.fromEntries(Object.keys(AREA_ENV).map((k) => [k, false]));
 const EX63_ENV = { CI_SCRATCH_DIR: "/scratch" };
 
+test("module consumers source exactly their lane environment", () => {
+  for (const profile of ["hosted", "ex63"]) {
+    const plan = buildPlan({ profile, areas: ALL, env: EX63_ENV });
+    for (const lane of plan.lanes) {
+      for (const check of lane.checks.filter((entry) => entry.needs?.includes("test-modules"))) {
+        const sources = [...check.run.matchAll(/\. ci-out\/test-modules-([^ ]+)\.env/g)];
+        assert.deepEqual(sources.map((match) => match[1]), [lane.name], `${profile}:${check.name}`);
+      }
+    }
+    const lane = plan.lanes.find((entry) => entry.name === (profile === "hosted" ? "storage-e2e" : "storage-drivers"));
+    const command = lane.checks.find((entry) => entry.name === "storage-e2e").run;
+    assert.match(command, /--features storage-sqlite,storage-file,flows,modules,linked-modules\s/);
+  }
+});
+
 test("EX63 verifies preinstalled tools before cache setup and validation", () => {
   const privateJob = ciLanes.slice(
     ciLanes.indexOf("  ex63:"),
@@ -333,7 +348,7 @@ test("the storage area covers every driver suite in isolated hosted jobs or one 
       for (const check of lane.checks.filter((entry) => entry.name !== "test-modules")) {
         assert.match(
           check.run,
-          /--features (?:session-store,)?storage-sqlite,storage-file(?:\s|$)/,
+          /--features (?:session-store,)?storage-sqlite,storage-file(?:,flows,modules,linked-modules)?(?:\s|$)/,
         );
       }
     }

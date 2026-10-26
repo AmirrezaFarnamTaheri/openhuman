@@ -462,7 +462,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             OH_COV_TUI: "1",
             ...(ex63 ? { OH_COV_RUNNER: "nextest" } : {}),
           },
-          run: withModules("bash scripts/ci/rust-coverage.sh"),
+          run: "bash scripts/ci/rust-coverage.sh",
         },
         // ex63: lcov-core.info is written (even after a failed suite), so drop
         // its ~90 GB of instrumented test executables and profiles before the
@@ -653,7 +653,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           when: areas.storage,
           needs: ["test-modules"],
           run:
-            `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS}` +
+            `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS},flows,modules,linked-modules` +
             STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join(""),
         },
         {
