@@ -34,6 +34,20 @@ export const DOC_PATH = resolve(REPO_ROOT, 'docs', 'storage-schema.md');
 const COLLECTION = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
 const TIME_SUFFIX = /(_at|_ns|_us|_secs|_ts|_time)$/;
 
+// TinyChannels must still provision these exact pre-v2 source collections so
+// its owner-controlled migration can read existing installations. Renaming them
+// would hide user data. Keep this exception scoped to that owner and vocabulary
+// (tinychannels-bus/src/storage/schema.rs::MIGRATION_SOURCE_COLLECTIONS).
+const CHANNEL_MIGRATION_SOURCES = new Set([
+  'channels_delivery_pending', 'channels_delivery_failed', 'channels_delivery_results',
+  'channel_remote_bindings', 'channel_remote_busy', 'channel_remote_meta',
+  'whatsapp_device', 'whatsapp_identity', 'whatsapp_session', 'whatsapp_prekey',
+  'whatsapp_signed_prekey', 'whatsapp_sender_key', 'whatsapp_sync_key', 'whatsapp_lid_mapping',
+]);
+
+const isMigrationSource = (owner, name) =>
+  owner === 'tinychannels-bus' && CHANNEL_MIGRATION_SOURCES.has(name);
+
 /** Features the dump is built with: the contributor set plus the wallet owner. */
 export const DUMP_FEATURES = 'web3';
 
@@ -98,7 +112,7 @@ export function lint(dump) {
     crates.add(owner.crate);
     for (const collection of owner.collections ?? []) {
       const { name, indexes = [], ttl_field: ttlField, search } = collection;
-      if (!COLLECTION.test(name)) {
+      if (!COLLECTION.test(name) && !isMigrationSource(owner.crate, name)) {
         problems.push(`${owner.crate}: collection "${name}" must be <owner>.<entity> with a snake_case entity`);
       }
       const key = `${owner.crate}\0${name}`;
@@ -141,6 +155,7 @@ export function render(dump) {
     '`ensure_collection` for every declaration at boot. Sections preserve the declaring',
     'crate, including when two crates use the same collection name.',
     'Record shapes and migrations stay with their owners.',
+    'TinyChannels also declares its exact pre-v2 source collections so existing records remain available to its migration.',
     '',
   ];
   for (const owner of [...(dump.owners ?? [])].sort((a, b) => compare(a.crate, b.crate))) {

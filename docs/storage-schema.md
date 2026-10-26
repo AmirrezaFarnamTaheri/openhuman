@@ -7,6 +7,7 @@ Each crate declares its collections with `CollectionSpec`; the host calls
 `ensure_collection` for every declaration at boot. Sections preserve the declaring
 crate, including when two crates use the same collection name.
 Record shapes and migrations stay with their owners.
+TinyChannels also declares its exact pre-v2 source collections so existing records remain available to its migration.
 
 ## openhuman-core
 
@@ -55,6 +56,7 @@ Record shapes and migrations stay with their owners.
 | `ledger.agent_runs` | `kind` (`kind`)<br>`parent` (`parent_run_id`)<br>`status` (`status`)<br>`thread` (`parent_thread_id`)<br>`updated` (`updated_ms`)<br>`worker` (`worker_thread_id`) |  |  |
 | `ledger.event_heads` |  |  |  |
 | `ledger.event_outbox` | `run_sequence` (`run_id`, `sequence`) unique |  |  |
+| `ledger.inputs` | `recipient_sequence` (`recipient_run_id`, `sequence`) unique<br>`root` (`root_thread_id`) |  |  |
 | `ledger.members` | `created` (`created_ms`)<br>`team_name` (`team_id`, `name`) unique<br>`team` (`team_id`) |  |  |
 | `ledger.tasks` | `claimed` (`claimed_by_member_id`)<br>`order` (`team_id`, `order_index`, `created_ms`)<br>`status` (`status`)<br>`team` (`team_id`) |  |  |
 | `ledger.teams` | `status` (`status`)<br>`thread` (`parent_thread_id`)<br>`updated` (`updated_ms`) |  |  |
@@ -91,6 +93,9 @@ Record shapes and migrations stay with their owners.
 
 | Collection | Indexes | Expiry field | Search fields |
 | --- | --- | --- | --- |
+| `channel_remote_bindings` |  |  |  |
+| `channel_remote_busy` |  |  |  |
+| `channel_remote_meta` |  |  |  |
 | `channels.delivery_failed` |  |  |  |
 | `channels.delivery_pending` |  |  |  |
 | `channels.delivery_results` |  |  |  |
@@ -107,6 +112,17 @@ Record shapes and migrations stay with their owners.
 | `channels.whatsapp_session` |  |  |  |
 | `channels.whatsapp_signed_prekey` |  |  |  |
 | `channels.whatsapp_sync_key` |  |  |  |
+| `channels_delivery_failed` |  |  |  |
+| `channels_delivery_pending` |  |  |  |
+| `channels_delivery_results` |  |  |  |
+| `whatsapp_device` |  |  |  |
+| `whatsapp_identity` |  |  |  |
+| `whatsapp_lid_mapping` |  |  |  |
+| `whatsapp_prekey` |  |  |  |
+| `whatsapp_sender_key` |  |  |  |
+| `whatsapp_session` |  |  |  |
+| `whatsapp_signed_prekey` |  |  |  |
+| `whatsapp_sync_key` |  |  |  |
 
 ## tinyconnectors-bus
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { lint, render } from '../ci/check-storage-schema.mjs';
@@ -54,6 +55,26 @@ test('duplicate collection and index names are refused within one crate', () => 
   });
   assert.ok(problems.some(p => p.includes('collection "cron.jobs" is declared more than once')));
   assert.ok(problems.some(p => p.includes('index name "by_time" is empty or duplicated')));
+});
+
+test('only the owning TinyChannels migration may retain its exact legacy names', () => {
+  const source = readFileSync(new URL('../../vendor/tinychannels/crates/tinychannels-bus/src/storage/schema.rs', import.meta.url), 'utf8');
+  const names = [...source.matchAll(/pub const LEGACY_\w+: &str = "([^"]+)";/g)].map(match => match[1]);
+  assert.equal(names.length, 14, 'review changes to the owner migration vocabulary');
+  assert.deepEqual(lint({ owners: [{ crate: 'tinychannels-bus', collections: names.map(name => collection(name)) }] }), []);
+  assert.deepEqual(lint({ owners: [{ crate: 'tinychannels-bus', collections: [
+    collection('channels_delivery_pending'), collection('whatsapp_device'),
+  ] }] }), []);
+  for (const [crate, name] of [
+    ['openhuman', 'whatsapp_device'],
+    ['tinychannels-bus', 'whatsapp_new_collection'],
+    ['tinychannels-bus', 'channels_delivery_new'],
+  ]) {
+    assert.equal(lint({ owners: [{ crate, collections: [collection(name)] }] }).length, 1);
+  }
+  assert.equal(lint({ owners: [{ crate: 'tinychannels-bus', collections: [
+    collection('whatsapp_device', { indexes: [{ name: 'by_time', fields: ['created_at'] }] }),
+  ] }] }).length, 1, 'legacy names do not bypass index rules');
 });
 
 test('indexed time fields must be epoch milliseconds', () => {
