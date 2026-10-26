@@ -15,6 +15,7 @@ test('Rust CI prepares a real nested jail without privileged containers', () => 
     assert.match(lane.container.options, /--init/);
     assert.match(lane.container.options, /--security-opt seccomp=unconfined/);
     assert.match(lane.container.options, /--security-opt apparmor=unconfined/);
+    assert.match(lane.container.options, /--security-opt systempaths=unconfined/);
     assert.doesNotMatch(lane.container.options, /--privileged|--cap-add/);
     assert.ok(lane.steps.some(step => step.run === 'bash scripts/ci/prepare-native-jail.sh'));
   }

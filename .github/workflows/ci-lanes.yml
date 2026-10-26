@@ -279,8 +279,8 @@ jobs:
       # The runner's PID 1 (`tail -f /dev/null`) never reaps orphans, so a
       # killed grandchild stays a zombie that `kill(pid, 0)` still finds and the
       # process-group timeout tests fail. `--init` puts a reaping init at PID 1.
-      # Nested native jails need namespace syscalls allowed by the outer container.
-      options: --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+      # Nested jails need user namespaces and an unmasked procfs to mount their own /proc.
+      options: --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}

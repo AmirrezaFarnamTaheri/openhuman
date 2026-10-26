@@ -145,8 +145,8 @@ jobs:
       # Reap orphaned grandchildren after timeout process-group termination.
       # Without an init as PID 1, killed descendants remain zombies and
       # kill(pid, 0) falsely reports them alive in the shell regression.
-      # Nested native jails need namespace syscalls allowed by the outer container.
-      options: --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+      # Nested jails need user namespaces and an unmasked procfs to mount their own /proc.
+      options: --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined
     env:
       CARGO_INCREMENTAL: "0"
       RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
