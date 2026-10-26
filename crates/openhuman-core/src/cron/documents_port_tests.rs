@@ -424,3 +424,36 @@ async fn one_object_is_served_per_scope_and_reused() {
     assert_ne!(first.object_path, other.object_path);
     assert_eq!(first.destination, module::HOST_BUS_NAME);
 }
+
+#[tokio::test]
+async fn explicit_backend_store_callbacks_release_their_storage_after_the_call() {
+    let config = Config::default();
+    module::proxy(&config).await.expect("module attaches");
+    let backend: Arc<dyn StorageBackend> = Arc::new(MemoryStorage::new());
+    let weak = Arc::downgrade(&backend);
+    let scope = DocScope::on_backend(&config, backend, Scope::local());
+    let (first_address, mut first) = store_address(&scope).await.unwrap();
+    let (second_address, mut second) = store_address(&scope).await.unwrap();
+    assert_ne!(first_address.object_path, second_address.object_path);
+    assert!(first.is_some() && second.is_some());
+    let runtime = crate::modules::runtime::runtime().await.unwrap();
+    let proxy = runtime
+        .connection()
+        .proxy(
+            &second_address.destination,
+            &second_address.object_path,
+            DOCUMENT_INTERFACE,
+        )
+        .unwrap();
+    drop(scope);
+    first.as_mut().unwrap().close().await.unwrap();
+    // Retiring another call must leave this call usable.
+    let reply = ask(&proxy, json!({"op": "capabilities"})).await;
+    assert!(reply["value"]["transactions"].is_boolean());
+    assert!(weak.upgrade().is_some());
+    second.as_mut().unwrap().close().await.unwrap();
+    assert!(
+        weak.upgrade().is_none(),
+        "acknowledged store callbacks release their backend"
+    );
+}

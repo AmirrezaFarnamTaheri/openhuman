@@ -145,7 +145,8 @@ jobs:
       # Reap orphaned grandchildren after timeout process-group termination.
       # Without an init as PID 1, killed descendants remain zombies and
       # kill(pid, 0) falsely reports them alive in the shell regression.
-      options: --init
+      # Nested native jails need namespace syscalls allowed by the outer container.
+      options: --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined
     env:
       CARGO_INCREMENTAL: "0"
       RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
@@ -175,6 +176,9 @@ jobs:
       - name: Trust container checkout and submodules
         shell: bash
         run: bash scripts/ci/trust-checkout.sh
+      - name: Prepare native jail for sandbox regressions
+        run: bash scripts/ci/prepare-native-jail.sh
+
       # Single dep-cache strategy repo-wide: Swatinem rust-cache (full target/).
       # sccache was removed here to match the ci-lite lanes — layered on a warm
       # rust-cache it logged 0% additional hits and just doubled cache footprint.

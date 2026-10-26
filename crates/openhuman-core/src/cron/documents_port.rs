@@ -404,6 +404,40 @@ impl DocumentsPort {
     }
 }
 
+/// A store call with an explicit backend must release that backend when the
+/// call ends. Ordinary scheduler scopes continue to resolve their backend on
+/// each request through the process registration.
+pub(crate) async fn store_address(
+    scope: &DocScope,
+) -> Result<(CallbackAddress, Option<module::ServedObjectRegistration>)> {
+    if scope.backend.is_none() {
+        return Ok((address(scope).await?, None));
+    }
+    let path = format!(
+        "/ai/tinyhumans/openhuman/ScheduleDocuments/m{}",
+        uuid::Uuid::new_v4().simple()
+    );
+    let scope = scope.clone();
+    let runtime = crate::modules::runtime::runtime()
+        .await
+        .map_err(|error| anyhow::anyhow!(error))?;
+    runtime
+        .spawn(async move {
+            let served = module::serve_registered(path.clone(), DocumentsPort { scope })
+                .await
+                .map_err(anyhow::Error::msg)?;
+            Ok::<_, anyhow::Error>((
+                CallbackAddress {
+                    destination: module::HOST_BUS_NAME.to_owned(),
+                    object_path: path,
+                },
+                Some(served),
+            ))
+        })
+        .await
+        .context("join the scoped schedule document registration")?
+}
+
 /// Addresses already served, by scope key.
 static SERVED: LazyLock<tokio::sync::Mutex<HashMap<String, CallbackAddress>>> =
     LazyLock::new(Default::default);

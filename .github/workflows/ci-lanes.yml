@@ -279,7 +279,8 @@ jobs:
       # The runner's PID 1 (`tail -f /dev/null`) never reaps orphans, so a
       # killed grandchild stays a zombie that `kill(pid, 0)` still finds and the
       # process-group timeout tests fail. `--init` puts a reaping init at PID 1.
-      options: --init
+      # Nested native jails need namespace syscalls allowed by the outer container.
+      options: --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -327,6 +328,10 @@ jobs:
 
       - name: Check out submodules
         run: bash scripts/ci/checkout-submodules.sh
+
+      - name: Prepare native jail for sandbox regressions
+        if: matrix.container != ''
+        run: bash scripts/ci/prepare-native-jail.sh
 
       - name: Cache Rust build artifacts
         if: matrix.group == 'rust-lint' || startsWith(matrix.group, 'rust-cov-') || matrix.group == 'tauri' || matrix.group == 'storage'

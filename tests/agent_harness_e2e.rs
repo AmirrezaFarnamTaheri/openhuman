@@ -2400,6 +2400,8 @@ async fn approval_gate_deny_flow_inner() {
         ),
         // request[1]: Orchestrator text after denial (gate returns POLICY_DENIED_MARKER).
         text_completion("Understood — the write was denied. DENIAL_ACK_CANARY"),
+        // The harness verifies the draft and asks for the replacement final answer.
+        text_completion("Understood — the write was denied. DENIAL_ACK_CANARY"),
     ]);
     let stack = boot_stack_with_config(SUPERVISED_AUTONOMY_CONFIG).await;
 
@@ -2490,6 +2492,8 @@ async fn approval_gate_timeout_inner() {
             json!({ "path": "timeout-canary.txt", "content": "TIMEOUT_WRITE_CANARY" }),
         ),
         // request[1]: Orchestrator text after TTL auto-denial.
+        text_completion("The write timed out awaiting approval. TIMEOUT_ACK_CANARY"),
+        // The harness verifies the draft and asks for the replacement final answer.
         text_completion("The write timed out awaiting approval. TIMEOUT_ACK_CANARY"),
     ]);
     let stack = boot_stack_with_config(SUPERVISED_AUTONOMY_CONFIG).await;

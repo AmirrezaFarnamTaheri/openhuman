@@ -20,6 +20,52 @@ use tinytools::{
 
 struct RoutingFakeTool(&'static str);
 
+#[test]
+fn borrowed_permission_view_only_offers_registered_visible_spawn_targets() {
+    use crate::agent::tinyagents::middleware::tool_policy::SessionPermissionView;
+    use tinytools::ToolPolicyEngine;
+
+    let tools: Arc<Vec<Box<dyn Tool>>> =
+        Arc::new(vec![Box::new(RoutingFakeTool("spawn_subagent"))]);
+    let sets = vec![tools.clone()];
+    let workflow = crate::tools::toolpacks::pack("workflows").expect("workflow pack");
+    let unavailable = tinyagents_harness_tools::skills::ToolPack {
+        id: "unavailable",
+        summary: "An owner outside the spawn schema",
+        tools: &[],
+        owners: &["unavailable_agent"],
+        guide: "",
+    };
+    for visible in [true, false] {
+        let visible_names = if visible {
+            ["spawn_subagent".to_string()].into_iter().collect()
+        } else {
+            Default::default()
+        };
+        let session = ToolPolicyEngine::build_session(
+            "orchestrator",
+            "web_chat",
+            "chat",
+            &Default::default(),
+            &tools,
+            &visible_names,
+        );
+        let view = SessionPermissionView {
+            session: &session,
+            tool_sets: &sets,
+            channel: "web_chat",
+        };
+        assert_eq!(
+            view.route_for_pack(workflow)
+                .contains("Call `spawn_subagent`"),
+            visible
+        );
+        assert!(!view
+            .route_for_pack(&unavailable)
+            .contains("Call `spawn_subagent`"));
+    }
+}
+
 #[async_trait]
 impl tinytools::Tool for RoutingFakeTool {
     fn name(&self) -> &str {

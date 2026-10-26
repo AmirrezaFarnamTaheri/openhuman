@@ -6,11 +6,33 @@ import layoutReducer, {
   selectPanelLayout,
   setSidebarVisible,
   setSidebarWidth,
+  togglePanelGroup,
   toggleSidebar,
 } from './layoutSlice';
 import { resetUserScopedState } from './resetActions';
 
 describe('layoutSlice', () => {
+  it('collapses and expands groups independently without changing panel geometry', () => {
+    const initial = layoutReducer(
+      undefined,
+      ensurePanelLayout({ id: 'chat', defaults: { sidebarVisible: true, sidebarWidth: 320 } })
+    );
+    let state = layoutReducer(initial, togglePanelGroup({ id: 'chat', group: 'archived' }));
+    state = layoutReducer(state, togglePanelGroup({ id: 'chat', group: 'today' }));
+    state = layoutReducer(state, togglePanelGroup({ id: 'files', group: 'archived' }));
+    expect(state.panels.chat).toEqual({
+      sidebarVisible: true,
+      sidebarWidth: 320,
+      collapsedGroups: ['archived', 'today'],
+    });
+    state = layoutReducer(state, togglePanelGroup({ id: 'chat', group: 'archived' }));
+    expect(state.panels.chat.collapsedGroups).toEqual(['today']);
+    expect(state.panels.files.collapsedGroups).toEqual(['archived']);
+    expect(initial.panels.chat.collapsedGroups).toBeUndefined();
+    state = layoutReducer(state, resetUserScopedState());
+    expect(state.panels).toEqual({});
+  });
+
   it('starts with no panels', () => {
     const state = layoutReducer(undefined, { type: '@@INIT' });
     expect(state.panels).toEqual({});

@@ -120,16 +120,6 @@ pub(crate) fn credentialed_endpoint_is_safe(endpoint: &str) -> bool {
     cloud_slug::prodex_gateway_endpoint_is_safe(endpoint)
 }
 
-/// Validate credential-bearing egress destinations.
-pub(crate) fn credentialed_endpoint_is_safe(endpoint: &str) -> bool {
-    cloud_slug::prodex_gateway_endpoint_is_safe(endpoint)
-}
-
-/// Validate credential-bearing egress destinations.
-pub(crate) fn credentialed_endpoint_is_safe(endpoint: &str) -> bool {
-    cloud_slug::prodex_gateway_endpoint_is_safe(endpoint)
-}
-
 // Factory-internal helpers shared across the implementation modules.
 use access_gates::enforce_local_only_inference;
 #[cfg(test)]

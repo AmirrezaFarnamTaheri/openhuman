@@ -59,6 +59,7 @@ pub async fn read_body(
         files.clone(),
         Some(&config.action_dir),
         None,
+        ctx,
     )
     .get(id)
     .await

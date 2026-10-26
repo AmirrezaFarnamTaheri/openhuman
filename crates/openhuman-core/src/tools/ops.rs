@@ -148,7 +148,7 @@ pub fn all_tools_with_runtime_and_pack_handle(
         Box::new(CsvExportTool::new(security.clone())),
     ];
     #[cfg(feature = "structural-code")]
-    match tinytools_std::code::code_tools(security.clone()) {
+    match tinyagents_harness_tools::code::code_tools(security.clone()) {
         Ok(code_tools) => tools.extend(code_tools),
         Err(error) => {
             tracing::error!(%error, "[tools] structural code tools could not be initialized")

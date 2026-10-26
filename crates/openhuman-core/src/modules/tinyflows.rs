@@ -39,6 +39,18 @@ pub(crate) const HOST_BUS_NAME: &str = "ai.tinyhumans.openhuman.CronHost";
 /// Owns the interfaces served at one module-bus object path.
 pub(crate) struct ServedObjectRegistration(String);
 
+impl ServedObjectRegistration {
+    /// Release the served interfaces before a temporary backend is closed.
+    /// Keep ownership until acknowledgement so cancellation still runs Drop.
+    pub(crate) async fn close(&mut self) -> Result<(), String> {
+        if !self.0.is_empty() {
+            unserve_and_wait(self.0.clone()).await?;
+            self.0.clear();
+        }
+        Ok(())
+    }
+}
+
 impl Drop for ServedObjectRegistration {
     fn drop(&mut self) {
         unserve(std::mem::take(&mut self.0));
@@ -365,30 +377,35 @@ mod imp {
             .map_err(|error| format!("serving the host object did not finish: {error}"))?
     }
 
-    /// Stop serving `path`. Fire and forget: a call already admitted finishes.
-    /// Without a runtime to run on (a sync drop at exit) the object is left;
-    /// the process is ending anyway.
+    /// Acknowledge removal on the process module executor.
+    pub(crate) async fn unserve_and_wait(path: String) -> Result<(), String> {
+        let runtime = runtime::runtime()
+            .await
+            .map_err(|error| error.to_string())?;
+        let connection = runtime.connection().clone();
+        let object = ObjectPath::new(&path).map_err(|error| error.to_string())?;
+        runtime
+            .spawn(async move {
+                let removed = connection.unserve(&object).await;
+                tracing::trace!(%path, removed, "[cron:bus] host object unserved");
+            })
+            .await
+            .map_err(|error| format!("host object cleanup did not finish: {error}"))
+    }
+
+    /// Cancellation fallback uses the persistent executor, even after the
+    /// caller runtime has stopped. Calls already admitted may finish.
     pub(crate) fn unserve(path: String) {
-        if !runtime::is_started() {
+        if path.is_empty() || !runtime::is_started() {
             return;
         }
-        let Ok(handle) = tokio::runtime::Handle::try_current() else {
-            return;
-        };
-        handle.spawn(async move {
-            let Ok(runtime) = runtime::runtime().await else {
-                return;
-            };
-            let connection = runtime.connection().clone();
-            let _ = runtime
-                .spawn(async move {
-                    if let Ok(object) = ObjectPath::new(&path) {
-                        let removed = connection.unserve(&object).await;
-                        tracing::trace!(path = %path, removed, "[cron:bus] host object unserved");
-                    }
-                })
-                .await;
-        });
+        if let Err(error) = runtime::spawn_cleanup(async move {
+            if let Err(error) = unserve_and_wait(path).await {
+                tracing::warn!(%error, "[cron:bus] host object cleanup failed");
+            }
+        }) {
+            tracing::warn!(%error, "[cron:bus] host object cleanup could not start");
+        }
     }
 }
 
@@ -402,7 +419,7 @@ pub(crate) use imp::serve_pair_after_first;
 pub(crate) use imp::{
     authoring_proxy, catalog_proxy, catalog_proxy_for_migration, copilot_invoke_proxy,
     copilot_proxy, portability_proxy, proxy, run_proxy, runs_proxy, serve, serve_pair,
-    serve_registered, unserve,
+    serve_registered, unserve, unserve_and_wait,
 };
 
 #[cfg(not(feature = "modules"))]
@@ -480,13 +497,17 @@ mod imp {
     }
 
     pub(crate) fn unserve(_path: String) {}
+
+    pub(crate) async fn unserve_and_wait(_path: String) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[cfg(not(feature = "modules"))]
 pub(crate) use imp::{
     authoring_proxy, catalog_proxy, catalog_proxy_for_migration, copilot_invoke_proxy,
     copilot_proxy, portability_proxy, proxy, run_proxy, runs_proxy, serve, serve_pair,
-    serve_registered, unserve,
+    serve_registered, unserve, unserve_and_wait,
 };
 
 /// Whether the module can serve in this build and configuration (the switch

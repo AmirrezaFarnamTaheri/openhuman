@@ -99,12 +99,10 @@ async fn catalogue_credential_requirement(
     }
 }
 
-/// OpenRouter's /key preflight returns a sanitized error string. Only
-/// explicit HTTP auth failures permit trying another key.
-fn should_retry_openrouter_key(error: &str, has_more: bool) -> bool {
-    has_more
-        && (error.starts_with("OpenRouter key validation returned 401:")
-            || error.starts_with("OpenRouter key validation returned 403:"))
+/// Only typed HTTP authentication failures from the OpenRouter /key
+/// preflight permit trying another key; response text cannot trigger retries.
+fn should_retry_openrouter_key(status: Option<u16>, has_more: bool) -> bool {
+    has_more && matches!(status, Some(401 | 403))
 }
 
 pub fn append_query_param(url: &str, key: &str, value: &str) -> String {
@@ -517,11 +515,11 @@ async fn list_configured_models_inner(
         if using_key_preflight {
             match validate_openrouter_api_key(&client, &routing.endpoint, candidate_key).await {
                 Ok(()) => {}
-                Err(error) if should_retry_openrouter_key(&error, has_more) => {
+                Err(error) if should_retry_openrouter_key(error.http_status(), has_more) => {
                     rejected_keys += 1;
                     continue;
                 }
-                Err(error) => return Err(error),
+                Err(error) => return Err(error.to_string()),
             }
         }
 

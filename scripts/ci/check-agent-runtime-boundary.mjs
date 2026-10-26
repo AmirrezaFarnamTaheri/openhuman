@@ -36,7 +36,9 @@ const embedContractExports = new Map(
     ],
     [
       "crates/openhuman-core/src/config/schema/context.rs",
-      ["pub use tinyagents_harness::config::{CompactionSettings, CompactionStrategy, ContextConfig};"],
+      [
+        "pub use tinyagents_harness::config::{CompactionSettings, CompactionStrategy, ContextConfig};",
+      ],
     ],
     [
       "crates/openhuman-core/src/tools/per_call.rs",
@@ -207,8 +209,16 @@ function isNativeAgentProgressReference(path, text, source = text) {
     return /^\s*use\s+crate::progress::AgentProgress\s*;\s*$/m.test(
       rustCode(source),
     );
-  if (path === "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs")
+  if (
+    path === "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs"
+  )
     return /^\s*use\s+tinyagents_harness::progress::AgentProgress\s*;\s*$/m.test(
+      rustCode(source),
+    );
+  if (
+    path === "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs"
+  )
+    return /^\s*use\s+tinyagents_harness::progress::\{AgentProgress, SubagentUsage\}\s*;\s*$/m.test(
       rustCode(source),
     );
   return false;
@@ -219,18 +229,25 @@ function isNativeAgentProgressReference(path, text, source = text) {
 function isChildMessageContract(path, text, source) {
   const root = "vendor/tinyagents/crates/tinyagents-orchestration/src/subagent/";
   if (path === `${root}child_turn.rs`)
-    return /^\s*type Message: Clone \+ Send \+ Sync;\s*$/.test(text) &&
-      /\bpub trait ChildTurnHost: Send\s*\{/.test(rustCode(source));
+    return (
+      /^\s*type Message: Clone \+ Send \+ Sync;\s*$/.test(text) &&
+      /\bpub trait ChildTurnHost: Send\s*\{/.test(rustCode(source))
+    );
   if (path === `${root}child_turn_tests.rs`)
-    return /^\s*type Message = String;\s*$/.test(text) &&
-      /\bimpl ChildTurnHost for \w+\s*\{/.test(rustCode(source));
+    return (
+      /^\s*type Message = String;\s*$/.test(text) &&
+      /\bimpl ChildTurnHost for \w+\s*\{/.test(rustCode(source))
+    );
   return false;
 }
 
 function isRoutedStreamTestModel(path, text, source) {
-  return path === "vendor/tinyagents/crates/tinyagents-harness/src/close_tests.rs" &&
-    text.trim() === "struct RoutedStreamModel(tinyinference_llm::model::ResolvedModelRoute);" &&
-    /\bimpl ChatModel<\(\)> for RoutedStreamModel\s*\{/.test(rustCode(source));
+  return (
+    path === "vendor/tinyagents/crates/tinyagents-harness/src/close_tests.rs" &&
+    text.trim() ===
+      "struct RoutedStreamModel(tinyinference_llm::model::ResolvedModelRoute);" &&
+    /\bimpl ChatModel<\(\)> for RoutedStreamModel\s*\{/.test(rustCode(source))
+  );
 }
 
 // Names moved out of compatibility layers. Values identify their sole owner;
@@ -936,17 +953,22 @@ for (const path of await filesUnder(
     );
     if (declaration) {
       const owner = movedSymbolOwners.get(declaration[1]);
-      if (owner && !crateName.startsWith(owner) && !isChildMessageContract(rel, text, source))
+      if (
+        owner &&
+        !crateName.startsWith(owner) &&
+        !isChildMessageContract(rel, text, source)
+      )
         add("tinyagents-moved-symbol-alias", path, line, raw);
     }
     if (
+      (
       /\b(?:pub(?:\s*\([^)]*\))?\s+)?type\s+[A-Za-z_][A-Za-z0-9_]*[^=]*=\s*(?:tinyagents(?:_[a-z_]+)?|tinytools(?:_[a-z_]+)?|tinyinference(?:_[a-z_]+)?)\s*::/i.test(
         text,
       ) ||
       /\b(?:pub(?:\s*\([^)]*\))?\s+)?struct\s+[A-Za-z_][A-Za-z0-9_]*\s*\(\s*(?:tinyagents(?:_[a-z_]+)?|tinytools(?:_[a-z_]+)?|tinyinference(?:_[a-z_]+)?)\s*::/i.test(
         text,
       )
-    ) && !isRoutedStreamTestModel(rel, text, source)
+      ) && !isRoutedStreamTestModel(rel, text, source)
     )
       add("tinyagents-moved-symbol-alias", path, line, raw);
     if (/\bopenhuman(?:\s*::|_[A-Za-z0-9_]*\s*::)/i.test(compact))

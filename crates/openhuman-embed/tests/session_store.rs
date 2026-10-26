@@ -261,13 +261,16 @@ fn a_stateless_runtime_keeps_every_conversation_in_its_session_store() {
                 .expect("status records list");
             assert!(!runs.is_empty(), "asha's runs are recorded in her scope");
 
-            // Nothing durable reached the scratch workspace.
+            // Conversation state stays in the store; bundled flow skills are disposable cache.
+            let flow_cache = std::path::Path::new("workspace")
+                .join(".openhuman")
+                .join("builtin-flow-skills");
             let after = files_under(&scratch);
             assert_no_durable_sessions(&after);
             let written: Vec<_> = after
                 .into_iter()
                 .filter(|path| !baseline.contains(path))
-                .filter(|path| !path.starts_with("workspace/.openhuman/builtin-flow-skills"))
+                .filter(|path| !std::path::Path::new(path).starts_with(&flow_cache))
                 .collect();
             if !written.is_empty() {
                 eprintln!("session_store: unexpected workspace writes: {written:?}");

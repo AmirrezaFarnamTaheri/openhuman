@@ -173,7 +173,6 @@ tinyinference-voice = { path = "../../vendor/tinyagents/vendor/tinyinference/cra
 # crates. After cloning: `git submodule update --init --recursive vendor/`.
 tinytools = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools" }
 tinytools-agent = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
-tinytools-std = { path = "../../vendor/tinyagents/vendor/tinytools/crates/tinytools-std" }
 
 
 # TinyMemory (https://github.com/tinyhumansai/tinymemory), three crates:
@@ -788,7 +787,7 @@ skills = ["tinyskills/registry", "dep:tinyskills-drivers"]
 # follows the real dependency graph, not the directory name.
 mcp = ["modules"]
 # Native structural inspection and revision-checked edits from TinyTools.
-structural-code = ["tinytools-std/code"]
+structural-code = ["tinyagents-harness-tools/code"]
 # Sentry crash/error reporting: the `sentry::init` guard + secret-scrubbing
 # `before_send` hook (src/main.rs), the sentry-tracing bridge layer
 # (core::logging), the ~24 `before_send` Event classifiers + the two

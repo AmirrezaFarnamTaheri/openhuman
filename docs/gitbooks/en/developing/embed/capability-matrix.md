@@ -27,12 +27,7 @@ This matrix comes from the default-feature compiled capability-report example. R
 | `storage-file` | No |
 | `storage-mongodb` | No |
 | `storage-s3` | No |
-<<<<<<< HEAD
 | `storage-sqlite` | Yes |
 | `structural-code` | Yes |
-| `tinymemes` | Yes |
-=======
-| `storage-sqlite` | No |
->>>>>>> upstream/main
 | `voice` | No |
 | `web3` | No |

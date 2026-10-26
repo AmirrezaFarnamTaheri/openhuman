@@ -5829,7 +5829,6 @@ dependencies = [
  "tinystoragedrivers-types",
  "tinytools",
  "tinytools-agent",
- "tinytools-std",
  "tinyvoice-bus",
  "tinywallet",
  "tinywallet-bus",
@@ -9107,11 +9106,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "tempfile",
  "tinyagents-harness",
  "tinyagents-orchestration",
  "tinyagents-tasks",
  "tinyinference-llm",
  "tinytools",
+ "tinytools-code",
  "tokio",
  "tracing",
  "uuid",
@@ -10623,33 +10624,6 @@ version = "0.6.0"
 dependencies = [
  "async-trait",
  "tinytools",
-]
-
-[[package]]
-name = "tinytools-std"
-version = "0.6.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.23.1",
- "fs2",
- "futures-util",
- "glob",
- "libc",
- "log",
- "parking_lot",
- "regex",
- "reqwest 0.12.28",
- "rustix 1.1.5",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "tinytools",
- "tinytools-code",
- "tokio",
- "tracing",
- "walkdir",
 ]
 
 [[package]]

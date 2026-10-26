@@ -50,7 +50,8 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: ghcr.io/tinyhumansai/openhuman_ci:latest@sha256:c3c20d625bcc9f75e50c3c2c2b75c88d3e60a3f4352b0f19f5327b490438722d
-      options: --init
+      # Nested native jails need namespace syscalls allowed by the outer container.
+      options: --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined
     timeout-minutes: 75
     strategy:
       fail-fast: false
@@ -78,6 +79,9 @@ jobs:
           submodules: recursive
       - name: Trust checkout and submodules
         run: bash scripts/ci/trust-checkout.sh
+      - name: Prepare native jail for sandbox regressions
+        run: bash scripts/ci/prepare-native-jail.sh
+
       - name: Restore pnpm store
         uses: actions/cache@v6
         with:

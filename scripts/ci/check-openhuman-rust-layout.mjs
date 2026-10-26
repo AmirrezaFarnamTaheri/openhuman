@@ -25,7 +25,7 @@ const LEGACY_LIMIT_ENTRIES = [
   // `spawn_subagent_tool_impl.rs` had its entry DELETED, not lowered: the
   // parameter schema moved to `spawn_subagent_parameters.rs` and the file is
   // under the general 750 limit, so it needs no exception at all.
-  ["crates/openhuman-core/src/agent/subagent_host/ops/runner.rs", 878],
+  ["crates/openhuman-core/src/agent/subagent_host/ops/runner.rs", 870],
   // These established external test modules grew with upstream coverage. Pin
   // their current sizes while follow-up work separates their test concerns.
   // `core/` was pruned from the line limit by name until these pins; its

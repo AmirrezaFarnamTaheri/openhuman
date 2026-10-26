@@ -116,11 +116,12 @@ type CloudSlugInspectionChatModelResult = Option<
 
 #[path = "cloud_slug_resolution.rs"]
 mod resolution;
+use resolution::inspection_output_budget_capability;
 #[cfg(test)]
 pub(super) use resolution::lookup_failure;
 #[cfg(test)]
 pub(super) use resolution::resolve_cloud_slug;
-use resolution::{inspection_output_budget_capability, resolve_cloud_slug_with_access};
+pub(super) use resolution::resolve_cloud_slug_with_access;
 pub(crate) use resolution::{resolve_cloud_slug_for, CloudSlugResolution};
 
 /// A `<slug>:<model>` BYOK cloud provider as a crate-native [`ChatModel`] — the

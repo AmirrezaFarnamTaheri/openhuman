@@ -211,28 +211,12 @@ impl ToolPolicyHostState {
     /// Return the single spawn route when it can dispatch any owner in this
     /// pack. The registered schema carries the actual allowed agent ids.
     fn callable_delegates_for(&self, owners: &[&str]) -> Vec<String> {
-        let Some(spawn) = self.resolve_tool("spawn_subagent") else {
-            return Vec::new();
-        };
-        if self.session.decision_for("spawn_subagent").is_denied() {
-            return Vec::new();
+        SessionPermissionView {
+            session: &self.session,
+            tool_sets: &self.tool_sets,
+            channel: &self.channel,
         }
-        let parameters = spawn.parameters_schema();
-        let allowed = parameters
-            .pointer("/properties/agent_id/enum")
-            .and_then(serde_json::Value::as_array);
-        let can_reach_owner = allowed
-            .map(|ids| {
-                owners
-                    .iter()
-                    .any(|owner| ids.iter().any(|id| id.as_str() == Some(owner)))
-            })
-            .unwrap_or(true);
-        if can_reach_owner {
-            vec!["spawn_subagent".to_string()]
-        } else {
-            Vec::new()
-        }
+        .callable_delegates_for(owners)
     }
 
     /// The answer to a `use_skill` call naming a tool `pack` does not contain:
@@ -446,64 +430,39 @@ impl SessionPermissionView<'_> {
         resolve_tool_in(self.tool_sets, name)
     }
 
-    /// The delegation tools this session can actually call that reach one of
-    /// `owners`, as tool names.
-    ///
-    /// Derived from the session's own tool set — every synthesised `delegate_*`
-    /// tool publishes its target agent on the erased host-extension slot
-    /// (`traits::delegation_target`). That is deliberately the only source: a
-    /// static owner-to-tool table would duplicate each agent's `delegate_name`
-    /// and could name a tool this session was never built with, sending the
-    /// model from one dead end into another. Asking the tool set cannot.
+    /// The registered spawn schema and session policy define the reachable owners.
     fn callable_delegates_for(&self, owners: &[&str]) -> Vec<String> {
-        let mut found: Vec<String> = Vec::new();
-        for tool in self.tool_sets.iter().flat_map(|set| set.iter()) {
-            let Some(target) = crate::tools::host_extensions::delegation_target(tool.as_ref())
-            else {
-                continue;
-            };
-            if !owners.contains(&target) {
-                continue;
-            }
-            let name = tool.name().to_string();
-            // Uses `is_denied()`, and that is deliberate — it is the same
-            // predicate as the gate this hint points at.
-            //
-            // Spelled out, because two predicates live in this file and a
-            // sentence that does not name one has been misread three times:
-            //
-            //   * This hint names a tool for the model to call DIRECTLY.
-            //   * The direct-call gate is `channel_permission_block`'s first
-            //     check, `if decision.is_denied()` (this file, top of the fn).
-            //   * `is_denied()` is `!matches!(action, Allow)`, so it is TRUE for
-            //     `HideFromPrompt` — that check is what refuses a prompt-hidden
-            //     tool called by name.
-            //   * Therefore a prompt-hidden delegate is not a route, and
-            //     `is_denied()` here is exactly what keeps it out.
-            //
-            // `blocks_execution()` would be wrong here: it deliberately admits
-            // `HideFromPrompt` for the `use_skill` path below, where hiding is
-            // the disclosure mechanism rather than a refusal. Same tool, two
-            // call paths, two answers. A hint must use the predicate of the gate
-            // it points at — the hint and the gate disagreeing is how this whole
-            // class of bug started.
-            //
-            // Pinned by `a_prompt_hidden_delegate_is_not_offered_as_a_direct_route`.
-            if self.session.decision_for(&name).is_denied() || found.contains(&name) {
-                continue;
-            }
-            found.push(name);
+        let Some(spawn) = self.resolve_tool("spawn_subagent") else {
+            return Vec::new();
+        };
+        if self.session.decision_for("spawn_subagent").is_denied() {
+            return Vec::new();
         }
-        found
+        let parameters = spawn.parameters_schema();
+        let allowed = parameters
+            .pointer("/properties/agent_id/enum")
+            .and_then(serde_json::Value::as_array);
+        let can_reach_owner = allowed
+            .map(|ids| {
+                owners
+                    .iter()
+                    .any(|owner| ids.iter().any(|id| id.as_str() == Some(owner)))
+            })
+            .unwrap_or(true);
+        if can_reach_owner {
+            vec!["spawn_subagent".to_string()]
+        } else {
+            Vec::new()
+        }
     }
 
     /// The answer to a `use_skill` call naming a tool `pack` does not contain:
     /// the tools in it this session can call, or the pack's route when none.
     pub(crate) fn no_such_pack_tool<'a>(
         &self,
-        pack: &'static tinyagents_harness::tool::packs::ToolPack,
+        pack: &'static tinyagents_harness_tools::skills::ToolPack,
         tool: &'a str,
-    ) -> tinyagents_harness::tool::packs::NoSuchPackTool<'a> {
+    ) -> tinyagents_harness_tools::skills::NoSuchPackTool<'a> {
         let callable = pack
             .tools
             .iter()
@@ -513,7 +472,7 @@ impl SessionPermissionView<'_> {
                     && !self.session.decision_for(name).blocks_execution()
             })
             .collect();
-        tinyagents_harness::tool::packs::NoSuchPackTool {
+        tinyagents_harness_tools::skills::NoSuchPackTool {
             not_found_marker: tinytools::status::NOT_FOUND_MARKER,
             skill: pack.id,
             tool,
@@ -525,9 +484,9 @@ impl SessionPermissionView<'_> {
     /// The route sentence for a pack, resolved against THIS session.
     pub(crate) fn route_for_pack(
         &self,
-        pack: &tinyagents_harness::tool::packs::ToolPack,
+        pack: &tinyagents_harness_tools::skills::ToolPack,
     ) -> String {
-        tinyagents_harness::tool::packs::route_sentence(
+        tinyagents_harness_tools::skills::route_sentence(
             &self.callable_delegates_for(pack.owners),
             pack.owners,
         )

@@ -219,13 +219,8 @@ The compiled capability report describes this build:
     "storage-file": false,
     "storage-mongodb": false,
     "storage-s3": false,
-<<<<<<< HEAD
     "storage-sqlite": true,
     "structural-code": true,
-    "tinymemes": true,
-=======
-    "storage-sqlite": false,
->>>>>>> upstream/main
     "voice": false,
     "web3": false
   },

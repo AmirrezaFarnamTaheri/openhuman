@@ -18,6 +18,7 @@ import {
   classifyProviderVerificationFailure,
   clearCloudProviderKey,
   completeOpenAiCodexOAuth,
+  countApiKeys,
   describeProviderVerificationFailure,
   flushCloudProviders,
   importOpenAiCodexCliAuth,
@@ -36,11 +37,29 @@ import {
   saveAISettings,
   serializeProviderRef,
   setCloudProviderKey,
+  splitApiKeyGroup,
   startOpenAiCodexOAuth,
   testProviderModel,
   upsertModelRegistryVision,
   verifyCloudProviderConnection,
 } from '../aiSettingsApi';
+
+describe('API key rotation groups', () => {
+  it('splits pasted keys on supported separators, trims them and deduplicates in first-use order', () => {
+    const pasted = ' key-a, key-b;\r\nkey-c\nkey-a; key-b, ,\rkey-d ';
+    expect(splitApiKeyGroup(pasted)).toEqual(['key-a', 'key-b', 'key-c', 'key-d']);
+    expect(countApiKeys(pasted)).toBe(4);
+  });
+
+  it('rejects an empty rotation group while retaining a single intact key', () => {
+    expect(splitApiKeyGroup(' , ;\r\n ')).toEqual([]);
+    expect(countApiKeys(' , ;\r\n ')).toBe(0);
+    expect(splitApiKeyGroup('  key-with-dashes_and:colon  ')).toEqual([
+      'key-with-dashes_and:colon',
+    ]);
+    expect(countApiKeys('  key-with-dashes_and:colon  ')).toBe(1);
+  });
+});
 
 // ─── Mock declarations (must be hoisted before imports) ───────────────────────
 

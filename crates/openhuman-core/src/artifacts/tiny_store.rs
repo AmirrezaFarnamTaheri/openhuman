@@ -316,8 +316,8 @@ impl LegacyUiBridge {
                 }
             }
         } else {
-            tokio::fs::write(&dest, latest.body.as_bytes()).await?;
-            latest.body.len() as u64
+            self.write_visible_file(&dest, latest.body.as_bytes(), None)
+                .await?
         };
         super::store::finalize_artifact(&self.workspace_dir, &meta.id, size, self.chat.as_ref())
             .await
@@ -359,6 +359,11 @@ impl LegacyUiBridge {
         bytes: &[u8],
         media_type: Option<&str>,
     ) -> anyhow::Result<u64> {
+        let raw = destination
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("artifact presentation path is not valid UTF-8"))?;
+        let resolved = self.files_guard().resolve(raw).await?;
+        let destination = resolved.path.as_path();
         let root = destination
             .parent()
             .ok_or_else(|| anyhow::anyhow!("artifact file has no parent"))?;

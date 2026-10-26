@@ -68,6 +68,7 @@ fn configured_entries(config: &crate::config::Config) -> Vec<CloudProviderCreds>
             endpoint: config.api_url.clone().unwrap_or_default(),
             auth_style: AuthStyle::OpenhumanJwt,
             default_model: None,
+            ..Default::default()
         });
     }
     entries
@@ -98,11 +99,7 @@ async fn prepare(
     entry: &CloudProviderCreds,
 ) -> Result<PreparedInspectionCatalog, InspectionCatalogError> {
     if let Some(listing) = inspection_catalog(&entry.slug) {
-        let client = crate::config::build_runtime_proxy_client_with_timeouts(
-            "providers.list_models",
-            30,
-            10,
-        );
+        let client = catalog_client(config, entry)?;
         return listing(
             config.clone(),
             InspectionCatalogRequest {
@@ -122,23 +119,13 @@ async fn prepare(
     if !matches!(url.scheme(), "http" | "https") {
         return Err(InspectionCatalogError::NoCatalog);
     }
-    let token = readonly_credential(config, entry);
-    let client = match config
-        .cloud_provider_ca_certs
-        .get(entry.slug.trim())
-        .filter(|pem| !pem.is_empty())
+    if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        && !crate::inference::provider::factory::credentialed_endpoint_is_safe(&entry.endpoint)
     {
-        Some(pem) => crate::util::tls::client_with_ca_bundle_with_timeouts(
-            pem,
-            "providers.list_models",
-            30,
-            10,
-        )
-        .map_err(|_| InspectionCatalogError::Unavailable)?,
-        None => {
-            crate::config::build_runtime_proxy_client_with_timeouts("providers.list_models", 30, 10)
-        }
-    };
+        return Err(InspectionCatalogError::Unavailable);
+    }
+    let token = readonly_credential(config, entry);
+    let client = catalog_client(config, entry)?;
     let provider = entry.slug.clone();
     let auth_style = entry.auth_style;
     let frozen_token = token.clone();
@@ -191,6 +178,24 @@ async fn prepare(
         token.as_deref(),
         fetch,
     ))
+}
+
+fn catalog_client(
+    config: &crate::config::Config,
+    entry: &CloudProviderCreds,
+) -> Result<reqwest::Client, InspectionCatalogError> {
+    crate::util::tls::credentialed_client_builder(
+        "providers.list_models",
+        config
+            .cloud_provider_ca_certs
+            .get(entry.slug.trim())
+            .map(String::as_str),
+    )
+    .map_err(|_| InspectionCatalogError::Unavailable)?
+    .timeout(Duration::from_secs(30))
+    .connect_timeout(Duration::from_secs(10))
+    .build()
+    .map_err(|_| InspectionCatalogError::Unavailable)
 }
 
 async fn catalog_for(
@@ -468,3 +473,7 @@ impl DoctorCheck for AuthErrors {
 pub(crate) fn built_in_checks() -> Vec<Arc<dyn DoctorCheck>> {
     vec![Arc::new(ModelInCatalog), Arc::new(AuthErrors)]
 }
+
+#[cfg(test)]
+#[path = "inference_catalog_egress_tests.rs"]
+mod egress_tests;

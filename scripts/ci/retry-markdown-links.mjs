@@ -56,7 +56,11 @@ export async function retryServiceUnavailable({
 }
 
 /** Recheck a Lychee Markdown report with the installed executable. */
-export async function recheckReport(reportPath, binary, { wait = delay } = {}) {
+export async function recheckReport(
+  reportPath,
+  binary,
+  { wait = delay, spawn = spawnSync } = {},
+) {
   const initialReport = readFileSync(reportPath, "utf8");
   let attempt = 0;
   const status = await retryServiceUnavailable({
@@ -67,7 +71,7 @@ export async function recheckReport(reportPath, binary, { wait = delay } = {}) {
       writeFileSync(input, urls.map((url) => `- <${url}>`).join("\n") + "\n");
       // These URLs passed the full sweep's inclusion/exclusion rules already.
       // Keep fragment checking on the retry, and require actual successful HTTP.
-      const run = spawnSync(
+      const run = spawn(
         binary,
         [
           "--no-progress",

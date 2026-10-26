@@ -485,7 +485,8 @@ pub(super) async fn agent_chat_reply_for_inner(
                 turn_model_source.clone(),
                 env.construction_keepalive,
             )
-            .await?;
+            .await
+            .map_err(anyhow::Error::msg)?;
             // Also thread it as the turn's workspace descriptor so acting tools
             // that read `ToolExecutionContext::workspace` (shell) resolve their
             // default cwd here, and so spawned sub-agents inherit the same root.
@@ -502,7 +503,8 @@ pub(super) async fn agent_chat_reply_for_inner(
                 turn_model_source,
                 env.construction_keepalive,
             )
-            .await?;
+            .await
+            .map_err(anyhow::Error::msg)?;
             // An ordinary turn still acts from the agent's configured action
             // directory. Make the descriptor explicit just as for a cwd
             // override: shell tools and tool hooks must report the same root,

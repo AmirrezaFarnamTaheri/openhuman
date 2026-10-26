@@ -5,6 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # System deps for Tauri + mold linker + clang + E2E testing (xvfb, dbus, webkit2gtk-driver).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    bubblewrap \
     cmake \
     curl \
     jq \

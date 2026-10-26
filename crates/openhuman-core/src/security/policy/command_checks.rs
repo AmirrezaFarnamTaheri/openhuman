@@ -14,7 +14,6 @@ use super::types::{AutonomyLevel, GateDecision, SecurityPolicy};
 use crate::security::policy::CommandClass;
 #[cfg(test)]
 use crate::util::floor_char_boundary;
-use tinybox_bus::CommandClass;
 #[cfg(test)]
 use tinybox_core::shell::analysis::analyze_command;
 use tinytools::status::POLICY_BLOCKED_MARKER;
@@ -25,7 +24,7 @@ use tinytools::status::POLICY_BLOCKED_MARKER;
 /// classifying quoted search patterns or heredoc bodies as filesystem targets.
 /// This is defense in depth, not a substitute for OS-level sandboxing.
 #[cfg(feature = "modules")]
-fn unbounded_system_scan(analysis: &crate::modules::tinybox::contract::CommandAnalysis) -> bool {
+fn unbounded_system_scan(analysis: &CommandAnalysis) -> bool {
     for segment in &analysis.segments {
         let name = segment.normalized_name.to_ascii_lowercase();
         let args = &segment.arguments;

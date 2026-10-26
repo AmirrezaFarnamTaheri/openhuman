@@ -32,7 +32,7 @@ pub async fn render_connected_identities_async(ctx: &crate::core::runtime::Dispa
 
 /// Read identities without parking a runtime worker. Async prompt preparation
 /// uses this before taking its prompt or tool-surface locks.
-pub async fn render_connected_identities_async(ctx: &crate::core::runtime::DispatchCtx) -> String {
+async fn render_section(ctx: &crate::core::runtime::DispatchCtx) -> String {
     let config = match ctx.load_config().await {
         Ok(config) => config,
         Err(error) => {

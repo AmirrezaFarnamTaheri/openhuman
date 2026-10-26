@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import {
   retryServiceUnavailable,
   retryableFailureUrls,
@@ -247,7 +248,15 @@ process.exit(success ? 0 : 2);
         { mode: 0o755 },
       );
       assert.equal(
-        await recheckReport(report, binary, { wait: async () => {} }),
+        await recheckReport(report, binary, {
+          wait: async () => {},
+          // Windows cannot execute a shebang script directly. Keep the real
+          // subprocess and argument/report checks through Node on every OS.
+          spawn(executable, args, options) {
+            assert.equal(executable, binary);
+            return spawnSync(process.execPath, [executable, ...args], options);
+          },
+        }),
         recover ? 0 : 2,
       );
       assert.equal(JSON.parse(readFileSync(counter, "utf8")), recover ? 2 : 3);

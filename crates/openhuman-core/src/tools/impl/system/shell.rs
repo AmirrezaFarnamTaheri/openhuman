@@ -1,6 +1,6 @@
 use super::shell_description::{command_param_description, shell_description};
 use super::shell_run::{audit_once, run_in_policy, run_native, AuditOnce, YieldRequest};
-use super::shell_support::{append_verification_receipt, command_failure, tool_timeout_message};
+use super::shell_support::append_verification_receipt;
 #[cfg(feature = "modules")]
 use super::shell_support::{container_environment, docker_module_result};
 use crate::agent::tinyagents::host::run_context::{

@@ -67,6 +67,77 @@ const contracts = {
     "pub mod providers {\n pub use tinyinference_llm::message::MessageDelta;\n pub use tinyinference_llm::model::{\n ChatModel, DeferredHandle, DeferredStatus, ModelProfile, ModelRequest, ModelResponse,\n ModelStream, ModelStreamItem, ModelStreamMetadata,\n };\n pub use tinyinference_llm::{Error, Result};\n}\n",
 };
 
+test("native host contracts remain exact and confined to their adapters", () => {
+  const nativeContracts = {
+    "crates/openhuman-core/src/config/schema/context.rs":
+      "pub use tinyagents_harness::config::{CompactionSettings, CompactionStrategy, ContextConfig};",
+    "crates/openhuman-core/src/tools/per_call.rs":
+      "pub(crate) use tinyagents_harness_tools::per_call::PerCallTool;",
+    "crates/openhuman-core/src/agent/orchestration/subagent_sessions/ops.rs":
+      "pub use tinyagents_orchestration::subagent::normalize_task_key;",
+    "crates/openhuman-embed/src/budget.rs":
+      "pub use tinyagents_harness::cost::ModelBudget;",
+  };
+  const allowed = check(nativeContracts);
+  assert.equal(allowed.status, 0, allowed.output);
+  for (const [path, source] of Object.entries(nativeContracts)) {
+    for (const files of [
+      { "crates/openhuman-core/src/unreviewed.rs": source },
+      { [path]: source.replace(/;$/, "Extra;") },
+    ]) {
+      const rejected = check(files);
+      assert.equal(rejected.status, 1, rejected.output);
+      assert.match(rejected.output, /openhuman-upstream-reexport/);
+    }
+  }
+});
+
+test("the upstream progress ledger consumes only its canonical progress type", () => {
+  const path = "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs";
+  const source = "use tinyagents_harness::progress::AgentProgress;\nfn observe(event: &AgentProgress) {}\n";
+  const allowed = check({ [path]: source });
+  assert.equal(allowed.status, 0, allowed.output);
+  const tests = check({
+    [path.replace("mod.rs", "mod_tests.rs")]:
+      "use tinyagents_harness::progress::{AgentProgress, SubagentUsage};\nfn test_progress(event: &AgentProgress) {}\n",
+  });
+  assert.equal(tests.status, 0, tests.output);
+  for (const files of [
+    { [path]: source.replace("tinyagents_harness::progress", "openhuman_core") },
+    { [path]: "fn observe(event: &AgentProgress) {}\n" },
+    { "vendor/tinyagents/crates/tinyagents-orchestration/src/other.rs": source },
+  ]) {
+    const rejected = check(files);
+    assert.equal(rejected.status, 1, rejected.output);
+    assert.match(rejected.output, /tinyagents-openhuman-domain-name/);
+  }
+});
+
+test("associated child message contracts and behavioral test models are not copied facades", () => {
+  const root = "vendor/tinyagents/crates/";
+  const files = {
+    [`${root}tinyagents-orchestration/src/subagent/child_turn.rs`]:
+      "pub trait ChildTurnHost: Send {\n type Message: Clone + Send + Sync;\n}\n",
+    [`${root}tinyagents-orchestration/src/subagent/child_turn_tests.rs`]:
+      "impl ChildTurnHost for FakeHost {\n type Message = String;\n}\n",
+    [`${root}tinyagents-harness/src/close_tests.rs`]:
+      "struct RoutedStreamModel(tinyinference_llm::model::ResolvedModelRoute);\nimpl ChatModel<()> for RoutedStreamModel {\n async fn stream(&self) { produce_stream(); }\n}\n",
+  };
+  const allowed = check(files);
+  assert.equal(allowed.status, 0, allowed.output);
+  for (const [path, source] of Object.entries(files)) {
+    const rejected = check({ [path.replace(/[^/]+$/, "other.rs")]: source });
+    assert.equal(rejected.status, 1, rejected.output);
+    assert.match(rejected.output, /tinyagents-moved-symbol-alias/);
+  }
+  const bareWrapper = check({
+    [`${root}tinyagents-harness/src/close_tests.rs`]:
+      "struct RoutedStreamModel(tinyinference_llm::model::ResolvedModelRoute);\n",
+  });
+  assert.equal(bareWrapper.status, 1, bareWrapper.output);
+  assert.match(bareWrapper.output, /tinyagents-moved-symbol-alias/);
+});
+
 test("Embed exposes the native provider and policy contracts without copying their owners", () => {
   const result = check(contracts);
   assert.equal(result.status, 0, result.output);
