@@ -418,24 +418,32 @@ pub(crate) async fn store_address(
         uuid::Uuid::new_v4().simple()
     );
     let scope = scope.clone();
-    let runtime = crate::modules::runtime::runtime()
-        .await
-        .map_err(|error| anyhow::anyhow!(error))?;
-    runtime
-        .spawn(async move {
-            let served = module::serve_registered(path.clone(), DocumentsPort { scope })
-                .await
-                .map_err(anyhow::Error::msg)?;
-            Ok::<_, anyhow::Error>((
-                CallbackAddress {
-                    destination: module::HOST_BUS_NAME.to_owned(),
-                    object_path: path,
-                },
-                Some(served),
-            ))
-        })
-        .await
-        .context("join the scoped schedule document registration")?
+    let register = async move {
+        let served = module::serve_registered(path.clone(), DocumentsPort { scope })
+            .await
+            .map_err(anyhow::Error::msg)?;
+        Ok::<_, anyhow::Error>((
+            CallbackAddress {
+                destination: module::HOST_BUS_NAME.to_owned(),
+                object_path: path,
+            },
+            Some(served),
+        ))
+    };
+    #[cfg(feature = "modules")]
+    {
+        let runtime = crate::modules::runtime::runtime()
+            .await
+            .map_err(|error| anyhow::anyhow!(error))?;
+        runtime
+            .spawn(register)
+            .await
+            .context("join the scoped schedule document registration")?
+    }
+    #[cfg(not(feature = "modules"))]
+    {
+        register.await
+    }
 }
 
 /// Addresses already served, by scope key.
