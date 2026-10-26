@@ -93,7 +93,7 @@ async fn released_schedule_v7_serves_the_host_contract_and_keeps_policy() {
         .build()
         .await
         .unwrap();
-    storage::install(Arc::new(storage::MemoryStorage::new()));
+    storage::install(Arc::new(tinystoragedrivers_testkit::MemoryBackend::new()));
     assert_released_module(&config).await;
 
     let security = Arc::new(SecurityPolicy::from_config(
