@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
-use tinyflows::engine::GraphObservation;
+use crate::flows::trace_observation::TraceObservation;
 use tinyflows_bus::catalog::Workflow as Flow;
 use tinyflows_bus::runs::FlowRunTrigger;
 use tinyflows_bus::runs::{self, RunEvent};
@@ -47,7 +47,7 @@ pub(crate) struct RunSession {
     started_event: std::sync::atomic::AtomicBool,
     finished_event: std::sync::atomic::AtomicBool,
     live_actor: std::sync::atomic::AtomicBool,
-    observations: Mutex<Vec<GraphObservation>>,
+    observations: Mutex<Vec<TraceObservation>>,
 }
 
 static SESSIONS: LazyLock<Mutex<HashMap<RunKey, Arc<RunSession>>>> =
@@ -98,14 +98,14 @@ impl RunSession {
             .retain(|watcher| watcher.send(event.clone()).is_ok());
     }
 
-    pub(super) fn add_observation(&self, observation: GraphObservation) {
+    pub(super) fn add_observation(&self, observation: TraceObservation) {
         self.observations
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(observation);
     }
 
-    pub(super) fn take_observations(&self) -> Vec<GraphObservation> {
+    pub(super) fn take_observations(&self) -> Vec<TraceObservation> {
         std::mem::take(
             &mut *self
                 .observations

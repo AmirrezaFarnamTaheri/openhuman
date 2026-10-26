@@ -568,7 +568,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             " agent::session_host::runtime_session::tool_surface:: agent_registry::agents::loader:: commands::ops::tests:: memory::people::contacts_gate_tests::" +
             " doctor::checks:: core::schema_test_support:: memory::layout_migration:: config::schema::load::source::tests::revision_loader_tests::" +
             " openhuman::config:: openhuman::platform::socket::event_handlers:: tools::schemas:: tools::ops::tests::" +
-            " tools::sources::tests:: web_chat::run_task::tests::",
+            " tools::sources::tests:: web_chat::run_task::tests:: --test-threads=1",
         },
         {
           // Share one build for these disjoint test surfaces. Enable the
@@ -660,10 +660,12 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           name: "storage-lib-tests",
           when: areas.storage,
           needs: ["test-modules"],
-          run:
-            `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
-            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join("") +
-            " --skip cron::bus_host::tests:: --skip cron::documents_port::tests::",
+          run: ex63
+            ? `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
+              STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join("") +
+              " --skip cron::bus_host::tests:: --skip cron::documents_port::tests::"
+            : `bash scripts/ci/nextest-coverage.sh storage-lib-tests cargo nextest run --profile ci --no-tests=fail --no-fail-fast -p openhuman --features ${STORAGE_DRIVERS} --lib -E ` +
+              `'(${STORAGE_LIB_FILTERS.map((f) => `test(${f})`).join(" | ")}) & not test(cron::bus_host::tests::) & not test(cron::documents_port::tests::)'`,
         },
         {
           // TinyFlows owns a process-global module host during these tests.
@@ -724,6 +726,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
                 env: {
                   ...check.env,
                   OH_COV_SHARD: shard,
+                  ...(shard === "core" ? { OH_COV_RUNNER: "nextest" } : {}),
                   OUT: `ci-out/lcov/lcov-core-${shard}.info`,
                 },
               };

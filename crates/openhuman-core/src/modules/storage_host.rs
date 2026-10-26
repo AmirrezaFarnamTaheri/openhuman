@@ -690,13 +690,20 @@ pub(crate) async fn install(
 /// TinyEventQueues. The callback endpoint reuses the live storage policy but
 /// is reachable only by the verified module instance loaded with this binding.
 pub(super) async fn prepare_module_callbacks(
-    runtime: &tinybus::module::ModuleRuntime,
+    runtime: &'static tinybus::module::ModuleRuntime,
 ) -> tinybus::Result<(
     Arc<tinybus::module::HostCallbackBinding>,
     tinystoragedrivers_busproxy::ServedStorage,
 )> {
-    let connection = runtime.connection();
-    prepare_callbacks(connection, runtime.host()).await
+    // Capture the permanent runtime, not the request runtime that may close next.
+    runtime
+        .spawn(async move { prepare_callbacks(runtime.connection(), runtime.host()).await })
+        .await
+        .map_err(|error| {
+            tinybus::Error::Transport(format!(
+                "the module storage callbacks did not finish: {error}"
+            ))
+        })?
 }
 
 /// Prepare a callback storage endpoint for a module host on `connection`.

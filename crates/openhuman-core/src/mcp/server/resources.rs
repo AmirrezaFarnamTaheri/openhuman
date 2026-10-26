@@ -59,6 +59,18 @@ const RESOURCE_CATALOG: &[PromptResource] = &[
         content: include_str!("../../agent_registry/agents/orchestrator/prompt.md"),
     },
     PromptResource {
+        uri: "openhuman://prompts/agents/planner",
+        name: "planner",
+        description: "Reasoning specialist that turns requests into actionable plans.",
+        content: include_str!("../../agent_registry/agents/planner/prompt.md"),
+    },
+    PromptResource {
+        uri: "openhuman://prompts/agents/critic",
+        name: "critic",
+        description: "Specialist that reviews proposed work and identifies concrete issues.",
+        content: include_str!("../../agent_registry/agents/critic/prompt.md"),
+    },
+    PromptResource {
         uri: "openhuman://prompts/agents/vision_agent",
         name: "vision_agent",
         description: "Multimodal worker that analyses attached images for the vision tier.",

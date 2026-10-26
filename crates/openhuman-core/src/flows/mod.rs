@@ -44,6 +44,7 @@ mod schemas;
 mod store;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub(crate) mod trace_observation;
 pub use schemas::{
     all_controller_schemas as all_flows_controller_schemas,
     all_registered_controllers as all_flows_registered_controllers,

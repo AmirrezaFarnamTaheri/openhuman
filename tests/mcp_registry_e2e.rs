@@ -102,6 +102,24 @@ fn http_server(url: &str) -> Value {
     json!({ "url": url, "enabled": false })
 }
 
+#[test]
+fn module_storage_callbacks_outlive_the_runtime_that_loaded_them() {
+    let _storage_lock = STORAGE_SETUP_LOCK.blocking_lock();
+    for name in [
+        "@openhuman-test/first-runtime",
+        "@openhuman-test/next-runtime",
+    ] {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("request runtime");
+        runtime.block_on(async {
+            let (_tmp, config) = fresh_workspace_config().await;
+            install_server(&config, name, stdio_server()).await;
+        });
+    }
+}
+
 #[tokio::test]
 async fn explicitly_trusted_stdio_server_still_uses_the_real_subprocess() {
     let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
@@ -162,17 +180,31 @@ async fn registry_stdio_is_refused_when_the_host_cannot_offer_a_sandbox() {
     openhuman_core::mcp::registry::ops::mcp_clients_set_enabled(&config, server_id.clone(), true)
         .await
         .expect("enable install");
-    assert!(
+    let refusal =
         openhuman_core::mcp::registry::ops::mcp_clients_connect(&config, server_id.clone())
             .await
-            .is_err(),
-        "an untrusted registry server must not run without a sandbox"
-    );
-    let reason =
-        openhuman_core::mcp::registry::connections::last_error_for_config(&config, &server_id)
-            .await
-            .expect("the registry retains the refusal reason");
-    assert!(reason.contains("without a sandbox"), "{reason}");
+            .expect_err("an untrusted registry server must not run without a sandbox");
+    let reason = if refusal.contains("sandbox") {
+        refusal
+    } else {
+        // Enabling also schedules a supervisor connection; its failure receipt is asynchronous.
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                if let Some(reason) =
+                    openhuman_core::mcp::registry::connections::last_error_for_config(
+                        &config, &server_id,
+                    )
+                    .await
+                {
+                    break reason;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("the registry retains the refusal reason")
+    };
+    assert!(reason.contains("sandbox"), "{reason}");
     assert!(
         !openhuman_core::mcp::registry::connections::is_connected_for_config(&config, &server_id)
             .await

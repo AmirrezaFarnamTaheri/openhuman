@@ -55,13 +55,20 @@ async fn doctor_catalog_does_not_follow_a_redirect_with_an_anthropic_key() {
     };
     config.secrets.encrypt = false;
     let entry = provider(format!("{}/v1", source.uri()), AuthStyle::Anthropic);
-    let auth = crate::security::credentials::AuthService::from_config(&config);
-    auth.store_provider_token(
-        &crate::inference::provider::factory::auth_key_for_slug(&entry.slug),
-        "default",
-        "private-doctor-key",
-        Default::default(),
-        true,
+    // Inspection reads the selected file, independent of installed mutable storage.
+    let provider_key = crate::inference::provider::factory::auth_key_for_slug(&entry.slug);
+    let profile_id = format!("{provider_key}:default");
+    std::fs::write(
+        temp.path().join("auth-profiles.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "schema_version": 1,
+            "active_profiles": {provider_key.clone(): profile_id.clone()},
+            "profiles": {profile_id: {
+                "provider": provider_key, "profile_name": "default", "kind": "token",
+                "token": "private-doctor-key", "metadata": {}
+            }}
+        }))
+        .unwrap(),
     )
     .unwrap();
     let request = prepare(&config, &entry).await.unwrap();

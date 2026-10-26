@@ -1,7 +1,7 @@
 //! Langfuse export for `flows::` graph runs.
 //!
 //! After a `flows_run` / `flows_resume` settles, the `flows::` domain hands
-//! this module the run's [`GraphObservation`] slice collected from the Runs
+//! this module the run's [`TraceObservation`] slice collected from the Runs
 //! bus event stream, and it exports the run as one Langfuse trace via the backend's Langfuse
 //! OTLP proxy route (Langfuse v4; the legacy batch ingestion path is not used
 //! for traces).
@@ -27,11 +27,10 @@ use std::time::Duration;
 
 use std::collections::{HashMap, VecDeque};
 
+use crate::flows::trace_observation::TraceObservation;
 use serde_json::{json, Value};
 use tinyagents_harness::observability::spans::{Span, SpanExporter, SpanState};
 use tinyagents_harness::{LangfuseAuth, LangfuseClient, LangfuseTraceConfig};
-use tinyflows::engine::GraphObservation;
-use tinyflows::graph::stream::GraphEvent;
 use tinyflows_bus::runs::FlowRunTrigger;
 
 use crate::config::Config;
@@ -111,24 +110,21 @@ fn build_flow_trace_config(
 
 /// Converts TinyFlows' durable events to the generic harness span contract.
 /// Pairing is FIFO so repeated node activations keep their event order.
-fn flow_spans(flow_id: &str, observations: &[GraphObservation]) -> Vec<Span> {
+fn flow_spans(flow_id: &str, observations: &[TraceObservation]) -> Vec<Span> {
     let Some(first) = observations.first() else {
         return Vec::new();
     };
     let trace_id = first
         .thread_id
-        .as_ref()
-        .map(|thread| thread.as_str())
-        .unwrap_or_else(|| first.root_run_id.as_str());
+        .as_deref()
+        .unwrap_or(first.root_run_id.as_str());
     let run_id = first.run_id.as_str();
     let root_run_id = first.root_run_id.as_str();
     let run_span_id = format!("{trace_id}:run:{root_run_id}");
-    let terminal = observations.iter().rev().find(|obs| {
-        matches!(
-            obs.event,
-            GraphEvent::RunCompleted { .. } | GraphEvent::RunFailed { .. }
-        )
-    });
+    let terminal = observations
+        .iter()
+        .rev()
+        .find(|obs| matches!(obs.event_name(), "RunCompleted" | "RunFailed"));
     let mut run_span = Span::new(
         run_span_id.clone(),
         run_id,
@@ -140,7 +136,7 @@ fn flow_spans(flow_id: &str, observations: &[GraphObservation]) -> Vec<Span> {
     if let Some(end) = terminal.or_else(|| observations.last()) {
         run_span = run_span.finish(
             end.ts_ms,
-            if matches!(end.event, GraphEvent::RunFailed { .. }) {
+            if end.event_name() == "RunFailed" {
                 SpanState::Error
             } else {
                 SpanState::Ok
@@ -156,41 +152,45 @@ fn flow_spans(flow_id: &str, observations: &[GraphObservation]) -> Vec<Span> {
     let mut subgraph_starts: HashMap<(String, Vec<String>), VecDeque<usize>> = HashMap::new();
 
     for (index, observation) in observations.iter().enumerate() {
-        match &observation.event {
-            GraphEvent::StepStarted { step, .. } => {
-                step_starts.entry(*step).or_default().push_back(index);
+        let (name, data) = observation.event_parts();
+        let step = data["step"]
+            .as_u64()
+            .and_then(|step| usize::try_from(step).ok());
+        let node = data["node"].as_str();
+        match (name, node, step) {
+            ("StepStarted", _, Some(step)) => {
+                step_starts.entry(step).or_default().push_back(index);
                 consumed[index] = true;
             }
-            GraphEvent::StepCompleted { step } => {
-                if let Some(start) = pop_start(&mut step_starts, step) {
+            ("StepCompleted", _, Some(step)) => {
+                if let Some(start) = pop_start(&mut step_starts, &step) {
                     consumed[index] = true;
                     output.push(step_span(
                         flow_id,
                         trace_id,
                         &run_span_id,
-                        *step,
+                        step,
                         observations,
                         start,
                         index,
                     ));
                 }
             }
-            GraphEvent::NodeStarted { node, step } => {
+            ("NodeStarted", Some(node), Some(step)) => {
                 node_starts
-                    .entry((node.as_str().to_owned(), *step))
+                    .entry((node.to_owned(), step))
                     .or_default()
                     .push_back(index);
                 consumed[index] = true;
             }
-            GraphEvent::NodeCompleted { node, step } => {
-                if let Some(start) = pop_start(&mut node_starts, &(node.as_str().to_owned(), *step))
-                {
+            ("NodeCompleted", Some(node), Some(step)) => {
+                if let Some(start) = pop_start(&mut node_starts, &(node.to_owned(), step)) {
                     consumed[index] = true;
                     output.push(node_span(
                         flow_id,
                         trace_id,
-                        node.as_str(),
-                        *step,
+                        node,
+                        step,
                         observations,
                         start,
                         index,
@@ -198,15 +198,17 @@ fn flow_spans(flow_id: &str, observations: &[GraphObservation]) -> Vec<Span> {
                     ));
                 }
             }
-            GraphEvent::NodeFailed { node, step, error } => {
-                if let Some(start) = pop_start(&mut node_starts, &(node.as_str().to_owned(), *step))
-                {
+            ("NodeFailed", Some(node), Some(step)) => {
+                let Some(error) = data["error"].as_str() else {
+                    continue;
+                };
+                if let Some(start) = pop_start(&mut node_starts, &(node.to_owned(), step)) {
                     consumed[index] = true;
                     output.push(node_span(
                         flow_id,
                         trace_id,
-                        node.as_str(),
-                        *step,
+                        node,
+                        step,
                         observations,
                         start,
                         index,
@@ -214,25 +216,34 @@ fn flow_spans(flow_id: &str, observations: &[GraphObservation]) -> Vec<Span> {
                     ));
                 }
             }
-            GraphEvent::SubgraphStarted { node, namespace } => {
+            ("SubgraphStarted", Some(node), _) => {
+                let Ok(namespace) =
+                    serde_json::from_value::<Vec<String>>(data["namespace"].clone())
+                else {
+                    continue;
+                };
                 subgraph_starts
-                    .entry((node.as_str().to_owned(), namespace.clone()))
+                    .entry((node.to_owned(), namespace))
                     .or_default()
                     .push_back(index);
                 consumed[index] = true;
             }
-            GraphEvent::SubgraphCompleted { node, namespace } => {
-                if let Some(start) = pop_start(
-                    &mut subgraph_starts,
-                    &(node.as_str().to_owned(), namespace.clone()),
-                ) {
+            ("SubgraphCompleted", Some(node), _) => {
+                let Ok(namespace) =
+                    serde_json::from_value::<Vec<String>>(data["namespace"].clone())
+                else {
+                    continue;
+                };
+                if let Some(start) =
+                    pop_start(&mut subgraph_starts, &(node.to_owned(), namespace.clone()))
+                {
                     consumed[index] = true;
                     output.push(subgraph_span(
                         flow_id,
                         trace_id,
                         &run_span_id,
-                        node.as_str(),
-                        namespace,
+                        node,
+                        &namespace,
                         observations,
                         start,
                         index,
@@ -287,20 +298,18 @@ fn flow_spans(flow_id: &str, observations: &[GraphObservation]) -> Vec<Span> {
         }
     }
     for (index, observation) in observations.iter().enumerate() {
-        if consumed[index] || matches!(observation.event, GraphEvent::RunStarted { .. }) {
+        if consumed[index] || observation.event_name() == "RunStarted" {
             continue;
         }
-        let failed = matches!(observation.event, GraphEvent::RunFailed { .. });
-        let error = match &observation.event {
-            GraphEvent::RunFailed { error, .. } | GraphEvent::NodeFailed { error, .. } => {
-                Some(error.as_str())
-            }
+        let failed = observation.event_name() == "RunFailed";
+        let error = match observation.event_parts() {
+            ("RunFailed" | "NodeFailed", data) => data["error"].as_str(),
             _ => None,
         };
         let mut span = Span::new(
             observation.event_id.as_str(),
             observation.run_id.as_str(),
-            observation.event.kind(),
+            observation.event_kind(),
             observation.ts_ms,
         )
         .with_root_run_id(observation.root_run_id.as_str())
@@ -331,7 +340,7 @@ fn pop_start<K: std::hash::Hash + Eq>(
     start
 }
 
-fn add_observation_metadata(span: &mut Span, observation: &GraphObservation, flow_id: &str) {
+fn add_observation_metadata(span: &mut Span, observation: &TraceObservation, flow_id: &str) {
     span.metadata.insert("flow_id".into(), json!(flow_id));
     span.metadata
         .insert("graph_id".into(), json!(observation.graph_id.as_str()));
@@ -343,11 +352,11 @@ fn add_observation_metadata(span: &mut Span, observation: &GraphObservation, flo
     );
     span.metadata.insert(
         "parent_run_id".into(),
-        json!(observation.parent_run_id.as_ref().map(|id| id.as_str())),
+        json!(observation.parent_run_id.as_deref()),
     );
     span.metadata.insert(
         "checkpoint_id".into(),
-        json!(observation.checkpoint_id.as_ref().map(|id| id.as_str())),
+        json!(observation.checkpoint_id.as_deref()),
     );
     span.metadata
         .insert("namespace".into(), json!(observation.namespace));
@@ -363,7 +372,7 @@ fn step_span(
     trace_id: &str,
     run_span_id: &str,
     step: usize,
-    observations: &[GraphObservation],
+    observations: &[TraceObservation],
     start: usize,
     end: usize,
 ) -> Span {
@@ -391,7 +400,7 @@ fn node_span(
     trace_id: &str,
     node: &str,
     step: usize,
-    observations: &[GraphObservation],
+    observations: &[TraceObservation],
     start: usize,
     end: usize,
     error: Option<&str>,
@@ -430,7 +439,7 @@ fn subgraph_span(
     run_span_id: &str,
     node: &str,
     namespace: &[String],
-    observations: &[GraphObservation],
+    observations: &[TraceObservation],
     start: usize,
     end: usize,
 ) -> Span {
@@ -456,7 +465,7 @@ fn flow_otlp_requests(
     exporter: &SpanExporter,
     trace: LangfuseTraceConfig,
     flow_id: &str,
-    observations: &[GraphObservation],
+    observations: &[TraceObservation],
 ) -> tinyagents_harness::error::Result<Vec<Value>> {
     exporter.build_otlp_requests(
         trace,
@@ -477,7 +486,7 @@ pub async fn export_flow_run_trace(
     thread_id: &str,
     status: &str,
     trigger: FlowRunTrigger,
-    observations: &[GraphObservation],
+    observations: &[TraceObservation],
 ) {
     if !config.observability.share_usage_data {
         tracing::debug!(

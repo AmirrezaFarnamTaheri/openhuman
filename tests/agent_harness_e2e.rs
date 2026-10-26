@@ -49,10 +49,7 @@ use tempfile::tempdir;
 
 use openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry;
 use openhuman_core::core::auth::{init_rpc_token, CORE_TOKEN_ENV_VAR};
-use openhuman_core::inference::registry::register_chat_model;
 use openhuman_rpc::server::build_core_http_router;
-use tinyinference_llm::providers::openai::{AuthStyle as MockAuthStyle, OpenAiModel};
-use tinyinference_llm::providers::overrides::ChatModelEntry;
 
 const TEST_RPC_TOKEN: &str = "json-rpc-e2e-local-token";
 const MANAGED_CAPTURE_PROMPT_CLOCK: &str = "2024-01-15T12:00:00Z";
@@ -66,51 +63,6 @@ static AGENT_HARNESS_E2E_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 /// calls are safe even though the underlying registry uses its own OnceLock
 /// (`init_global_builtins` silently ignores a second set).
 static AGENT_DEF_REGISTRY_INIT: OnceLock<()> = OnceLock::new();
-
-/// The core no longer constructs a managed provider internally: the embedding
-/// host must register one. These CLI integration tests boot only the core RPC
-/// router, so install a real OpenAI-compatible model pointed at the in-process
-/// scripted HTTP upstream, not an always-successful mock ChatModel.
-///
-/// Per-turn config supplies the endpoint, which is different for each boot.
-/// This makes every scripted completion, error and SSE assertion exercise the
-/// actual provider transport while keeping the production provider registry
-/// unchanged. E2E cases serialize their global environment via env_lock.
-fn install_scripted_hosted_provider() {
-    static SCRIPTED_PROVIDER: OnceLock<()> = OnceLock::new();
-    SCRIPTED_PROVIDER.get_or_init(|| {
-        register_chat_model(
-            "openhuman",
-            ChatModelEntry {
-                build: std::sync::Arc::new(|request| {
-                    let endpoint = request
-                        .context
-                        .config
-                        .api_url
-                        .as_deref()
-                        .filter(|value| !value.trim().is_empty())
-                        .ok_or_else(|| {
-                            tinyinference_llm::Error::Validation(
-                                "agent E2E missing local scripted API URL".into(),
-                            )
-                        })?;
-                    let base = format!("{}/openai/v1", endpoint.trim_end_matches('/'));
-                    let model = OpenAiModel::new("e2e-scripted-provider-key")
-                        .with_provider("openhuman")
-                        .with_base_url(&base)
-                        .with_auth_style(MockAuthStyle::Bearer);
-                    let model_id = request
-                        .model_override
-                        .unwrap_or("e2e-mock-model")
-                        .to_owned();
-                    Ok((std::sync::Arc::new(model), model_id))
-                }),
-                probe: None,
-                models: None,
-            },
-        );
-    });
-}
 
 fn init_agent_def_registry() {
     AGENT_DEF_REGISTRY_INIT.get_or_init(|| {
@@ -896,9 +848,7 @@ async fn boot_stack_with_options(
     // delegation tools and every `analyze_image`/`spawn_subagent` call becomes
     // "Unknown tool: …", making delegation tests vacuous.
     init_agent_def_registry();
-    install_scripted_hosted_provider();
 
-    let home_is_override = home_override.is_some();
     let tmp = tempdir().expect("tempdir");
     let home = home_override.unwrap_or_else(|| tmp.path().to_path_buf());
     #[cfg(unix)]
@@ -913,11 +863,8 @@ async fn boot_stack_with_options(
 
     let home_guard = EnvVarGuard::set_to_path("HOME", &home);
     let action_dir_guard = EnvVarGuard::set_to_path("OPENHUMAN_ACTION_DIR", &action_dir);
-    let workspace_guard = if home_is_override {
-        EnvVarGuard::set_to_path("OPENHUMAN_WORKSPACE", &home.join("workspace"))
-    } else {
-        EnvVarGuard::unset("OPENHUMAN_WORKSPACE")
-    };
+    // Windows home discovery does not follow HOME; bind the fixture explicitly.
+    let workspace_guard = EnvVarGuard::set_to_path("OPENHUMAN_WORKSPACE", &home.join("workspace"));
     let backend_guard = EnvVarGuard::unset("BACKEND_URL");
     let vite_guard = EnvVarGuard::unset("VITE_BACKEND_URL");
 
@@ -936,14 +883,8 @@ async fn boot_stack_with_options(
         extra_config,
     );
 
-    // The transport-only router does not create a Core runtime context. Install
-    // the explicit tinymemory host seams before handlers service memory-backed
-    // agent turns, matching normal startup wiring.
-
-    // The transport-only router does not create a Core runtime context, and a
-    // dispatch with none resolves no storage scope (the sub-agent session store
-    // refuses to open). Bind the process default context like a booted host.
-    let (_default_context, _, _) = openhuman_core::core::runtime::CoreContext::init_with_config(
+    // Every router needs its own context; the process default belongs to the first fixture.
+    let (_context, _, _) = openhuman_core::core::runtime::CoreContext::init_with_config(
         openhuman_core::core::types::HostKind::Library,
         &openhuman_core::core::runtime::TokenSource::Fixed(std::sync::Arc::new(
             "agent-harness-e2e-token".to_owned(),
@@ -1231,10 +1172,7 @@ async fn run_managed_capture_turn(
     );
     drop(events);
     stack.shutdown_and_wait().await;
-    // The bare test router dispatches RPC under the process default context
-    // that `boot_stack` initialized. Its cached web-chat agent outlives a router
-    // shutdown, so remove that session from the same slot before the fixture
-    // resets its files.
+    // Cached agents outlive the router; release this fixture's session before resetting files.
     openhuman_core::web_chat::invalidate_thread_sessions(
         &openhuman_core::core::runtime::DispatchCtx::process_default(),
         "managed-capture-thread",
@@ -1484,6 +1422,23 @@ where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
+    // The host owns process-wide stores and one runtime; each scenario needs its own process.
+    const CHILD_ENV: &str = "OPENHUMAN_HARNESS_E2E_CHILD";
+    if std::env::var(CHILD_ENV).as_deref() != Ok(name) {
+        let _lock = env_lock();
+        let output = Command::new(std::env::current_exe().expect("test executable"))
+            .args(["--exact", name, "--nocapture"])
+            .env(CHILD_ENV, name)
+            .output()
+            .expect("spawn isolated harness scenario");
+        assert!(
+            output.status.success(),
+            "{name} failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
     std::thread::Builder::new()
         .name(name.to_string())
         .stack_size(openhuman_core::core::runtime::AGENT_WORKER_STACK_BYTES)
@@ -1912,10 +1867,21 @@ async fn subagent_delegation_happy_path_inner() {
     // Delegation is evidenced by a request that is not the orchestrator's: the
     // child builds its own context. Poll, since the detached child may not
     // have issued its call when the parent's turn ends.
+    let first_sys = |r: &Value| {
+        r.pointer("/body/messages/0/content")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
     let deadline = std::time::Instant::now() + Duration::from_secs(60);
     let requests = loop {
         let requests = with_captured(|c| c.clone());
-        if requests.len() >= 3 {
+        if requests.len() >= 3
+            && requests
+                .iter()
+                .skip(1)
+                .any(|r| first_sys(r) != first_sys(&requests[0]))
+        {
             break requests;
         }
         assert!(
@@ -1932,17 +1898,12 @@ async fn subagent_delegation_happy_path_inner() {
          requests: {}",
         serde_json::to_string_pretty(&requests).unwrap_or_default()
     );
-    let first_sys = |r: &Value| {
-        r.pointer("/body/messages/0/content")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string()
-    };
     let req0_sys = first_sys(&requests[0]);
     assert!(
         requests.iter().skip(1).any(|r| first_sys(r) != req0_sys),
         "no later request carries its own system context — the vision_agent subagent \
-         did not build one; content: {req0_sys:?}"
+        did not build one; spawn result: {:?}",
+        tool_result_text(&requests, "spawn_subagent")
     );
 
     stack.shutdown();
@@ -1958,20 +1919,19 @@ async fn subagent_delegation_happy_path_inner() {
 //
 //   * `spawn_subagent` is asynchronous: the parent gets a task id back and ends
 //     its turn on an acknowledgement (turn 1);
-//   * a child that calls `ask_user_clarification` pauses (it is checkpointed,
-//     not failed) and the pause is delivered back to the parent's thread as a
-//     host-authored `[SUBAGENT_AWAITING_USER]` envelope, which the orchestrator
-//     relays in its own reply;
+//   * a background child reports missing information in its result; the parent
+//     owns asking the user and relays that result in its own reply;
 //   * the user's next message resumes the thread with that relay in context.
 //
-// Deterministic request ordering (`serialize_children_after_parent(2)` holds the
-// child's first model call until the parent has answered twice):
+// Deterministic request ordering (`serialize_children_after_parent(3)` holds the
+// child's first model call through the parent's verification request):
 //   request[0] = orchestrator turn 1 → spawn_subagent(task_manager_agent)
-//   request[1] = orchestrator, acknowledges; turn 1 ends (chat_done)
-//   request[2] = task_manager_agent → ask_user_clarification pauses the child
-//   request[3] = orchestrator delivery turn with the awaiting-user envelope →
+//   request[1] = orchestrator acknowledges
+//   request[2] = orchestrator verifies its hand-off; turn 1 ends (chat_done)
+//   request[3] = task_manager_agent reports its missing detail
+//   request[4] = orchestrator delivery turn with the child's result →
 //                relays the question as text
-//   request[4] = orchestrator turn 2 ("version 2") → synthesis (chat_done)
+//   request[5] = orchestrator turn 2 ("version 2") → synthesis (chat_done)
 
 /// A delegated request whose specialist needs clarification surfaces its question
 /// to the parent, then preserves that question in the context used to answer the
@@ -1986,7 +1946,7 @@ fn delegated_clarification_flow() {
 
 async fn delegated_clarification_flow_inner() {
     let _lock = env_lock();
-    serialize_children_after_parent(2);
+    serialize_children_after_parent(3);
     reset_script(vec![
         tool_call_completion(
             "spawn_subagent",
@@ -1996,10 +1956,8 @@ async fn delegated_clarification_flow_inner() {
             }),
         ),
         text_completion("Handed that to the task manager."),
-        tool_call_completion(
-            "ask_user_clarification",
-            json!({ "question": "WHICH_VERSION_CANARY?" }),
-        ),
+        text_completion("The task manager will ask for any missing detail."),
+        text_completion("Missing detail: WHICH_VERSION_CANARY?"),
         text_completion("The task manager needs one detail: WHICH_VERSION_CANARY?"),
         text_completion("Final: ANSWER_CANARY_V2"),
     ]);
@@ -2044,7 +2002,7 @@ async fn delegated_clarification_flow_inner() {
 
     // ── the child's pause reaches the parent, which relays it ──
     // The delivery turn is host-authored (no web client waits on it), so wait for
-    // the script to drain: the relay is the fourth completion consumed.
+    // the script to drain: the relay is the fifth completion consumed.
     let deadline = std::time::Instant::now() + Duration::from_secs(120);
     loop {
         let consumed_all_but_last = with_scripted(|q| q.len()) <= 1;
@@ -2095,35 +2053,34 @@ async fn delegated_clarification_flow_inner() {
         serde_json::to_string_pretty(&requests).unwrap_or_default()
     );
     assert!(
-        requests.len() >= 5,
-        "expected ≥5 upstream requests (spawn, ack, child pause, relay, turn-2), got {};\n\
+        requests.len() >= 6,
+        "expected ≥6 upstream requests (spawn, ack, verification, child result, relay, turn-2), got {};\n\
          all requests: {}",
         requests.len(),
         serde_json::to_string_pretty(&requests).unwrap_or_default()
     );
 
-    // request[2] went to task_manager_agent, not the orchestrator: its system
+    // request[3] went to task_manager_agent, not the orchestrator: its system
     // prompt is task-manager-specific. Without this the flow degrades to the
-    // orchestrator asking the user itself, which never exercises the pause.
-    let child_request = requests.get(2).map(Value::to_string).unwrap_or_default();
+    // orchestrator asking the user itself, which never exercises delegation.
+    let child_request = requests.get(3).map(Value::to_string).unwrap_or_default();
     assert!(
         child_request.contains("You own the user's task-source feeds and artifacts"),
-        "request[2] did not carry the task_manager_agent prompt — spawn_subagent did not \
+        "request[3] did not carry the task_manager_agent prompt — spawn_subagent did not \
          run the specialist; request: {child_request}"
     );
+    assert!(child_request.contains("Do not call ask_user_clarification"));
 
-    // request[3] saw the pause as a `[SUBAGENT_AWAITING_USER]` envelope carrying
-    // the child's question, not a plain success the model could read as "answered".
-    let relay_request = requests.get(3).map(Value::to_string).unwrap_or_default();
+    // The background child reports missing detail to its parent without requesting user attention.
+    let relay_request = requests.get(4).map(Value::to_string).unwrap_or_default();
     assert!(
-        relay_request.contains("[SUBAGENT_AWAITING_USER]")
-            && relay_request.contains("WHICH_VERSION_CANARY"),
-        "request[3] did not carry the awaiting-user envelope with the child's question; \
+        relay_request.contains("WHICH_VERSION_CANARY"),
+        "request[4] did not carry the child's missing-detail result; \
          request: {relay_request}"
     );
 
     // The turn-2 request must still hold the question: the relay was persisted in
-    // thread history. Scoped to the last request because request[3] carries the
+    // thread history. Scoped to the last request because request[4] carries the
     // canary through the envelope, so an `any()` over all requests would pass
     // without persistence.
     let turn2_contains_question = requests
@@ -3747,7 +3704,8 @@ async fn serve_skill_registry_fixture() -> (
 // `skills` off drops `skill_setup` from the builtins, and this
 // target declares no `required-features`, so an ungated skill test would run
 // and fail instead of being skipped.
-#[cfg(feature = "skills")]
+// The installer uses the OS home; only Unix HOME can isolate this user-scope fixture.
+#[cfg(all(feature = "skills", unix))]
 #[test]
 fn agent_installs_a_registry_skill_then_runs_it() {
     run_on_agent_stack(
@@ -3756,7 +3714,7 @@ fn agent_installs_a_registry_skill_then_runs_it() {
     );
 }
 
-#[cfg(feature = "skills")]
+#[cfg(all(feature = "skills", unix))]
 async fn agent_installs_a_registry_skill_then_runs_it_inner() {
     let _lock = env_lock();
     let _ttl = EnvVarGuard::set("OPENHUMAN_APPROVAL_TTL_SECS", "120");
@@ -3780,13 +3738,14 @@ async fn agent_installs_a_registry_skill_then_runs_it_inner() {
     // The hand-off is a `spawn_subagent` (asynchronous): the parent's
     // acknowledgement is answered before the child's first call, and the child's
     // result is delivered to a later parent turn that loads the skill.
-    serialize_children_after_parent(2);
+    serialize_children_after_parent(3);
     reset_script(vec![
         tool_call_completion(
             "spawn_subagent",
             json!({ "agent_id": "skill_setup", "prompt": "Install the harness registry skill" }),
         ),
         text_completion("Handed the install to the skill specialist."),
+        text_completion("The skill specialist owns the install and will report its result."),
         // skill_setup finds the entry, then installs it (the gate parks here).
         tool_call_completion(
             "skill_registry_search",
@@ -3796,6 +3755,8 @@ async fn agent_installs_a_registry_skill_then_runs_it_inner() {
             "skill_registry_install",
             json!({ "entry_id": REGISTRY_SKILL_ID }),
         ),
+        text_completion("Installed the skill."),
+        // The install writes state, so the child verifies before returning.
         text_completion("Installed the skill."),
         // The delivery turn: the child's result reaches the orchestrator, which
         // answers. (The `workflows` pack is closed to it while it can hand off

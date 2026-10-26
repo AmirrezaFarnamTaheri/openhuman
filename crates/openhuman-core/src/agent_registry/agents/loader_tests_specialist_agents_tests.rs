@@ -270,16 +270,22 @@ fn orchestrator_routes_every_registered_specialist_through_spawn_subagent() {
             let SubagentEntry::AgentId(agent_id) = entry else {
                 continue;
             };
-            if agent_id == "presentation_agent" && !cfg!(feature = "documents") {
+            let feature_disabled = match agent_id.as_str() {
+                "presentation_agent" => !cfg!(feature = "documents"),
+                "skill_setup" => !cfg!(feature = "skills"),
+                "workflow_builder" | "flow_discovery" => !cfg!(feature = "flows"),
+                _ => false,
+            };
+            if feature_disabled {
                 assert!(
                     registry.get(agent_id).is_none(),
-                    "presentation_agent is intentionally absent without documents"
+                    "{agent_id} is intentionally absent without its feature"
                 );
                 assert!(
                     !allowed
                         .iter()
                         .any(|candidate| candidate.as_str() == Some(agent_id)),
-                    "spawn_subagent must not advertise presentation_agent without documents"
+                    "spawn_subagent must not advertise {agent_id} without its feature"
                 );
                 continue;
             }

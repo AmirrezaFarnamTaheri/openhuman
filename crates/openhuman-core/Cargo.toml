@@ -53,7 +53,6 @@ crate-type = ["rlib"]
 # contracts. Unconditional because cron and module callbacks remain available
 # without the OpenHuman `flows` surface; engine and catalog implementations are
 # reached only through the loaded module's bus endpoints.
-tinyflows = { path = "../../vendor/tinyflows/crates/tinyflows" }
 tinyflows-bus = { path = "../../vendor/tinyflows/crates/tinyflows-bus" }
 # TinyAgents — Rust LLM orchestration framework (LangGraph/LangChain-style):
 # durable state graphs, agent-loop harness, model/tool registries, REPL +

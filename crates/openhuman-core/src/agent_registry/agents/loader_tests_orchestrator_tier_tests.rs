@@ -158,14 +158,18 @@ fn orchestrator_is_chat_tier() {
 
 #[test]
 fn other_builtins_default_to_worker_tier() {
+    assert_eq!(find("planner").agent_tier, AgentTier::Reasoning);
     for def in load_builtins().unwrap() {
-        if matches!(def.id.as_str(), "orchestrator" | "flow_discovery") {
+        if matches!(
+            def.id.as_str(),
+            "orchestrator" | "flow_discovery" | "planner"
+        ) {
             continue;
         }
         assert_eq!(
             def.agent_tier,
             AgentTier::Worker,
-            "{} should default to worker tier (only orchestrator/flow_discovery are non-worker today)",
+            "{} should default to worker tier (orchestrator/flow_discovery/planner have explicit tiers)",
             def.id
         );
     }

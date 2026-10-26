@@ -138,20 +138,51 @@ test("commands are static: no suite is ever narrowed to the diff", () => {
   }
 });
 
-test("ex63 runs the core's unit tests under nextest; hosted keeps cargo's runner", () => {
+test("both runners isolate core unit tests; other hosted shards retain cargo", () => {
   for (const plan of plans()) {
     const lanes = plan.lanes.filter((l) => l.name.startsWith("rust-cov"));
     for (const lane of lanes) {
       const cov = lane.checks.find((c) => c.name === "rust-core-coverage");
       assert.equal(
         cov.env.OH_COV_RUNNER,
-        plan.profile === "ex63" ? "nextest" : undefined,
+        plan.profile === "ex63" || lane.name === "rust-cov-core"
+          ? "nextest"
+          : undefined,
       );
     }
   }
   assert.match(
     fs.readFileSync(path.join(repoRoot, ".config/nextest.toml"), "utf8"),
     /\[profile\.ci\][\s\S]*fail-fast = false/,
+  );
+});
+
+test("hosted storage isolation preserves the private suite selection and installs its runner", () => {
+  const [privatePlan, hostedPlan] = plans();
+  const command = (plan) =>
+    plan.lanes
+      .flatMap((lane) => lane.checks)
+      .find((check) => check.name === "storage-lib-tests").run;
+  const filters = (run) =>
+    [...run.matchAll(/test\(([^)]+)\)/g)].map((match) => match[1]).sort();
+  assert.deepEqual(filters(command(hostedPlan)), filters(command(privatePlan)));
+  assert.match(
+    command(hostedPlan),
+    /cargo nextest run --profile ci --no-tests=fail --no-fail-fast/,
+  );
+  const job = Object.values(parseYaml(ciLanes).jobs).find((entry) =>
+    entry.steps?.some(
+      (step) => step.uses === "taiki-e/install-action@cargo-nextest",
+    ),
+  );
+  assert.ok(job, "hosted isolated suites require nextest to be installed");
+  const install = job.steps.findIndex(
+    (step) => step.uses === "taiki-e/install-action@cargo-nextest",
+  );
+  assert.match(job.steps[install].if, /rust-cov-core/);
+  assert.match(job.steps[install].if, /storage-lib/);
+  assert.ok(
+    install < job.steps.findIndex((step) => step.name === "Start lanes"),
   );
 });
 
@@ -493,6 +524,7 @@ test("private gates-off, storage, and Tauri execute equivalent coverage suites w
     /--features modules,mcp,e2e-test-support/,
   );
   assert.match(checks["gate-contract-tests-features"].run, /--test-threads=1/);
+  assert.match(checks["gate-contract-tests"].run, /--test-threads=1/);
   assert.match(checks["cron-module-tests"].run, /--test-threads=1/);
   assert.equal(
     checks["storage-e2e"].env.NEXTEST_EXPECTED_TARGETS,

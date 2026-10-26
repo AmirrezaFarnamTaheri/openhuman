@@ -18,14 +18,17 @@ This matrix comes from the default-feature compiled capability-report example. R
 | `inbound-queues` | Yes |
 | `inference` | No |
 | `langfuse` | No |
+| `legacy-import` | Yes |
 | `mcp` | Yes |
 | `media` | Yes |
 | `modules` | Yes |
 | `rss-bench` | No |
 | `scheduler-gate` | Yes |
+| `secret-file` | Yes |
 | `skills` | Yes |
 | `storage-file` | No |
 | `storage-mongodb` | No |
+| `storage-rabbitmq` | No |
 | `storage-s3` | No |
 | `storage-sqlite` | Yes |
 | `structural-code` | Yes |

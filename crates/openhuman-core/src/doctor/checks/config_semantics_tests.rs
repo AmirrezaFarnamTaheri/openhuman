@@ -258,7 +258,10 @@ async fn action_directory_without_write_mode_bits_reports_effective_writability(
         findings[0].severity, expected_severity,
         "action-directory probe should reflect effective write access"
     );
-    assert_eq!(findings[0].config_path.as_deref(), Some("action_dir"));
+    assert_eq!(
+        findings[0].config_path.as_deref(),
+        (expected_severity == FindingSeverity::Error).then_some("action_dir")
+    );
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
 }
 

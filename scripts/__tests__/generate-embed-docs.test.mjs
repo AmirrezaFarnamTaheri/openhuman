@@ -30,12 +30,14 @@ test('rejects manually typed rust fences, alternative fence style, and hidden li
   assert.doesNotThrow(() => lintEmbedMarkdown('# Title\n\n```text\nnormal\n```'));
 });
 test('local links verify files and headings without following external services', () => {
-  const read = path => { if (path === '/repo/other.md') return '# Some API\n'; throw Error('missing'); };
-  assert.doesNotThrow(() => checkLocalLinks('# Here\n[x](other.md#some-api) [external](https://example.com) [self](#here)', '/repo/doc.md', '/repo', read));
-  assert.throws(() => checkLocalLinks('[x](missing.md)', '/repo/doc.md', '/repo', read), /Broken local/);
-  assert.throws(() => checkLocalLinks('[x](other.md#missing)', '/repo/doc.md', '/repo', read), /Broken heading/);
-  assert.throws(() => checkLocalLinks('[x](../secret)', '/repo/doc.md', '/repo', read), /escapes/);
-  assert.doesNotThrow(() => checkLocalLinks('```rust\nlet x = "[x](missing.md)";\n```', '/repo/doc.md', '/repo', read));
+  const root = resolve('/repo');
+  const document = resolve(root, 'doc.md');
+  const read = path => { if (path === resolve(root, 'other.md')) return '# Some API\n'; throw Error('missing'); };
+  assert.doesNotThrow(() => checkLocalLinks('# Here\n[x](other.md#some-api) [external](https://example.com) [self](#here)', document, root, read));
+  assert.throws(() => checkLocalLinks('[x](missing.md)', document, root, read), /Broken local/);
+  assert.throws(() => checkLocalLinks('[x](other.md#missing)', document, root, read), /Broken heading/);
+  assert.throws(() => checkLocalLinks('[x](../secret)', document, root, read), /escapes/);
+  assert.doesNotThrow(() => checkLocalLinks('```rust\nlet x = "[x](missing.md)";\n```', document, root, read));
 });
 test('cookbook metadata must come from example headers', () => {
   assert.deepEqual(exampleMetadata(example, 'hello'), { name: 'hello', title: 'Hello', summary: 'Builds an offline agent.', run: 'offline', feature: undefined });
@@ -118,7 +120,7 @@ test('generate then check is stable, edited source fails check, no prose authore
     generateEmbedDocs({ root, capabilities });
     generateEmbedDocs({ root, capabilities, check: true });
     writeFileSync(path, example.replace('fn main() {}', 'fn main() { println!("changed"); }'));
-    assert.throws(() => generateEmbedDocs({ root, capabilities, check: true }), /docs\/gitbooks\/en\/developing\/embed\/index[.]md/);
+    assert.throws(() => generateEmbedDocs({ root, capabilities, check: true }), /docs[\\/]gitbooks[\\/]en[\\/]developing[\\/]embed[\\/]index[.]md/);
     generateEmbedDocs({ root, capabilities });
     generateEmbedDocs({ root, capabilities, check: true });
     assert.match(readFileSync(resolve(root, 'docs/gitbooks/en/developing/embed/index.md'), 'utf8'), /println!\("changed"\)/);

@@ -1,30 +1,36 @@
 use super::*;
 use serde_json::Value;
-use tinyflows::engine::GraphObservation;
+use tinyflows::engine::GraphObservation as EngineObservation;
 use tinyflows::graph::ids::{EventId, GraphId, NodeId, RunId, ThreadId};
 use tinyflows::graph::stream::GraphEvent;
 use tinyflows_bus::runs::FlowRunTrigger;
+
+fn decode_observation(observation: EngineObservation) -> TraceObservation {
+    serde_json::from_value(serde_json::to_value(observation).unwrap()).unwrap()
+}
 
 /// Builds a minimal observation stream for one node under run/thread ids
 /// shaped like a real `flows_run` (`thread_id = flow:{id}:{uuid}`).
 ///
 /// Built from TinyFlows graph observations consumed by the host's PollRun
-/// adapter; these engine types are mapped into TinyAgents' generic span export.
-fn sample_observations(thread_id: &str) -> Vec<GraphObservation> {
+/// adapter; the host decodes their wire payload for TinyAgents' span export.
+fn sample_observations(thread_id: &str) -> Vec<TraceObservation> {
     let node = NodeId::new("fetch");
-    let mk = |offset: u64, step: usize, ts_ms: u64, event: GraphEvent| GraphObservation {
-        event_id: EventId::new(format!("evt-{offset}")),
-        run_id: RunId::new("run-9"),
-        root_run_id: RunId::new("run-9"),
-        parent_run_id: None,
-        thread_id: Some(ThreadId::new(thread_id)),
-        graph_id: GraphId::new("workflow"),
-        checkpoint_id: None,
-        namespace: Vec::new(),
-        step,
-        offset,
-        ts_ms,
-        event,
+    let mk = |offset: u64, step: usize, ts_ms: u64, event: GraphEvent| {
+        decode_observation(EngineObservation {
+            event_id: EventId::new(format!("evt-{offset}")),
+            run_id: RunId::new("run-9"),
+            root_run_id: RunId::new("run-9"),
+            parent_run_id: None,
+            thread_id: Some(ThreadId::new(thread_id)),
+            graph_id: GraphId::new("workflow"),
+            checkpoint_id: None,
+            namespace: Vec::new(),
+            step,
+            offset,
+            ts_ms,
+            event,
+        })
     };
     vec![
         mk(
@@ -66,21 +72,23 @@ fn sample_observations(thread_id: &str) -> Vec<GraphObservation> {
     ]
 }
 
-fn three_node_observations(thread_id: &str) -> Vec<GraphObservation> {
+fn three_node_observations(thread_id: &str) -> Vec<TraceObservation> {
     let nodes = ["fetch", "transform", "publish"].map(NodeId::new);
-    let mk = |offset: u64, step: usize, ts_ms: u64, event: GraphEvent| GraphObservation {
-        event_id: EventId::new(format!("three-node-{offset}")),
-        run_id: RunId::new("run-three-node"),
-        root_run_id: RunId::new("run-three-node"),
-        parent_run_id: None,
-        thread_id: Some(ThreadId::new(thread_id)),
-        graph_id: GraphId::new("three-node-workflow"),
-        checkpoint_id: None,
-        namespace: Vec::new(),
-        step,
-        offset,
-        ts_ms,
-        event,
+    let mk = |offset: u64, step: usize, ts_ms: u64, event: GraphEvent| {
+        decode_observation(EngineObservation {
+            event_id: EventId::new(format!("three-node-{offset}")),
+            run_id: RunId::new("run-three-node"),
+            root_run_id: RunId::new("run-three-node"),
+            parent_run_id: None,
+            thread_id: Some(ThreadId::new(thread_id)),
+            graph_id: GraphId::new("three-node-workflow"),
+            checkpoint_id: None,
+            namespace: Vec::new(),
+            step,
+            offset,
+            ts_ms,
+            event,
+        })
     };
     let mut observations = vec![mk(
         0,
@@ -451,7 +459,7 @@ async fn export_skips_api_key_credentials() {
 }
 
 /// The bus carries TinyFlows observations. Pin the round-trip used by the
-/// PollRun adapter so run coordinates survive without a serde retype bridge.
+/// PollRun adapter so run coordinates survive without linking the engine.
 #[test]
 fn bus_graph_observation_round_trip_preserves_export_fields() {
     let thread_id = "flow:flow-1:uuid-1";
@@ -459,7 +467,7 @@ fn bus_graph_observation_round_trip_preserves_export_fields() {
         .iter()
         .map(|observation| serde_json::to_value(observation).unwrap())
         .collect();
-    let converted: Vec<GraphObservation> = bus_events
+    let converted: Vec<TraceObservation> = bus_events
         .into_iter()
         .map(|event| serde_json::from_value(event).unwrap())
         .collect();
@@ -471,13 +479,56 @@ fn bus_graph_observation_round_trip_preserves_export_fields() {
     );
 
     let first = &converted[0];
-    assert_eq!(
-        first.thread_id.as_ref().map(|t| t.as_str()),
-        Some(thread_id)
-    );
+    assert_eq!(first.thread_id.as_deref(), Some(thread_id));
     assert_eq!(first.run_id.as_str(), "run-9");
     assert_eq!(first.graph_id.as_str(), "workflow");
     assert_eq!(first.offset, 0);
     assert_eq!(converted[2].step, 1);
     assert_eq!(converted[2].ts_ms, 1_020);
+}
+
+#[test]
+fn failed_nodes_subgraphs_and_future_events_survive_trace_projection() {
+    let events = [
+        json!({"StepStarted": {"step": 1, "active": ["fetch"]}}),
+        json!({"NodeStarted": {"node": "fetch", "step": 1}}),
+        json!({"NodeFailed": {"node": "fetch", "step": 1, "error": "fetch failed"}}),
+        json!({"StepCompleted": {"step": 1}}),
+        json!({"SubgraphStarted": {"node": "child", "namespace": ["nested"]}}),
+        json!({"SubgraphCompleted": {"node": "child", "namespace": ["nested"]}}),
+        json!({"RunFailed": {"run_id": "run", "error": "run failed"}}),
+        json!({"FutureEvent": {"retained": [1, 2]}}),
+    ];
+    let observations: Vec<TraceObservation> = events
+        .into_iter()
+        .enumerate()
+        .map(|(offset, event)| {
+            serde_json::from_value(json!({
+                "event_id": format!("event-{offset}"), "run_id": "run", "root_run_id": "run",
+                "thread_id": "thread", "graph_id": "graph", "step": 1,
+                "offset": offset, "ts_ms": 1000 + offset, "event": event,
+            }))
+            .unwrap()
+        })
+        .collect();
+    let spans = flow_spans("flow", &observations);
+    let node = spans.iter().find(|span| span.name == "fetch").unwrap();
+    assert_eq!(node.status, SpanState::Error);
+    assert_eq!(node.status_message.as_deref(), Some("fetch failed"));
+    assert_eq!(node.start_ms, 1001);
+    assert_eq!(node.end_ms, Some(1002));
+    let child = spans
+        .iter()
+        .find(|span| span.name == "subgraph child")
+        .unwrap();
+    assert_eq!(child.status, SpanState::Ok);
+    assert_eq!(child.start_ms, 1004);
+    assert_eq!(child.end_ms, Some(1005));
+    assert_eq!(spans[0].status, SpanState::Error);
+    assert_eq!(spans[0].end_ms, Some(1006));
+    let future = spans
+        .iter()
+        .find(|span| span.name == "FutureEvent")
+        .unwrap();
+    assert_eq!(future.metadata["event"], observations[7].event);
 }
