@@ -7,8 +7,8 @@
 mod coding_handoff;
 
 use async_trait::async_trait;
-use openhuman_core::agent::harness::ParentExecutionContext;
 use openhuman_core::agent::orchestration::tools::SpawnSubagentTool;
+use openhuman_core::agent::subagent_host::ParentExecutionContext;
 use openhuman_core::agent::subagent_host::{
     OpenHumanSubagentHost, SubagentRunError, SubagentRunOptions, SubagentRunOutcome,
 };

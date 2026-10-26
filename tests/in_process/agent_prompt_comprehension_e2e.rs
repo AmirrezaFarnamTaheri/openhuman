@@ -35,9 +35,10 @@ use serde_json::{json, Value};
 use tempfile::tempdir;
 
 use openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry;
-use openhuman_core::inference::registry::{register_chat_model, ChatModelEntry};
+use openhuman_core::inference::registry::register_chat_model;
 use openhuman_rpc::server::build_core_http_router;
 use tinyinference_llm::providers::openai::{AuthStyle as MockAuthStyle, OpenAiModel};
+use tinyinference_llm::providers::overrides::ChatModelEntry;
 
 // ─── Env serialization ──────────────────────────────────────────────────────
 
@@ -57,11 +58,16 @@ fn install_scripted_hosted_provider() {
             ChatModelEntry {
                 build: std::sync::Arc::new(|request| {
                     let endpoint = request
+                        .context
                         .config
                         .api_url
                         .as_deref()
                         .filter(|value| !value.trim().is_empty())
-                        .ok_or_else(|| anyhow::anyhow!("prompt E2E missing scripted API URL"))?;
+                        .ok_or_else(|| {
+                            tinyinference_llm::Error::Validation(
+                                "prompt E2E missing scripted API URL".into(),
+                            )
+                        })?;
                     let base = format!("{}/openai/v1", endpoint.trim_end_matches('/'));
                     let model = OpenAiModel::new("e2e-scripted-provider-key")
                         .with_provider("openhuman")
@@ -74,6 +80,7 @@ fn install_scripted_hosted_provider() {
                     Ok((std::sync::Arc::new(model), model_id))
                 }),
                 probe: None,
+                models: None,
             },
         );
     });

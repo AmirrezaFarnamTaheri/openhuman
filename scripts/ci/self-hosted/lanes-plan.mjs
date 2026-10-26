@@ -653,7 +653,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           when: areas.storage,
           needs: ["test-modules"],
           run:
-            `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS},flows,modules,linked-modules` +
+            `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS},flows,modules` +
             STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join(""),
         },
         {

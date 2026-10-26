@@ -33,8 +33,6 @@ use tinystoragedrivers::Query;
 #[path = "../crates/openhuman-core/src/util/classic_transcript_fixture.rs"]
 mod classic_transcript_fixture;
 
-#[path = "support/linked_modules.rs"]
-mod linked_modules;
 #[path = "support/storage_case.rs"]
 mod storage_case;
 
@@ -457,8 +455,7 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched() {
     std::env::set_var("HOME", home_dir.path());
     std::env::set_var("USERPROFILE", home_dir.path());
     std::env::set_var("OPENHUMAN_WORKSPACE", workspace);
-    std::env::set_var("OPENHUMAN_MODULE_SOURCE", "linked");
-    linked_modules::install_if_requested();
+    std::env::set_var("OPENHUMAN_MODULE_SOURCE", "release");
     let fixture = desktop_workspace(workspace);
     make_workspace_private(workspace);
     let before = tree(workspace);
@@ -571,7 +568,7 @@ async fn a_desktop_upgrade_is_lossless_and_leaves_the_legacy_files_untouched() {
         assert!(
             juice
                 .blobs()
-                .get(&format!("tinyjuice_ccr/{token}"))
+                .get(&format!("juice/ccr/{token}"))
                 .await
                 .unwrap()
                 .is_some(),

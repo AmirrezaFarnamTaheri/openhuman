@@ -146,7 +146,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     // This file is scripts/ci/*.mjs (two directories below repository root).
     const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
     const frontend = readFileSync(resolve(root, 'app/src/components/settings/panels/builtinCloudProviders.ts'), 'utf8');
-    const rust = readFileSync(resolve(root, 'crates/openhuman-core/src/config/schema/cloud_providers.rs'), 'utf8');
+    const rust = readFileSync(resolve(root, 'crates/openhuman-core/src/config/schema/cloud_provider_presets.rs'), 'utf8');
     const vendor = readFileSync(
       resolve(root, 'vendor/tinyagents/vendor/tinyinference/crates/tinyinference-providers/src/builtin.rs'),
       'utf8'

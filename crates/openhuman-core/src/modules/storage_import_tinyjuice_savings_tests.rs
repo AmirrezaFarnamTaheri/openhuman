@@ -110,7 +110,7 @@ async fn a_symlinked_snapshot_is_not_followed() {
     std::fs::create_dir_all(ws.path().join("state")).unwrap();
     let file = legacy_file(ws.path());
     std::os::unix::fs::symlink(&secret, &file).unwrap();
-    let outcome = import_into(&ctx, &scoped(), &file, |_| async {
+    let outcome = import_into(&scoped(), &file, |_| async {
         panic!("a symlink must not be read");
         #[allow(unreachable_code)]
         Ok(true)

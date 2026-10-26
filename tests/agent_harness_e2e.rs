@@ -49,9 +49,10 @@ use tempfile::tempdir;
 
 use openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry;
 use openhuman_core::core::auth::{init_rpc_token, CORE_TOKEN_ENV_VAR};
-use openhuman_core::inference::registry::{register_chat_model, ChatModelEntry};
+use openhuman_core::inference::registry::register_chat_model;
 use openhuman_rpc::server::build_core_http_router;
 use tinyinference_llm::providers::openai::{AuthStyle as MockAuthStyle, OpenAiModel};
+use tinyinference_llm::providers::overrides::ChatModelEntry;
 
 const TEST_RPC_TOKEN: &str = "json-rpc-e2e-local-token";
 const MANAGED_CAPTURE_PROMPT_CLOCK: &str = "2024-01-15T12:00:00Z";
@@ -83,12 +84,15 @@ fn install_scripted_hosted_provider() {
             ChatModelEntry {
                 build: std::sync::Arc::new(|request| {
                     let endpoint = request
+                        .context
                         .config
                         .api_url
                         .as_deref()
                         .filter(|value| !value.trim().is_empty())
                         .ok_or_else(|| {
-                            anyhow::anyhow!("agent E2E missing local scripted API URL")
+                            tinyinference_llm::Error::Validation(
+                                "agent E2E missing local scripted API URL".into(),
+                            )
                         })?;
                     let base = format!("{}/openai/v1", endpoint.trim_end_matches('/'));
                     let model = OpenAiModel::new("e2e-scripted-provider-key")
@@ -102,6 +106,7 @@ fn install_scripted_hosted_provider() {
                     Ok((std::sync::Arc::new(model), model_id))
                 }),
                 probe: None,
+                models: None,
             },
         );
     });

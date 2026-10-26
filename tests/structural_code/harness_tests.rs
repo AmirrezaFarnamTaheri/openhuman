@@ -84,14 +84,11 @@ async fn run(
     let mut request = ModelResponse::assistant("");
     request.message.tool_calls = vec![call];
     request.finish_reason = Some("tool_calls".to_owned());
-    harness.register_model(
-        "mock",
-        Arc::new(ScriptedModel::new(vec![
-            request,
-            ModelResponse::assistant("draft"),
-            ModelResponse::assistant("checked"),
-        ])),
-    );
+    harness.with_model(Arc::new(ScriptedModel::new(vec![
+        request,
+        ModelResponse::assistant("draft"),
+        ModelResponse::assistant("checked"),
+    ])));
     let mut policy = RunPolicy {
         limits: RunLimits::default().with_max_model_calls(10),
         ..RunPolicy::default()

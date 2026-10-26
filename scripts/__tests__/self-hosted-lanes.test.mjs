@@ -57,7 +57,7 @@ test("module consumers source exactly their lane environment", () => {
     }
     const lane = plan.lanes.find((entry) => entry.name === (profile === "hosted" ? "storage-e2e" : "storage-drivers"));
     const command = lane.checks.find((entry) => entry.name === "storage-e2e").run;
-    assert.match(command, /--features storage-sqlite,storage-file,flows,modules,linked-modules\s/);
+    assert.match(command, /--features storage-sqlite,storage-file,flows,modules\s/);
   }
 });
 
@@ -348,7 +348,7 @@ test("the storage area covers every driver suite in isolated hosted jobs or one 
       for (const check of lane.checks.filter((entry) => entry.name !== "test-modules")) {
         assert.match(
           check.run,
-          /--features (?:session-store,)?storage-sqlite,storage-file(?:,flows,modules,linked-modules)?(?:\s|$)/,
+          /--features (?:session-store,)?storage-sqlite,storage-file(?:,flows,modules)?(?:\s|$)/,
         );
       }
     }

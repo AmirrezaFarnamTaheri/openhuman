@@ -18,7 +18,6 @@ cd "$(dirname "$0")/../.."
 EXPECTED=$(cat <<'EOF'
 agent/prompts/mod.rs
 agent/session_host/mod.rs
-agent/session_host/runtime_session.rs
 agent/session_host/runtime_session_flow_prompt_tests.rs
 agent/session_host/runtime_session_tests.rs
 agent/session_host/runtime_session_tool_surface.rs

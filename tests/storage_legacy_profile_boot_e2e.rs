@@ -42,7 +42,7 @@ fn start(home: &Path) -> (Server, String) {
         .env("USERPROFILE", home)
         .env("OPENHUMAN_CORE_TOKEN", TOKEN)
         .env("OPENHUMAN_KEYRING_MASTER_KEY", "22".repeat(32))
-        .env("OPENHUMAN_MODULE_SOURCE", "linked")
+        .env("OPENHUMAN_MODULE_SOURCE", "release")
         .env_remove("OPENHUMAN_KEYRING_MASTER_KEY_FILE")
         .env_remove("OPENHUMAN_WORKSPACE")
         .env_remove("OPENHUMAN_STORAGE_URL")

@@ -150,7 +150,7 @@ path = "../../tests/storage_flows_e2e.rs"
 # in an isolated module runtime.
 name = "storage_flows_fallback_e2e"
 path = "../../tests/storage_flows_fallback_e2e.rs"
-required-features = ["flows", "modules", "linked-modules", "storage-sqlite"]
+required-features = ["flows", "modules", "storage-sqlite"]
 
 [[test]]
 # Its own binary: it installs a storage backend into the process-wide slot and
@@ -179,7 +179,7 @@ path = "../../tests/components_e2e.rs"
 # reads its historical records through their owning domains.
 name = "storage_legacy_profile_boot_e2e"
 path = "../../tests/storage_legacy_profile_boot_e2e.rs"
-required-features = ["storage-sqlite", "modules", "flows", "linked-modules"]
+required-features = ["storage-sqlite", "modules", "flows"]
 
 [[test]]
 name = "embedded_server_shutdown_e2e"
@@ -335,7 +335,7 @@ required-features = ["voice", "http-server"]
 # installs a storage backend into the process-wide slot.
 name = "storage_desktop_upgrade_e2e"
 path = "../../tests/storage_desktop_upgrade_e2e.rs"
-required-features = ["storage-sqlite", "modules", "flows", "linked-modules"]
+required-features = ["storage-sqlite", "modules", "flows"]
 
 [[test]]
 # The released TinyMCP cdylib under the real host: add a server, restart the

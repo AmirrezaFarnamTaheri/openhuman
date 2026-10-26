@@ -274,17 +274,10 @@ pub async fn rehydrate_image_placeholders(
 /// written before the blob stash stay readable from here.
 static ATTACHMENTS_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// The workspace whose storage backend holds the blob stash; the parent of the
-/// directory given to [`init_attachments_dir`].
-static ATTACHMENTS_WORKSPACE: OnceLock<PathBuf> = OnceLock::new();
-
 /// Install the legacy attachments directory (`<workspace>/attachments`) and,
 /// from its parent, the workspace the blob stash lives in. Call once at core
 /// startup. Idempotent — first writer wins.
 pub fn init_attachments_dir(dir: PathBuf) {
-    if let Some(workspace) = dir.parent() {
-        let _ = ATTACHMENTS_WORKSPACE.set(workspace.to_path_buf());
-    }
     let _ = ATTACHMENTS_DIR.set(dir);
 }
 
@@ -305,7 +298,7 @@ pub(crate) fn attachments_dir() -> PathBuf {
 /// `tinyagents_harness::multimodal::BlobAttachmentStash`; the cap and TTL are
 /// this host's policy (none: references stay resolvable).
 fn stash() -> Option<BlobAttachmentStash> {
-    stash_for_workspace(ATTACHMENTS_WORKSPACE.get().map(PathBuf::as_path))
+    stash_for_workspace(ATTACHMENTS_DIR.get().and_then(|dir| dir.parent()))
 }
 
 fn stash_for_workspace(workspace: Option<&Path>) -> Option<BlobAttachmentStash> {
