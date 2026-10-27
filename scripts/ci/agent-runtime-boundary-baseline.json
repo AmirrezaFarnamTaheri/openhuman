@@ -22,6 +22,13 @@
   },
   {
     "rule": "openhuman-task-local",
+    "path": "crates/openhuman-core/src/agent/turn_host.rs",
+    "line": 163,
+    "text": "Box::pin(with_origin(origin, turn)).await",
+    "occurrence": 1
+  },
+  {
+    "rule": "openhuman-task-local",
     "path": "crates/openhuman-core/src/channels/proactive.rs",
     "line": 229,
     "text": "let (outcome, request_id) = crate::security::turn_origin::with_origin(",
@@ -225,23 +232,9 @@
   },
   {
     "rule": "openhuman-task-local",
-    "path": "crates/openhuman-core/src/web_chat/ops/turn_guards.rs",
-    "line": 253,
-    "text": "crate::security::turn_origin::with_origin(",
-    "occurrence": 1
-  },
-  {
-    "rule": "openhuman-task-local",
     "path": "crates/openhuman-embed/src/turn_control.rs",
     "line": 425,
     "text": "openhuman_core::security::turn_origin::with_origin(origin, dispatch).await",
-    "occurrence": 1
-  },
-  {
-    "rule": "openhuman-upstream-reexport",
-    "path": "crates/openhuman-core/src/agent/orchestration/subagent_sessions/ops.rs",
-    "line": 22,
-    "text": "pub use tinyagents_orchestration::subagent::normalize_task_key;",
     "occurrence": 1
   },
   {
@@ -270,13 +263,6 @@
     "path": "crates/openhuman-core/src/web_chat/progress_ledger.rs",
     "line": 3,
     "text": "pub(super) use tinyagents_orchestration::run_progress_ledger::ProgressLedgerContext;",
-    "occurrence": 1
-  },
-  {
-    "rule": "openhuman-upstream-reexport",
-    "path": "crates/openhuman-embed/src/budget.rs",
-    "line": 25,
-    "text": "pub use tinyagents_harness::cost::ModelBudget;",
     "occurrence": 1
   },
   {
@@ -372,30 +358,9 @@
   },
   {
     "rule": "tinyagents-moved-symbol-alias",
-    "path": "vendor/tinyagents/crates/tinyagents-harness/src/close_tests.rs",
-    "line": 816,
-    "text": "struct RoutedStreamModel(tinyinference_llm::model::ResolvedModelRoute);",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-moved-symbol-alias",
     "path": "vendor/tinyagents/crates/tinyagents-harness/src/tool/mod.rs",
     "line": 222,
     "text": "pub struct ToolRegistry<State: Send + Sync, Ctx: Send + Sync> {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-moved-symbol-alias",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/subagent/child_turn_tests.rs",
-    "line": 27,
-    "text": "type Message = String;",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-moved-symbol-alias",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/subagent/child_turn.rs",
-    "line": 178,
-    "text": "type Message: Clone + Send + Sync;",
     "occurrence": 1
   },
   {
@@ -571,237 +536,6 @@
     "path": "vendor/tinyagents/crates/tinyagents-harness/src/turn_runner/work_tracker.rs",
     "line": 49,
     "text": "AgentProgress::TurnCompleted { .. } => {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 3,
-    "text": "use tinyagents_harness::progress::{AgentProgress, SubagentUsage};",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 34,
-    "text": "ledger.observe(&AgentProgress::TurnStarted).await;",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 36,
-    "text": ".observe(&AgentProgress::ToolCallStarted {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 67,
-    "text": ".observe(&AgentProgress::TurnCompleted {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 105,
-    "text": "ledger.observe(&AgentProgress::TurnStarted).await;",
-    "occurrence": 2
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 107,
-    "text": ".observe(&AgentProgress::TurnCompleted {",
-    "occurrence": 2
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 160,
-    "text": "ledger.observe(&AgentProgress::TurnStarted).await;",
-    "occurrence": 3
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 165,
-    "text": "ledger.observe(&AgentProgress::turn_completed(1)).await;",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 205,
-    "text": "ledger.observe(&AgentProgress::TurnStarted).await;",
-    "occurrence": 4
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 230,
-    "text": "completed.observe(&AgentProgress::TurnStarted).await;",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 231,
-    "text": "completed.observe(&AgentProgress::turn_completed(1)).await;",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 246,
-    "text": ".observe(&AgentProgress::SubagentSpawned {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 261,
-    "text": ".observe(&AgentProgress::SubagentToolCallStarted {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 275,
-    "text": ".observe(&AgentProgress::SubagentCompleted {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 292,
-    "text": ".observe(&AgentProgress::SubagentIterationStarted {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 308,
-    "text": ".observe(&AgentProgress::SubagentSpawned {",
-    "occurrence": 2
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod_tests.rs",
-    "line": 322,
-    "text": ".observe(&AgentProgress::ModelCallCompleted {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 16,
-    "text": "use tinyagents_harness::progress::AgentProgress;",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 35,
-    "text": "pub async fn observe(&self, event: &AgentProgress) -> ProgressLedgerContext {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 45,
-    "text": "AgentProgress::TurnCompleted {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 50,
-    "text": "AgentProgress::TurnCompleted { .. } => Some(AgentRunStatus::Completed),",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 234,
-    "text": "fn serialize_event(event: &AgentProgress) -> Option<(String, Value)> {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 244,
-    "text": "fn correlation_for(event: &AgentProgress, state: &mut LedgerState) -> ProgressLedgerContext {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 246,
-    "text": "AgentProgress::SubagentSpawned {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 258,
-    "text": "AgentProgress::SubagentCompleted { task_id, .. }",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 259,
-    "text": "| AgentProgress::SubagentFailed { task_id, .. } => {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 263,
-    "text": "AgentProgress::SubagentAwaitingUser { task_id, .. }",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 264,
-    "text": "| AgentProgress::SubagentIterationStarted { task_id, .. }",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 265,
-    "text": "| AgentProgress::SubagentToolCallStarted { task_id, .. }",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 266,
-    "text": "| AgentProgress::SubagentToolCallCompleted { task_id, .. }",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 267,
-    "text": "| AgentProgress::SubagentTextDelta { task_id, .. }",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 268,
-    "text": "| AgentProgress::SubagentThinkingDelta { task_id, .. } => ProgressLedgerContext {",
-    "occurrence": 1
-  },
-  {
-    "rule": "tinyagents-openhuman-domain-name",
-    "path": "vendor/tinyagents/crates/tinyagents-orchestration/src/run_progress_ledger/mod.rs",
-    "line": 271,
-    "text": "AgentProgress::ModelCallCompleted {",
     "occurrence": 1
   },
   {
