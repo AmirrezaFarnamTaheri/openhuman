@@ -13,7 +13,7 @@ fn legacy_db(dir: &std::path::Path, broken: bool) -> std::path::PathBuf {
          CREATE TABLE _tsd_streams (scope TEXT, stream TEXT, seq INTEGER, value TEXT);
          CREATE TABLE _tsd_stream_meta (scope TEXT, stream TEXT, base INTEGER, len INTEGER, sealed INTEGER);
          CREATE TABLE _tsd_blobs (scope TEXT, key TEXT, content_type TEXT, bytes BLOB, expires_at_ms INTEGER);
-         CREATE TABLE _tsd_collections (coll TEXT PRIMARY KEY, spec TEXT);
+         CREATE TABLE _tsd_collections (coll TEXT PRIMARY KEY, spec TEXT NOT NULL) WITHOUT ROWID;
          CREATE VIRTUAL TABLE _tsd_fts USING fts5(scope UNINDEXED, coll UNINDEXED, id UNINDEXED, body);"
     ).unwrap();
     conn.execute(
