@@ -365,6 +365,90 @@ describe('useComposioIntegrations', () => {
     }
   });
 
+  it('keeps polling when the local core bearer is rejected with a 401', async () => {
+    const { useComposioIntegrations } = await import('./hooks');
+    const { CoreRpcError } = await import('../../services/coreRpcClient');
+    mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
+    mockListConnections.mockResolvedValue({ connections: [] });
+    let tick: (() => void) | undefined;
+    const realSetInterval = window.setInterval.bind(window);
+    const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
+      if (interval === 12_345 && typeof handler === 'function') {
+        tick = handler;
+        return 1234 as unknown as ReturnType<typeof window.setInterval>;
+      }
+      return realSetInterval(handler, interval) as unknown as ReturnType<typeof window.setInterval>;
+    });
+    const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
+    try {
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      mockListConnections.mockRejectedValueOnce(
+        new CoreRpcError('Core RPC HTTP 401: Unauthorized', 'core_auth', 401)
+      );
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const afterCoreAuth = mockListConnections.mock.calls.length;
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(afterCoreAuth + 1);
+    } finally {
+      unmount();
+      timer.mockRestore();
+    }
+  });
+
+  it('ignores an older overlapping poll 401 after a newer poll succeeds', async () => {
+    const { useComposioIntegrations } = await import('./hooks');
+    mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
+    mockListConnections.mockResolvedValue({ connections: [] });
+    let tick: (() => void) | undefined;
+    const realSetInterval = window.setInterval.bind(window);
+    const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
+      if (interval === 12_345 && typeof handler === 'function') {
+        tick = handler;
+        return 1234 as unknown as ReturnType<typeof window.setInterval>;
+      }
+      return realSetInterval(handler, interval) as unknown as ReturnType<typeof window.setInterval>;
+    });
+    const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
+    try {
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      let rejectOldPoll: ((error: Error) => void) | undefined;
+      mockListConnections.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectOldPoll = reject;
+          })
+      );
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        rejectOldPoll?.(new Error('HTTP 401 invalid API key'));
+        await Promise.resolve();
+      });
+      const afterStaleRejection = mockListConnections.mock.calls.length;
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(afterStaleRejection + 1);
+    } finally {
+      unmount();
+      timer.mockRestore();
+    }
+  });
+
   it('skips toolkit fetch and polling for local sessions without a composio api key', async () => {
     sessionToken = 'header.payload.local';
     mockOpenhumanComposioGetMode.mockResolvedValue({
