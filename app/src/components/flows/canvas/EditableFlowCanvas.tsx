@@ -71,7 +71,6 @@ import NodeConfigDrawer, { type NodeConfigPatch } from './nodeConfig/NodeConfigD
 import NodePalette, { PALETTE_DND_MIME } from './NodePalette';
 import { StepNumberContext } from './stepNumbers';
 import { useFlowValidation } from './useFlowValidation';
-import { validateLoopCycleSafety } from '../../../lib/flows/loopCycleSafety';
 
 const log = createDebug('app:flows:canvas:edit');
 
@@ -370,22 +369,16 @@ function EditableFlowCanvas(
   const { validation, validating, validateNow } = useFlowValidation(currentGraph, currentKey);
   // Only a *present, failed* validation blocks Save — a null result (not yet
   // run, or the RPC failed) fails open, since the server re-validates on update.
-  // A loop that can repeat without consuming a bound must block Save before
-  // an asynchronous RPC can return; backend validation remains authoritative.
-  const loopIssues = useMemo(() => validateLoopCycleSafety(currentGraph), [currentGraph]);
-  const hasErrors = loopIssues.length > 0 || (validation ? !validation.valid : false);
+  const hasErrors = validation ? !validation.valid : false;
 
   // Ids named by a hard error, so the canvas can ring the offending node(s).
   const erroredIds = useMemo(
     () =>
       erroredNodeIds(
-        [
-          ...(validation && !validation.valid ? validation.errors : []),
-          ...loopIssues.map(issue => issue.message),
-        ],
+        validation && !validation.valid ? validation.errors : [],
         nodes.map(n => n.id)
       ),
-    [validation, nodes, loopIssues]
+    [validation, nodes]
   );
   // ── Live run overlay (Phase 3e) ───────────────────────────────────────────
   // Subscribe to the core's per-step progress feed for the active run and map
