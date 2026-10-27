@@ -106,4 +106,42 @@ describe('AnnouncementGate', () => {
     await waitFor(() => expect(fetchLatestAnnouncement).toHaveBeenCalled());
     expect(screen.queryByTestId('modal')).not.toBeInTheDocument();
   });
+  it('hides an already fetched announcement immediately when the account changes', async () => {
+    fetchLatestAnnouncement.mockResolvedValueOnce(sample);
+    let completeSecond!: (value: Announcement | null) => void;
+    fetchLatestAnnouncement.mockImplementationOnce(
+      () => new Promise<Announcement | null>(resolve => { completeSecond = resolve; })
+    );
+
+    const view = render(<AnnouncementGate />);
+    expect(await screen.findByText('Hello')).toBeInTheDocument();
+
+    authState.userId = 'u2';
+    view.rerender(<AnnouncementGate />);
+    expect(screen.queryByText('Hello')).not.toBeInTheDocument();
+    await waitFor(() => expect(fetchLatestAnnouncement).toHaveBeenCalledTimes(2));
+
+    completeSecond(null);
+    await waitFor(() => expect(screen.queryByTestId('modal')).not.toBeInTheDocument());
+  });
+
+  it('ignores an older account fetch that resolves after the new account response', async () => {
+    let completeOld!: (value: Announcement | null) => void;
+    fetchLatestAnnouncement
+      .mockImplementationOnce(
+        () => new Promise<Announcement | null>(resolve => { completeOld = resolve; })
+      )
+      .mockResolvedValueOnce({ ...sample, id: 'b1', title: 'For account B' });
+
+    const view = render(<AnnouncementGate />);
+    await waitFor(() => expect(fetchLatestAnnouncement).toHaveBeenCalledTimes(1));
+    authState.userId = 'u2';
+    view.rerender(<AnnouncementGate />);
+    expect(await screen.findByText('For account B')).toBeInTheDocument();
+
+    completeOld(sample);
+    await waitFor(() => expect(screen.queryByText('Hello')).not.toBeInTheDocument());
+    expect(screen.getByText('For account B')).toBeInTheDocument();
+  });
+
 });
