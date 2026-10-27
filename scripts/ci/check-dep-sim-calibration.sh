@@ -146,6 +146,7 @@ cd "$(dirname "$0")/../.."
 # split (#8229/#8231) nets one more; see the 331/303/3 entry in
 # `kernel-floor.limits`.
 # See kernel-floor.limits.
-EXPECTED_NAMES=303
+# 303 -> 301: host flow trace projection no longer links the TinyFlows engine.
+EXPECTED_NAMES=301
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"
