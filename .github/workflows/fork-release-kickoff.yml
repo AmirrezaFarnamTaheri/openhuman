@@ -1,7 +1,10 @@
 name: Fork release kickoff
-# Retry after PR #18 fixed mixed-case GHCR image tags (push, verify, latest).
+# One-time recovery cleanup: the corrected release was already dispatched by
+# run 40483391285. Stop the superseded, inevitably failing v0.64.23 build so
+# it cannot block the corrected run in the production concurrency queue.
 on:
   push:
+    branches: [main]
     paths:
       - .github/workflows/fork-release-kickoff.yml
   workflow_dispatch:
@@ -9,17 +12,15 @@ permissions:
   contents: read
   actions: write
 jobs:
-  dispatch:
-    if: github.repository == 'AmirrezaFarnamTaheri/openhuman'
+  cancel-superseded:
+    if: github.repository == 'AmirrezaFarnamTaheri/openhuman' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Start existing production release pipeline
+      - name: Cancel the superseded v0.64.23 production run
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh api --method POST "repos/${GH_REPO}/actions/workflows/release-production.yml/dispatches" \
-            -f ref=main \
-            -f 'inputs[release_type]=patch' \
-            -f 'inputs[create_release]=true' \
-            -f 'inputs[signed_release]=false'
+          if ! gh api --method POST "repos/${GH_REPO}/actions/runs/40481122587/cancel"; then
+            echo "::notice::Superseded production run was already cancelled or finished."
+          fi
