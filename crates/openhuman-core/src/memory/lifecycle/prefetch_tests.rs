@@ -135,7 +135,9 @@ async fn pre_turn_logs_channel_metadata_without_writing_legacy_thread_map() {
         false,
         None,
         Some("telegram".into()),
+        None,
     )
+    .await
     .is_none());
     drain(&cache, &key).await;
 
@@ -437,10 +439,13 @@ async fn slow_engine_results_survive_the_manual_pre_turn_cutoff() {
             resumed,
             observed_actor,
             None,
+            None,
         )
     };
     let config = Arc::new(config);
-    assert!(pre_turn(config.clone(), identity.clone(), input(0)).is_none());
+    assert!(pre_turn(config.clone(), identity.clone(), input(0))
+        .await
+        .is_none());
     // Even after the old one-millisecond cutoff, the pack remains owned by
     // the background worker instead of being discarded by the live turn.
     tokio::time::sleep(Duration::from_millis(5)).await;
@@ -450,13 +455,16 @@ async fn slow_engine_results_survive_the_manual_pre_turn_cutoff() {
     release.add_permits(100);
     drain(&cache, &key).await;
     let pack = pre_turn(config.clone(), identity.clone(), input(2))
+        .await
         .expect("next turn uses completed slow lookup");
     assert!(pack.markdown.contains("teal"));
     assert!(pack.markdown.contains("earlier turn"));
     drain(&cache, &key).await;
     let mut omitted = identity;
     omitted.recall = false;
-    assert!(pre_turn(config.clone(), omitted.clone(), input(4)).is_none());
+    assert!(pre_turn(config.clone(), omitted.clone(), input(4))
+        .await
+        .is_none());
     drain(&cache, &Key::new(&config, &omitted, "slow", false)).await;
     let turns = crate::memory::test_fixtures::stored(
         &engine.inner,
