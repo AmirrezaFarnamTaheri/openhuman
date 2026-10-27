@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { CoreRpcError } from '../../services/coreRpcClient';
 import { isLocalSessionToken } from '../../utils/localSession';
 import { openhumanComposioGetMode } from '../../utils/tauriCommands';
 import { getCoreStateSnapshot } from '../coreState/store';
@@ -22,6 +23,17 @@ import type { ComposioConnection, ComposioToolkitCatalogEntry } from './types';
 const COMPOSIO_FETCH_RETRY_ATTEMPTS = 1;
 /** Backoff between a failed attempt and the silent retry. */
 const COMPOSIO_FETCH_RETRY_BACKOFF_MS = 400;
+
+/** A local RPC bearer failure is not a rejected Composio API key. */
+function isComposioCredentialRejection(error: unknown): boolean {
+  if (error instanceof CoreRpcError) {
+    if (error.kind === 'provider_auth') return true;
+    if (error.kind !== 'unknown') return false;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  // Only a provider-key-specific rejection is terminal for this credential generation.
+  return /invalid (?:api[ -]?key|composio credentials)|composio.{0,40}(?:unauthori[sz]ed|\b401\b)|(?:api[ -]?key|composio credentials).{0,30}(?:rejected|revoked)/i.test(message);
+}
 
 const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -125,6 +137,8 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
   // Do not repeatedly poll Composio with a rejected API key. Resume only
   // after the provider identity or credentials change.
   const authRejectedPollRef = useRef(false);
+  // Polls may overlap: only the newest response for this client can update state.
+  const pollRequestIdRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -233,9 +247,14 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
     const id = window.setInterval(() => {
       if (authRejectedPollRef.current) return;
       const generation = configGenerationRef.current;
+      const pollRequestId = ++pollRequestIdRef.current;
       void listConnections({ timeoutMs: COMPOSIO_FETCH_TIMEOUT_MS })
         .then(resp => {
-          if (!mountedRef.current || generation !== configGenerationRef.current) return;
+          if (
+            !mountedRef.current ||
+            generation !== configGenerationRef.current ||
+            pollRequestId !== pollRequestIdRef.current
+          ) return;
           const freshConnections = resp.connections ?? [];
           setConnections(freshConnections);
           // Keep the durable cache current with each poll so a restart paints
@@ -245,9 +264,13 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
         .catch(err => {
           // A stale 401 from an earlier tenant must not pause polling after
           // a credential switch. Config generation is incremented first.
-          if (!mountedRef.current || generation !== configGenerationRef.current) return;
+          if (
+            !mountedRef.current ||
+            generation !== configGenerationRef.current ||
+            pollRequestId !== pollRequestIdRef.current
+          ) return;
           const message = err instanceof Error ? err.message : String(err);
-          if (/\b401\b|invalid api key|unauthori[sz]ed/i.test(message)) {
+          if (isComposioCredentialRejection(err)) {
             authRejectedPollRef.current = true;
           }
           console.warn('[composio] polling connections failed:', message);
@@ -271,6 +294,7 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
       // Invalidate any refresh/poll already in flight under the previous client
       // so it can't write its result back after the caches below are cleared.
       configGenerationRef.current += 1;
+      pollRequestIdRef.current += 1;
       authRejectedPollRef.current = false;
       // The Composio client identity changed (backend ↔ direct / BYO key),
       // so the cached catalog AND connections belong to the previous tenant.
