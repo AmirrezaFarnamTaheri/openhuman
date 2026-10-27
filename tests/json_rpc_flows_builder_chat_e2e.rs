@@ -320,6 +320,12 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     write_builder_config(&openhuman_home.join("users").join("local"), &mock_origin);
     write_builder_config(&openhuman_home.join("users").join("e2e-user"), &mock_origin);
 
+    // The lightweight router skips the core boot, which is what initialises
+    // the bus; publishers (and the subscription below) need it live.
+    openhuman_core::core::bus::init()
+        .await
+        .expect("initialise the in-process bus");
+
     // The agent-side save writes a flow; approve exactly that tool.
     let mut approval_config = openhuman_core::config::Config {
         workspace_dir: openhuman_home.join("workspace"),
