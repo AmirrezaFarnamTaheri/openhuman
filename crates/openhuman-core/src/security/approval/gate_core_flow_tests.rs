@@ -271,7 +271,9 @@ async fn approve_always_for_create_workflow_persists_and_skips_the_next_prompt()
     .await
     .expect("persist the Always-allow choice");
 
-    let saved = crate::config::ops::load_config_with_timeout().await.unwrap();
+    let saved = crate::config::ops::load_config_with_timeout()
+        .await
+        .unwrap();
     assert!(
         saved
             .autonomy

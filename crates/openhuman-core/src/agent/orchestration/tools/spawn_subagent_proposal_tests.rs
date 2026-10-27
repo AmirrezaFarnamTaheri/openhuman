@@ -72,7 +72,9 @@ fn persisted_proposal(workspace: &std::path::Path, task_id: &str, tool_output: S
 }
 
 fn assert_prompts(proposal: &Value, expected: &[(&str, &str)]) {
-    let nodes = proposal["graph"]["nodes"].as_array().expect("proposal nodes");
+    let nodes = proposal["graph"]["nodes"]
+        .as_array()
+        .expect("proposal nodes");
     assert_eq!(nodes.len(), 4, "{proposal}");
     for (id, prompt) in expected {
         let node = nodes
