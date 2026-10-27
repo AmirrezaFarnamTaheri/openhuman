@@ -15,13 +15,13 @@ pub(crate) use startup::prepare_runtime_limits;
 #[cfg(feature = "channels")]
 pub(crate) use startup::start_channels_with_session;
 #[cfg(feature = "channels")]
-pub use startup::{start_channels, start_channels_in};
-#[cfg(feature = "channels")]
 pub(crate) use startup::ChannelHandle;
 #[cfg(all(test, feature = "channels"))]
 pub(crate) use startup::TestChannel;
 #[cfg(all(test, feature = "channels"))]
 pub(crate) use startup::{prepare_module_runtime_for_test, ModuleRuntimeTestGuard};
+#[cfg(feature = "channels")]
+pub use startup::{start_channels, start_channels_in};
 // The hosted-channel relay (`channels::providers::relay`) runs one message
 // through the same pipeline, with a context built from the caller's config.
 #[cfg(all(test, feature = "channels"))]
