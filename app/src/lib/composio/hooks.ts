@@ -122,6 +122,9 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
   // tenant's connections, painting phantom activations on the next restart
   // (PR #4288).
   const configGenerationRef = useRef(0);
+  // Do not repeatedly poll Composio with a rejected API key. Resume only
+  // after the provider identity or credentials change (May 2026 fork fix).
+  const authRejectedPollRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -228,6 +231,7 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
     void refresh();
     if (pollIntervalMs <= 0 || fetchEnabled !== true) return;
     const id = window.setInterval(() => {
+      if (authRejectedPollRef.current) return;
       const generation = configGenerationRef.current;
       void listConnections({ timeoutMs: COMPOSIO_FETCH_TIMEOUT_MS })
         .then(resp => {
@@ -239,10 +243,14 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
           writeConnectionCache({ connections: freshConnections });
         })
         .catch(err => {
-          console.warn(
-            '[composio] polling connections failed:',
-            err instanceof Error ? err.message : String(err)
-          );
+          // A stale 401 from an earlier tenant must not pause polling after
+          // a credential switch. Config generation is incremented first.
+          if (!mountedRef.current || generation !== configGenerationRef.current) return;
+          const message = err instanceof Error ? err.message : String(err);
+          if (/\b401\b|invalid api key|unauthori[sz]ed/i.test(message)) {
+            authRejectedPollRef.current = true;
+          }
+          console.warn('[composio] polling connections failed:', message);
         });
     }, pollIntervalMs);
     return () => window.clearInterval(id);
@@ -263,6 +271,7 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
       // Invalidate any refresh/poll already in flight under the previous client
       // so it can't write its result back after the caches below are cleared.
       configGenerationRef.current += 1;
+      authRejectedPollRef.current = false;
       // The Composio client identity changed (backend ↔ direct / BYO key),
       // so the cached catalog AND connections belong to the previous tenant.
       // Drop both before refetching, mirroring the core-side
