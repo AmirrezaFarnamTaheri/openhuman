@@ -44,4 +44,8 @@ pub struct AuthProfileSummary {
     pub updated_at: String,
     pub has_token: bool,
     pub has_token_set: bool,
+    /// Set on listed profiles, which can be compared to the active selection.
+    /// A one-profile write response cannot infer existing selection state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_active: Option<bool>,
 }
