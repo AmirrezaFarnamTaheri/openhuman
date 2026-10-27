@@ -2137,6 +2137,7 @@ async fn delegated_background_task_completion_flow_inner() {
     // Verify the *actor* and the durable result, not fixed FIFO indices.
     // The host may issue a verification/nudge request between asynchronous
     // child and delivery turns; that does not change which agent ran.
+    let task_manager_prompt = "You own the user's task-source feeds and artifacts";
     let child_request = requests.iter().find(|request| {
         request
             .pointer("/body/messages")
@@ -2147,9 +2148,7 @@ async fn delegated_background_task_completion_flow_inner() {
                         && message
                             .get("content")
                             .and_then(Value::as_str)
-                            .is_some_and(|content| {
-                                content.contains("You own the user's task-source feeds and artifacts")
-                            })
+                            .is_some_and(|content| content.contains(task_manager_prompt))
                 })
             })
     });
@@ -2181,12 +2180,15 @@ async fn delegated_background_task_completion_flow_inner() {
                 })
             })
     };
-    let turn2_request = requests.iter().find(|request| is_turn_two(request)).unwrap_or_else(|| {
-        panic!(
-            "no second user turn reached the model; requests: {}",
-            serde_json::to_string_pretty(&requests).unwrap_or_default()
-        )
-    });
+    let turn2_request = requests
+        .iter()
+        .find(|request| is_turn_two(request))
+        .unwrap_or_else(|| {
+            panic!(
+                "no second user turn reached the model; requests: {}",
+                serde_json::to_string_pretty(&requests).unwrap_or_default()
+            )
+        });
 
     // The completed child reply must reach a separate orchestrator relay,
     // rather than merely appear in the child's own provider history.
