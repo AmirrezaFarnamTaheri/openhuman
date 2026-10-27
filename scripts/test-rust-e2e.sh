@@ -372,7 +372,10 @@ for suite in "${SUITES[@]}"; do
       --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
     continue
   fi
-  if [ "$suite" = "tinymcp_storage_smoke_e2e" ]; then
+  if [ "$suite" = "tinymcp_storage_smoke_e2e" ] || [ "$suite" = "inbound_module_e2e" ]; then
+    # Both tests require e2e-test-support, which is intentionally excluded
+    # from product-features.sh. Cargo rejects the target before running tests
+    # without this explicit opt-in. Preserve serial execution for native modules.
     # Released TinyMCP cdylib under the real host and its storage backend
     # (#7737). The staging above put it on OPENHUMAN_MODULE_PATH. It spawns
     # openhuman-core twice, so run it serially.
