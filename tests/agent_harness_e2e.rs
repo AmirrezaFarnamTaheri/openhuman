@@ -2607,7 +2607,7 @@ async fn max_iterations_exceeded_inner() {
     let terminal = wait_for_terminal(&mut events, Duration::from_secs(180)).await;
     let serialized = terminal.to_string();
     // AgentError::MaxIterationsExceeded is handled gracefully at the session layer:
-    // turn_checkpoint.rs:62 intercepts it and renders a user-friendly `chat_done`
+    // The session driver intercepts it and renders a user-friendly `chat_done`
     // message: "I reached the tool-call limit for this turn ({max_iterations} steps),
     // so I paused here." This is the reachable surface from the web-chat channel.
     // The lower-level display "OpenHumanSessionHost exceeded maximum tool iterations (N)" (error.rs:89-90,
