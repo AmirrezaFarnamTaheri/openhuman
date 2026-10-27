@@ -237,7 +237,7 @@ fn recall_each_turn_reaches_the_first_request_in_time_and_never_the_transcript()
                     .await
                     .expect("the agent is removed");
             }
-            runtime.shutdown().await;
+            drop(runtime);
         })
         .await
         .expect("the test task");
