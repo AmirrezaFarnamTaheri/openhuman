@@ -466,6 +466,8 @@ export function formatReport(result, { coreDefaults, shell, allowlist = {} }) {
 export const CHAIN_GATES_NOT_FORWARDED = {
   'openhuman-tinyhumans': {
     profiles: 'The headless ProfileRuntime API belongs to openhuman-embed; the TinyHumans layer does not expose a standalone profiles gate. Its channels gate already enables embed profiles for channel relays.',
+    testkit:
+      'Test scaffolding for the session testkit is only used by embed-local tests and is not a TinyHumans or host runtime capability.',
   },
   'openhuman-embed': {
     'rss-bench':
@@ -483,6 +485,8 @@ export const CHAIN_GATES_NOT_FORWARDED = {
 export const CHAIN_LOCAL_GATES = {
   'openhuman-embed': {
     profiles: 'The in-process ProfileRuntime facade is implemented in openhuman-embed and has no core gate; channels also enables it for profile relays.',
+    testkit:
+      'Test-only session-store scaffolding for embed tests; it does not enable a runtime or product capability.',
   },
   'openhuman-tinyhumans': {
     jev: 'This crate owns the gate: the Jev-backed `tool_search` ranker (`tinytools-jev` over the TinyHumans System One proxy).',
@@ -500,8 +504,6 @@ export const CHAIN_LOCAL_GATES = {
     'bin-tools': 'CLI argument parsing + logger init for the `openhuman-fleet` binary.',
     'linked-modules':
       'Local development only: links module implementation crates into this binary through `openhuman-modules-linked`. Never a product gate (see checkLinkedModulesIsolation).',
-    'structural-code':
-      'CLI-only integration-test gate; the structural-code test target is hosted by openhuman-cli and has no library implementation feature to forward.',
   },
 };
 

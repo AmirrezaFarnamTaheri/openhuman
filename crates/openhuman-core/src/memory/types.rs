@@ -258,7 +258,7 @@ pub struct SourceView {
     pub id: String,
     /// What it reads.
     pub kind: MemorySourceKind,
-    /// Path, URL, `owner/repo`, feed URL or Composio toolkit.
+    /// Path, URL, `owner/repo` or feed URL.
     pub target: String,
     /// Display label.
     pub label: String,
@@ -289,7 +289,7 @@ pub struct SourcesListView {
 pub struct SourcesAddParams {
     /// What it reads.
     pub kind: String,
-    /// Path, URL, `owner/repo`, feed URL or Composio toolkit.
+    /// Path, URL, `owner/repo` or feed URL.
     pub target: String,
     /// Display label; defaults to the target.
     #[serde(default)]

@@ -69,6 +69,13 @@ function dispatchedTypes() {
 }
 
 describe('useNewChat', () => {
+  it('does not reuse an archived empty conversation', async () => {
+    mockThreads = [{ id: 'archived', messageCount: 0, labels: ['ui:archived'] }];
+    const { result } = renderHook(() => useNewChat(), { wrapper });
+    result.current();
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/chat/fresh-thread'));
+    expect(dispatchedTypes()).toContain('thread/createNewThread');
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mockThreads = [];

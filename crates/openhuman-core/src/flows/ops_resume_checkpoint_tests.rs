@@ -301,7 +301,15 @@ async fn resume_uses_the_captured_profile_scope_for_identical_run_ids() {
 /// upgrading mid-park can never strand an otherwise-valid in-flight approval
 /// — even if the flow's graph was *also* edited in the meantime, since there
 /// is nothing recorded to compare it against.
-#[tokio::test]
+///
+/// Multi-thread on purpose: this test calls the synchronous store bridge
+/// (`update_parked_run_document_for_test`, `store::update_flow_graph`) between
+/// async calls. The bridge blocks the calling thread while the TinyFlows
+/// module calls back into the host's document port, and a current-thread
+/// runtime has no other thread left to make progress on the work that call
+/// depends on (the resumed run's poller task lives on that runtime). The
+/// production runtime is multi-thread, where the bridge uses `block_in_place`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn flows_resume_allows_a_legacy_row_with_null_graph_hash() {
     let tmp = TempDir::new().unwrap();
     let config = test_config(&tmp);

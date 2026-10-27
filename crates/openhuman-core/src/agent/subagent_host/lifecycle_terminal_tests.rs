@@ -1,6 +1,7 @@
 use super::*;
 
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn driver_cancel_uses_the_typed_terminal_for_lossy_idle_sessions() {
     use crate::agent::orchestration::subagent_sessions::{
         cancel_driver_job_by_task, mark_finished, upsert_running, DurableSubagentStatus,
@@ -9,6 +10,7 @@ async fn driver_cancel_uses_the_typed_terminal_for_lossy_idle_sessions() {
 
     let directory = tempfile::tempdir().unwrap();
     let workspace = directory.path();
+    crate::storage::local::use_persistent_default_for_test(workspace);
     let store = SubagentSessionStore::new(workspace.to_path_buf());
     let jobs = tinyagents_orchestration::subagent::SubAgentJobRegistry::default();
     let persistence = OpenHumanPersistence::new(workspace.join(".openhuman/subagent_checkpoints"));
@@ -50,6 +52,7 @@ async fn driver_cancel_uses_the_typed_terminal_for_lossy_idle_sessions() {
                 worker_thread_id: None,
                 task_id: task_id.into(),
                 lifecycle_key: Some(key.clone()),
+                parent_epoch: None,
             },
             None,
         )

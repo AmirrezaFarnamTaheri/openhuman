@@ -379,10 +379,29 @@ const ThreadListItemRename: FC<{ onDone: (restoreFocus: boolean) => void }> = ({
       onKeyDown={event => {
         if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
         if (event.key === 'Enter') {
+          // The rename editor is a bare <input> inside the thread row, so a
+          // plain Enter has no form of its own to submit. It DOES, however,
+          // reach the composer: assistant-ui's `ComposerPrimitive.Input`
+          // submits on Enter by calling `requestSubmit()` on the COMPOSER's
+          // <form>, and the composer's keydown handler is bound to the
+          // document. With the rename input focused, that handler still ran
+          // and fired a second Enter — sending the user's chat message while
+          // the title was being renamed (#5141).
+          //
+          // `stopPropagation` in the capture phase stops the event before any
+          // other handler (the composer's included) can act on it. It has to
+          // be the capture phase: the composer's own handler is on its input,
+          // and would otherwise run first in the bubble phase.
+          //
+          // `preventDefault` alone is NOT enough — the composer's handler
+          // calls `requestSubmit()` explicitly, which fires the form's submit
+          // event whether or not the key's default was prevented.
           event.preventDefault();
+          event.stopPropagation();
           commit(true);
         } else if (event.key === 'Escape') {
           event.preventDefault();
+          event.stopPropagation();
           cancel();
         }
       }}

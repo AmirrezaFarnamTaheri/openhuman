@@ -32,7 +32,6 @@ fn full_product_features_enabled() -> bool {
         ("documents", cfg!(feature = "documents")),
         ("modules", cfg!(feature = "modules")),
         ("flows", cfg!(feature = "flows")),
-        ("structural-code", cfg!(feature = "structural-code")),
         ("skills", cfg!(feature = "skills")),
         ("mcp", cfg!(feature = "mcp")),
         ("crash-reporting", cfg!(feature = "crash-reporting")),
@@ -40,9 +39,12 @@ fn full_product_features_enabled() -> bool {
         ("scheduler-gate", cfg!(feature = "scheduler-gate")),
         ("file-logging", cfg!(feature = "file-logging")),
         ("hosting", cfg!(feature = "hosting")),
-        ("tinymemes", cfg!(feature = "tinymemes")),
         ("inbound-queues", cfg!(feature = "inbound-queues")),
         ("storage-sqlite", cfg!(feature = "storage-sqlite")),
+        ("structural-code", cfg!(feature = "structural-code")),
+        ("storage-file", cfg!(feature = "storage-file")),
+        ("secret-file", cfg!(feature = "secret-file")),
+        ("legacy-import", cfg!(feature = "legacy-import")),
     ];
     let declared: std::collections::BTreeSet<_> = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -156,7 +158,6 @@ fn full_tool_catalog_names() -> Vec<String> {
             &browser,
             &http,
             tmp.path(),
-            &HashMap::new(),
             &cfg,
         )
     });
@@ -254,6 +255,10 @@ fn tool_catalog_matches_frontend_fixture() {
         Vec::new()
     };
     if !added.is_empty() || !removed.is_empty() {
+        // A loaded module can install a sanitized process panic hook. Emit
+        // these content-free tool identifiers separately so CI retains the
+        // catalogue mismatch even when that hook hides the panic payload.
+        eprintln!("[tool-catalog] added: {added:?}; removed: {removed:?}");
         panic!(
             "core tool catalog drifted from the frontend fixture at {} (product features compiled: {full_product}).\n\
              added:   {added:?}\n\

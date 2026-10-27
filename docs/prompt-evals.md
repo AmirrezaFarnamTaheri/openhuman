@@ -97,9 +97,9 @@ Scoring reads only artifacts the run already writes, in this order:
    `output_tokens`, `cached_input_tokens`, `charged_amount_usd`), plus an
    `max_input_tokens` ceiling per case. The judge call is not included.
 4. **Judge** (cases with `"judge": true`). The production close-verification
-   rubric from `close_verification_prompt` in
-   `agent/session_host/turn_checkpoint.rs`, copied into `cases.json` rather
-   than widening that `pub(super)` function for an on-demand script. The
+   rubric from `verification_prompt` in
+   `vendor/tinyagents/crates/tinyagents-harness/src/close.rs`, copied into
+   `cases.json` for the on-demand script. The
    verdict is read as `parse_close_verdict` reads it: the last standalone
    `ACCEPT`/`REJECT` token wins, so `UNACCEPTABLE` is not `ACCEPT`.
 

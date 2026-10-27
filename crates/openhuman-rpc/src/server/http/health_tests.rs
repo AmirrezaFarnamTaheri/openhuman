@@ -25,20 +25,53 @@ async fn get_schema_memory_entries_match_the_pre_refactor_raw_bytes() {
     let full_digest = format!("{:x}", Sha256::digest(&body));
 
     let dump: RawSchemaDump = serde_json::from_slice(&body).expect("parse GET /schema methods");
-    let memory_methods: Vec<&str> = dump
+    let memory_methods: Vec<String> = dump
         .methods
         .iter()
         .filter_map(|method| {
             let value: serde_json::Value =
                 serde_json::from_str(method.get()).expect("parse raw schema method");
-            (value["namespace"] == "memory").then_some(method.get())
+            if value["namespace"] != "memory" || value["function"] == "local_start" {
+                return None;
+            }
+            // The upstream byte snapshot already reflects removal of the
+            // retired Composio source kind. Compare the actual wire bytes.
+            let raw = method.get().to_owned();
+            if value["function"] == "sources_add" {
+                for (name, current) in [
+                    ("kind", "folder | file | link | github | rss."),
+                    ("target", "Path, URL, owner/repo or feed URL."),
+                ] {
+                    let field = value["inputs"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|field| field["name"] == name)
+                        .expect("historical source input exists");
+                    assert_eq!(field["comment"], current);
+                }
+            }
+            Some(raw)
         })
         .collect();
     assert_eq!(
         memory_methods.len(),
         35,
-        "all memory controller schemas appear"
+        "all historical memory controller schemas appear"
     );
+
+    // The later provisioning RPC is additive; keep the original byte snapshot
+    // for the existing methods and check the new declaration independently.
+    let local_start = dump
+        .methods
+        .iter()
+        .find_map(|method| {
+            let value: serde_json::Value = serde_json::from_str(method.get()).unwrap();
+            (value["namespace"] == "memory" && value["function"] == "local_start").then_some(value)
+        })
+        .expect("local memory provisioning schema is exposed");
+    assert_eq!(local_start["method"], "openhuman.memory_local_start");
+    assert_eq!(local_start["inputs"], serde_json::json!([]));
 
     let mut memory_bytes = Vec::new();
     for method in &memory_methods {
@@ -53,11 +86,11 @@ async fn get_schema_memory_entries_match_the_pre_refactor_raw_bytes() {
     );
     assert_eq!(
         memory_bytes.len(),
-        18_897,
+        18_868,
         "memory schema methods' raw byte count"
     );
     assert_eq!(
-        memory_digest, "7b1b15f7e40cc7f4e6b767ea8eb4d17e49c5a3a5c6250164a733af828ec22783",
+        memory_digest, "b8142e8908f032972ce3f451a73c5d18cd74a6d0287f2315e585584840665955",
         "memory schema methods' raw SHA-256"
     );
 }

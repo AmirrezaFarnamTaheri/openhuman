@@ -89,7 +89,7 @@ _Generated from `app/src/App.tsx` by `scripts/generate-architecture-docs.mjs`. D
 | 7 | `CoreStateProvider` | Core app snapshot: auth, session, onboarding state |
 | 8 | `SocketProvider` | Core socket.io events; desktop only (mobile uses the TunnelTransport relay) |
 | 9 | `ChatRuntimeProvider` | Chat runtime events, tool timeline, and approvals |
-| 10 | `AppDataRouter` | Hash-based data routing that supports navigation blockers |
+| 10 | `RouterProvider` | Hash data-router navigation and unsaved-editor guards for all routes |
 | 11 | `CommandProvider` | Command palette context |
 | 12 | `ServiceBlockingGate` | Blocks the shell until required services are configured |
 
@@ -247,7 +247,7 @@ const result = await apiClient.post<LoginResponse>("/auth/login", {
 
 - `authApi` / `userApi`: auth + user profile
 - `threadApi`, `threadUsageApi`: chat threads
-- `agentTeamApi`, `agentWorkApi`, `subagentApi`: agents
+- `agentWorkApi`, `subagentApi`: agents
 - `skillsApi`, `skillRegistryApi`, `flowsApi`, `workflowRunsApi`: skills & automation
 - `channelConnectionsApi`, `mcpClientsApi`, `mcpSetupApi`, `tunnelsApi`: connections
 - `memoryApi`: Memory v2 RPC wrappers (`openhuman.memory_*`)
@@ -427,7 +427,7 @@ are not separately exported components from the npm runtime package.
 | Queued follow-ups                              | `ComposerPrimitive.Queue`, `QueueItemPrimitive.Text`, `Remove`                       | Core run-queue adapter and translated registry row captions                                                          |
 | Markdown, code and citations                   | `MarkdownTextPrimitive` and registry elements                                        | Source projection, app links, math and artifact access                                                               |
 | Reasoning and tool groups                      | `MessagePrimitive.GroupedParts`, registry tool-group/reasoning elements              | Core timing and grouping interleaved reasoning with calls                                                            |
-| Tasks and subagents                            | Registry task-card/subagent-list, `ReadonlyThreadProvider`                           | Delegation state, awaiting-user replies and worktree actions                                                         |
+| Tasks and subagents                            | Registry task-card/subagent-list, `ReadonlyThreadProvider`                           | Delegation state and awaiting-user replies                                                         |
 | Approvals, questions and plans                 | Registry approval-card, elicitation-form and agent-plan                              | Core decision RPCs, security policy and plan/workflow lifecycle                                                      |
 | Todos and goals                                | Registry todo-list and agent-status                                                  | Durable harness progress and remembered disclosure state                                                             |
 | Images, documents and tool results             | Registry image, artifact-card, web-search, terminal-block, code-diff and web-preview | Core artifact and tool-result projection                                                                             |

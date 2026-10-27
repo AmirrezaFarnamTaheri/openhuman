@@ -414,6 +414,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'آخر 7 أيام',
   'chat.sidebar.group.previous30Days': 'آخر 30 يومًا',
   'chat.sidebar.group.older': 'أقدم',
+  'chat.sidebar.archived': 'المؤرشفة',
+  'chat.sidebar.restoreThread': 'استعادة',
   'chat.sidebar.pinThread': 'تثبيت المحادثة',
   'chat.sidebar.unpinThread': 'إلغاء تثبيت المحادثة',
   'chat.sidebar.unread': 'رد جديد',
@@ -591,6 +593,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'تعذر تحميل موافقات سطح المكتب المعلقة. حدّث الصفحة للمحاولة مجددًا.',
   'desktop.unsupported': 'التحكم بسطح المكتب غير متاح في بيئة التشغيل هذه.',
+  'desktop.unsupportedWindows':
+    'التحكم بسطح المكتب غير متاح على Windows بعد. يعمل التحكم بالمتصفح على Windows حاليًا.',
   'desktop.localOnly': 'ينطبق هذا الإعداد على هذا الكمبيوتر فقط.',
   'desktop.permissions': 'أذونات النظام',
   'desktop.openSettings': 'فتح الإعدادات',
@@ -610,6 +614,10 @@ const messages: TranslationMap = {
     'تعذّر الوصول إلى الذاكرة حاليًا. لم يُفقد أي شيء مخزّن؛ حاول مرة أخرى بعد قليل.',
   'memory.outOfCredits.title': 'نفد الرصيد',
   'memory.outOfCredits.action': 'اشحن الرصيد',
+  'memory.error.planRequired':
+    'خطتك الحالية لا تتضمن الذاكرة، لذا لا يستطيع OpenHuman حفظ ما يتعلّمه أو البحث فيه. قم بالترقية لتفعيل الذاكرة، أو انتقل إلى خيار ذاكرة آخر من الإعدادات.',
+  'memory.planRequired.title': 'الذاكرة ليست جزءًا من خطتك',
+  'memory.planRequired.action': 'عرض الخطط',
   'alerts.title': 'التنبيهات',
   'alerts.empty': 'لا توجد تنبيهات بعد',
   'alerts.markAllRead': 'تحديد الكل كمقروء',
@@ -669,6 +677,15 @@ const messages: TranslationMap = {
   'invites.title': 'الدعوات',
   'invites.noInvites': 'لا توجد دعوات معلقة',
   'devOptions.titleDiagnostics': 'المطور والتشخيص',
+  'devOptions.doctor.run': 'تشغيل الفحص',
+  'devOptions.doctor.runLive': 'تشغيل الفحوصات المباشرة',
+  'devOptions.doctor.liveWarning':
+    'قد تستهلك الفحوصات المباشرة رموزًا عند اختبار استدعاءات النماذج أو التضمين. هل تريد المتابعة؟',
+  'devOptions.doctor.severity.pass': 'ناجح',
+  'devOptions.doctor.severity.info': 'معلومات',
+  'devOptions.doctor.severity.warn': 'تحذير',
+  'devOptions.doctor.severity.error': 'خطأ',
+  'devOptions.doctor.severity.skipped': 'تم التخطي',
   'devOptions.diagnostics': 'التشخيص',
   'devOptions.toolPolicyDiagnosticsDesc':
     'قوائم جرد المواد، ووضع السياسات، والقوائم المسموح بها بx0xx، والوحدات الأخيرة',
@@ -1292,6 +1309,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'فشل تحميل الرسائل',
   'chat.thinkingDots': 'جارٍ التفكير...',
   'chat.status.thinkingElapsed': 'جارٍ التفكير · {elapsed}',
+  'chat.status.compacting': 'جارٍ تلخيص المحادثة السابقة…',
+  'chat.status.compactingElapsed': 'جارٍ تلخيص المحادثة السابقة · {elapsed}',
   'chat.status.waitingApproval': 'في انتظار موافقتك',
   'chat.status.waitingReview': 'في انتظار مراجعتك',
   'chat.status.waitingAnswer': 'في انتظار إجابتك',
@@ -1806,11 +1825,6 @@ const messages: TranslationMap = {
   'chat.todos.ofTotal': '{done} من {total}',
   'chat.todos.receipt': 'تم تحديث التقدم · {done}/{total}',
   'chat.subagents.ranFor': 'استغرق {duration}',
-  'chat.subagents.ofTotal': '{complete} من {total}',
-  'chat.subagents.runningCount': '{count} قيد التشغيل',
-  'chat.subagents.failedCount': '{count} فشل',
-  'chat.subagents.incompleteCount': '{count} غير مكتمل',
-  'chat.subagents.settled': 'انتهت المهام الفرعية. تجري معالجة نتائجها.',
   'conversations.planReview.title': 'مراجعة الخطة',
   'conversations.planReview.subtitle':
     'وافق لتشغيلها، أو ارفضها لتجاهلها، أو أرسل ملاحظات لتعديلها.',
@@ -1846,7 +1860,6 @@ const messages: TranslationMap = {
   'conversations.mcpUi.confirmAllow': 'سماح',
   'conversations.mcpUi.confirmDeny': 'رفض',
   'conversations.tools.delegatedTo': 'تم التفويض إلى {agent}',
-  'conversations.tools.parallelAgentsAggregating': 'تجميع النتائج',
   'conversations.tools.openInBrowser': 'فتح في المتصفح',
   'conversations.tools.status.running': 'قيد التشغيل',
   'conversations.tools.status.done': 'مكتمل',
@@ -1914,22 +1927,6 @@ const messages: TranslationMap = {
     'فشلت إعادة المحاولة. نزّل أحدث إصدار للتطبيق وحاول مرة أخرى.',
   'daemon.serviceBlockingGate.retrying': 'جارٍ إعادة المحاولة...',
   'daemon.serviceBlockingGate.title': 'نواة OpenHuman غير متاحة',
-  'worktree.label': 'شجرة العمل',
-  'worktree.dirty': 'تغييرات غير مُلتزمة',
-  'worktree.clean': 'نظيفة',
-  'worktree.removing': 'جارٍ الإزالة…',
-  'worktree.removeFailed': 'فشل إزالة شجرة العمل',
-  'worktree.diffFailed': 'فشل تحميل الفرق',
-  'worktree.diffLoading': 'جارٍ تحميل الفرق…',
-  'worktree.diffEmpty': 'لا توجد تغييرات مقارنةً بـ HEAD.',
-  'worktree.dirtyConfirm':
-    'تحتوي شجرة العمل هذه على تغييرات غير مُلتزمة. إزالتها تتجاهل ذلك العمل. يتم الاحتفاظ بفرع العامل.',
-  'worktree.action.open': 'فتح المجلد',
-  'worktree.action.diff': 'الفرق',
-  'worktree.action.hideDiff': 'إخفاء الفرق',
-  'worktree.action.remove': 'إزالة',
-  'worktree.action.removeAnyway': 'تجاهل وإزالة',
-  'worktree.action.preserve': 'الإبقاء',
   'notifications.card.dismiss': 'إغلاق الإشعار',
   'notifications.card.importanceTitle': 'الأهمية: {pct}%',
   'notifications.center.empty': 'لا توجد إشعارات بعد',
@@ -2345,6 +2342,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'يمكن أن تضم مجموعة المزوّد 128 مفتاح API كحد أقصى.',
   'settings.ai.fleet.partialKeyVerified':
     'رُفضت بعض مفاتيح API، لكن تم التحقق من مفتاح آخر. راجع حالة مفاتيح المزوّد.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'تعذّر على OpenHuman تأكيد مجموعة المفاتيح من خلال قائمة نماذج المزوّد. تم حفظ المفاتيح وسيتم فحصها عند إرسال طلب إلى نموذج.',
   'settings.ai.apiKeyFieldLabel': 'تسمية حقل مفتاح API',
   'settings.ai.apiKeyRequired': 'يرجى لصق مفتاح API للمتابعة.',
   'settings.ai.apiKeyStoredEncrypted': 'مفتاح API محفوظ مشفّرًا',
@@ -3720,6 +3719,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'وظائف البحث...',
   'settings.developerMenu.eventLog.column.time': 'الوقت',
   'settings.developerMenu.eventLog.column.event': 'الحدث',
+  'settings.agentAccess.totalTimeout.label': 'الحد الإجمالي لمدة التشغيل',
+  'settings.agentAccess.totalTimeout.desc':
+    'لا يوجد حد زمني إجمالي للتشغيل افتراضيًا. عيّن OPENHUMAN_AGENT_TURN_TIMEOUT_SECS لتحديد حد؛ القيمة 0 تعطّله. تظل ضمانات الإجراءات الفردية والطلبات المتوقفة سارية.',
   'settings.agentAccess.group.approvals': 'الموافقات',
   'settings.agentAccess.group.fileSystem': 'نظام الملفات',
   'settings.agentAccess.group.limits': 'الحدود',
@@ -4745,8 +4747,6 @@ const messages: TranslationMap = {
   'conversations.tools.updateLearnings.done': 'تم تحديث ما تعلمته',
   'conversations.tools.delegateTask.active': 'جارٍ تفويض المهمة',
   'conversations.tools.delegateTask.done': 'تم تفويض المهمة',
-  'conversations.tools.runAgentsInParallel.active': 'جارٍ تشغيل الوكلاء بالتوازي',
-  'conversations.tools.runAgentsInParallel.done': 'تم تشغيل الوكلاء بالتوازي',
   'conversations.tools.messageAgent.active': 'جارٍ مراسلة الوكيل',
   'conversations.tools.messageAgent.done': 'تمت مراسلة الوكيل',
   'conversations.tools.waitForAgent.active': 'جارٍ انتظار الوكيل',
@@ -4783,6 +4783,8 @@ const messages: TranslationMap = {
   'conversations.tools.checkGoal.done': 'تم فحص الهدف',
   'conversations.tools.completeGoal.active': 'جارٍ إكمال الهدف',
   'conversations.tools.completeGoal.done': 'تم إكمال الهدف',
+  'conversations.tools.resumeGoal.active': 'جارٍ استئناف الهدف',
+  'conversations.tools.resumeGoal.done': 'تم استئناف الهدف',
   'conversations.tools.scheduleTask.active': 'جارٍ جدولة المهمة',
   'conversations.tools.scheduleTask.done': 'تمت جدولة المهمة',
   'conversations.tools.checkSchedules.active': 'جارٍ فحص الجداول',
@@ -5015,6 +5017,9 @@ const messages: TranslationMap = {
   'settings.layout.corners.subtle': 'خفيف',
 
   'settings.layout.corners.round': 'مستدير',
+  'settings.agentAccess.hideShellWindows.label': 'إخفاء نوافذ الطرفية',
+  'settings.agentAccess.hideShellWindows.desc':
+    'إخفاء نوافذ الطرفية الأصلية في Windows لجلسات الأوامر الجديدة.',
 };
 
 export default messages;

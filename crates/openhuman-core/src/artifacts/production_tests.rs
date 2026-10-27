@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use tiny_artifacts::{ArtifactKind, ArtifactStatus as RecordStatus, ArtifactStore};
+use tiny_artifacts::{ArtifactKind, ArtifactStatus as RecordStatus, ArtifactStore, FileStore};
 
 use super::*;
 use crate::artifacts::store::get_artifact;
@@ -32,6 +32,7 @@ async fn produce(
     revise: Option<&str>,
 ) -> String {
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         workspace,
         FileRoots::new(files),
         ArtifactKind::File,
@@ -52,6 +53,7 @@ async fn produce(
 async fn a_new_artifact_shares_one_id_and_one_file_between_card_and_record() {
     let (workspace, files) = temp_dirs();
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::File,
@@ -123,20 +125,22 @@ async fn a_revision_reuses_the_id_and_file_and_keeps_the_history() {
         b"deck-v2!"
     );
     // Each version still holds what it was.
-    let bytes_of = |n: u32| {
-        let file = record.version(n).unwrap().file.clone().unwrap();
-        std::fs::read(crate::artifacts::tiny_store::stored_file_path(
-            &workspace, &file,
-        ))
-    };
-    assert_eq!(bytes_of(1).unwrap(), b"deck-v1");
-    assert_eq!(bytes_of(2).unwrap(), b"deck-v2!");
+    let context = crate::core::runtime::DispatchCtx::ambient();
+    let scoped = crate::storage::sessions::artifact_scoped_for_in(&workspace, &context)
+        .expect("production's artifact scope is available");
+    let storage = crate::artifacts::tiny_store::storage_bundle(&scoped);
+    let blobs = tiny_artifacts::BlobFileStore::new(&storage);
+    for (version, expected) in [(1, b"deck-v1".as_slice()), (2, b"deck-v2!".as_slice())] {
+        let file = record.version(version).unwrap().file.as_ref().unwrap();
+        assert_eq!(blobs.read(&file.key).await.unwrap(), expected);
+    }
 }
 
 #[tokio::test]
 async fn a_failed_production_fails_card_and_record() {
     let (workspace, files) = temp_dirs();
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::Image,
@@ -168,6 +172,7 @@ async fn a_failed_revision_keeps_the_artifact_and_shows_its_newest_version() {
     let id = produce(&workspace, &files, b"deck-v1", None, None).await;
 
     let revision = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::File,
@@ -200,6 +205,7 @@ async fn a_failed_revision_keeps_the_artifact_and_shows_its_newest_version() {
 async fn a_completion_that_records_nothing_fails_the_record_too() {
     let (workspace, files) = temp_dirs();
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::File,
@@ -239,6 +245,7 @@ async fn a_saved_version_the_card_cannot_show_succeeds_and_says_so() {
 
     let (workspace, files) = temp_dirs();
     let production = Production::start(
+        &crate::core::runtime::DispatchCtx::unbound(),
         &workspace,
         FileRoots::new(&files),
         ArtifactKind::File,

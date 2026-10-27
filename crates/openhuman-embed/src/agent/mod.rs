@@ -77,8 +77,8 @@ pub enum AgentError {
         source: std::io::Error,
     },
 
-    /// A module-owned agent resource did not acknowledge cleanup, so its
-    /// workspace could not be purged safely.
+    /// Session construction or module-owned cleanup is still running, so
+    /// the agent's workspace could not be purged safely.
     #[error("agent cleanup is still pending; its workspace was retained")]
     CleanupPending,
 
@@ -124,11 +124,6 @@ pub(crate) struct AgentInner {
     _approval_subscription: Option<ApprovalSubscription>,
     pub(crate) runtime_id: String,
     pub(crate) attachments: attachments::Attachments,
-    /// Keeps the runtime's core and (for an ephemeral workspace) its
-    /// directory alive for as long as this agent is, even after the host
-    /// drops its `Runtime` handle. See
-    /// [`CoreGuard`](crate::runtime::CoreGuard).
-    pub(crate) _runtime_guard: Arc<crate::runtime::CoreGuard>,
     pub(crate) runtime: Arc<CoreRuntime>,
     pub(crate) ctx: Arc<CoreContext>,
     pub(crate) config: Config,
@@ -149,6 +144,9 @@ pub(crate) struct AgentInner {
     /// Built from [`ToolScopeSpec::HostOnly`]: every turn's session is built
     /// from the host tools alone.
     pub(crate) host_only: bool,
+    // Drop context, config and runtime handles before the final guard can
+    // remove their workspace. An agent may outlive its Runtime handle.
+    pub(crate) _runtime_guard: Arc<crate::runtime::CoreGuard>,
 }
 
 impl AgentInner {

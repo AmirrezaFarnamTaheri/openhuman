@@ -11,6 +11,7 @@ import {
   loadAISettings,
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
+import { invalidateModelCatalogCache } from '../../../../services/modelCatalogCache';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
 import {
   type AISettings,
@@ -316,6 +317,13 @@ export function useCloudProviderEditorSubmit({
             throw new Error(redactCandidateSecrets(error.message, apiKey));
           }
           throw error;
+        } finally {
+          if (settingsWriteAttempted) {
+            invalidateModelCatalogCache(upserted.slug);
+            if (previous && previous.slug !== upserted.slug) {
+              invalidateModelCatalogCache(previous.slug);
+            }
+          }
         }
         onDone();
       } finally {

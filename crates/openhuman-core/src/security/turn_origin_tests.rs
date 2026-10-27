@@ -97,7 +97,7 @@ async fn inherited_origin_preserves_a_non_cli_origin_verbatim() {
     }
 }
 
-/// Regression: a detached sub-agent (`spawn_async_subagent`, the
+/// Regression: a detached sub-agent (`spawn_subagent`, the
 /// orchestration spawn task) starts on a fresh task, and without explicit
 /// propagation its tools reach the approval gate as `Unknown` and every
 /// external-effect call is refused — the parent's label silently lost at
@@ -357,16 +357,19 @@ async fn a_bare_origin_scope_is_invisible_to_every_other_reader() {
 
     let outside_slot = slot_for::<StateProbe>(&DispatchCtx::ambient());
     let outside_current = CoreContext::current();
-    let (inside_slot, inside_current, inside_scoped, origin) =
-        with_origin(AgentTurnOrigin::Cli, async {
+    let (inside_slot, inside_current, inside_scoped, origin) = CoreContext::scope_with_turn_origin(
+        CoreContext::bare(),
+        Some(AgentTurnOrigin::Cli),
+        async {
             (
                 slot_for::<StateProbe>(&DispatchCtx::ambient()),
                 CoreContext::current(),
                 CoreContext::scoped(),
                 current(),
             )
-        })
-        .await;
+        },
+    )
+    .await;
 
     assert!(
         std::sync::Arc::ptr_eq(&outside_slot, &inside_slot),

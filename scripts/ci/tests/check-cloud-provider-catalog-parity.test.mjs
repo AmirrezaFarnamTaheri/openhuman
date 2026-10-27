@@ -82,7 +82,7 @@ test('shipped TypeScript and Rust catalogs agree and all builtins have safe endp
   // silently skip in CI when either shipping catalog disappears or changes.
   const root = fileURLToPath(new URL('../../../', import.meta.url));
   const ui = readFileSync(resolve(root, 'app/src/components/settings/panels/builtinCloudProviders.ts'), 'utf8');
-  const backend = readFileSync(resolve(root, 'crates/openhuman-core/src/config/schema/cloud_providers.rs'), 'utf8');
+  const backend = readFileSync(resolve(root, 'crates/openhuman-core/src/config/schema/cloud_provider_presets.rs'), 'utf8');
   const result = assertCatalogParity(ui, backend);
   assert.ok(result.checked >= 6, 'expected real Rust-owned provider extras');
 });

@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useRef, useState } from 'react';
-import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
+import { createMemoryRouter, Route, RouterProvider, Routes, useNavigate } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
+import { createAppDataRouter } from '../../../AppDataRouter';
 import FlowNavigationBlocker, { type BlockedFlowNavigation } from './FlowNavigationBlocker';
 
 function GuardedEditor() {
@@ -82,6 +83,34 @@ function setup(initialEntries = ['/flows/test-id']) {
 }
 
 describe('FlowNavigationBlocker', () => {
+  it('guards dirty editor navigation under the production hash data router', async () => {
+    const originalUrl = window.location.href;
+    window.history.replaceState(null, '', '/#/flows/test-id');
+    const router = createAppDataRouter(
+      <Routes>
+        <Route path="/flows/:id" element={<GuardedEditor />} />
+        <Route path="/chat" element={<p data-testid="chat-page">Chat</p>} />
+      </Routes>
+    );
+    const view = render(<RouterProvider router={router} />);
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+      await screen.findByRole('dialog', { name: 'Unsaved workflow' });
+      expect(window.location.hash).toBe('#/flows/test-id');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+      expect(window.location.hash).toBe('#/flows/test-id');
+      fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Discard and leave' }));
+      await screen.findByTestId('chat-page');
+      expect(window.location.hash).toBe('#/chat');
+    } finally {
+      view.unmount();
+      router.dispose();
+      window.history.replaceState(null, '', originalUrl);
+    }
+  });
+
   it('stops sidebar-like navigation until the user discards or stays', async () => {
     const router = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));

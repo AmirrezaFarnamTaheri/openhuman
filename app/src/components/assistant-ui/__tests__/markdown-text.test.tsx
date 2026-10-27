@@ -95,6 +95,23 @@ describe('MarkdownText — syntax highlighting', () => {
 });
 
 describe('MarkdownText — LaTeX', () => {
+  it('ignores inherited KaTeX trust when rendering model text', async () => {
+    const original = Object.getOwnPropertyDescriptor(Object.prototype, 'trust');
+    Object.defineProperty(Object.prototype, 'trust', {
+      value: true,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      const container = await renderMarkdown('$$\\href{https://example.invalid/}{unsafe}$$');
+      expect(container.querySelector('.katex')).not.toBeNull();
+      expect(container.querySelector('a[href="https://example.invalid/"]')).toBeNull();
+    } finally {
+      if (original) Object.defineProperty(Object.prototype, 'trust', original);
+      else Reflect.deleteProperty(Object.prototype, 'trust');
+    }
+  });
+
   it('renders display math written with $$', async () => {
     const container = await renderMarkdown('$$\\frac{a}{b}$$');
 

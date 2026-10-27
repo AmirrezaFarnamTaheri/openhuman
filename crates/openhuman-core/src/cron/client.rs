@@ -48,14 +48,15 @@ async fn call<R: DeserializeOwned>(
 
 /// The `StoreConfig` for `config`: the scope's document port and the host's
 /// history and batch limits.
-async fn store_config(config: &Config, scope: &DocScope) -> Result<StoreConfig> {
-    Ok(StoreConfig {
-        backend: StoreBackend::Documents {
-            callback: documents_port::address(scope).await?,
-        },
+fn store_config(
+    config: &Config,
+    callback: tinyflows_bus::schedule::CallbackAddress,
+) -> StoreConfig {
+    StoreConfig {
+        backend: StoreBackend::Documents { callback },
         max_run_history: config.cron.max_run_history,
         max_tasks: config.scheduler.max_tasks,
-    })
+    }
 }
 
 /// Run one store operation in `scope` and decode its reply.
@@ -76,11 +77,18 @@ async fn store_raw<R: DeserializeOwned>(
     scope: &DocScope,
     operation: StoreOperation,
 ) -> Result<R> {
+    let (callback, mut registration) = documents_port::store_address(scope).await?;
     let request = StoreRequest {
-        storage: store_config(config, scope).await?,
+        storage: store_config(config, callback),
         operation: serde_json::to_value(&operation)?,
     };
-    let value: Value = call(config, members::SCHEDULE_STORE, (request,)).await?;
+    let reply = call::<Value>(config, members::SCHEDULE_STORE, (request,)).await;
+    let cleanup = match registration.as_mut() {
+        Some(registration) => registration.close().await.map_err(anyhow::Error::msg),
+        None => Ok(()),
+    };
+    let value = reply?;
+    cleanup?;
     serde_json::from_value(value).map_err(|error| {
         tracing::warn!(%error, "[cron:bus] undecodable ScheduleStore reply");
         anyhow!("the tinyflows module answered a store request with an unexpected shape")

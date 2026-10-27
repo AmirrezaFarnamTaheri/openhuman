@@ -131,16 +131,14 @@ pub(crate) async fn migrate_with(
 /// The legacy on-disk bytes of an unmigrated record, when present and inside
 /// its own artifact directory.
 fn legacy_bytes(root: &Path, artifact_dir: &Path, meta: &ArtifactMeta) -> Option<PathBuf> {
-    let rel = Path::new(&meta.path);
-    if rel.is_absolute()
-        || rel
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
-        return None;
-    }
-    let candidate = root.join(rel);
-    (candidate.starts_with(artifact_dir) && candidate.is_file()).then_some(candidate)
+    let candidate = root.join(&meta.path);
+    // The escape guard also refuses a symlink that leads out of the directory.
+    // Check against `root` too: when `artifact_dir` is itself a symlink, both
+    // sides of the inner check resolve through it.
+    (super::files::check_within(root, &candidate).is_ok()
+        && super::files::check_within(artifact_dir, &candidate).is_ok()
+        && candidate.is_file())
+    .then_some(candidate)
 }
 
 /// For a migrated record, every regular file in its artifact directory other
@@ -180,15 +178,28 @@ async fn migrate_one(
     // Step 1: copy to a hidden partial and flush it.
     let partial = files_dir.join(format!(".{}{PARTIAL_SUFFIX}", meta.id));
     let _ = tokio::fs::remove_file(&partial).await;
-    tokio::fs::copy(src, &partial)
+    let mut source = tokio::fs::File::open(src)
+        .await
+        .map_err(|e| format!("open legacy bytes: {e}"))?;
+    let mut output = files::open_artifact_file(&partial)
+        .await
+        .map_err(|e| format!("create partial: {e}"))?;
+    tokio::io::copy(&mut source, &mut output)
         .await
         .map_err(|e| format!("copy: {e}"))?;
-    tokio::fs::File::open(&partial)
+    use tokio::io::AsyncWriteExt;
+    output
+        .flush()
         .await
-        .map_err(|e| format!("reopen partial: {e}"))?
+        .map_err(|e| format!("write partial: {e}"))?;
+    // FlushFileBuffers on Windows requires the writable handle that received
+    // the copy. A read-only reopen fails before any record can be migrated.
+    output
         .sync_all()
         .await
         .map_err(|e| format!("flush partial: {e}"))?;
+    drop(output.into_std().await);
+    drop(source);
     if crash_after == Some(CrashAfter::Copy) {
         return Ok(false);
     }

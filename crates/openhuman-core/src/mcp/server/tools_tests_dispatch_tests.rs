@@ -1,24 +1,32 @@
 use super::*;
 
+fn isolated_context(
+    tmp: &tempfile::TempDir,
+) -> (crate::config::Config, crate::core::runtime::DispatchCtx) {
+    use crate::core::runtime::{CoreContext, DispatchCtx, DomainSet};
+    let config = crate::config::Config {
+        workspace_dir: tmp.path().join("workspace"),
+        action_dir: tmp.path().join("workspace"),
+        config_path: tmp.path().join("config.toml"),
+        ..Default::default()
+    };
+    std::fs::create_dir_all(&config.workspace_dir).unwrap();
+    crate::mcp::install_test_module_port(&config);
+    let ctx = DispatchCtx::new(CoreContext::for_test_with_config(
+        DomainSet::full(),
+        config.clone(),
+    ));
+    (config, ctx)
+}
+
 #[tokio::test]
 async fn call_tool_records_write_argument_rejection() {
-    let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
     let tmp = tempfile::tempdir().expect("tempdir");
-    unsafe {
-        std::env::set_var("OPENHUMAN_WORKSPACE", tmp.path());
-    }
-    let config = config_rpc::load_config_with_timeout()
-        .await
-        .expect("config");
+    let (config, ctx) = isolated_context(&tmp);
 
-    let err = call_tool(
-        &crate::core::runtime::DispatchCtx::ambient(),
-        "memory.learn",
-        json!({ "kind": "fact" }),
-        "mcp:test",
-    )
-    .await
-    .expect_err("missing text should reject");
+    let err = call_tool(&ctx, "memory.learn", json!({ "kind": "fact" }), "mcp:test")
+        .await
+        .expect_err("missing text should reject");
     assert!(
         err.message().contains("missing required argument `text`"),
         "got: {}",
@@ -49,10 +57,6 @@ async fn call_tool_records_write_argument_rejection() {
         .unwrap_or_default()
         .contains("missing required argument `text`"));
     assert!(rows[0].args_summary.get("text").is_none());
-
-    unsafe {
-        std::env::remove_var("OPENHUMAN_WORKSPACE");
-    }
 }
 
 #[tokio::test]
@@ -72,26 +76,16 @@ async fn call_tool_rejects_v1_memory_tools_as_unknown() {
 
 #[tokio::test]
 async fn call_tool_validates_memory_arguments_before_dispatch() {
-    // A rejected write is audited against the ambient workspace. Without its
-    // own workspace under the env lock this test wrote its `memory.forget` row
-    // into whichever workspace a concurrent audit test had just pointed
-    // `OPENHUMAN_WORKSPACE` at, making their row counts flaky.
-    let _env_lock = crate::config::TEST_ENV_LOCK.lock().await;
+    // Rejected writes retain this explicit config when audit work is spawned;
+    // they cannot enter another test's ambient workspace.
     let tmp = tempfile::tempdir().expect("tempdir");
-    unsafe {
-        std::env::set_var("OPENHUMAN_WORKSPACE", tmp.path());
-    }
-    let err = call_tool(
-        &crate::core::runtime::DispatchCtx::ambient(),
-        "memory.forget",
-        json!({ "ids": [] }),
-        "mcp:test",
-    )
-    .await
-    .expect_err("empty ids rejected before any RPC");
+    let (_config, ctx) = isolated_context(&tmp);
+    let err = call_tool(&ctx, "memory.forget", json!({ "ids": [] }), "mcp:test")
+        .await
+        .expect_err("empty ids rejected before any RPC");
     assert!(err.message().contains("`ids`"), "got: {}", err.message());
     let err = call_tool(
-        &crate::core::runtime::DispatchCtx::ambient(),
+        &ctx,
         "memory.recall",
         json!({ "question": "q", "filter": { "x": 1 } }),
         "mcp:test",
@@ -99,15 +93,13 @@ async fn call_tool_validates_memory_arguments_before_dispatch() {
     .await
     .expect_err("unknown filter field");
     assert!(err.message().contains("unexpected filter field"));
-    unsafe {
-        std::env::remove_var("OPENHUMAN_WORKSPACE");
-    }
 }
 
 /// The policy a tool call is judged by comes from the context handed to
 /// `call_tool`, not from whichever context the task happens to be scoped to,
 /// and two sessions running side by side never see each other's.
 #[tokio::test]
+#[cfg(feature = "storage-sqlite")]
 async fn call_tool_judges_the_policy_of_the_explicit_context_across_scopes() {
     use crate::core::runtime::{CoreContext, DispatchCtx, DomainSet};
     use crate::security::AutonomyLevel;
@@ -123,6 +115,13 @@ async fn call_tool_judges_the_policy_of_the_explicit_context_across_scopes() {
     let mut allowing = crate::config::Config::default();
     allowing.workspace_dir = tmp_allow.path().to_path_buf();
     allowing.action_dir = tmp_allow.path().to_path_buf();
+    // Validating tool arguments calls the tinymcp module, which reaches the
+    // host's installed storage.
+    let storage = crate::storage::test_support::sqlite_backend().expect("SQLite test backend");
+    let _storage_guard =
+        crate::storage::test_support::install_for_test(&storage.url, Arc::clone(&storage.backend));
+    denying.storage.url = Some(storage.url.clone());
+    allowing.storage.url = Some(storage.url.clone());
     let deny_core = CoreContext::for_test_with_config(DomainSet::full(), denying);
     let allow_core = CoreContext::for_test_with_config(DomainSet::full(), allowing);
 

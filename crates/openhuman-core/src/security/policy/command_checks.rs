@@ -5,13 +5,23 @@
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
+use super::command_vocabulary::classify_segment_source;
+use super::CommandAnalysis;
+
+#[cfg(test)]
 use super::types::CommandRiskLevel;
 use super::types::{AutonomyLevel, GateDecision, SecurityPolicy};
+use crate::security::policy::CommandClass;
 #[cfg(test)]
 use crate::util::floor_char_boundary;
-use tinybox_bus::CommandClass;
 #[cfg(test)]
-use tinybox_core::shell::analysis::analyze_command;
+fn analyze_command(command: &str) -> CommandAnalysis {
+    use tinybox_core::shell::scan;
+    CommandAnalysis::from_shell_analysis(tinybox_bus::ShellAnalysis {
+        segments: scan::split_unquoted_segments(&scan::strip_quoted_heredoc_bodies(command)),
+        redirection: scan::contains_unquoted_char(&scan::strip_heredoc_bodies(command), '>'),
+    })
+}
 use tinytools::status::POLICY_BLOCKED_MARKER;
 
 /// Deny broad recursive scans of OS trees before running a shell command.
@@ -20,7 +30,7 @@ use tinytools::status::POLICY_BLOCKED_MARKER;
 /// classifying quoted search patterns or heredoc bodies as filesystem targets.
 /// This is defense in depth, not a substitute for OS-level sandboxing.
 #[cfg(feature = "modules")]
-fn unbounded_system_scan(analysis: &crate::modules::tinybox::contract::CommandAnalysis) -> bool {
+fn unbounded_system_scan(analysis: &CommandAnalysis) -> bool {
     for segment in &analysis.segments {
         let name = segment.normalized_name.to_ascii_lowercase();
         let args = &segment.arguments;
@@ -90,10 +100,7 @@ impl SecurityPolicy {
     /// Apply the supervised allowlist to parser facts returned by TinyBox.
     /// The module owns shell structure; this host owns the permission policy.
     #[cfg(feature = "modules")]
-    pub fn is_command_allowed_analysis(
-        &self,
-        analysis: &crate::modules::tinybox::contract::CommandAnalysis,
-    ) -> bool {
+    pub(crate) fn is_command_allowed_analysis(&self, analysis: &CommandAnalysis) -> bool {
         if !self.enabled {
             return true;
         }
@@ -137,9 +144,9 @@ impl SecurityPolicy {
     /// The module supplies parsing facts, while this host owns path checks,
     /// autonomy tiers, and approval decisions.
     #[cfg(feature = "modules")]
-    pub fn check_gated_command_analysis(
+    pub(crate) fn check_gated_command_analysis(
         &self,
-        analysis: &crate::modules::tinybox::contract::CommandAnalysis,
+        analysis: &CommandAnalysis,
     ) -> Result<CommandClass, String> {
         self.check_protected_path_words(&analysis.literal_words)?;
         if unbounded_system_scan(analysis) {
@@ -535,7 +542,12 @@ impl SecurityPolicy {
         // heredoc data out of the policy scan. Legacy scanner exports have
         // moved upstream; this fixture must exercise the current contract.
         let analysis = analyze_command(command);
-        if analysis.expansion || analysis.redirection || analysis.tee || analysis.background {
+        if analysis.hidden_execution
+            || analysis.expansion
+            || analysis.redirection
+            || analysis.tee
+            || analysis.background
+        {
             return false;
         }
         for segment in &analysis.segments {

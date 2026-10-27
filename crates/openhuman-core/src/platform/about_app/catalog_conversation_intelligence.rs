@@ -14,16 +14,6 @@ Capability {
         privacy: IMAGE_TO_BACKEND,
     },
 Capability {
-        id: "conversation.reply_remix",
-        name: "Slang and Meme Replies",
-        domain: "conversation",
-        category: CapabilityCategory::Conversation,
-        description: "When the chat can take it, the assistant's final reply comes back in your own language and register with regional slang and sometimes a reaction meme. Serious chats are never touched, and the original reply goes out whenever remixing fails or runs out of time. After a reply is delivered, slang and meme research can run in the background through web search. Runs in the TinyMemes module; off unless the TinyMemes flag selects the thread.",
-        how_to: "Configured with [components] memes and [memes] in config.toml; the OPENHUMAN_TINYMEMES flag selects threads",
-        status: CapabilityStatus::Beta,
-        privacy: REMIX_TO_PROVIDERS,
-    },
-Capability {
         id: "conversation.create",
         name: "Create Conversations",
         domain: "conversation",
@@ -31,6 +21,26 @@ Capability {
         description: "Start a new conversation thread with the assistant.",
         how_to: "Conversations",
         status: CapabilityStatus::Stable,
+        privacy: None,
+    },
+Capability {
+        id: "conversation.organization",
+        name: "Conversation Projects and Categories",
+        domain: "conversation",
+        category: CapabilityCategory::Conversation,
+        description: "Group conversations by working folder or a custom category. Collapse groups and expand child conversations beneath their parent to keep the conversation dock manageable.",
+        how_to: "Conversations > thread actions > category; use the group and child disclosures in the left dock",
+        status: CapabilityStatus::Beta,
+        privacy: None,
+    },
+Capability {
+        id: "conversation.archive",
+        name: "Archive Conversations",
+        domain: "conversation",
+        category: CapabilityCategory::Conversation,
+        description: "Archive conversations without deleting their history, then restore them from the archive view. Delete remains a separate action.",
+        how_to: "Conversations > thread actions > Archive; open the archive view to restore a conversation",
+        status: CapabilityStatus::Beta,
         privacy: None,
     },
 Capability {
@@ -312,7 +322,7 @@ Capability {
         name: "Per-Agent Memory",
         domain: "memory",
         category: CapabilityCategory::Intelligence,
-        description: "Every agent keeps its own conversations (one memory id per agent, by default its definition id) while learnings and the brain are shared by every agent under the same memory root. An agent team gets a root of its own, and a host that runs OpenHuman agents (an embedder, a coordinating product) can bind each agent to its own memory id and root.",
+        description: "Every agent keeps its own conversations (one memory id per agent, by default its definition id) while learnings and the brain are shared by every agent under the same memory root. A host that runs OpenHuman agents (an embedder, a coordinating product) can bind each agent to its own memory id and root.",
         how_to: "Automatic for every agent turn. Configure with [memory] agent_id / root (host binding), [memory.agents.<id>] agent_id / root / recall, or AgentSpec::memory(MemoryBinding) when embedding. Programmatic: openhuman.memory_agents_list (RPC).",
         status: CapabilityStatus::Beta,
         privacy: MEMORY_TO_REMOTE_ENGINE,
@@ -476,7 +486,7 @@ Capability {
             system prompt — OpenHuman's analog of Claude Code's CLAUDE.md / Codex's AGENTS.md. Two \
             layers are read once at session start: a global layer from the OpenHuman workspace \
             (<workspace_dir>/AGENTS.md) and a project layer from the folder the agent is operating \
-            in (<action_dir>/AGENTS.md, or a sub-agent's isolated worktree). The global layer is \
+            in <action_dir>/AGENTS.md). The global layer is \
             injected first, the project layer second (project instructions take precedence). \
             Missing or empty files are silently skipped, and each layer is capped so a large file \
             can't crowd out the rest of the prompt. On by default; disable via \
@@ -570,6 +580,16 @@ Capability {
         status: CapabilityStatus::Beta,
         privacy: RAW_TO_INFERENCE_PROVIDER,
     },
+    Capability {
+        id: "intelligence.doctor_health",
+        name: "Health Diagnostics",
+        domain: "doctor",
+        category: CapabilityCategory::Intelligence,
+        description: "Inspect OpenHuman configuration and runtime health with a structured diagnostic report of checks and repair hints. The default tier uses local and bounded read-only checks; live probes that can spend inference tokens require an explicit request.",
+        how_to: "Ask the assistant to run doctor_health when diagnosing a configuration or runtime problem",
+        status: CapabilityStatus::Beta,
+        privacy: DIAGNOSTICS_TO_BACKEND,
+    },
 Capability {
         id: "intelligence.orchestrator_worker_thread",
         name: "Worker Thread Delegation",
@@ -577,16 +597,6 @@ Capability {
         category: CapabilityCategory::Intelligence,
         description: "When a delegated sub-task is long or complex, the orchestrator can route it into a fresh worker-labeled conversation thread instead of flooding the parent thread. The user opens the worker thread from the thread list (or via the reference card in the parent) to read the sub-agent's full transcript.",
         how_to: "Conversations > tap the worker reference card in the parent thread, or open the worker-labeled thread from the thread list",
-        status: CapabilityStatus::Beta,
-        privacy: DERIVED_TO_BACKEND,
-    },
-Capability {
-        id: "intelligence.workflow_orchestration",
-        name: "Workflow Orchestration",
-        domain: "workflow_runs",
-        category: CapabilityCategory::Intelligence,
-        description: "Run declarative multi-agent workflows such as parallel research with cross-checking: a question is decomposed into angles, researched in parallel, adversarially cross-checked, and synthesized into one cited report. Watch each phase progress with its child agent results, stop or resume a run, and read the final synthesis. High-cost / high-concurrency runs require explicit approval before starting.",
-        how_to: "Intelligence > Orchestration > pick a workflow and Start",
         status: CapabilityStatus::Beta,
         privacy: DERIVED_TO_BACKEND,
     },
@@ -599,16 +609,6 @@ Capability {
         how_to: "Intelligence > Agent Tasks > Agents Library",
         status: CapabilityStatus::Beta,
         privacy: DERIVED_TO_BACKEND,
-    },
-Capability {
-        id: "intelligence.worktree_manager",
-        name: "Agent Worktrees",
-        domain: "intelligence",
-        category: CapabilityCategory::Intelligence,
-        description: "Inspect and clean up the isolated git worktrees that parallel sub-agents check out under <repo>/.claude/worktrees. Each row shows the worktree's branch, dirty state, and changed files, plus a cross-worktree overlap warning when two workers touched the same file. Open, diff, or remove a worktree (a dirty worktree requires an explicit discard confirmation; the worker branch is preserved).",
-        how_to: "Intelligence > Worktrees",
-        status: CapabilityStatus::Beta,
-        privacy: None,
     },
 Capability {
         id: "intelligence.notifications_dismiss",

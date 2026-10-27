@@ -306,6 +306,10 @@ pub struct PromptContext<'a> {
     /// by the caller so prompt builders remain deterministic and avoid
     /// hidden global reads during `build(ctx)`.
     pub connected_identities_md: String,
+    /// Pre-rendered connected-MCP metadata fetched by the caller before
+    /// synchronous prompt rendering. An empty snapshot omits the section;
+    /// builders must never initialize a module or block on its runtime.
+    pub connected_mcp_servers_md: String,
     /// Authenticated user identity (id/name/email) when available — see
     /// [`UserIdentity`]. `None` for unauthenticated paths (CLI without a
     /// session, tests). Pre-fetched by the caller from the
@@ -321,8 +325,8 @@ pub struct PromptContext<'a> {
     /// turn) so the frozen system-prompt prefix / KV-cache contract holds.
     pub agents_md_global: Option<String>,
     /// Pre-loaded project-layer `AGENTS.md` content — `<action_dir>/AGENTS.md`,
-    /// or a sub-agent's `worktree_action_dir` override. `None` when the file is
-    /// absent/empty, deduplicated against the global layer (same dir), or the
+    /// `None` when the file is absent/empty, deduplicated against the global
+    /// layer (same dir), or the
     /// gate is off. Rendered after the global layer.
     pub agents_md_local: Option<String>,
 }

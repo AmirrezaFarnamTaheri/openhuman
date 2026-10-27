@@ -28,6 +28,17 @@ const THREAD: Thread = {
 };
 
 describe('useThreadPins', () => {
+  it('uses the shared label writer and transforms its latest labels', async () => {
+    const latest = ['category:Research', 'ui:archived'];
+    const persist = vi.fn(async (_thread: Thread, update: (labels: string[]) => string[]) => {
+      expect(update(latest)).toEqual([...latest, PINNED_THREAD_LABEL]);
+    });
+    const { result } = renderHook(() => useThreadPins(persist));
+    act(() => result.current.togglePin(THREAD, true));
+    await waitFor(() => expect(persist).toHaveBeenCalledOnce());
+    expect(updateLabels).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     updateLabels.mockReset();
     dispatch.mockReset();

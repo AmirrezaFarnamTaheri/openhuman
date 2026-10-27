@@ -33,6 +33,7 @@ fn config_fn_final_autonomy_is_captured_on_the_built_agent_context() {
         .build()
         .unwrap();
     let test = tokio.spawn(async {
+        let _guard = crate::runtime::RUNTIME_TEST_LOCK.lock().await;
         use openhuman_core::config::{AutonomyConfig, Config};
         use openhuman_core::core::runtime::AutonomyTierSource;
         use openhuman_core::security::AutonomyLevel;
@@ -146,9 +147,9 @@ fn sub_agent_ids_are_checked_like_agent_ids() {
         &catalogue,
         "lead",
         &mut definition,
-        vec![("planner".to_string(), spec())],
+        vec![("vision_agent".to_string(), spec())],
     );
-    assert!(matches!(reserved, Err(AgentError::ReservedId(id)) if id == "planner"));
+    assert!(matches!(reserved, Err(AgentError::ReservedId(id)) if id == "vision_agent"));
 
     let invalid = own_catalogue(
         &catalogue,

@@ -76,6 +76,10 @@ jobs:
       - name: Verify private runner contract
         run: bash scripts/ci/self-hosted/verify-runner.sh
 
+      - name: Set Tinymold diagnostic log path
+        # RUNNER_TEMP is available to steps, but not to the job-level env block.
+        run: echo "TINYMOLD_LOG=$RUNNER_TEMP/tinymold.log" >> "$GITHUB_ENV"
+
       - name: Setup Tinymold
         id: tinymold
         uses: tinyhumansai/tinymold@c4a7ea77ce4a95bf0a65fb403de310bd624197d4
@@ -85,9 +89,11 @@ jobs:
           store: /scratch/tinymold
           # Instrumented test executables link the whole core (~0.5-1 GB each,
           # ~90 GB per run). Stored, they share inodes with the target, so
-          # neither copy can be freed and the 160 GB scratch disk fills
-          # (runs 39315551099, 39331958941, 39340683561). Relink them instead.
-          max-executable-size: 256M
+          # neither copy can be freed: that filled the 160 GB scratch disk
+          # (runs 39315551099, 39331958941, 39340683561). Scratch is 320 GB
+          # now, so they are stored and the core test harness is not
+          # recompiled on every run.
+          max-executable-size: 2G
           remote-url: ${{ env.TINYMOLD_REMOTE_URL }}
           remote-auth: ${{ env.TINYMOLD_REMOTE_AUTH }}
           remote-signing-key: ${{ env.TINYMOLD_REMOTE_SIGNING_KEY }}
@@ -188,6 +194,9 @@ jobs:
         run: |
           mkdir -p ci-out
           tinymold stats > ci-out/tinymold-stats.txt || true
+          # One line per compile (outcome, crate, time, why not stored), for
+          # ranking the misses after the run.
+          [ -f "${TINYMOLD_LOG:-}" ] && cp "${TINYMOLD_LOG}" ci-out/tinymold.log || true
           if [ -f ci-out/cache-save-start ]; then
             echo "$(( $(date +%s) - $(cat ci-out/cache-save-start) ))" > ci-out/cache-save-seconds.txt
           fi
@@ -261,15 +270,17 @@ jobs:
     needs: plan
     if: inputs.profile == 'hosted' && fromJSON(needs.plan.outputs.matrix).include[0] != null
     runs-on: ubuntu-22.04
-    # Hosted Rust coverage shards run concurrently on independent runners.
-    timeout-minutes: ${{ startsWith(matrix.group, 'rust-cov-') && 180 || 100 }}
+    # Storage shards compile independent feature sets and need enough time
+    # to finish while displaying each individual check's live log.
+    timeout-minutes: ${{ startsWith(matrix.group, 'rust-cov-') && 180 || startsWith(matrix.group, 'storage-') && 150 || 100 }}
     container:
       # Empty for the pester group: pwsh ships on the bare runner image.
       image: ${{ matrix.container }}
       # The runner's PID 1 (`tail -f /dev/null`) never reaps orphans, so a
       # killed grandchild stays a zombie that `kill(pid, 0)` still finds and the
       # process-group timeout tests fail. `--init` puts a reaping init at PID 1.
-      options: --init
+      # Nested jails need user namespaces and an unmasked procfs to mount their own /proc.
+      options: --init --security-opt seccomp=unconfined --security-opt apparmor=unconfined --security-opt systempaths=unconfined
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -318,6 +329,10 @@ jobs:
       - name: Check out submodules
         run: bash scripts/ci/checkout-submodules.sh
 
+      - name: Prepare native jail for sandbox regressions
+        if: matrix.container != ''
+        run: bash scripts/ci/prepare-native-jail.sh
+
       - name: Cache Rust build artifacts
         if: matrix.group == 'rust-lint' || startsWith(matrix.group, 'rust-cov-') || matrix.group == 'tauri' || matrix.group == 'storage'
         uses: Swatinem/rust-cache@v2
@@ -345,6 +360,10 @@ jobs:
       - name: Install cargo-llvm-cov
         if: startsWith(matrix.group, 'rust-cov-') || matrix.group == 'tauri'
         uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Install cargo-nextest for isolated core tests
+        if: matrix.group == 'rust-cov-core' || matrix.group == 'storage-lib'
+        uses: taiki-e/install-action@cargo-nextest
 
       # One step per lane: `Start lanes` launches every lane in the background
       # (they still run in parallel); each `Lane:` step streams its own lane's
@@ -403,6 +422,18 @@ jobs:
       - name: "Lane: Rust gates-off smoke"
         if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'rust-gates-off') }}
         run: node scripts/ci/self-hosted/lanes.mjs --wait rust-gates-off
+
+      - name: "Lane: storage E2E"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'storage-e2e') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait storage-e2e
+
+      - name: "Lane: storage library and cron"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'storage-lib') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait storage-lib
+
+      - name: "Lane: storage session store"
+        if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'storage-session') }}
+        run: node scripts/ci/self-hosted/lanes.mjs --wait storage-session
 
       - name: "Lane: Tauri clippy + coverage"
         if: ${{ !cancelled() && contains(fromJSON(steps.lanes.outputs.lanes || '[]'), 'tauri') }}

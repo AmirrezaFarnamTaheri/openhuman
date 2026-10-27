@@ -426,6 +426,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Последние 7 дней',
   'chat.sidebar.group.previous30Days': 'Последние 30 дней',
   'chat.sidebar.group.older': 'Ранее',
+  'chat.sidebar.archived': 'Архив',
+  'chat.sidebar.restoreThread': 'Восстановить',
   'chat.sidebar.pinThread': 'Закрепить разговор',
   'chat.sidebar.unpinThread': 'Открепить разговор',
   'chat.sidebar.unread': 'Новый ответ',
@@ -608,6 +610,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'Не удалось загрузить ожидающие подтверждения действий на рабочем столе. Обновите страницу и повторите попытку.',
   'desktop.unsupported': 'Управление рабочим столом недоступно в этой среде.',
+  'desktop.unsupportedWindows':
+    'Управление рабочим столом пока недоступно в Windows. Управление браузером в Windows уже работает.',
   'desktop.localOnly': 'Эта настройка действует только на этом компьютере.',
   'desktop.permissions': 'Системные разрешения',
   'desktop.openSettings': 'Открыть настройки',
@@ -627,6 +631,10 @@ const messages: TranslationMap = {
     'Сейчас не удаётся связаться с памятью. Ничего из сохранённого не потеряно; повторите попытку чуть позже.',
   'memory.outOfCredits.title': 'Кредиты закончились',
   'memory.outOfCredits.action': 'Пополнить',
+  'memory.error.planRequired':
+    'Ваш текущий тариф не включает память, поэтому OpenHuman не может сохранять то, что узнаёт, и обращаться к этому. Перейдите на более высокий тариф, чтобы включить память, или выберите другой вариант памяти в настройках.',
+  'memory.planRequired.title': 'Память не входит в ваш тариф',
+  'memory.planRequired.action': 'Посмотреть тарифы',
   'alerts.title': 'Оповещения',
   'alerts.empty': 'Оповещений пока нет',
   'alerts.markAllRead': 'Отметить всё прочитанным',
@@ -692,6 +700,15 @@ const messages: TranslationMap = {
   'invites.title': 'Приглашения',
   'invites.noInvites': 'Активных приглашений нет',
   'devOptions.titleDiagnostics': 'Разработчик и Диагностика',
+  'devOptions.doctor.run': 'Запустить диагностику',
+  'devOptions.doctor.runLive': 'Запустить проверки в реальном времени',
+  'devOptions.doctor.liveWarning':
+    'Проверки в реальном времени могут расходовать токены при вызовах модели или эмбеддингов. Продолжить?',
+  'devOptions.doctor.severity.pass': 'Пройдено',
+  'devOptions.doctor.severity.info': 'Информация',
+  'devOptions.doctor.severity.warn': 'Предупреждение',
+  'devOptions.doctor.severity.error': 'Ошибка',
+  'devOptions.doctor.severity.skipped': 'Пропущено',
   'devOptions.diagnostics': 'Диагностика',
   'devOptions.toolPolicyDiagnosticsDesc':
     'Инвентаризация инструментов, положение политики, белые списки MCP и недавние блокировки',
@@ -1326,6 +1343,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'Не удалось загрузить сообщения',
   'chat.thinkingDots': 'Думаю...',
   'chat.status.thinkingElapsed': 'Думаю · {elapsed}',
+  'chat.status.compacting': 'Резюмирую предыдущий разговор…',
+  'chat.status.compactingElapsed': 'Резюмирую предыдущий разговор · {elapsed}',
   'chat.status.waitingApproval': 'Ожидает вашего одобрения',
   'chat.status.waitingReview': 'Ожидает вашей проверки',
   'chat.status.waitingAnswer': 'Ожидает вашего ответа',
@@ -1853,11 +1872,6 @@ const messages: TranslationMap = {
   'chat.todos.ofTotal': '{done} из {total}',
   'chat.todos.receipt': 'Прогресс обновлён · {done}/{total}',
   'chat.subagents.ranFor': 'Длилось {duration}',
-  'chat.subagents.ofTotal': '{complete} из {total}',
-  'chat.subagents.runningCount': 'Выполняется: {count}',
-  'chat.subagents.failedCount': 'С ошибкой: {count}',
-  'chat.subagents.incompleteCount': 'Не завершено: {count}',
-  'chat.subagents.settled': 'Подзадачи завершены. Обрабатываем их результаты.',
   'conversations.planReview.title': 'Проверить план',
   'conversations.planReview.subtitle':
     'Одобрите для запуска, отклоните для отмены или отправьте отзыв для доработки.',
@@ -1893,7 +1907,6 @@ const messages: TranslationMap = {
   'conversations.mcpUi.confirmAllow': 'Разрешить',
   'conversations.mcpUi.confirmDeny': 'Запретить',
   'conversations.tools.delegatedTo': 'Передано агенту {agent}',
-  'conversations.tools.parallelAgentsAggregating': 'Объединение результатов',
   'conversations.tools.openInBrowser': 'Открыть в браузере',
   'conversations.tools.status.running': 'выполняется',
   'conversations.tools.status.done': 'готово',
@@ -1961,22 +1974,6 @@ const messages: TranslationMap = {
     'Повтор не удался. Скачай последнюю версию и попробуй снова.',
   'daemon.serviceBlockingGate.retrying': 'Повтор...',
   'daemon.serviceBlockingGate.title': 'Ядро OpenHuman недоступно',
-  'worktree.label': 'Рабочее дерево',
-  'worktree.dirty': 'Незакоммиченные изменения',
-  'worktree.clean': 'Чисто',
-  'worktree.removing': 'Удаление…',
-  'worktree.removeFailed': 'Не удалось удалить worktree',
-  'worktree.diffFailed': 'Не удалось загрузить diff',
-  'worktree.diffLoading': 'Загрузка diff…',
-  'worktree.diffEmpty': 'Нет изменений относительно HEAD.',
-  'worktree.dirtyConfirm':
-    'В этом worktree есть незакоммиченные изменения. При удалении эта работа будет потеряна. Ветка воркера сохраняется.',
-  'worktree.action.open': 'Открыть папку',
-  'worktree.action.diff': 'Разница',
-  'worktree.action.hideDiff': 'Скрыть diff',
-  'worktree.action.remove': 'Удалить',
-  'worktree.action.removeAnyway': 'Отклонить и удалить',
-  'worktree.action.preserve': 'Сохранить',
   'notifications.card.dismiss': 'Закрыть уведомление',
   'notifications.card.importanceTitle': 'Важность: {pct}%',
   'notifications.center.empty': 'Уведомлений пока нет',
@@ -2414,6 +2411,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'В группе провайдера может быть не более 128 ключей API.',
   'settings.ai.fleet.partialKeyVerified':
     'Некоторые ключи API отклонены, но другой ключ успешно проверен. Проверьте состояние ключей.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman не удалось подтвердить эту группу ключей по каталогу провайдера. Ключи сохранены и будут проверены при отправке запроса к модели.',
   'settings.ai.apiKeyFieldLabel': 'Поле API-ключа',
   'settings.ai.apiKeyRequired': 'Вставь свой API-ключ для продолжения.',
   'settings.ai.apiKeyStoredEncrypted': 'API-ключ хранится в зашифрованном виде',
@@ -3838,6 +3837,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Поиск рабочих мест...',
   'settings.developerMenu.eventLog.column.time': 'Время',
   'settings.developerMenu.eventLog.column.event': 'Событие',
+  'settings.agentAccess.totalTimeout.label': 'Общий лимит времени хода',
+  'settings.agentAccess.totalTimeout.desc':
+    'По умолчанию общий лимит времени хода не задан. Укажите OPENHUMAN_AGENT_TURN_TIMEOUT_SECS, чтобы задать лимит; значение 0 отключает его. Защита для отдельных действий и зависших вызовов продолжает действовать.',
   'settings.agentAccess.group.approvals': 'Утверждение',
   'settings.agentAccess.group.fileSystem': 'Файловая система',
   'settings.agentAccess.group.limits': 'пределы',
@@ -4898,8 +4900,6 @@ const messages: TranslationMap = {
   'conversations.tools.updateLearnings.done': 'Изученное обновлено',
   'conversations.tools.delegateTask.active': 'Передача задачи',
   'conversations.tools.delegateTask.done': 'Задача передана',
-  'conversations.tools.runAgentsInParallel.active': 'Параллельный запуск агентов',
-  'conversations.tools.runAgentsInParallel.done': 'Агенты запущены параллельно',
   'conversations.tools.messageAgent.active': 'Отправка сообщения агенту',
   'conversations.tools.messageAgent.done': 'Сообщение агенту отправлено',
   'conversations.tools.waitForAgent.active': 'Ожидание агента',
@@ -4936,6 +4936,8 @@ const messages: TranslationMap = {
   'conversations.tools.checkGoal.done': 'Цель проверена',
   'conversations.tools.completeGoal.active': 'Выполнение цели',
   'conversations.tools.completeGoal.done': 'Цель выполнена',
+  'conversations.tools.resumeGoal.active': 'Возобновление цели',
+  'conversations.tools.resumeGoal.done': 'Цель возобновлена',
   'conversations.tools.scheduleTask.active': 'Планирование задачи',
   'conversations.tools.scheduleTask.done': 'Задача запланирована',
   'conversations.tools.checkSchedules.active': 'Проверка расписаний',
@@ -5168,6 +5170,9 @@ const messages: TranslationMap = {
   'settings.layout.contrast.subtle': 'Незаметный',
 
   'settings.layout.contrast.strong': 'Высокий',
+  'settings.agentAccess.hideShellWindows.label': 'Скрывать окна терминала',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Скрывает окна терминала Windows для новых сеансов оболочки.',
 };
 
 export default messages;

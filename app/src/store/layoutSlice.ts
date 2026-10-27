@@ -13,6 +13,8 @@ export interface PanelLayout {
   sidebarVisible: boolean;
   /** Sidebar width in CSS px, as set by dragging the divider. */
   sidebarWidth: number;
+  /** User-scoped collapsed section identities within this panel. */
+  collapsedGroups?: string[];
 }
 
 interface LayoutState {
@@ -66,14 +68,26 @@ const layoutSlice = createSlice({
     setSidebarWidth: (state, action: PayloadAction<{ id: string; width: number }>) => {
       panelFor(state, action.payload.id).sidebarWidth = action.payload.width;
     },
+    togglePanelGroup: (state, action: PayloadAction<{ id: string; group: string }>) => {
+      const panel = panelFor(state, action.payload.id);
+      const groups = panel.collapsedGroups ?? [];
+      panel.collapsedGroups = groups.includes(action.payload.group)
+        ? groups.filter(group => group !== action.payload.group)
+        : [...groups, action.payload.group];
+    },
   },
   extraReducers: builder => {
     builder.addCase(resetUserScopedState, () => initialState);
   },
 });
 
-export const { ensurePanelLayout, setSidebarVisible, toggleSidebar, setSidebarWidth } =
-  layoutSlice.actions;
+export const {
+  ensurePanelLayout,
+  setSidebarVisible,
+  toggleSidebar,
+  setSidebarWidth,
+  togglePanelGroup,
+} = layoutSlice.actions;
 
 /**
  * Select a panel's geometry, falling back to `DEFAULT_PANEL_LAYOUT` (or the

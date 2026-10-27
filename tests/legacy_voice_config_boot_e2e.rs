@@ -124,7 +124,11 @@ fn legacy_voice_settings_boot_without_starting_retired_listeners() {
         .env("OPENHUMAN_WORKSPACE", &workspace)
         .env("OPENHUMAN_DOTENV_PATH", &dotenv_path)
         .env("OPENHUMAN_CORE_TOKEN", TOKEN)
-        .env("OPENHUMAN_KEYRING_BACKEND", "file")
+        .env("OPENHUMAN_KEYRING_BACKEND", "encrypted_file")
+        // This child owns a scratch keychain; no OS keychain or operator key
+        // participates in the boot regression.
+        .env("OPENHUMAN_KEYRING_MASTER_KEY", "11".repeat(32))
+        .env_remove("OPENHUMAN_KEYRING_MASTER_KEY_FILE")
         .env("RUST_LOG", "info")
         .env("BACKEND_URL", backend_url)
         .env_remove("OPENHUMAN_BACKEND_API_KEY")
@@ -143,11 +147,14 @@ fn legacy_voice_settings_boot_without_starting_retired_listeners() {
     );
     assert!(
         credential.get("error").is_none(),
-        "installing the local test credential failed"
+        "installing the local test credential failed: {credential}"
     );
     let status = rpc(&base, "openhuman.voice_status", json!({}));
     let voice_enabled = status.get("error").is_none();
-    assert!(voice_enabled, "the voice RPC component must remain enabled");
+    assert!(
+        voice_enabled,
+        "the voice RPC component must remain enabled: {status}"
+    );
     let observed_engine = status
         .pointer("/result/stt_engine")
         .and_then(Value::as_str)
@@ -157,8 +164,16 @@ fn legacy_voice_settings_boot_without_starting_retired_listeners() {
         "legacy non-default engine must survive host configuration load"
     );
 
-    std::thread::sleep(Duration::from_millis(500));
-    let logs = std::fs::read_to_string(log_path).unwrap();
+    let startup_deadline = Instant::now() + Duration::from_secs(10);
+    let logs = loop {
+        let logs = std::fs::read_to_string(&log_path).unwrap();
+        if logs.contains("login-gated services started concurrently")
+            || Instant::now() >= startup_deadline
+        {
+            break logs;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
     let gated_startup_completed = logs.contains("login-gated services started concurrently");
     assert!(
         gated_startup_completed,

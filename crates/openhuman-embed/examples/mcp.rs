@@ -1,9 +1,10 @@
 //! Title: Connect an actual MCP protocol stub over loopback
 //! Summary: Connect an actual MCP protocol stub over loopback.
 //! Run: offline with loopback stubs; no live path.
-//! Feature: mcp
+//! Feature: mcp,storage-sqlite
 
 mod support;
+use openhuman_core::config::schema::ModuleOverride;
 use openhuman_embed::{AgentSpec, Runtime, Workspace};
 
 fn main() -> anyhow::Result<()> {
@@ -13,8 +14,18 @@ fn main() -> anyhow::Result<()> {
 async fn run() -> anyhow::Result<()> {
     let backend = support::stub_backend().await;
     let provider = support::provider("hello from the stub").await;
+    // CI stages the checksum-verified module; storage callbacks require this local-file source.
+    let artifact = openhuman_core::modules::local_artifact("tinymcp").ok_or_else(|| {
+        anyhow::anyhow!("stage TinyMCP on OPENHUMAN_MODULE_PATH before running this example")
+    })?;
+    let mut config = support::offline_config();
+    config.modules.allow_download = false;
+    config.modules.overrides.push(ModuleOverride::with_path(
+        "tinymcp",
+        artifact.canonicalize()?.to_string_lossy().into_owned(),
+    ));
     let runtime = Runtime::builder()
-        .config(support::offline_config())
+        .config(config)
         .workspace(Workspace::Ephemeral)
         .backend_url(backend.uri())
         .provider(support::route(&provider, "fixture"))
@@ -98,7 +109,8 @@ impl wiremock::Respond for ForecastModel {
             1 => {
                 assert!(
                     support::tool_results(request).contains("forecast"),
-                    "remote tools were listed successfully"
+                    "remote tools were listed successfully: {}",
+                    support::tool_results(request)
                 );
                 support::tool_call_completion(
                     "mcp_call_tool",
@@ -108,7 +120,8 @@ impl wiremock::Respond for ForecastModel {
             _ => {
                 assert!(
                     support::tool_results(request).contains("sunny"),
-                    "remote execution returned its result"
+                    "remote execution returned its result: {}",
+                    support::tool_results(request)
                 );
                 support::chat_completion("sunny verified")
             }

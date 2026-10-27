@@ -1,15 +1,14 @@
 //! Langfuse export for `flows::` graph runs.
 //!
 //! After a `flows_run` / `flows_resume` settles, the `flows::` domain hands
-//! this module the run's [`GraphObservation`] slice collected from the Runs
+//! this module the run's [`TraceObservation`] slice collected from the Runs
 //! bus event stream, and it exports the run as one Langfuse trace via the backend's Langfuse
 //! OTLP proxy route (Langfuse v4; the legacy batch ingestion path is not used
 //! for traces).
 //!
-//! The trace is built by `tinyagents`' [`GraphLangfuseExporter`], which turns
-//! each superstep and node into a timed span and stamps the Langfuse **Agent
-//! Graph view** keys (`langgraph_node` / `langgraph_step`) on node spans, so
-//! the Langfuse UI can render the flow run as a graph, then projects it to
+//! The trace mapper turns TinyFlows run observations into timed generic
+//! harness spans, stamps the Langfuse **Agent Graph view** keys
+//! (`langgraph_node` / `langgraph_step`) on node spans, and projects them to
 //! v4 OTLP: trace name, session, tags, release and flow metadata ride on every
 //! span, since v4 filters observations directly. A host span-metadata
 //! injector additionally stamps `flow_id` on every span for filtering.
@@ -26,8 +25,11 @@
 
 use std::time::Duration;
 
-use serde_json::{json, Map, Value};
-use tinyagents_graph::{GraphLangfuseExporter, GraphObservation};
+use std::collections::{HashMap, VecDeque};
+
+use crate::flows::trace_observation::TraceObservation;
+use serde_json::{json, Value};
+use tinyagents_harness::observability::spans::{Span, SpanExporter, SpanState};
 use tinyagents_harness::{LangfuseAuth, LangfuseClient, LangfuseTraceConfig};
 use tinyflows_bus::runs::FlowRunTrigger;
 
@@ -106,29 +108,370 @@ fn build_flow_trace_config(
     }
 }
 
-/// Builds the graph exporter for a flow run: the batch builder plus a host
-/// span-metadata injector that stamps `flow_id` on every span (node spans
-/// already carry `langgraph_node`/`langgraph_step` from `tinyagents`).
-fn build_flow_exporter(client: LangfuseClient, flow_id: &str) -> GraphLangfuseExporter {
-    let flow_id = flow_id.to_string();
-    GraphLangfuseExporter::new(client).with_span_metadata_fn(move |_obs| {
-        let mut extra = Map::new();
-        extra.insert("flow_id".to_string(), json!(flow_id));
-        Some(extra)
-    })
+/// Converts TinyFlows' durable events to the generic harness span contract.
+/// Pairing is FIFO so repeated node activations keep their event order.
+fn flow_spans(flow_id: &str, observations: &[TraceObservation]) -> Vec<Span> {
+    let Some(first) = observations.first() else {
+        return Vec::new();
+    };
+    let trace_id = first
+        .thread_id
+        .as_deref()
+        .unwrap_or(first.root_run_id.as_str());
+    let run_id = first.run_id.as_str();
+    let root_run_id = first.root_run_id.as_str();
+    let run_span_id = format!("{trace_id}:run:{root_run_id}");
+    let terminal = observations
+        .iter()
+        .rev()
+        .find(|obs| matches!(obs.event_name(), "RunCompleted" | "RunFailed"));
+    let mut run_span = Span::new(
+        run_span_id.clone(),
+        run_id,
+        first.graph_id.as_str(),
+        first.ts_ms,
+    )
+    .with_root_run_id(root_run_id)
+    .with_event_id(terminal.unwrap_or(first).event_id.as_str());
+    if let Some(end) = terminal.or_else(|| observations.last()) {
+        run_span = run_span.finish(
+            end.ts_ms,
+            if end.event_name() == "RunFailed" {
+                SpanState::Error
+            } else {
+                SpanState::Ok
+            },
+        );
+    }
+    add_observation_metadata(&mut run_span, first, flow_id);
+
+    let mut output = vec![run_span];
+    let mut consumed = vec![false; observations.len()];
+    let mut step_starts: HashMap<usize, VecDeque<usize>> = HashMap::new();
+    let mut node_starts: HashMap<(String, usize), VecDeque<usize>> = HashMap::new();
+    let mut subgraph_starts: HashMap<(String, Vec<String>), VecDeque<usize>> = HashMap::new();
+
+    for (index, observation) in observations.iter().enumerate() {
+        let (name, data) = observation.event_parts();
+        let step = data["step"]
+            .as_u64()
+            .and_then(|step| usize::try_from(step).ok());
+        let node = data["node"].as_str();
+        match (name, node, step) {
+            ("StepStarted", _, Some(step)) => {
+                step_starts.entry(step).or_default().push_back(index);
+                consumed[index] = true;
+            }
+            ("StepCompleted", _, Some(step)) => {
+                if let Some(start) = pop_start(&mut step_starts, &step) {
+                    consumed[index] = true;
+                    output.push(step_span(
+                        flow_id,
+                        trace_id,
+                        &run_span_id,
+                        step,
+                        observations,
+                        start,
+                        index,
+                    ));
+                }
+            }
+            ("NodeStarted", Some(node), Some(step)) => {
+                node_starts
+                    .entry((node.to_owned(), step))
+                    .or_default()
+                    .push_back(index);
+                consumed[index] = true;
+            }
+            ("NodeCompleted", Some(node), Some(step)) => {
+                if let Some(start) = pop_start(&mut node_starts, &(node.to_owned(), step)) {
+                    consumed[index] = true;
+                    output.push(node_span(
+                        flow_id,
+                        trace_id,
+                        node,
+                        step,
+                        observations,
+                        start,
+                        index,
+                        None,
+                    ));
+                }
+            }
+            ("NodeFailed", Some(node), Some(step)) => {
+                let Some(error) = data["error"].as_str() else {
+                    continue;
+                };
+                if let Some(start) = pop_start(&mut node_starts, &(node.to_owned(), step)) {
+                    consumed[index] = true;
+                    output.push(node_span(
+                        flow_id,
+                        trace_id,
+                        node,
+                        step,
+                        observations,
+                        start,
+                        index,
+                        Some(error),
+                    ));
+                }
+            }
+            ("SubgraphStarted", Some(node), _) => {
+                let Ok(namespace) =
+                    serde_json::from_value::<Vec<String>>(data["namespace"].clone())
+                else {
+                    continue;
+                };
+                subgraph_starts
+                    .entry((node.to_owned(), namespace))
+                    .or_default()
+                    .push_back(index);
+                consumed[index] = true;
+            }
+            ("SubgraphCompleted", Some(node), _) => {
+                let Ok(namespace) =
+                    serde_json::from_value::<Vec<String>>(data["namespace"].clone())
+                else {
+                    continue;
+                };
+                if let Some(start) =
+                    pop_start(&mut subgraph_starts, &(node.to_owned(), namespace.clone()))
+                {
+                    consumed[index] = true;
+                    output.push(subgraph_span(
+                        flow_id,
+                        trace_id,
+                        &run_span_id,
+                        node,
+                        &namespace,
+                        observations,
+                        start,
+                        index,
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    for (step, starts) in step_starts {
+        for start in starts {
+            output.push(step_span(
+                flow_id,
+                trace_id,
+                &run_span_id,
+                step,
+                observations,
+                start,
+                start,
+            ));
+            output.last_mut().expect("just pushed").end_ms = None;
+        }
+    }
+    for ((node, step), starts) in node_starts {
+        for start in starts {
+            output.push(node_span(
+                flow_id,
+                trace_id,
+                &node,
+                step,
+                observations,
+                start,
+                start,
+                None,
+            ));
+            output.last_mut().expect("just pushed").end_ms = None;
+        }
+    }
+    for ((node, namespace), starts) in subgraph_starts {
+        for start in starts {
+            output.push(subgraph_span(
+                flow_id,
+                trace_id,
+                &run_span_id,
+                &node,
+                &namespace,
+                observations,
+                start,
+                start,
+            ));
+            output.last_mut().expect("just pushed").end_ms = None;
+        }
+    }
+    for (index, observation) in observations.iter().enumerate() {
+        if consumed[index] || observation.event_name() == "RunStarted" {
+            continue;
+        }
+        let failed = observation.event_name() == "RunFailed";
+        let error = match observation.event_parts() {
+            ("RunFailed" | "NodeFailed", data) => data["error"].as_str(),
+            _ => None,
+        };
+        let mut span = Span::new(
+            observation.event_id.as_str(),
+            observation.run_id.as_str(),
+            observation.event_kind(),
+            observation.ts_ms,
+        )
+        .with_root_run_id(observation.root_run_id.as_str())
+        .with_parent(&run_span_id)
+        .with_event_id(observation.event_id.as_str());
+        span.kind = "event-create".to_owned();
+        span.status = if failed {
+            SpanState::Error
+        } else {
+            SpanState::Unset
+        };
+        span.status_message = error.map(str::to_owned);
+        add_observation_metadata(&mut span, observation, flow_id);
+        output.push(span);
+    }
+    output
 }
 
-/// The Langfuse v4 OTLP requests for one flow run, under the product's
-/// `service.name` (the same one agent-turn traces use).
+fn pop_start<K: std::hash::Hash + Eq>(
+    starts: &mut HashMap<K, VecDeque<usize>>,
+    key: &K,
+) -> Option<usize> {
+    let queue = starts.get_mut(key)?;
+    let start = queue.pop_front();
+    if queue.is_empty() {
+        starts.remove(key);
+    }
+    start
+}
+
+fn add_observation_metadata(span: &mut Span, observation: &TraceObservation, flow_id: &str) {
+    span.metadata.insert("flow_id".into(), json!(flow_id));
+    span.metadata
+        .insert("graph_id".into(), json!(observation.graph_id.as_str()));
+    span.metadata
+        .insert("run_id".into(), json!(observation.run_id.as_str()));
+    span.metadata.insert(
+        "root_run_id".into(),
+        json!(observation.root_run_id.as_str()),
+    );
+    span.metadata.insert(
+        "parent_run_id".into(),
+        json!(observation.parent_run_id.as_deref()),
+    );
+    span.metadata.insert(
+        "checkpoint_id".into(),
+        json!(observation.checkpoint_id.as_deref()),
+    );
+    span.metadata
+        .insert("namespace".into(), json!(observation.namespace));
+    span.metadata.insert("step".into(), json!(observation.step));
+    span.metadata
+        .insert("offset".into(), json!(observation.offset));
+    span.metadata
+        .insert("event".into(), json!(observation.event));
+}
+
+fn step_span(
+    flow_id: &str,
+    trace_id: &str,
+    run_span_id: &str,
+    step: usize,
+    observations: &[TraceObservation],
+    start: usize,
+    end: usize,
+) -> Span {
+    let first = &observations[start];
+    let last = &observations[end];
+    let mut span = Span::new(
+        format!("{trace_id}:step:{step}"),
+        first.run_id.as_str(),
+        format!("step {step}"),
+        first.ts_ms,
+    )
+    .with_root_run_id(first.root_run_id.as_str())
+    .with_parent(run_span_id)
+    .with_event_id(last.event_id.as_str());
+    if end != start {
+        span = span.finish(last.ts_ms, SpanState::Ok);
+    }
+    add_observation_metadata(&mut span, first, flow_id);
+    span.metadata.insert("langgraph_step".into(), json!(step));
+    span
+}
+
+fn node_span(
+    flow_id: &str,
+    trace_id: &str,
+    node: &str,
+    step: usize,
+    observations: &[TraceObservation],
+    start: usize,
+    end: usize,
+    error: Option<&str>,
+) -> Span {
+    let first = &observations[start];
+    let last = &observations[end];
+    let mut span = Span::new(
+        format!("{trace_id}:node:{node}:{step}"),
+        first.run_id.as_str(),
+        node,
+        first.ts_ms,
+    )
+    .with_root_run_id(first.root_run_id.as_str())
+    .with_parent(format!("{trace_id}:step:{step}"))
+    .with_event_id(last.event_id.as_str());
+    if end != start {
+        span = span.finish(
+            last.ts_ms,
+            if error.is_some() {
+                SpanState::Error
+            } else {
+                SpanState::Ok
+            },
+        );
+    }
+    span.status_message = error.map(str::to_owned);
+    add_observation_metadata(&mut span, last, flow_id);
+    span.metadata.insert("langgraph_node".into(), json!(node));
+    span.metadata.insert("langgraph_step".into(), json!(step));
+    span
+}
+
+fn subgraph_span(
+    flow_id: &str,
+    trace_id: &str,
+    run_span_id: &str,
+    node: &str,
+    namespace: &[String],
+    observations: &[TraceObservation],
+    start: usize,
+    end: usize,
+) -> Span {
+    let first = &observations[start];
+    let last = &observations[end];
+    let mut span = Span::new(
+        format!("{trace_id}:subgraph:{}", namespace.join("/")),
+        first.run_id.as_str(),
+        format!("subgraph {node}"),
+        first.ts_ms,
+    )
+    .with_root_run_id(first.root_run_id.as_str())
+    .with_parent(run_span_id)
+    .with_event_id(last.event_id.as_str());
+    if end != start {
+        span = span.finish(last.ts_ms, SpanState::Ok);
+    }
+    add_observation_metadata(&mut span, last, flow_id);
+    span
+}
+
 fn flow_otlp_requests(
-    exporter: &GraphLangfuseExporter,
+    exporter: &SpanExporter,
     trace: LangfuseTraceConfig,
-    observations: &[GraphObservation],
+    flow_id: &str,
+    observations: &[TraceObservation],
 ) -> tinyagents_harness::error::Result<Vec<Value>> {
-    crate::core::observability::progress_tracing::build_graph_otlp_requests(
-        exporter,
+    exporter.build_otlp_requests(
         trace,
-        observations,
+        &flow_spans(flow_id, observations),
+        "openhuman",
+        "openhuman.graph",
     )
 }
 
@@ -143,7 +486,7 @@ pub async fn export_flow_run_trace(
     thread_id: &str,
     status: &str,
     trigger: FlowRunTrigger,
-    observations: &[GraphObservation],
+    observations: &[TraceObservation],
 ) {
     if !config.observability.share_usage_data {
         tracing::debug!(
@@ -201,7 +544,7 @@ pub async fn export_flow_run_trace(
         }
     };
 
-    let exporter = build_flow_exporter(client, flow_id);
+    let exporter = SpanExporter::new(client);
     let trace = build_flow_trace_config(flow_name, flow_id, thread_id, status, trigger);
     let observation_count = observations.len();
     tracing::debug!(
@@ -215,7 +558,7 @@ pub async fn export_flow_run_trace(
         "[flows] pushing flow run trace to Langfuse"
     );
 
-    let requests = match flow_otlp_requests(&exporter, trace, observations) {
+    let requests = match flow_otlp_requests(&exporter, trace, flow_id, observations) {
         Ok(requests) => requests,
         Err(err) => {
             tracing::warn!(
@@ -228,18 +571,22 @@ pub async fn export_flow_run_trace(
             return;
         }
     };
-    // The core observability owner performs the generic graph projection and
-    // authenticated sends; this adapter supplies flow-specific trace metadata.
-    let send =
-        crate::core::observability::progress_tracing::send_graph_otlp_requests(&exporter, requests);
+    // The generic exporter owns OTLP conversion and the authenticated client;
+    // this adapter supplies flow-specific spans and trace metadata.
+    let send = async {
+        for request in requests {
+            exporter.client().send_otlp(request).await?;
+        }
+        Ok::<(), tinyagents_harness::error::TinyAgentsError>(())
+    };
     match tokio::time::timeout(PUSH_TIMEOUT, send).await {
-        Ok(Ok(request_count)) => {
+        Ok(Ok(())) => {
             tracing::debug!(
                 target: LOG_TARGET,
                 flow_id = %flow_id,
                 thread_id = %thread_id,
                 observation_count,
-                request_count,
+                request_count = 1,
                 "[flows] pushed flow run trace to Langfuse"
             );
         }

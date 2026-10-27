@@ -3,10 +3,13 @@
 
 use super::super::dispatch::run_message_dispatch_loop;
 use super::module_providers::ModuleChannelRuntime;
-use super::turn_parts::{build_channel_turn_parts, runtime_context, PromptToolDescs};
+use super::turn_parts::{
+    build_channel_turn_parts_with_inference, runtime_context, PromptToolDescs,
+};
 use crate::config::Config;
 use crate::core::bus::BUS;
 use crate::core::events::DomainEvent;
+use crate::core::runtime::DispatchCtx;
 use crate::security::SecurityPolicy;
 use anyhow::Result;
 use std::sync::{Arc, OnceLock, Weak};
@@ -20,16 +23,32 @@ pub(crate) async fn start_channels_with_session(
     config: Config,
     session: tokio_util::sync::CancellationToken,
 ) -> Result<()> {
-    start_channels_inner(config, session).await
+    start_channels_inner(DispatchCtx::host_default(), config.clone(), config, session).await
 }
 
-async fn start_channels_inner(mut config: Config, session: CancellationToken) -> Result<()> {
+/// Start the channel runtime for a caller-owned agent and channel config.
+///
+/// The channel config owns workspace, tools, and service settings. The
+/// inference config is the resolved provider/model config for the bound agent.
+pub async fn start_channels_in(
+    dispatch: DispatchCtx,
+    config: Config,
+    inference_config: Config,
+) -> Result<()> {
+    start_channels_inner(dispatch, config, inference_config, CancellationToken::new()).await
+}
+
+async fn start_channels_inner(
+    dispatch: DispatchCtx,
+    mut config: Config,
+    inference_config: Config,
+    session: CancellationToken,
+) -> Result<()> {
     if session.is_cancelled() {
         return Ok(());
     }
     // The listener runs for the host's own tenant (none in SaaS, where hosted
     // channels go through the relay under their profile's context).
-    let dispatch = crate::core::runtime::DispatchCtx::host_default();
     // Initialize the global event bus singleton and register the tracing
     // subscriber for debug logging of all domain events.
     crate::core::bus::init().await.expect("bus init");
@@ -126,7 +145,13 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     // shared with the hosted-channel relay.
     #[cfg(all(feature = "flows", feature = "skills"))]
     crate::skills::schedule_flow_authoring_prewarm(&dispatch, &config, None);
-    let parts = build_channel_turn_parts(&dispatch, &config, &security, PromptToolDescs::Fixed)?;
+    let parts = build_channel_turn_parts_with_inference(
+        &dispatch,
+        &config,
+        &inference_config,
+        &security,
+        PromptToolDescs::Fixed,
+    )?;
     let model = parts.model.clone();
     let skills = parts.skills.clone();
 
@@ -240,7 +265,10 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     // Remote-control turn state (`/status` shows "in progress") for every
     // channel with the `remote_control` capability.
     let _turn_state_handle = bus.subscribe(Arc::new(
-        crate::channels::host::ChannelTurnStateSubscriber::with_config(Arc::new(config.clone())),
+        crate::channels::host::ChannelTurnStateSubscriber::with_config(
+            Arc::clone(&channels_by_name),
+            Arc::new(config.clone()),
+        ),
     ));
     // In-chat approvals (sub-issue 2 of #3098) for every channel with the
     // `chat_approvals` capability: `Prompt`-class tool calls are gated for the
@@ -267,6 +295,7 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     let runtime_ctx = Arc::new(runtime_context(
         &dispatch,
         &config,
+        &inference_config,
         parts,
         Arc::clone(&channels_by_name),
         message_timeout_secs,
@@ -295,7 +324,12 @@ async fn start_channels_inner(mut config: Config, session: CancellationToken) ->
     tokio::select! {
         biased;
         _ = session.cancelled() => {},
-        _ = run_message_dispatch_loop(rx, runtime_ctx, max_in_flight_messages) => {},
+        _ = run_message_dispatch_loop(
+            rx,
+            runtime_ctx,
+            max_in_flight_messages,
+            config.inbound_debounce.clone(),
+        ) => {},
     }
     if let Some(runtime) = module_runtime.as_mut() {
         runtime.close().await?;

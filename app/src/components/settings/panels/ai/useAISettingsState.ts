@@ -33,6 +33,51 @@ import {
 /** Providers with no `/models` endpoint, never re-probed at save time. */
 const SAVE_PROBE_EXEMPT_SLUGS = new Set(['openhuman', 'claude-code']);
 
+/**
+ * Stable, order-independent signature of a provider's PERSISTED fields.
+ *
+ * The eager-flush effect below compares the draft's providers with the saved
+ * ones to decide whether it still has to write them out. It used to compare
+ * raw `JSON.stringify` output, which is wrong twice over:
+ *
+ *  - `JSON.stringify` is key-ORDER sensitive, so two snapshots describing the
+ *    same provider compared unequal whenever the core re-serialized a nested
+ *    map (`model_image_endpoints`, `model_transports`) in a different order.
+ *  - The comparison therefore never converged: the effect flushed the
+ *    providers, the write triggered a config change, the panel reloaded, the
+ *    reloaded snapshot had a different key order, and the effect flushed
+ *    again. That is the "auto refresh in high frequency" the user reported —
+ *    a write loop that also raced the user's own Save.
+ *
+ * Comparing the fields the core actually persists, in a fixed order and with
+ * sorted map keys, makes the effect converge after one flush.
+ */
+function providerSignature(provider: CloudProvider): string {
+  const sortedMap = (value: Record<string, unknown> | undefined): string =>
+    Object.keys(value ?? {})
+      .sort()
+      .map(key => `${key}=${String((value ?? {})[key])}`)
+      .join(';');
+  return [
+    provider.id,
+    provider.slug,
+    provider.label,
+    provider.endpoint,
+    provider.imageEndpoint ?? '',
+    sortedMap(provider.modelImageEndpoints),
+    sortedMap(provider.modelTransports),
+    provider.rotationStrategy ?? 'round_robin',
+    provider.toolCallCodec ?? 'native',
+    provider.caCertPem ?? '',
+    provider.authStyle,
+  ].join('\u0000');
+}
+
+/** Signature of the provider list, order-independent (the list is a set). */
+function providerListSignature(providers: CloudProvider[]): string {
+  return providers.map(providerSignature).sort().join('\u0001');
+}
+
 function toPanelProvider(p: CloudProviderView): CloudProvider {
   return {
     id: p.id,
@@ -107,6 +152,13 @@ export function useAISettings() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
+  /**
+   * Full reload: replaces BOTH the saved snapshot and the draft.
+   *
+   * Only for an explicit user-driven refresh (the panel's Reload button, an
+   * OAuth round-trip that changes what is stored). It intentionally discards
+   * unsaved edits — the user asked for the stored state.
+   */
   const reload = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -120,6 +172,28 @@ export function useAISettings() {
       setError(message);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  /**
+   * Refresh ONLY the saved snapshot, leaving the draft alone.
+   *
+   * This is what a background poll must use. `reload()` reset the draft to
+   * the stored state, so any background refresh silently threw away the
+   * user's in-progress edits — the reason a manual Save "didn't stick" in
+   * the settings panel: the edit was gone before Save was ever pressed.
+   *
+   * The draft is now the user's, and only an explicit reload replaces it.
+   */
+  const refreshSaved = useCallback(async () => {
+    try {
+      const api = await loadAISettings();
+      const { panel } = toPanelRoutingFromApi(api);
+      setSaved(panel);
+      setError('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load AI settings';
+      setError(message);
     }
   }, []);
 
@@ -145,7 +219,9 @@ export function useAISettings() {
     const savedUserProviders = saved.cloudProviders.filter(
       p => !['', 'cloud', 'openhuman', 'pid'].includes(p.slug)
     );
-    if (JSON.stringify(userProviders) === JSON.stringify(savedUserProviders)) return;
+    // Signature comparison, not raw JSON — see `providerSignature` for why
+    // the stringified form never converged and turned this into a write loop.
+    if (providerListSignature(userProviders) === providerListSignature(savedUserProviders)) return;
     const wire = userProviders.map(p => ({
       id: p.id,
       slug: p.slug,
@@ -220,7 +296,19 @@ export function useAISettings() {
 
   const discard = useCallback(() => setDraft(saved), [saved]);
 
-  return { saved, draft, setDraft, isDirty, save, persist, discard, loading, error, reload };
+  return {
+    saved,
+    draft,
+    setDraft,
+    isDirty,
+    save,
+    persist,
+    discard,
+    loading,
+    error,
+    reload,
+    refreshSaved,
+  };
 }
 
 /**

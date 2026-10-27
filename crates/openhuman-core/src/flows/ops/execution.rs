@@ -2,8 +2,8 @@
 //! notification. Execution, run rows, and graph observations belong to the
 //! TinyFlows module; this file only consumes its typed PollRun projection.
 
+use crate::flows::trace_observation::TraceObservation;
 use serde_json::json;
-use tinyagents_graph::GraphObservation;
 use tinyflows_bus::catalog::Workflow as Flow;
 use tinyflows_bus::runs::FlowRunTrigger;
 
@@ -21,7 +21,7 @@ pub(crate) async fn export_run_to_langfuse(
     run_id: &str,
     status: &str,
     trigger: FlowRunTrigger,
-    observations: &[GraphObservation],
+    observations: &[TraceObservation],
 ) {
     langfuse_export::export_flow_run_trace(
         config,

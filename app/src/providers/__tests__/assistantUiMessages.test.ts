@@ -8,6 +8,7 @@ import {
   STREAMING_TAIL_ID,
   streamingMessageId,
   streamingTailMessage,
+  subagentMessages,
   toThreadMessageLike,
 } from '../assistantUiMessages';
 
@@ -33,6 +34,20 @@ function tool(over: Partial<ToolTimelineEntry> = {}): ToolTimelineEntry {
 }
 
 describe('toThreadMessageLike', () => {
+  it('renders delegated image markers in the nested task prompt', () => {
+    const messages = subagentMessages({
+      taskId: 'vision-task',
+      agentId: 'vision_agent',
+      toolCalls: [],
+      prompt: 'Inspect this image [IMAGE:data:image/png;base64,aGVsbG8=]',
+    });
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].content).toEqual([
+      { type: 'text', text: 'Inspect this image' },
+      { type: 'image', image: 'data:image/png;base64,aGVsbG8=', filename: undefined },
+    ]);
+  });
+
   it('renders durable uploads as file chips without raw reference JSON or inline bytes', () => {
     const references = [
       { path: 'uploads/t/id/scan.png', name: 'scan.png', mime: 'image/png', size_bytes: 3 },

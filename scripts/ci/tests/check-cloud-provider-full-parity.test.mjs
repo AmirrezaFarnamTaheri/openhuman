@@ -64,7 +64,7 @@ test('CLI finds source files relative to script location, not the caller cwd', (
     const sources = [
       [scriptPath, readFileSync(sourcePath, 'utf8')],
       [resolve(repo, 'app/src/components/settings/panels/builtinCloudProviders.ts'), ui],
-      [resolve(repo, 'crates/openhuman-core/src/config/schema/cloud_providers.rs'), host],
+      [resolve(repo, 'crates/openhuman-core/src/config/schema/cloud_provider_presets.rs'), host],
       [resolve(repo, 'vendor/tinyagents/vendor/tinyinference/crates/tinyinference-providers/src/builtin.rs'), vendor],
     ];
     for (const [path, source] of sources) {

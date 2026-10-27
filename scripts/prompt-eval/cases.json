@@ -1,7 +1,7 @@
 {
   "_comment": "Tier-2 prompt evals: real model, scored, on demand only. Never wired into CI. See docs/prompt-evals.md.",
   "judge": {
-    "_source": "Copied from close_verification_prompt in crates/openhuman-core/src/agent/session_host/turn_checkpoint.rs (pub(super), deliberately not widened for this script). The Rust copy has a drift guard; if you edit the rules there, mirror them here.",
+    "_source": "Copied from verification_prompt in vendor/tinyagents/crates/tinyagents-harness/src/close.rs. If you edit the rules there, mirror them here.",
     "preamble": "You are checking a reply before it is shown to a user. Below are the user's request, the records of the tool calls made while handling it, and the reply.",
     "rules": [
       "The reply only says what the assistant will do or is about to do, instead of reporting what happened.",
@@ -20,7 +20,7 @@
         "web_search_tool"
       ],
       "forbid_calls": [
-        "spawn_async_subagent"
+        "spawn_subagent"
       ],
       "max_consecutive": {
         "web_search_tool": 3
@@ -59,7 +59,7 @@
       "message": "What is 17 times 23?",
       "expect_calls": [],
       "forbid_calls": [
-        "spawn_async_subagent",
+        "spawn_subagent",
         "use_skill",
         "cron"
       ],
@@ -82,7 +82,7 @@
       "forbid_calls": [
         "request_plan_review",
         "todo",
-        "spawn_async_subagent"
+        "spawn_subagent"
       ],
       "max_consecutive": {
         "web_search_tool": 4

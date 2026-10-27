@@ -1,13 +1,32 @@
 //! `<slug>:<model>` BYOK cloud providers: shared slug resolution (model fallback,
 //! abstract-tier remapping, credentials, codex routing) and the crate-native builders.
 
-use super::*;
+use super::{
+    access_gates::enforce_local_only_inference, cloud_spec, credentials::CredentialAccess,
+    local_runtime::OptionalChatModelResult, managed_backend::managed_chat_model_for,
+    openai_bearer_is_oauth, provider_for_role, redact_endpoint_origin, resolve_codex_routing,
+    InspectionOutputBudgetCapability, BYOK_INCOMPLETE_SENTINEL, CLAUDE_AGENT_SDK_PREFIX,
+    CLAUDE_AGENT_SDK_PROVIDER, PROVIDER_OPENHUMAN,
+};
+use crate::config::ops::resolve_primary_cloud_provider_string;
+use crate::config::schema::cloud_providers::AuthStyle;
+use crate::config::Config;
 #[cfg(not(test))]
 use crate::inference::provider::factory::access_gates::verify_backend_session_active;
 #[cfg(not(test))]
 use crate::inference::provider::factory::access_gates::verify_session_active;
 use crate::inference::provider::fallback_diagnostics;
+use crate::inference::provider::openai_codex::resolve_openai_codex_routing_for_inspection;
+use crate::security::egress::EgressLedger;
+use std::sync::Arc;
+use tinyinference_llm::model::ChatModel;
 use tinyinference_llm::providers::anthropic::endpoint_is_anthropic_messages;
+use tinyinference_llm::providers::openai::codex::{
+    openai_codex_client_version, openai_codex_user_agent, OPENAI_CODEX_ACCOUNT_HEADER,
+    OPENAI_CODEX_ORIGINATOR, OPENAI_CODEX_ORIGINATOR_HEADER,
+};
+use tinyinference_llm::providers::registry::resolve_slug_model;
+use tinyinference_providers::route::split_model_and_temperature;
 
 /// Use the Codex-resolved endpoint for Bearer routes, including OAuth's
 /// chatgpt.com backend. Keeping the saved generic OpenAI endpoint here silently
@@ -85,214 +104,25 @@ pub(super) fn prodex_has_single_virtual_key(raw: &str) -> bool {
     keys.len() == 1 && !keys[0].trim().is_empty()
 }
 
-/// Look up a `cloud_providers` entry by slug and build the provider.
-/// The shared resolution for a `<slug>:<model>` cloud provider — the cloud
-/// `cloud_providers` entry, the effective model id (with `default_model`
-/// fallback + abstract-tier remapping), the resolved API key, and the OpenAI
-/// codex-oauth routing shared by every cloud `ChatModel` constructor.
-pub(super) struct CloudSlugResolution<'a> {
-    pub(super) entry: &'a crate::config::schema::cloud_providers::CloudProviderCreds,
-    pub(super) effective_model: String,
-    pub(super) key: String,
-    pub(super) codex: tinyinference_llm::providers::openai::codex::OpenAiCodexRouting,
-}
+type CloudSlugInspectionChatModelResult = Option<
+    anyhow::Result<(
+        Arc<dyn ChatModel<()>>,
+        String,
+        String,
+        String,
+        InspectionOutputBudgetCapability,
+    )>,
+>;
 
-pub(super) fn resolve_cloud_slug<'a>(
-    role: &str,
-    slug: &str,
-    model: &str,
-    config: &'a Config,
-) -> anyhow::Result<CloudSlugResolution<'a>> {
-    let entry = config.cloud_providers.iter().find(|e| e.slug == slug);
-
-    let entry = entry.ok_or_else(|| {
-        let known: Vec<&str> = config
-            .cloud_providers
-            .iter()
-            .map(|e| e.slug.as_str())
-            .collect();
-        anyhow::anyhow!(
-            "[chat-factory] no cloud provider configured for slug '{}' (role '{}') — \
-             add an entry with that slug to cloud_providers in config.toml. \
-             Configured slugs: [{}]",
-            slug,
-            role,
-            known.join(", ")
-        )
-    })?;
-
-    // The gateway virtual key is not a general cloud API token. Never send it
-    // to remote HTTP or allow the endpoint to carry URL-embedded credentials.
-    if slug == "prodex" && !prodex_gateway_destinations_are_safe(entry) {
-        anyhow::bail!(
-            "[chat-factory] Prodex gateway endpoints require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
-        );
-    }
-    if !image_destinations_are_safe(entry) {
-        anyhow::bail!(
-            "[chat-factory] image endpoint overrides require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
-        );
-    }
-    // This is not Prodex-specific: every Bearer/Anthropic direct-provider
-    // route can forward a stored account secret. Validate the main endpoint
-    // even for config.toml imports and dormant model profiles.
-    if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
-        && !prodex_gateway_endpoint_is_safe(&entry.endpoint)
-    {
-        anyhow::bail!(
-            "[chat-factory] credentialed provider endpoints require HTTPS or loopback HTTP, with no URL credentials, query or fragment"
-        );
-    }
-
-    // Resolve effective model: use provided model if non-empty, else fall back
-    // to the entry's legacy default_model (if any), else empty → error.
-    let mut effective_model = if model.trim().is_empty() {
-        entry.default_model.clone().unwrap_or_default()
-    } else {
-        model.to_string()
-    };
-
-    // Guard: if effective_model is still empty after fallback, bail with an
-    // actionable error. Sending an empty model string to providers like
-    // nvidia-nim causes a 400 "model field is required" — a confusing error
-    // that obscures the real cause (missing model in the provider string or
-    // unset default_model on the config entry).
-    // See https://github.com/tinyhumansai/openhuman/issues/2784.
-    //
-    // OpenhumanJwt entries are exempt: they always delegate to
-    // make_openhuman_backend which derives the model from config.default_model,
-    // ignoring whatever effective_model we computed here.
-    if entry.auth_style != AuthStyle::OpenhumanJwt && effective_model.trim().is_empty() {
-        log::warn!(
-            "[nvidia-nim][chat-factory] role={} slug={} resolved to empty model — \
-             provider string must include a model id (e.g. '{}:<model-id>') or \
-             set default_model on the cloud_providers entry",
-            role,
-            slug,
-            slug,
-        );
-        anyhow::bail!(
-            "[chat-factory] no model configured: role '{}' resolved to an empty model id for slug '{}'. \
-             Include a model in the provider string (e.g. '{slug}:<model-id>') or \
-             set default_model on the cloud_providers entry for slug '{slug}'.",
-            role,
-            slug,
-        );
-    }
-
-    if entry.auth_style != AuthStyle::OpenhumanJwt && is_abstract_tier_model(&effective_model) {
-        if let Some(default_model) = entry
-            .default_model
-            .as_deref()
-            .map(str::trim)
-            .filter(|m| !m.is_empty() && !is_abstract_tier_model(m))
-        {
-            log::info!(
-                "[providers][chat-factory] role={} slug={} remapping abstract model {} -> {}",
-                role,
-                slug,
-                effective_model,
-                default_model
-            );
-            effective_model = default_model.to_string();
-        } else {
-            anyhow::bail!(
-                "[chat-factory] model '{}' is an abstract tier for role '{}', \
-                 but cloud provider slug '{}' has no concrete default_model configured. \
-                 Set cloud_providers[].default_model to a provider-native model id (e.g. deepseek-v4-pro).",
-                effective_model,
-                role,
-                slug
-            );
-        }
-    }
-
-    log::info!(
-        "[providers][chat-factory] role={} slug={} model={} endpoint_host={}",
-        role,
-        slug,
-        effective_model,
-        redact_endpoint(&entry.endpoint)
-    );
-
-    // #5146 §2.1: a raw "failed to read API key for slug 'anthropic'" is
-    // baffling when the user never configured Anthropic — they set a local
-    // Ollama model and this is a background role that fell back to the cloud.
-    // Attach the role, and the local chat model that caused the fallback, so
-    // the message explains itself and names a concrete remedy.
-    // Only an *implicit* fallback is explained as one. A role with its own
-    // explicit cloud route can fail key lookup here too, and telling that user
-    // their local chat model caused it would be a lie.
-    let implicit_fallback = role_uses_implicit_cloud_fallback(role, config);
-    let local_chat = if implicit_fallback {
-        config
-            .chat_provider
-            .as_deref()
-            .filter(|chat| tinyinference_local::profile::is_local_provider_string(chat))
-    } else {
-        None
-    };
-    let missing_credentials = || {
-        // Safe fields only: role, slug, and the routing shape. Never the
-        // underlying error (it can echo a key) and never the key itself.
-        log::warn!(
-            "[providers][chat-factory] credential lookup failed role={} slug={} auth_style={} implicit_cloud_fallback={}",
-            role,
-            slug,
-            entry.auth_style.as_str(),
-            implicit_fallback
-        );
-        fallback_diagnostics::missing_provider_credentials_message(role, slug, local_chat)
-    };
-
-    // The underlying auth-store error can contain secret material. Never
-    // attach it to a user/model-visible error or its Debug source chain.
-    let key = lookup_key_for_slug(slug, config).map_err(|source| {
-        super::credentials::redact_credential_lookup_error(source, missing_credentials())
-    })?;
-
-    // A readable auth profile with no key for this slug returns `Ok("")`, which
-    // would otherwise build a client with an empty bearer and surface as a raw
-    // 401 from the provider several layers later — exactly the baffling error
-    // this diagnostic exists to replace.
-    //
-    // Scoped to the *implicit fallback* path deliberately. That is the case the
-    // diagnostic is for: a local-chat user whose background role landed on a
-    // BYOK slug they never configured. An explicitly routed provider keeps its
-    // existing behaviour and is allowed to build without a stored key — callers
-    // construct such models to probe or describe a provider before a key is
-    // saved, and failing that at construction time would be a behaviour change
-    // well beyond this diagnostic.
-    //
-    // Styles that carry no stored key (`OpenhumanJwt` injects a session JWT
-    // downstream, `None` sends no auth header at all) are legitimately blank and
-    // never trip this.
-    if implicit_fallback
-        && key.trim().is_empty()
-        && matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
-    {
-        anyhow::bail!("{}", missing_credentials());
-    }
-    let bearer_is_oauth = slug == "openai" && openai_bearer_is_oauth(config);
-    let codex = resolve_openai_codex_routing(config, slug, &entry.endpoint, &key, bearer_is_oauth)
-        .map_err(anyhow::Error::msg)?;
-    // Re-check the actual endpoint after Codex routing, not just the saved
-    // base, so an alternate transport cannot downgrade the credential.
-    if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
-        && !prodex_gateway_endpoint_is_safe(cloud_base_url(entry, &codex))
-    {
-        anyhow::bail!(
-            "[chat-factory] resolved credential endpoint requires HTTPS or loopback HTTP"
-        );
-    }
-
-    Ok(CloudSlugResolution {
-        entry,
-        effective_model,
-        key,
-        codex,
-    })
-}
+#[path = "cloud_slug_resolution.rs"]
+mod resolution;
+pub(super) use resolution::inspection_output_budget_capability;
+#[cfg(test)]
+pub(super) use resolution::lookup_failure;
+#[cfg(test)]
+pub(super) use resolution::resolve_cloud_slug;
+pub(super) use resolution::resolve_cloud_slug_with_access;
+pub(crate) use resolution::{resolve_cloud_slug_for, CloudSlugResolution};
 
 /// A `<slug>:<model>` BYOK cloud provider as a crate-native [`ChatModel`] — the
 /// Native model for every configured cloud auth style, including the managed
@@ -311,25 +141,87 @@ pub(super) fn resolve_cloud_slug<'a>(
 /// non-codex slugs is not replicated (the crate has responses-*primary*, not
 /// fallback); chat completions is the primary path those slugs use in practice.
 ///
-/// The resolution is shared via [`resolve_cloud_slug`], so slugs resolve
+/// The resolution is shared via [`resolve_cloud_slug_for`], so slugs resolve
 /// identically to the legacy path; only the wire client differs. The **same**
 /// access gate the `Provider` path applies (`enforce_local_only_inference` +
 /// `verify_session_active`) runs before building. Temperature rides the per-call
 /// `ModelRequest` (managed/local parity; the `@<temp>` suffix still bakes a fixed
 /// override).
+#[cfg(test)]
 pub(super) fn try_create_cloud_slug_chat_model(
     role: &str,
     config: &Config,
     egress: &EgressLedger,
 ) -> OptionalChatModelResult {
-    try_create_cloud_slug_chat_model_with_native_tools(role, config, true, egress)
+    let extensions = crate::core::runtime::CoreContext::current_extensions();
+    try_create_cloud_slug_chat_model_with_native_tools_for(
+        role,
+        config,
+        true,
+        egress,
+        extensions.as_ref(),
+    )
 }
 
-pub(super) fn try_create_cloud_slug_chat_model_with_native_tools(
+pub(super) fn try_create_cloud_slug_chat_model_with_native_tools_for(
     role: &str,
     config: &Config,
     native_tool_calling: bool,
     egress: &EgressLedger,
+    extensions: Option<&crate::core::slots::Extensions>,
+) -> OptionalChatModelResult {
+    try_create_cloud_slug_chat_model_with_native_tools_and_access(
+        role,
+        config,
+        native_tool_calling,
+        egress,
+        extensions,
+        CredentialAccess::Runtime,
+        None,
+    )
+}
+
+pub(super) fn try_create_cloud_slug_chat_model_for_inspection_with_identity(
+    role: &str,
+    config: &Config,
+    extensions: Option<&crate::core::slots::Extensions>,
+) -> CloudSlugInspectionChatModelResult {
+    let mut identity = None;
+    let mut resolved = provider_for_role(role, config);
+    if resolved.trim().is_empty() || resolved.trim() == "cloud" {
+        resolved = resolve_primary_cloud_provider_string(config);
+    }
+    let result = try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
+        role,
+        &resolved,
+        config,
+        true,
+        &EgressLedger::none(),
+        extensions,
+        CredentialAccess::Inspection,
+        Some(&mut identity),
+    )?;
+    Some(result.and_then(|(model, model_id)| {
+        let (endpoint, credential, wire_model, output_budget) = identity.ok_or_else(|| {
+            anyhow::anyhow!("inspection route did not expose its frozen wire identity")
+        })?;
+        if wire_model != model_id {
+            anyhow::bail!("inspection route model identity did not match its constructed model");
+        }
+        Ok((model, model_id, endpoint, credential, output_budget))
+    }))
+}
+
+fn try_create_cloud_slug_chat_model_with_native_tools_and_access(
+    role: &str,
+    config: &Config,
+    native_tool_calling: bool,
+    egress: &EgressLedger,
+    extensions: Option<&crate::core::slots::Extensions>,
+    credential_access: CredentialAccess,
+    inspection_identity: Option<
+        &mut Option<(String, String, String, InspectionOutputBudgetCapability)>,
+    >,
 ) -> OptionalChatModelResult {
     // Resolve the role's provider string, expanding the empty / "cloud" sentinel
     // to the primary cloud target.
@@ -337,12 +229,15 @@ pub(super) fn try_create_cloud_slug_chat_model_with_native_tools(
     if resolved.trim().is_empty() || resolved.trim() == "cloud" {
         resolved = resolve_primary_cloud_provider_string(config);
     }
-    try_create_cloud_slug_chat_model_from_string_with_native_tools(
+    try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
         role,
         &resolved,
         config,
         native_tool_calling,
         egress,
+        extensions,
+        credential_access,
+        inspection_identity,
     )
 }
 
@@ -363,6 +258,51 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     config: &Config,
     native_tool_calling: bool,
     egress: &EgressLedger,
+) -> OptionalChatModelResult {
+    let extensions = crate::core::runtime::CoreContext::current_extensions();
+    try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
+        role,
+        provider,
+        config,
+        native_tool_calling,
+        egress,
+        extensions.as_ref(),
+        CredentialAccess::Runtime,
+        None,
+    )
+}
+
+pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools_for(
+    role: &str,
+    provider: &str,
+    config: &Config,
+    native_tool_calling: bool,
+    egress: &EgressLedger,
+    extensions: Option<&crate::core::slots::Extensions>,
+) -> OptionalChatModelResult {
+    try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
+        role,
+        provider,
+        config,
+        native_tool_calling,
+        egress,
+        extensions,
+        CredentialAccess::Runtime,
+        None,
+    )
+}
+
+fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
+    role: &str,
+    provider: &str,
+    config: &Config,
+    native_tool_calling: bool,
+    egress: &EgressLedger,
+    extensions: Option<&crate::core::slots::Extensions>,
+    credential_access: CredentialAccess,
+    mut inspection_identity: Option<
+        &mut Option<(String, String, String, InspectionOutputBudgetCapability)>,
+    >,
 ) -> OptionalChatModelResult {
     let p = provider.trim().to_string();
 
@@ -393,9 +333,11 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
     if let Err(e) = enforce_local_only_inference(role, &p) {
         return Some(Err(e));
     }
-    #[cfg(not(test))]
-    if let Err(e) = verify_session_active(config) {
-        return Some(Err(e));
+    if credential_access == CredentialAccess::Runtime {
+        #[cfg(not(test))]
+        if let Err(e) = verify_session_active(config) {
+            return Some(Err(e));
+        }
     }
 
     let CloudSlugResolution {
@@ -403,7 +345,14 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         effective_model,
         key,
         codex,
-    } = match resolve_cloud_slug(role, &slug, &raw_model, config) {
+    } = match resolve_cloud_slug_with_access(
+        role,
+        &slug,
+        &raw_model,
+        config,
+        extensions,
+        credential_access,
+    ) {
         Ok(r) => r,
         Err(e) => return Some(Err(e)),
     };
@@ -425,7 +374,7 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             "Codex OAuth credentials cannot be sent to alternate image endpoints"
         )));
     }
-    let codex_accounts = if codex.using_oauth {
+    let codex_accounts = if codex.using_oauth && credential_access == CredentialAccess::Runtime {
         match crate::security::credentials::openai_oauth::lookup_openai_oauth_fleet(config) {
             Ok(accounts) => accounts,
             Err(error) => return Some(Err(anyhow::anyhow!(error))),
@@ -436,7 +385,9 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
 
     // Credentials are parsed once; one provider slug can own a pool of keys.
     // No credential group is ever sent as a single upstream Authorization header.
-    let keys = if codex.using_oauth {
+    let keys = if credential_access == CredentialAccess::Inspection {
+        vec![key.clone()]
+    } else if codex.using_oauth {
         if codex_accounts.is_empty() {
             vec![key.clone()]
         } else {
@@ -498,6 +449,14 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         })
         .map(|route| route.headers.clone())
         .unwrap_or_default();
+    let default_provider_options = config
+        .ephemeral_route
+        .as_ref()
+        .filter(|route| {
+            slug == crate::config::schema::ephemeral_route::EPHEMERAL_ROUTE_SLUG
+                && route.endpoint == entry.endpoint
+        })
+        .and_then(|route| route.provider_options.clone());
     let mut extra_query_params: Vec<(String, String)> = Vec::new();
     let mut user_agent: Option<String> = None;
     let mut codex_route: Option<&tinyinference_llm::providers::openai::codex::OpenAiCodexRouting> =
@@ -518,22 +477,52 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             );
         }
         AuthStyle::Anthropic | AuthStyle::None => {}
-        AuthStyle::OpenhumanJwt => {
-            #[cfg(not(test))]
-            if let Err(error) = verify_backend_session_active(config) {
-                return Some(Err(error));
+        style
+            if crate::config::schema::cloud_providers::is_hosted_auth_style_for(
+                extensions, style,
+            ) =>
+        {
+            if credential_access == CredentialAccess::Runtime {
+                #[cfg(not(test))]
+                if let Err(error) = verify_backend_session_active(config) {
+                    return Some(Err(error));
+                }
             }
             let model_override =
                 (!effective_model.trim().is_empty()).then_some(effective_model.as_str());
-            return Some(managed_chat_model(
-                role,
-                config,
-                model_override,
-                None,
-                native_tool_calling,
-                None,
-                egress,
-            ));
+            return Some(match credential_access {
+                CredentialAccess::Runtime => managed_chat_model_for(
+                    extensions,
+                    role,
+                    config,
+                    model_override,
+                    None,
+                    native_tool_calling,
+                    None,
+                    egress,
+                ),
+                CredentialAccess::Inspection => {
+                    match super::managed_backend::managed_chat_model_build_for_inspection(
+                        extensions,
+                        role,
+                        config,
+                        model_override,
+                    ) {
+                        Ok(build) => {
+                            if let Some(identity) = inspection_identity.as_deref_mut() {
+                                *identity = Some((
+                                    build.endpoint.clone(),
+                                    build.credential.clone(),
+                                    build.model_id.clone(),
+                                    InspectionOutputBudgetCapability::Bounded,
+                                ));
+                            }
+                            Ok((build.model, build.model_id))
+                        }
+                        Err(error) => Err(error),
+                    }
+                }
+            });
         }
         AuthStyle::Bearer => {
             // The codex routing may re-target the endpoint (OAuth backend).
@@ -557,6 +546,11 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
                     .push(("client_version".to_string(), openai_codex_client_version()));
             }
             codex_route = Some(&codex);
+        }
+        AuthStyle::OpenhumanJwt => {
+            return Some(Err(anyhow::anyhow!(
+                "hosted cloud authentication is unavailable without a registered host provider"
+            )));
         }
     }
 
@@ -633,6 +627,7 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
             temperature_override,
             temperature_unsupported_models: config.temperature_unsupported_models.as_slice(),
             native_tool_calling,
+            default_provider_options: default_provider_options.clone(),
             extra_headers: headers.as_slice(),
             extra_query_params: extra_query_params.as_slice(),
             user_agent: user_agent.as_deref(),
@@ -668,11 +663,32 @@ pub(super) fn try_create_cloud_slug_chat_model_from_string_with_native_tools(
         None => None,
     };
     let chat = wrap_fleet(fleet_scope, keys, models, image_models, strategy);
+    if let Some(identity) = inspection_identity {
+        let credential = if entry.auth_style == AuthStyle::None {
+            String::new()
+        } else {
+            key.clone()
+        };
+        let output_budget = inspection_output_budget_capability(&codex);
+        // Doctor's live probe deduplicates on this identity, so it carries
+        // everything else that shapes the request: two aliases with the same
+        // endpoint, key and model but another auth style, header or CA bundle
+        // are two different requests.
+        let transport = format!(
+            "{:?}\u{1f}{extra_headers:?}\u{1f}{extra_query_params:?}\u{1f}{user_agent:?}\u{1f}{:?}",
+            entry.auth_style,
+            config.cloud_provider_ca_certs.get(&slug),
+        );
+        *identity = Some((
+            format!("{}\u{1f}{transport}", codex.endpoint),
+            credential,
+            effective_model.clone(),
+            output_budget,
+        ));
+    }
     Some(Ok((chat, effective_model)))
 }
 
-/// Preserve the existing single-model path when neither rotation nor multimodal
-/// routing is configured. All other paths delegate to the same per-call wrapper.
 fn wrap_fleet(
     scope: String,
     keys: Vec<String>,

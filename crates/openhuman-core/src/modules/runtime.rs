@@ -34,8 +34,11 @@
 //! shutdown path because there is nothing a shutdown could reclaim.
 
 use std::sync::OnceLock;
+use std::time::Duration;
 
-use tinybus::module::{ModuleRuntime, RuntimeNames};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use tinybus::module::{ModuleRuntime, RuntimeNames, RuntimeOptions};
 
 /// The module bus, built once on first use.
 static RUNTIME: OnceLock<Result<ModuleRuntime, String>> = OnceLock::new();
@@ -52,19 +55,34 @@ static CALLBACKS: tokio::sync::OnceCell<Result<(), String>> = tokio::sync::OnceC
 /// failed to start does not start on a later call.
 pub async fn runtime() -> tinybus::Result<&'static ModuleRuntime> {
     let runtime = runtime_now()?;
-    CALLBACKS
-        .get_or_init(|| async {
-            // On the module runtime, not the caller's: the callbacks serve
-            // objects that must outlive whichever runtime asked first.
-            match runtime.spawn(install_callbacks(runtime)).await {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(error)) => Err(error.to_string()),
-                Err(error) => Err(format!("the module callbacks did not finish: {error}")),
-            }
-        })
-        .await
-        .as_ref()
-        .map_err(|error| tinybus::Error::Transport(error.clone()))?;
+    let callbacks = match CALLBACKS.get() {
+        Some(cached) => cached.clone(),
+        None => runtime
+            .spawn(async move {
+                // Own initialization and cache publication on the permanent
+                // runtime: the caller may block or disappear while we wait.
+                CALLBACKS
+                    .get_or_init(|| async {
+                        // Keep callback panics cached as initialization errors.
+                        match runtime.spawn(install_callbacks(runtime)).await {
+                            Ok(Ok(())) => Ok(()),
+                            Ok(Err(error)) => Err(error.to_string()),
+                            Err(error) => {
+                                Err(format!("the module callbacks did not finish: {error}"))
+                            }
+                        }
+                    })
+                    .await
+                    .clone()
+            })
+            .await
+            .map_err(|error| {
+                tinybus::Error::Transport(format!(
+                    "the module callback cache task did not finish: {error}"
+                ))
+            })?,
+    };
+    callbacks.map_err(tinybus::Error::Transport)?;
     Ok(runtime)
 }
 
@@ -83,7 +101,14 @@ fn runtime_now() -> tinybus::Result<&'static ModuleRuntime> {
             thread: "openhuman-module-bus".to_string(),
             worker: "openhuman-module-worker".to_string(),
         };
-        ModuleRuntime::start(&names, None).map_err(|error| error.to_string())
+        ModuleRuntime::start_with_options(
+            &names,
+            None,
+            RuntimeOptions {
+                thread_stack_size: Some(crate::core::runtime::AGENT_WORKER_STACK_BYTES),
+            },
+        )
+        .map_err(|error| error.to_string())
     });
     let runtime = started
         .as_ref()
@@ -93,6 +118,8 @@ fn runtime_now() -> tinybus::Result<&'static ModuleRuntime> {
 
 /// Serve the host objects modules call back into, before any module loads.
 async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<()> {
+    #[cfg(test)]
+    callback_storage::before_install();
     let connection = runtime.connection();
 
     // The summary callback exists for the module alone; with the component off
@@ -105,14 +132,6 @@ async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<(
     }
     super::site_memory_host::install(connection).await?;
     super::storage_host::install(connection, runtime.host()).await?;
-    #[cfg(feature = "tinymemes")]
-    {
-        if host.components().memes {
-            crate::tinymemes::service::install(connection).await?;
-        } else {
-            tracing::debug!("[modules] memes component off; Host callbacks not served");
-        }
-    }
     #[cfg(feature = "web3")]
     super::wallet_host::install(connection).await?;
     // Deliver / ClassifySalience for the inbound event queues; with the
@@ -125,6 +144,8 @@ async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<(
             tracing::debug!("[modules] eventqueues component off; inbound Host not served");
         }
     }
+    #[cfg(test)]
+    callback_storage::after_install().await;
     Ok(())
 }
 
@@ -135,6 +156,56 @@ async fn install_callbacks(runtime: &'static ModuleRuntime) -> tinybus::Result<(
 #[must_use]
 pub fn is_started() -> bool {
     RUNTIME.get().is_some_and(Result::is_ok)
+}
+
+/// Returns the current runtime only when it was already started and its host
+/// callbacks are serving. Unlike [`runtime`], this accessor never starts a
+/// runtime or installs callbacks.
+pub(crate) fn existing_runtime() -> Option<&'static ModuleRuntime> {
+    let runtime = RUNTIME.get()?.as_ref().ok()?;
+    CALLBACKS.get()?.as_ref().ok()?;
+    Some(runtime)
+}
+
+/// A safe, sanitized result for a call through the already-serving module bus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExistingModuleCallError {
+    Unavailable,
+    Failed,
+}
+
+/// Call a read-only capability on a module that is already ready. This never
+/// starts the module runtime, loads a module, or retries through a ModuleClient.
+pub(crate) async fn call_if_ready<Request, Reply>(
+    id: &str,
+    member: &str,
+    request: Request,
+    timeout: Duration,
+) -> Result<Option<Reply>, ExistingModuleCallError>
+where
+    Request: Serialize + Send,
+    Reply: DeserializeOwned,
+{
+    if super::ops::state_of(id) != super::types::ModuleState::Ready {
+        return Ok(None);
+    }
+    let Some(runtime) = existing_runtime() else {
+        return Ok(None);
+    };
+    let record = super::registry::find(id).ok_or(ExistingModuleCallError::Unavailable)?;
+    let proxy = runtime
+        .proxy(record.bus_name, record.object_path)
+        .map_err(|_| ExistingModuleCallError::Unavailable)?
+        .with_timeout(timeout);
+    match tokio::time::timeout(
+        timeout,
+        proxy.call_confidential::<Reply>(member, (request,)),
+    )
+    .await
+    {
+        Ok(Ok(reply)) => Ok(Some(reply)),
+        Ok(Err(_)) | Err(_) => Err(ExistingModuleCallError::Failed),
+    }
 }
 
 /// Whether `id` is admitted and currently serving on an already-started
@@ -161,3 +232,7 @@ pub fn is_module_serving(id: &str) -> bool {
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "runtime_callback_storage_tests.rs"]
+mod callback_storage;

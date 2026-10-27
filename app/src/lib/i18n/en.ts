@@ -368,6 +368,8 @@ const en: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Previous 7 days',
   'chat.sidebar.group.previous30Days': 'Previous 30 days',
   'chat.sidebar.group.older': 'Older',
+  'chat.sidebar.archived': 'Archived',
+  'chat.sidebar.restoreThread': 'Restore',
   'chat.sidebar.pinThread': 'Pin conversation',
   'chat.sidebar.unpinThread': 'Unpin conversation',
   'chat.sidebar.unread': 'New reply',
@@ -561,6 +563,8 @@ const en: TranslationMap = {
   'desktop.moduleUnavailable': 'The desktop module is unavailable. Check its status and try again.',
   'desktop.pendingUnavailable': 'Could not load pending desktop approvals. Refresh to try again.',
   'desktop.unsupported': 'Desktop control is unavailable in this runtime.',
+  'desktop.unsupportedWindows':
+    "Desktop control isn't available on Windows yet. Browser Control works on Windows today.",
   'desktop.localOnly': 'This setting applies only to this computer.',
   'desktop.permissions': 'System permissions',
   'desktop.openSettings': 'Open settings',
@@ -616,6 +620,10 @@ const en: TranslationMap = {
     "Memory can't be reached right now. Nothing stored has been lost; try again in a moment.",
   'memory.outOfCredits.title': 'Out of credits',
   'memory.outOfCredits.action': 'Top up',
+  'memory.error.planRequired':
+    "Your current plan doesn't include memory, so OpenHuman can't save or look up what it learns. Upgrade to turn memory on, or switch to a different memory option in Settings.",
+  'memory.planRequired.title': "Memory isn't part of your plan",
+  'memory.planRequired.action': 'See plans',
 
   // Activity surface: Phase 3 renamed tabs
   'activity.tabs.automations': 'Automations',
@@ -749,6 +757,15 @@ const en: TranslationMap = {
 
   // Developer Options / Developer & Diagnostics
   'devOptions.titleDiagnostics': 'Developer & Diagnostics',
+  'devOptions.doctor.run': 'Run doctor',
+  'devOptions.doctor.runLive': 'Run live checks',
+  'devOptions.doctor.liveWarning':
+    'Live checks may spend tokens on model or embedding calls. Continue?',
+  'devOptions.doctor.severity.pass': 'Pass',
+  'devOptions.doctor.severity.info': 'Info',
+  'devOptions.doctor.severity.warn': 'Warning',
+  'devOptions.doctor.severity.error': 'Error',
+  'devOptions.doctor.severity.skipped': 'Skipped',
   'devOptions.diagnostics': 'Diagnostics',
   'devOptions.toolPolicyDiagnosticsDesc':
     'Tool inventory, policy posture, MCP allowlists, and recent blocks',
@@ -1509,6 +1526,8 @@ const en: TranslationMap = {
   'chat.failedToLoadMessages': 'Failed to load messages',
   'chat.thinkingDots': 'Thinking...',
   'chat.status.thinkingElapsed': 'Thinking · {elapsed}',
+  'chat.status.compacting': 'Summarizing earlier conversation…',
+  'chat.status.compactingElapsed': 'Summarizing earlier conversation · {elapsed}',
   'chat.status.waitingApproval': 'Waiting for your approval',
   'chat.status.waitingReview': 'Waiting for your review',
   'chat.status.waitingAnswer': 'Waiting for your answer',
@@ -2114,11 +2133,6 @@ const en: TranslationMap = {
   'chat.todos.ofTotal': '{done} of {total}',
   'chat.todos.receipt': 'Progress updated · {done}/{total}',
   'chat.subagents.ranFor': 'Ran for {duration}',
-  'chat.subagents.ofTotal': '{complete} of {total}',
-  'chat.subagents.runningCount': '{count} running',
-  'chat.subagents.failedCount': '{count} failed',
-  'chat.subagents.incompleteCount': '{count} incomplete',
-  'chat.subagents.settled': 'Child runs finished. Processing their results.',
   'conversations.planReview.title': 'Review plan',
   'conversations.planReview.subtitle':
     'Approve to run it, reject to discard, or send feedback to revise.',
@@ -2155,7 +2169,6 @@ const en: TranslationMap = {
   'conversations.mcpUi.confirmAllow': 'Allow',
   'conversations.mcpUi.confirmDeny': 'Deny',
   'conversations.tools.delegatedTo': 'Delegated to {agent}',
-  'conversations.tools.parallelAgentsAggregating': 'Aggregating results',
   'conversations.tools.openInBrowser': 'Open in browser',
   'conversations.tools.status.running': 'running',
   'conversations.tools.status.done': 'done',
@@ -2253,25 +2266,6 @@ const en: TranslationMap = {
     'Retry failed. Download the latest app build and try again.',
   'daemon.serviceBlockingGate.retrying': 'Retrying...',
   'daemon.serviceBlockingGate.title': 'OpenHuman core is unavailable',
-  // Worktree manager (#3376): isolated worker git worktrees
-  'worktree.label': 'Worktree',
-  'worktree.dirty': 'Uncommitted changes',
-  'worktree.clean': 'Clean',
-  'worktree.removing': 'Removing…',
-  'worktree.removeFailed': 'Failed to remove worktree',
-  'worktree.diffFailed': 'Failed to load diff',
-  'worktree.diffLoading': 'Loading diff…',
-  'worktree.diffEmpty': 'No changes vs HEAD.',
-  'worktree.dirtyConfirm':
-    'This worktree has uncommitted changes. Removing it discards that work. The worker branch is kept.',
-  'worktree.action.open': 'Open folder',
-  'worktree.action.diff': 'Diff',
-  'worktree.action.hideDiff': 'Hide diff',
-  'worktree.action.remove': 'Remove',
-  'worktree.action.removeAnyway': 'Discard & remove',
-  'worktree.action.preserve': 'Preserve',
-  // Orchestration tab (#3375): multi-agent workflow runs.
-  'orchestration.detail.stop': 'Stop',
   'notifications.card.dismiss': 'Dismiss notification',
   'notifications.card.importanceTitle': 'Importance: {pct}%',
   'notifications.center.empty': 'No notifications yet',
@@ -2806,6 +2800,8 @@ const en: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'A provider group supports at most 128 API keys.',
   'settings.ai.fleet.partialKeyVerified':
     'Some API keys were rejected, but another key was verified. Review the provider key health.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman could not confirm this key group through the provider catalogue. The keys were saved and will be checked when a model request is sent.',
   'settings.ai.apiKeyFieldLabel': 'API Key',
   'settings.ai.apiKeyRequired': 'Please paste your API key to continue.',
   'settings.ai.apiKeyStoredEncrypted': 'Your API key is stored encrypted on this device.',
@@ -3380,6 +3376,9 @@ const en: TranslationMap = {
     'Enter a whole number of seconds within the allowed range',
   'settings.agentAccess.timeout.envOverride':
     'The OPENHUMAN_TOOL_TIMEOUT_SECS environment variable is overriding this setting, so changes here have no effect until it is unset.',
+  'settings.agentAccess.totalTimeout.label': 'Overall turn limit',
+  'settings.agentAccess.totalTimeout.desc':
+    'No total wall-clock limit is applied by default. Set OPENHUMAN_AGENT_TURN_TIMEOUT_SECS to choose one; 0 disables it. Individual action and stalled-call safeguards still apply.',
   'settings.agentAccess.group.approvals': 'Approvals',
   'settings.agentAccess.group.fileSystem': 'File system',
   'settings.agentAccess.group.limits': 'Limits',
@@ -5164,11 +5163,10 @@ const en: TranslationMap = {
   'conversations.tools.reviewLearnings.active': 'Reviewing what I learned',
   'conversations.tools.reviewLearnings.done': 'Reviewed what I learned',
   'conversations.tools.updateLearnings.active': 'Updating what I learned',
+  'orchestration.detail.stop': 'Stop',
   'conversations.tools.updateLearnings.done': 'Updated what I learned',
   'conversations.tools.delegateTask.active': 'Delegating task',
   'conversations.tools.delegateTask.done': 'Delegated task',
-  'conversations.tools.runAgentsInParallel.active': 'Running agents in parallel',
-  'conversations.tools.runAgentsInParallel.done': 'Ran agents in parallel',
   'conversations.tools.messageAgent.active': 'Messaging agent',
   'conversations.tools.messageAgent.done': 'Messaged agent',
   'conversations.tools.waitForAgent.active': 'Waiting for agent',
@@ -5205,6 +5203,8 @@ const en: TranslationMap = {
   'conversations.tools.checkGoal.done': 'Checked goal',
   'conversations.tools.completeGoal.active': 'Completing goal',
   'conversations.tools.completeGoal.done': 'Completed goal',
+  'conversations.tools.resumeGoal.active': 'Resuming goal',
+  'conversations.tools.resumeGoal.done': 'Resumed goal',
   'conversations.tools.scheduleTask.active': 'Scheduling task',
   'conversations.tools.scheduleTask.done': 'Scheduled task',
   'conversations.tools.checkSchedules.active': 'Checking schedules',
@@ -5389,6 +5389,9 @@ const en: TranslationMap = {
   'settings.appearance.showChatMascot': 'Show Tiny on the message box',
 
   'settings.layout.corners.round': 'Rounded',
+  'settings.agentAccess.hideShellWindows.label': 'Hide shell windows',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Suppress native terminal windows on Windows for new shell sessions.',
 };
 
 export default en;

@@ -392,7 +392,7 @@ pub fn restore(archive: &Path, profile_dir: &Path) -> Result<Manifest, LayoutErr
     Ok(manifest)
 }
 
-#[cfg(all(test, feature = "storage-sqlite"))]
+#[cfg(all(test, feature = "legacy-import"))]
 #[path = "archive_tests.rs"]
 mod tests;
 

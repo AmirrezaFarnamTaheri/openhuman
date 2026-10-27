@@ -6,6 +6,11 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  cachedModelCatalog,
+  invalidateModelCatalogCache,
+  loadModelCatalog,
+} from '../../modelCatalogCache';
 // ─── Import SUT after mocks ───────────────────────────────────────────────────
 
 import {
@@ -13,6 +18,7 @@ import {
   classifyProviderVerificationFailure,
   clearCloudProviderKey,
   completeOpenAiCodexOAuth,
+  countApiKeys,
   describeProviderVerificationFailure,
   flushCloudProviders,
   importOpenAiCodexCliAuth,
@@ -31,11 +37,29 @@ import {
   saveAISettings,
   serializeProviderRef,
   setCloudProviderKey,
+  splitApiKeyGroup,
   startOpenAiCodexOAuth,
   testProviderModel,
   upsertModelRegistryVision,
   verifyCloudProviderConnection,
 } from '../aiSettingsApi';
+
+describe('API key rotation groups', () => {
+  it('splits pasted keys on supported separators, trims them and deduplicates in first-use order', () => {
+    const pasted = ' key-a, key-b;\r\nkey-c\nkey-a; key-b, ,\rkey-d ';
+    expect(splitApiKeyGroup(pasted)).toEqual(['key-a', 'key-b', 'key-c', 'key-d']);
+    expect(countApiKeys(pasted)).toBe(4);
+  });
+
+  it('rejects an empty rotation group while retaining a single intact key', () => {
+    expect(splitApiKeyGroup(' , ;\r\n ')).toEqual([]);
+    expect(countApiKeys(' , ;\r\n ')).toBe(0);
+    expect(splitApiKeyGroup('  key-with-dashes_and:colon  ')).toEqual([
+      'key-with-dashes_and:colon',
+    ]);
+    expect(countApiKeys('  key-with-dashes_and:colon  ')).toBe(1);
+  });
+});
 
 // ─── Mock declarations (must be hoisted before imports) ───────────────────────
 
@@ -1415,13 +1439,30 @@ describe('credential-group model catalogue verification', () => {
     await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);
   });
 
+  it('keeps a key group when the keyed catalogue succeeds but the anonymous check is inconclusive', async () => {
+    mockCallCoreRpc.mockResolvedValue({
+      result: {
+        models: [{ id: 'nvidia/model' }],
+        fleet_probe: {
+          authenticated: false,
+          public_catalogue: false,
+          checked_keys: 1,
+          rejected_keys: 0,
+        },
+      },
+    });
+    await expect(probeProviderModelFleet('nvidia')).resolves.toEqual({
+      rejectedKeys: 0,
+      verification: 'inconclusive_catalogue',
+    });
+  });
+
   it('rejects malformed fleet verification metadata', async () => {
     for (const fleet_probe of [
       { authenticated: true, checked_keys: 0, rejected_keys: 0 },
       { authenticated: true, checked_keys: 2, rejected_keys: 2 },
       { authenticated: true, checked_keys: 2, rejected_keys: -1 },
       { authenticated: true, checked_keys: undefined, rejected_keys: 1 },
-      { authenticated: false, checked_keys: 2, rejected_keys: 0 },
     ]) {
       mockCallCoreRpc.mockResolvedValueOnce({ result: { models: [], fleet_probe } });
       await expect(probeProviderModelFleet('openai')).rejects.toThrow(/not confirmed/i);
@@ -1471,5 +1512,42 @@ describe('public model catalog cannot authenticate a provider-editor credential'
   it('does not require key proof when simply browsing model names', async () => {
     mockCallCoreRpc.mockResolvedValue({ result: { models: [{ id: 'public' }] } });
     await expect(listProviderModels('chutes')).resolves.toHaveLength(1);
+  });
+});
+
+describe('model catalog invalidation after credential writes', () => {
+  beforeEach(async () => {
+    invalidateModelCatalogCache();
+    mockAuthStoreProviderCredentials.mockReset();
+    mockAuthRemoveProviderCredentials.mockReset();
+    mockCallCoreRpc.mockReset();
+    mockOpenhumanUpdateModelSettings.mockReset();
+    await loadModelCatalog('openai', async () => [{ id: 'old-account-model', owned_by: 'openai' }]);
+    await loadModelCatalog('unrelated', async () => [{ id: 'unchanged', owned_by: 'other' }]);
+  });
+
+  it.each([
+    ['key replacement', () => setCloudProviderKey('openai', 'replacement')],
+    ['key removal', () => clearCloudProviderKey('openai')],
+    ['OAuth completion', () => completeOpenAiCodexOAuth('https://localhost/callback?code=test')],
+    ['CLI credential import', () => importOpenAiCodexCliAuth()],
+  ])('discards the old catalog after %s', async (_label, mutate) => {
+    await mutate();
+    expect(cachedModelCatalog('openai')).toBeUndefined();
+    expect(cachedModelCatalog('unrelated')).toEqual([{ id: 'unchanged', owned_by: 'other' }]);
+  });
+
+  it('preserves a valid catalog when a key write is rejected', async () => {
+    mockAuthStoreProviderCredentials.mockRejectedValue(new Error('key store unavailable'));
+    await expect(setCloudProviderKey('openai', 'replacement')).rejects.toThrow(
+      'key store unavailable'
+    );
+    expect(cachedModelCatalog('openai')).toEqual([{ id: 'old-account-model', owned_by: 'openai' }]);
+  });
+
+  it('invalidates catalogs after a provider list is published, including removals', async () => {
+    await flushCloudProviders([]);
+    expect(cachedModelCatalog('openai')).toBeUndefined();
+    expect(cachedModelCatalog('unrelated')).toBeUndefined();
   });
 });

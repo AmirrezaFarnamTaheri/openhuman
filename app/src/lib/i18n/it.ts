@@ -433,6 +433,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Ultimi 7 giorni',
   'chat.sidebar.group.previous30Days': 'Ultimi 30 giorni',
   'chat.sidebar.group.older': 'Meno recenti',
+  'chat.sidebar.archived': 'Archiviate',
+  'chat.sidebar.restoreThread': 'Ripristina',
   'chat.sidebar.pinThread': 'Fissa conversazione',
   'chat.sidebar.unpinThread': 'Sblocca conversazione',
   'chat.sidebar.unread': 'Nuova risposta',
@@ -617,6 +619,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'Impossibile caricare le approvazioni desktop in attesa. Aggiorna per riprovare.',
   'desktop.unsupported': 'Il controllo desktop non è disponibile in questo ambiente.',
+  'desktop.unsupportedWindows':
+    'Il controllo desktop non è ancora disponibile su Windows. Il controllo del browser funziona già su Windows.',
   'desktop.localOnly': 'Questa impostazione vale solo per questo computer.',
   'desktop.permissions': 'Autorizzazioni di sistema',
   'desktop.openSettings': 'Apri impostazioni',
@@ -637,6 +641,10 @@ const messages: TranslationMap = {
     'Al momento la memoria non è raggiungibile. Nulla di quanto salvato è andato perso; riprova tra poco.',
   'memory.outOfCredits.title': 'Crediti esauriti',
   'memory.outOfCredits.action': 'Ricarica',
+  'memory.error.planRequired':
+    "Il tuo piano attuale non include la memoria, quindi OpenHuman non può salvare né consultare ciò che impara. Passa a un piano superiore per attivare la memoria, oppure scegli un'altra opzione di memoria nelle Impostazioni.",
+  'memory.planRequired.title': 'La memoria non fa parte del tuo piano',
+  'memory.planRequired.action': 'Vedi i piani',
   'alerts.title': 'Avvisi',
   'alerts.empty': 'Nessun avviso',
   'alerts.markAllRead': 'Segna tutti come letti',
@@ -700,6 +708,15 @@ const messages: TranslationMap = {
   'invites.title': 'Inviti',
   'invites.noInvites': 'Nessun invito in sospeso',
   'devOptions.titleDiagnostics': 'Sviluppatore e Diagnostica',
+  'devOptions.doctor.run': 'Esegui diagnostica',
+  'devOptions.doctor.runLive': 'Esegui controlli dal vivo',
+  'devOptions.doctor.liveWarning':
+    'I controlli dal vivo possono consumare token per le chiamate a modelli o embedding. Continuare?',
+  'devOptions.doctor.severity.pass': 'Superato',
+  'devOptions.doctor.severity.info': 'Info',
+  'devOptions.doctor.severity.warn': 'Avviso',
+  'devOptions.doctor.severity.error': 'Errore',
+  'devOptions.doctor.severity.skipped': 'Saltato',
   'devOptions.diagnostics': 'Diagnostica',
   'devOptions.toolPolicyDiagnosticsDesc':
     'Inventario degli strumenti, posizione della politica, allowlist MCP e blocchi recenti',
@@ -1339,6 +1356,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'Impossibile caricare i messaggi',
   'chat.thinkingDots': 'Sto pensando...',
   'chat.status.thinkingElapsed': 'Sto pensando · {elapsed}',
+  'chat.status.compacting': 'Riassumo la conversazione precedente…',
+  'chat.status.compactingElapsed': 'Riassumo la conversazione precedente · {elapsed}',
   'chat.status.waitingApproval': 'In attesa della tua approvazione',
   'chat.status.waitingReview': 'In attesa della tua revisione',
   'chat.status.waitingAnswer': 'In attesa della tua risposta',
@@ -1871,11 +1890,6 @@ const messages: TranslationMap = {
   'chat.todos.ofTotal': '{done} di {total}',
   'chat.todos.receipt': 'Avanzamento aggiornato · {done}/{total}',
   'chat.subagents.ranFor': 'Durata {duration}',
-  'chat.subagents.ofTotal': '{complete} di {total}',
-  'chat.subagents.runningCount': '{count} in corso',
-  'chat.subagents.failedCount': '{count} non riusciti',
-  'chat.subagents.incompleteCount': '{count} incompleti',
-  'chat.subagents.settled': 'Sottoattività concluse. Elaborazione dei risultati.',
   'conversations.planReview.title': 'Rivedi il piano',
   'conversations.planReview.subtitle':
     'Approva per eseguirlo, rifiuta per scartarlo o invia un feedback per rivederlo.',
@@ -1911,7 +1925,6 @@ const messages: TranslationMap = {
   'conversations.mcpUi.confirmAllow': 'Consenti',
   'conversations.mcpUi.confirmDeny': 'Rifiuta',
   'conversations.tools.delegatedTo': 'Delegato a {agent}',
-  'conversations.tools.parallelAgentsAggregating': 'Aggregazione dei risultati',
   'conversations.tools.openInBrowser': 'Apri nel browser',
   'conversations.tools.status.running': 'in corso',
   'conversations.tools.status.done': 'completato',
@@ -1980,22 +1993,6 @@ const messages: TranslationMap = {
     "Tentativo fallito. Scarica l'ultima build dell'app e riprova.",
   'daemon.serviceBlockingGate.retrying': 'Nuovo tentativo...',
   'daemon.serviceBlockingGate.title': 'Il core di OpenHuman non è disponibile',
-  'worktree.label': 'Albero di lavoro',
-  'worktree.dirty': 'Modifiche non sottoposte a commit',
-  'worktree.clean': 'Pulito',
-  'worktree.removing': 'Rimozione…',
-  'worktree.removeFailed': 'Impossibile rimuovere il worktree',
-  'worktree.diffFailed': 'Impossibile caricare il diff',
-  'worktree.diffLoading': 'Caricamento del diff…',
-  'worktree.diffEmpty': 'Nessuna modifica rispetto a HEAD.',
-  'worktree.dirtyConfirm':
-    'Questo worktree ha modifiche non sottoposte a commit. Rimuoverlo scarta quel lavoro. Il branch del worker viene mantenuto.',
-  'worktree.action.open': 'Apri cartella',
-  'worktree.action.diff': 'Diff',
-  'worktree.action.hideDiff': 'Nascondi diff',
-  'worktree.action.remove': 'Rimuovi',
-  'worktree.action.removeAnyway': 'Scarta e rimuovi',
-  'worktree.action.preserve': 'Conserva',
   'notifications.card.dismiss': 'Ignora notifica',
   'notifications.card.importanceTitle': 'Importanza: {pct}%',
   'notifications.center.empty': 'Nessuna notifica',
@@ -2429,6 +2426,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Un gruppo di provider supporta al massimo 128 chiavi API.',
   'settings.ai.fleet.partialKeyVerified':
     "Alcune chiavi API sono state rifiutate, ma un'altra è stata verificata. Controlla lo stato delle chiavi.",
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman non ha potuto confermare questo gruppo di chiavi tramite il catalogo del provider. Le chiavi sono state salvate e verranno controllate quando verrà inviata una richiesta al modello.',
   'settings.ai.apiKeyFieldLabel': 'Etichetta campo chiave API',
   'settings.ai.apiKeyRequired': 'Incolla la tua chiave API per continuare.',
   'settings.ai.apiKeyStoredEncrypted': 'Chiave API memorizzata crittografata',
@@ -3863,6 +3862,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Cerca lavori...',
   'settings.developerMenu.eventLog.column.time': 'Tempo',
   'settings.developerMenu.eventLog.column.event': 'Evento',
+  'settings.agentAccess.totalTimeout.label': 'Limite totale del turno',
+  'settings.agentAccess.totalTimeout.desc':
+    'Per impostazione predefinita non è previsto un limite di tempo totale. Imposta OPENHUMAN_AGENT_TURN_TIMEOUT_SECS per sceglierne uno; 0 lo disattiva. Restano attive le protezioni per le singole azioni e le chiamate bloccate.',
   'settings.agentAccess.group.approvals': 'Approvazioni',
   'settings.agentAccess.group.fileSystem': 'Sistema file',
   'settings.agentAccess.group.limits': 'Limiti',
@@ -4958,8 +4960,6 @@ const messages: TranslationMap = {
   'conversations.tools.updateLearnings.done': 'Apprendimenti aggiornati',
   'conversations.tools.delegateTask.active': "Delega dell'attività",
   'conversations.tools.delegateTask.done': 'Attività delegata',
-  'conversations.tools.runAgentsInParallel.active': 'Esecuzione di agenti in parallelo',
-  'conversations.tools.runAgentsInParallel.done': 'Agenti eseguiti in parallelo',
   'conversations.tools.messageAgent.active': "Invio di un messaggio all'agente",
   'conversations.tools.messageAgent.done': "Messaggio inviato all'agente",
   'conversations.tools.waitForAgent.active': "Attesa dell'agente",
@@ -4996,6 +4996,8 @@ const messages: TranslationMap = {
   'conversations.tools.checkGoal.done': 'Obiettivo verificato',
   'conversations.tools.completeGoal.active': "Completamento dell'obiettivo",
   'conversations.tools.completeGoal.done': 'Obiettivo completato',
+  'conversations.tools.resumeGoal.active': "Ripresa dell'obiettivo",
+  'conversations.tools.resumeGoal.done': 'Obiettivo ripreso',
   'conversations.tools.scheduleTask.active': "Pianificazione dell'attività",
   'conversations.tools.scheduleTask.done': 'Attività pianificata',
   'conversations.tools.checkSchedules.active': 'Verifica delle pianificazioni',
@@ -5187,6 +5189,9 @@ const messages: TranslationMap = {
     'La configurazione gestita richiede il login a OpenHuman e non è disponibile in modalità locale.',
   'onboarding.custom.localDefaultDisabledReason':
     'La configurazione gestita richiede un account OpenHuman. In una sessione locale configuri ogni servizio da solo.',
+  'settings.agentAccess.hideShellWindows.label': 'Nascondi le finestre del terminale',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Nasconde le finestre native del terminale in Windows per le nuove sessioni.',
 };
 
 export default messages;

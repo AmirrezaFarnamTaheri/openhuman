@@ -2,7 +2,7 @@
 //! coding pack. The finish policy is included from its owning module so this
 //! integration target exercises the installed policy without copying it.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -78,17 +78,19 @@ impl Fixture {
             workspace_only: true,
             ..SecurityPolicy::default()
         });
-        let tools = Arc::new(ops::all_tools(
+        let (tools, pack_handle) = ops::all_tools_with_runtime_and_pack_handle(
             config.clone(),
             &security,
+            Arc::new(openhuman_core::modules::tinybox::host_runtime::NativeRuntime::new()),
             AuditLogger::disabled(),
             &config.browser,
             &config.http_request,
             &action,
-            &HashMap::new(),
             &config,
-        ));
-        toolpacks::bind_pack_registry(&tools);
+            None,
+        );
+        let tools = Arc::new(tools);
+        toolpacks::bind_pack_registry(&pack_handle, &tools);
         Self {
             _root: root,
             home,

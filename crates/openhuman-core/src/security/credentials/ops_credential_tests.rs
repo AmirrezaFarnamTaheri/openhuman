@@ -174,171 +174,183 @@ async fn set_credential_requires_a_user_id_for_a_session() {
 
 #[tokio::test]
 async fn set_credential_installs_a_session_without_touching_the_backend() {
-    let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
-    let tmp = TempDir::new().unwrap();
-    std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
-    let _home = EnvVarGuard::set("HOME", tmp.path());
-    let mut config = test_config(&tmp);
-    // A backend that would reject everything: it must never be consulted.
-    config.api_url = Some(spawn_auth_me_status(StatusCode::UNAUTHORIZED).await);
-    let exp = chrono::Utc::now() + chrono::Duration::hours(1);
-    let token = jwt_with_payload(json!({ "sub": "user-42", "exp": exp.timestamp() }));
+    with_operator_context(async {
+        let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
+        let _home = EnvVarGuard::set("HOME", tmp.path()).without("OPENHUMAN_WORKSPACE");
+        let mut config = test_config(&tmp);
+        // A backend that would reject everything: it must never be consulted.
+        config.api_url = Some(spawn_auth_me_status(StatusCode::UNAUTHORIZED).await);
+        let exp = chrono::Utc::now() + chrono::Duration::hours(1);
+        let token = jwt_with_payload(json!({ "sub": "user-42", "exp": exp.timestamp() }));
 
-    let result = store_session(
-        &DispatchCtx::process_default(),
-        &config,
-        &token,
-        None,
-        Some(json!({ "id": "user-42", "email": "u@example.com" })),
-    )
-    .await
-    .unwrap();
+        let result = store_session(
+            &DispatchCtx::ambient(),
+            &config,
+            &token,
+            None,
+            Some(json!({ "id": "user-42", "email": "u@example.com" })),
+        )
+        .await
+        .unwrap();
 
-    let state = result.value;
-    assert!(state.is_authenticated);
-    assert_eq!(state.user_id.as_deref(), Some("user-42"));
-    assert_eq!(state.credential.as_deref(), Some("session"));
-    assert_eq!(state.user.unwrap()["email"], "u@example.com");
-    assert!(
-        state.expires_at.is_some(),
-        "JWT exp is recorded for the local precheck"
-    );
-    let logs = result.logs.join(" ");
-    assert!(
-        logs.contains("user directory activated for user-42"),
-        "{logs}"
-    );
-    assert!(logs.contains("session credential stored"), "{logs}");
-    assert_eq!(
-        crate::config::read_active_user_id(&default_root_openhuman_dir().unwrap()).as_deref(),
-        Some("user-42")
-    );
-    assert_eq!(
-        identity::peek_credential_user_identity()
-            .and_then(|i| i.email)
-            .as_deref(),
-        Some("u@example.com")
-    );
+        let state = result.value;
+        assert!(state.is_authenticated);
+        assert_eq!(state.user_id.as_deref(), Some("user-42"));
+        assert_eq!(state.credential.as_deref(), Some("session"));
+        assert_eq!(state.user.unwrap()["email"], "u@example.com");
+        assert!(
+            state.expires_at.is_some(),
+            "JWT exp is recorded for the local precheck"
+        );
+        let logs = result.logs.join(" ");
+        assert!(
+            logs.contains("user directory activated for user-42"),
+            "{logs}"
+        );
+        assert!(logs.contains("session credential stored"), "{logs}");
+        assert_eq!(
+            crate::config::read_active_user_id(&default_root_openhuman_dir().unwrap()).as_deref(),
+            Some("user-42")
+        );
+        assert_eq!(
+            identity::peek_credential_user_identity()
+                .and_then(|i| i.email)
+                .as_deref(),
+            Some("u@example.com")
+        );
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn set_credential_derives_the_user_id_from_the_jwt_subject() {
-    let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
-    let tmp = TempDir::new().unwrap();
-    std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
-    let _home = EnvVarGuard::set("HOME", tmp.path());
-    let config = test_config(&tmp);
-    let token = jwt_with_payload(json!({
-        "sub": "from-claims",
-        "exp": (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp()
-    }));
-    let state = store_session(&DispatchCtx::process_default(), &config, &token, None, None)
+    with_operator_context(async {
+        let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
+        let _home = EnvVarGuard::set("HOME", tmp.path()).without("OPENHUMAN_WORKSPACE");
+        let config = test_config(&tmp);
+        let token = jwt_with_payload(json!({
+            "sub": "from-claims",
+            "exp": (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp()
+        }));
+        let state = store_session(&DispatchCtx::ambient(), &config, &token, None, None)
+            .await
+            .unwrap()
+            .value;
+        assert_eq!(state.user_id.as_deref(), Some("from-claims"));
+        // Explicit userId wins over the claim; the user payload's id wins over
+        // the claim too.
+        let state = store_session(
+            &DispatchCtx::ambient(),
+            &config,
+            &token,
+            Some("explicit".into()),
+            None,
+        )
         .await
         .unwrap()
         .value;
-    assert_eq!(state.user_id.as_deref(), Some("from-claims"));
-    // Explicit userId wins over the claim; the user payload's id wins over
-    // the claim too.
-    let state = store_session(
-        &DispatchCtx::process_default(),
-        &config,
-        &token,
-        Some("explicit".into()),
-        None,
-    )
-    .await
-    .unwrap()
-    .value;
-    assert_eq!(state.user_id.as_deref(), Some("explicit"));
+        assert_eq!(state.user_id.as_deref(), Some("explicit"));
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn set_credential_with_the_same_token_and_user_is_a_cheap_refresh() {
-    let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
-    let tmp = TempDir::new().unwrap();
-    std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
-    let _home = EnvVarGuard::set("HOME", tmp.path());
-    let config = test_config(&tmp);
-    let token = jwt_with_payload(json!({
-        "sub": "user-7",
-        "exp": (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp()
-    }));
-    let first = store_session(
-        &DispatchCtx::process_default(),
-        &config,
-        &token,
-        None,
-        Some(json!({ "id": "user-7", "pendingBackendValidation": true })),
-    )
-    .await
-    .unwrap();
-    assert!(first.logs.join(" ").contains("user directory activated"));
+    with_operator_context(async {
+        let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
+        let _home = EnvVarGuard::set("HOME", tmp.path()).without("OPENHUMAN_WORKSPACE");
+        let config = test_config(&tmp);
+        let token = jwt_with_payload(json!({
+            "sub": "user-7",
+            "exp": (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp()
+        }));
+        let first = store_session(
+            &DispatchCtx::ambient(),
+            &config,
+            &token,
+            None,
+            Some(json!({ "id": "user-7", "pendingBackendValidation": true })),
+        )
+        .await
+        .unwrap();
+        assert!(first.logs.join(" ").contains("user directory activated"));
 
-    // The host's `/auth/me` answer arrives: same token, same user.
-    let user_config = crate::config::load_config_with_timeout().await.unwrap();
-    let second = store_session(
-        &DispatchCtx::process_default(),
-        &user_config,
-        &token,
-        None,
-        Some(json!({ "id": "user-7", "name": "Confirmed" })),
-    )
-    .await
-    .unwrap();
-    let logs = second.logs.join(" ");
-    assert!(logs.contains("credential refreshed"), "{logs}");
-    assert!(!logs.contains("user directory activated"), "{logs}");
-    assert!(
-        !logs.contains("credential-gated services started"),
-        "{logs}"
-    );
-    let user = second.value.user.unwrap();
-    assert_eq!(user["name"], "Confirmed");
-    assert!(user.get("pendingBackendValidation").is_none());
+        // The host's `/auth/me` answer arrives: same token, same user.
+        let user_config = crate::config::load_config_with_timeout().await.unwrap();
+        let second = store_session(
+            &DispatchCtx::ambient(),
+            &user_config,
+            &token,
+            None,
+            Some(json!({ "id": "user-7", "name": "Confirmed" })),
+        )
+        .await
+        .unwrap();
+        let logs = second.logs.join(" ");
+        assert!(logs.contains("credential refreshed"), "{logs}");
+        assert!(!logs.contains("user directory activated"), "{logs}");
+        assert!(
+            !logs.contains("credential-gated services started"),
+            "{logs}"
+        );
+        let user = second.value.user.unwrap();
+        assert_eq!(user["name"], "Confirmed");
+        assert!(user.get("pendingBackendValidation").is_none());
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn set_credential_for_a_different_user_signs_the_previous_one_out_first() {
-    let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
-    let tmp = TempDir::new().unwrap();
-    std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
-    let _home = EnvVarGuard::set("HOME", tmp.path());
-    let config = test_config(&tmp);
-    let exp = (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp();
-    store_session(
-        &DispatchCtx::process_default(),
-        &config,
-        &jwt_with_payload(json!({ "sub": "alice", "exp": exp })),
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    let alice_config = crate::config::load_config_with_timeout().await.unwrap();
-    let result = store_session(
-        &DispatchCtx::process_default(),
-        &alice_config,
-        &jwt_with_payload(json!({ "sub": "bob", "exp": exp })),
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    let logs = result.logs.join(" ");
-    assert!(logs.contains("session cleared"), "{logs}");
-    assert!(logs.contains("user directory activated for bob"), "{logs}");
-    assert_eq!(result.value.user_id.as_deref(), Some("bob"));
-    assert_eq!(
-        crate::config::read_active_user_id(&default_root_openhuman_dir().unwrap()).as_deref(),
-        Some("bob")
-    );
-    // Alice's profile is gone from her scope.
-    assert!(auth_get_state(&alice_config)
+    with_operator_context(async {
+        let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
+        let _home = EnvVarGuard::set("HOME", tmp.path()).without("OPENHUMAN_WORKSPACE");
+        let config = test_config(&tmp);
+        let exp = (chrono::Utc::now() + chrono::Duration::hours(1)).timestamp();
+        store_session(
+            &DispatchCtx::ambient(),
+            &config,
+            &jwt_with_payload(json!({ "sub": "alice", "exp": exp })),
+            None,
+            None,
+        )
         .await
-        .unwrap()
-        .value
-        .user_id
-        .is_none());
+        .unwrap();
+        let alice_config = crate::config::load_config_with_timeout().await.unwrap();
+        let result = store_session(
+            &DispatchCtx::ambient(),
+            &alice_config,
+            &jwt_with_payload(json!({ "sub": "bob", "exp": exp })),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let logs = result.logs.join(" ");
+        assert!(logs.contains("session cleared"), "{logs}");
+        assert!(logs.contains("user directory activated for bob"), "{logs}");
+        assert_eq!(result.value.user_id.as_deref(), Some("bob"));
+        assert_eq!(
+            crate::config::read_active_user_id(&default_root_openhuman_dir().unwrap()).as_deref(),
+            Some("bob")
+        );
+        // Alice's profile is gone from her scope.
+        assert!(auth_get_state(&alice_config)
+            .await
+            .unwrap()
+            .value
+            .user_id
+            .is_none());
+    })
+    .await;
 }
 
 // ── set_credential (api key) ──────────────────────────────────
@@ -389,7 +401,7 @@ async fn set_and_clear_api_key_credential() {
 async fn clearing_the_session_preserves_a_coexisting_api_key() {
     // Reaches the connector module, whose route is process-wide: hold the module
     // lock (before TEST_ENV_LOCK, the established order) for the whole test.
-    let _module = crate::integrations::composio::module_client::module_guard().await;
+    let _module = crate::integrations::composio::module_client::module_lock_guard().await;
     let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
     let tmp = TempDir::new().unwrap();
     std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
@@ -472,11 +484,12 @@ async fn clearing_the_session_preserves_a_coexisting_api_key() {
 // workspace must never outrank the key that was actually the active
 // credential a moment ago. This RPC only removes the session; it must not
 // let an unrelated leftover key silently become the effective one.
-#[tokio::test]
+// Multi-thread: the sync store bridge blocks while tinyflows calls back into the host.
+#[tokio::test(flavor = "multi_thread")]
 async fn clearing_the_session_preserves_the_active_key_over_a_stale_destination_key() {
     // Reaches the connector module, whose route is process-wide: hold the module
     // lock (before TEST_ENV_LOCK, the established order) for the whole test.
-    let _module = crate::integrations::composio::module_client::module_guard().await;
+    let _module = crate::integrations::composio::module_client::module_lock_guard().await;
     let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
     let tmp = TempDir::new().unwrap();
     std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
@@ -567,7 +580,7 @@ async fn clearing_the_session_preserves_the_active_key_over_a_stale_destination_
 async fn clearing_without_a_kind_removes_a_user_scoped_api_key_at_its_source() {
     // Reaches the connector module, whose route is process-wide: hold the module
     // lock (before TEST_ENV_LOCK, the established order) for the whole test.
-    let _module = crate::integrations::composio::module_client::module_guard().await;
+    let _module = crate::integrations::composio::module_client::module_lock_guard().await;
     let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
     let tmp = TempDir::new().unwrap();
     std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
@@ -659,91 +672,4 @@ async fn clear_credential_without_a_kind_removes_everything() {
             .value
             .is_authenticated
     );
-}
-
-// ── set_credential (local session) ─────────────────────────────
-
-/// A local session token requires a non-empty user payload — the backend
-/// fetch path is bypassed entirely, so there is no fallback to derive the
-/// user from an API response.
-#[tokio::test]
-async fn store_session_local_token_rejects_missing_user_payload() {
-    let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
-    let tmp = TempDir::new().unwrap();
-    std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
-    let _home = EnvVarGuard::set("HOME", tmp.path());
-    let config = test_config(&tmp);
-    let local_token = "header.payload.local";
-    let err = store_session(
-        &DispatchCtx::process_default(),
-        &config,
-        local_token,
-        None,
-        None,
-    )
-    .await
-    .unwrap_err();
-    assert!(
-        err.contains("local session requires a user payload"),
-        "expected 'local session requires a user payload', got: {err}"
-    );
-}
-
-/// A local session token with a user payload must be accepted without any
-/// network call, must force a deterministic `local-<device>` user id
-/// regardless of what the caller passes, and must return a stored profile
-/// summary.
-#[tokio::test]
-async fn store_session_local_token_succeeds_without_network_and_forces_local_user_id() {
-    let _env_guard = crate::config::TEST_ENV_LOCK.lock().await;
-    let tmp = TempDir::new().unwrap();
-    std::fs::create_dir_all(tmp.path().join("workspace")).unwrap();
-    let _home = EnvVarGuard::set("HOME", tmp.path());
-    let config = test_config(&tmp);
-    let local_token = "header.payload.local";
-    let user = serde_json::json!({
-        "id": "local",
-        "name": "Local User",
-        "email": "local@openhuman.local"
-    });
-    // Pass a different user_id to verify it is overridden.
-    let result = store_session(
-        &DispatchCtx::process_default(),
-        &config,
-        local_token,
-        Some("should-be-overridden".to_string()),
-        Some(user),
-    )
-    .await
-    .unwrap();
-    // The credential is installed (no network call was required).
-    assert!(result.value.is_authenticated);
-    assert_eq!(result.value.credential.as_deref(), Some("local"));
-    // Logs must mention that backend validation was skipped.
-    let log_text = result.logs.join(" ");
-    assert!(
-        log_text.contains("local session accepted without backend validation"),
-        "expected log confirming no backend call, got: {log_text}"
-    );
-    let expected_local_user_id = local_session_user_id();
-    assert!(
-        log_text.contains(&format!(
-            "user directory activated for {expected_local_user_id}"
-        )),
-        "expected user-directory activation log for deterministic local uid, got: {log_text}"
-    );
-    assert!(
-        log_text.contains("onboarding left incomplete for local session setup"),
-        "expected local session to remain in onboarding, got: {log_text}"
-    );
-    // The forced local user id wins over the caller's hint, and the user
-    // payload's id fields are rewritten to match.
-    assert_eq!(
-        result.value.user_id.as_deref(),
-        Some(expected_local_user_id.as_str())
-    );
-    let user = result.value.user.unwrap();
-    assert_eq!(user["id"], expected_local_user_id);
-    assert_eq!(user["_id"], expected_local_user_id);
-    assert_eq!(user["name"], "Local User");
 }

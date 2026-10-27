@@ -6,11 +6,55 @@
 use crate::agent::OpenHumanSessionHost;
 use crate::config::Config;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 
 use super::types::{SessionCacheFingerprint, SessionEntry};
 
 pub(super) fn autonomy_signature(config: &Config) -> String {
-    serde_json::to_string(&config.autonomy).unwrap_or_default()
+    // Runtime/provider settings are captured at construction. Include the whole
+    // persisted document so a newly added setting cannot silently miss cache
+    // invalidation; resolved paths are runtime-only and must be included too.
+    // This rebuilds at the next turn, without rewriting frozen prefix/history.
+    // The profile binding is immutable and shared across config clones. A new
+    // binding must rebuild the client even when its serialized settings match.
+    let profile_binding = config
+        .profile_providers
+        .as_ref()
+        .map(|binding| std::sync::Arc::as_ptr(binding) as usize);
+    let mut snapshot = match serde_json::to_value((
+        config,
+        &config.action_dir,
+        &config.workspace_dir,
+        &config.config_path,
+        &config.ephemeral_route,
+        &config.resolved_endpoints,
+        profile_binding,
+        crate::security::credentials::profiles::profile_revision(
+            &crate::security::credentials::state_dir_from_config(config),
+        )
+        .map(|revision| revision.to_string()),
+    )) {
+        Ok(value) => value,
+        Err(_) => {
+            // Never reuse a cached runtime on an unrepresentable config, and
+            // never put raw configuration (which may include keys) in logs.
+            log::warn!("[web-channel] runtime settings fingerprint unavailable");
+            return uuid::Uuid::new_v4().to_string();
+        }
+    };
+    snapshot.sort_all_objects();
+    let bytes = match serde_json::to_vec(&snapshot) {
+        Ok(bytes) => bytes,
+        Err(_) => return uuid::Uuid::new_v4().to_string(),
+    };
+    let mut digest = Sha256::new();
+    digest.update(b"openhuman-session-runtime-settings-v1:");
+    digest.update(bytes);
+    digest
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 /// Signature of `config.model_registry` for the session-cache fingerprint.
@@ -61,8 +105,16 @@ pub(crate) fn provider_role_for_model_override(model_override: Option<&str>) -> 
     // A role alias (`hint:coding`) or a retired tier slug (`hint:coding`) picks
     // that workload's route; a concrete model id rides the chat route.
     match model_override.map(str::trim) {
-        Some(value) if value.starts_with("hint:") || crate::config::is_legacy_tier_model(value) => {
-            match crate::inference::provider::factory::role_for_model_tier(value) {
+        Some(value)
+            if crate::inference::provider_model::is_abstract_model(
+                crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+                value,
+            ) =>
+        {
+            match crate::inference::provider_model::role_for_provider_model(
+                crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+                value,
+            ) {
                 role @ ("agentic" | "coding" | "summarization" | "reasoning") => role,
                 _ => "chat",
             }
@@ -95,7 +147,12 @@ fn effective_session_config(
         .default_model
         .as_deref()
         .map(str::trim)
-        .filter(|model| crate::inference::provider::factory::is_raw_passthrough_model(model))
+        .filter(|model| {
+            crate::inference::provider_model::is_raw_model(
+                crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+                model,
+            )
+        })
     {
         if model.starts_with("openrouter/") {
             // The managed backend accepts catalog ids verbatim. This also
@@ -164,11 +221,7 @@ pub(super) fn build_session_agent(
                 json!({"client_id": client_id, "thread_id": thread_id}).to_string(),
                 "web_channel",
             );
-            let short_thread = if thread_id.len() > 12 {
-                &thread_id[..12]
-            } else {
-                thread_id
-            };
+            let short_thread: String = thread_id.chars().take(12).collect();
             agent.set_agent_definition_name(format!("{target_agent_id}_{short_thread}"));
             // Bind the conversation's durable identity here, not after
             // checkout: everything downstream — resume, transcript binding,
@@ -329,7 +382,8 @@ pub(super) fn build_session_fingerprint(
     let effective = effective_session_config(config, model_override.as_deref(), temperature);
     SessionCacheFingerprint {
         model_override,
-        effective_model: crate::inference::provider::factory::resolve_model_for_hint(
+        effective_model: crate::inference::provider_model::resolve_provider_model_hint(
+            crate::inference::provider::factory::PROVIDER_OPENHUMAN,
             &format!("hint:{provider_role}"),
             &effective,
         ),
@@ -621,3 +675,7 @@ mod session_checkout_agents_tests;
 #[cfg(test)]
 #[path = "session_routing_tests.rs"]
 mod session_routing_tests;
+
+#[cfg(test)]
+#[path = "session_fingerprint_tests.rs"]
+mod session_fingerprint_tests;

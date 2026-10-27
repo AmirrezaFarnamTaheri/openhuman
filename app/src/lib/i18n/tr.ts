@@ -312,6 +312,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'Önceki 7 gün',
   'chat.sidebar.group.previous30Days': 'Önceki 30 gün',
   'chat.sidebar.group.older': 'Daha eski',
+  'chat.sidebar.archived': 'Arşivlenenler',
+  'chat.sidebar.restoreThread': 'Geri yükle',
   'chat.sidebar.pinThread': 'Sohbeti sabitle',
   'chat.sidebar.unpinThread': 'Sohbetin sabitlemesini kaldır',
   'chat.sidebar.unread': 'Yeni yanıt',
@@ -508,6 +510,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'Bekleyen masaüstü onayları yüklenemedi. Yeniden denemek için yenileyin.',
   'desktop.unsupported': 'Masaüstü denetimi bu çalışma ortamında kullanılamıyor.',
+  'desktop.unsupportedWindows':
+    "Masaüstü denetimi henüz Windows'ta kullanılamıyor. Tarayıcı denetimi Windows'ta şu anda çalışıyor.",
   'desktop.localOnly': 'Bu ayar yalnızca bu bilgisayar için geçerlidir.',
   'desktop.permissions': 'Sistem izinleri',
   'desktop.openSettings': 'Ayarları aç',
@@ -649,6 +653,15 @@ const messages: TranslationMap = {
   'invites.redeemPlaceholder': 'Davet kodu',
   'invites.redeemSubmit': 'Kullan',
   'devOptions.titleDiagnostics': 'Geliştirici ve tanılama',
+  'devOptions.doctor.run': 'Tanılamayı çalıştır',
+  'devOptions.doctor.runLive': 'Canlı denetimleri çalıştır',
+  'devOptions.doctor.liveWarning':
+    'Canlı denetimler model veya gömme çağrılarında token harcayabilir. Devam edilsin mi?',
+  'devOptions.doctor.severity.pass': 'Başarılı',
+  'devOptions.doctor.severity.info': 'Bilgi',
+  'devOptions.doctor.severity.warn': 'Uyarı',
+  'devOptions.doctor.severity.error': 'Hata',
+  'devOptions.doctor.severity.skipped': 'Atlandı',
   'devOptions.diagnostics': 'Tanılama',
   'devOptions.toolPolicyDiagnosticsDesc':
     'Araç envanteri, politika durumu, MCP izin listeleri ve son engellemeler',
@@ -1876,11 +1889,6 @@ const messages: TranslationMap = {
   'chat.todos.ofTotal': '{done} / {total}',
   'chat.todos.receipt': 'İlerleme güncellendi · {done}/{total}',
   'chat.subagents.ranFor': '{duration} çalıştı',
-  'chat.subagents.ofTotal': '{complete} / {total}',
-  'chat.subagents.runningCount': '{count} çalışıyor',
-  'chat.subagents.failedCount': '{count} başarısız',
-  'chat.subagents.incompleteCount': '{count} tamamlanmadı',
-  'chat.subagents.settled': 'Alt çalıştırmalar tamamlandı. Sonuçları işleniyor.',
   'conversations.planReview.title': 'Planı incele',
   'conversations.planReview.subtitle':
     'Çalıştırmak için onaylayın, atmak için reddedin veya düzeltilmesi için geri bildirim gönderin.',
@@ -1915,7 +1923,6 @@ const messages: TranslationMap = {
   'conversations.mcpUi.confirmAllow': 'İzin ver',
   'conversations.mcpUi.confirmDeny': 'Reddet',
   'conversations.tools.delegatedTo': 'Devredilen ajan: {agent}',
-  'conversations.tools.parallelAgentsAggregating': 'Sonuçlar birleştiriliyor',
   'conversations.tools.openInBrowser': 'Tarayıcıda aç',
   'conversations.tools.status.running': 'çalışıyor',
   'conversations.tools.status.done': 'tamamlandı',
@@ -2007,23 +2014,6 @@ const messages: TranslationMap = {
     'Yeniden deneme başarısız oldu. Uygulamanın en son sürümünü indirip yeniden deneyin.',
   'daemon.serviceBlockingGate.retrying': 'Yeniden deneniyor...',
   'daemon.serviceBlockingGate.title': 'OpenHuman çekirdeği kullanılamıyor',
-  'worktree.label': 'Çalışma ağacı',
-  'worktree.dirty': 'İşlenmemiş değişiklikler',
-  'worktree.clean': 'Temiz',
-  'worktree.removing': 'Kaldırılıyor…',
-  'worktree.removeFailed': 'Çalışma ağacı kaldırılamadı',
-  'worktree.diffFailed': 'Fark yüklenemedi',
-  'worktree.diffLoading': 'Fark yükleniyor…',
-  'worktree.diffEmpty': 'HEAD ile fark yok.',
-  'worktree.dirtyConfirm':
-    'Bu çalışma ağacında işlenmemiş değişiklikler var. Kaldırırsanız bu çalışma silinir. Çalışan dalı korunur.',
-  'worktree.action.open': 'Klasörü aç',
-  'worktree.action.diff': 'Fark',
-  'worktree.action.hideDiff': 'Farkı gizle',
-  'worktree.action.remove': 'Kaldır',
-  'worktree.action.removeAnyway': 'Değişiklikleri sil ve kaldır',
-  'worktree.action.preserve': 'Koru',
-  'orchestration.detail.stop': 'Durdur',
   'notifications.card.dismiss': 'Bildirimi kapat',
   'notifications.card.importanceTitle': 'Önem: %{pct}',
   'notifications.center.empty': 'Henüz bildirim yok',
@@ -2507,6 +2497,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Bir sağlayıcı grubu en fazla 128 API anahtarını destekler.',
   'settings.ai.fleet.partialKeyVerified':
     'Bazı API anahtarları reddedildi ancak başka bir anahtar doğrulandı. Sağlayıcı anahtarlarının durumunu kontrol edin.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman bu anahtar grubunu sağlayıcının kataloğundan doğrulayamadı. Anahtarlar kaydedildi ve bir model isteği gönderildiğinde denetlenecek.',
   'settings.ai.apiKeyFieldLabel': 'API anahtarı',
   'settings.ai.apiKeyRequired': 'Devam etmek için lütfen API anahtarınızı yapıştırın.',
   'settings.ai.apiKeyStoredEncrypted': 'API anahtarınız bu cihazda şifrelenmiş olarak saklanır.',
@@ -3086,6 +3078,9 @@ const messages: TranslationMap = {
   'settings.agentAccess.timeout.invalid': 'İzin verilen aralıkta tam sayı olarak saniye girin',
   'settings.agentAccess.timeout.envOverride':
     'OPENHUMAN_TOOL_TIMEOUT_SECS ortam değişkeni bu ayarı geçersiz kılıyor; bu nedenle değişken kaldırılana kadar buradaki değişikliklerin etkisi olmaz.',
+  'settings.agentAccess.totalTimeout.label': 'Toplam tur süresi sınırı',
+  'settings.agentAccess.totalTimeout.desc':
+    'Varsayılan olarak tur için toplam süre sınırı yoktur. Bir sınır belirlemek için OPENHUMAN_AGENT_TURN_TIMEOUT_SECS ayarlayın; 0 sınırı devre dışı bırakır. Tekil işlemler ve takılan çağrılar için korumalar geçerliliğini korur.',
   'settings.agentAccess.group.approvals': 'Onaylar',
   'settings.agentAccess.group.fileSystem': 'Dosya sistemi',
   'settings.agentAccess.group.limits': 'Sınırlar',
@@ -4240,6 +4235,8 @@ const messages: TranslationMap = {
   'memoryPage.import.progress': '{imported}/{total} öğe içe aktarıldı',
   // Chat status, history, and tool activity.
   'chat.status.thinkingElapsed': 'Düşünüyor · {elapsed}',
+  'chat.status.compacting': 'Önceki konuşma özetleniyor…',
+  'chat.status.compactingElapsed': 'Önceki konuşma özetleniyor · {elapsed}',
   'chat.status.waitingApproval': 'Onayınız bekleniyor',
   'chat.status.waitingReview': 'İncelemeniz bekleniyor',
   'chat.status.waitingAnswer': 'Yanıtınız bekleniyor',
@@ -4402,6 +4399,10 @@ const messages: TranslationMap = {
     'Belleğe şu anda ulaşılamıyor. Kayıtlı hiçbir şey kaybolmadı; biraz sonra yeniden deneyin.',
   'memory.outOfCredits.title': 'Krediniz tükendi',
   'memory.outOfCredits.action': 'Kredi yükle',
+  'memory.error.planRequired':
+    "Mevcut planınız bellek içermediği için OpenHuman öğrendiklerini kaydedemez veya bunlara bakamaz. Belleği açmak için planınızı yükseltin ya da Ayarlar'dan başka bir bellek seçeneğine geçin.",
+  'memory.planRequired.title': 'Bellek planınıza dahil değil',
+  'memory.planRequired.action': 'Planları gör',
   'memoryPage.engine.badgeDegraded': 'Kısıtlı çalışıyor',
   'memoryPage.engine.badgeDown': 'Ulaşılamıyor',
   'memoryPage.engine.connecting': 'Bağlanıyor…',
@@ -4888,11 +4889,10 @@ const messages: TranslationMap = {
   'conversations.tools.reviewLearnings.active': 'Öğrenilenler inceleniyor',
   'conversations.tools.reviewLearnings.done': 'Öğrenilenler incelendi',
   'conversations.tools.updateLearnings.active': 'Öğrenilenler güncelleniyor',
+  'orchestration.detail.stop': 'Durdur',
   'conversations.tools.updateLearnings.done': 'Öğrenilenler güncellendi',
   'conversations.tools.delegateTask.active': 'Görev devrediliyor',
   'conversations.tools.delegateTask.done': 'Görev devredildi',
-  'conversations.tools.runAgentsInParallel.active': 'Ajanlar paralel çalıştırılıyor',
-  'conversations.tools.runAgentsInParallel.done': 'Ajanlar paralel çalıştırıldı',
   'conversations.tools.messageAgent.active': 'Ajana mesaj gönderiliyor',
   'conversations.tools.messageAgent.done': 'Ajana mesaj gönderildi',
   'conversations.tools.waitForAgent.active': 'Ajan bekleniyor',
@@ -4929,6 +4929,8 @@ const messages: TranslationMap = {
   'conversations.tools.checkGoal.done': 'Hedef kontrol edildi',
   'conversations.tools.completeGoal.active': 'Hedef tamamlanıyor',
   'conversations.tools.completeGoal.done': 'Hedef tamamlandı',
+  'conversations.tools.resumeGoal.active': 'Hedefe devam ediliyor',
+  'conversations.tools.resumeGoal.done': 'Hedefe devam edildi',
   'conversations.tools.scheduleTask.active': 'Görev zamanlanıyor',
   'conversations.tools.scheduleTask.done': 'Görev zamanlandı',
   'conversations.tools.checkSchedules.active': 'Zamanlamalar kontrol ediliyor',
@@ -5114,6 +5116,9 @@ const messages: TranslationMap = {
   'settings.appearance.showChatMascot': "Tiny'yi mesaj kutusunda göster",
   'onboarding.custom.localDefaultDisabledReason':
     'Yönetilen kurulum için bir OpenHuman hesabı gerekir. Yerel oturumda her hizmeti kendiniz yapılandırırsınız.',
+  'settings.agentAccess.hideShellWindows.label': 'Kabuk pencerelerini gizle',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Windows üzerinde yeni kabuk oturumlarının terminal pencerelerini gizler.',
 };
 
 export default messages;

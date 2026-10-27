@@ -1,16 +1,28 @@
-//! Tests for the surrounding module.
-
-use super::{
-    builtin_cloud_supports_responses_api, endpoint_host, endpoint_host_is_chat_completions_only,
-    host_is_builtin_cloud_provider, is_builtin_cloud_slug, is_slug_reserved, AuthStyle,
-    BUILTIN_CLOUD_PROVIDERS,
-};
+use super::*;
+use tinyinference_providers::builtin::endpoint_host;
 
 #[test]
 fn reserved_slugs() {
     for s in ["", " ", "cloud", "openhuman", "pid"] {
         assert!(is_slug_reserved(s), "{s:?} must stay reserved");
     }
+}
+
+#[test]
+fn auth_style_parse_accepts_rpc_spellings_and_preserves_unknown_error() {
+    for (value, expected) in [
+        ("BEARER", AuthStyle::Bearer),
+        ("anthropic", AuthStyle::Anthropic),
+        ("openhuman_jwt", AuthStyle::OpenhumanJwt),
+        ("OpenHumanJwt", AuthStyle::OpenhumanJwt),
+        ("none", AuthStyle::None),
+    ] {
+        assert_eq!(AuthStyle::parse(value).unwrap(), expected);
+    }
+    assert_eq!(
+        AuthStyle::parse("Strange").unwrap_err(),
+        "unknown auth_style 'strange'; valid: bearer, anthropic, openhuman_jwt, none"
+    );
 }
 
 // Regression: `ollama` was previously reserved, which made the AI settings
@@ -76,7 +88,7 @@ fn builtin_cloud_provider_defaults_cover_phase_one_presets() {
 #[test]
 fn builtin_cloud_provider_slugs_are_unique() {
     let mut slugs = std::collections::HashSet::new();
-    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
+    for provider in builtin_cloud_providers().iter() {
         assert!(
             slugs.insert(provider.slug),
             "duplicate built-in cloud provider slug {}",
@@ -88,11 +100,14 @@ fn builtin_cloud_provider_slugs_are_unique() {
 #[test]
 fn is_builtin_cloud_slug_matches_presets_only() {
     for slug in ["openai", "deepseek", "groq", "mistral"] {
-        assert!(is_builtin_cloud_slug(slug), "{slug} is a built-in preset");
+        assert!(
+            builtin_presets().is_builtin_cloud_slug(slug),
+            "{slug} is a built-in preset"
+        );
     }
     for slug in ["my-proxy", "custom-openai", "totally-unknown", ""] {
         assert!(
-            !is_builtin_cloud_slug(slug),
+            !builtin_presets().is_builtin_cloud_slug(slug),
             "{slug:?} is not a built-in preset"
         );
     }
@@ -107,7 +122,7 @@ fn only_explicit_known_responses_providers_advertise_the_endpoint() {
     assert!(builtin_cloud_supports_responses_api("xai"));
     for slug in ["deepseek", "groq", "mistral", "fireworks", "together"] {
         assert!(
-            !builtin_cloud_supports_responses_api(slug),
+            !builtin_presets().builtin_cloud_supports_responses_api(slug),
             "{slug} is chat-completions-only and must not advertise the Responses API"
         );
     }
@@ -120,7 +135,7 @@ fn only_explicit_known_responses_providers_advertise_the_endpoint() {
 /// Nebius, OpenRouter and xAI serve `/v1/responses`; the remainder is chat-only unless verified.
 #[test]
 fn responses_api_capability_is_coupled_to_the_preset_list() {
-    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
+    for provider in builtin_cloud_providers().iter() {
         let expected = matches!(
             provider.slug,
             "openai" | "prodex" | "nebius" | "openrouter" | "xai"
@@ -140,12 +155,10 @@ fn endpoint_host_parses_scheme_path_and_port() {
         endpoint_host("https://integrate.api.nvidia.com/v1").as_deref(),
         Some("integrate.api.nvidia.com")
     );
-    // Missing scheme, mixed case, trailing path.
     assert_eq!(
         endpoint_host("API.OpenAI.com/v1/chat").as_deref(),
         Some("api.openai.com")
     );
-    // Userinfo + explicit port are stripped.
     assert_eq!(
         endpoint_host("https://user:pass@api.groq.com:443/openai/v1").as_deref(),
         Some("api.groq.com")
@@ -172,7 +185,7 @@ fn host_is_builtin_cloud_provider_recognises_inference_hosts() {
         "API.OPENAI.COM", // case-insensitive
     ] {
         assert!(
-            host_is_builtin_cloud_provider(host),
+            builtin_presets().host_is_builtin_cloud_provider(host),
             "{host} is a built-in cloud inference host"
         );
     }
@@ -194,7 +207,7 @@ fn host_is_builtin_cloud_provider_recognises_inference_hosts() {
     }
     // Local gateway presets cannot classify every service on their host as
     // cloud inference. Public preset hosts still identify their providers.
-    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
+    for provider in builtin_cloud_providers().iter() {
         let host = endpoint_host(provider.endpoint).expect("preset endpoint has a host");
         let expected = !matches!(provider.slug, "9router" | "prodex");
         assert_eq!(
@@ -212,9 +225,8 @@ fn host_is_builtin_cloud_provider_recognises_inference_hosts() {
 /// the slug is not builtin.
 #[test]
 fn nvidia_host_is_chat_completions_only_regardless_of_slug() {
-    assert!(endpoint_host_is_chat_completions_only(
-        "https://integrate.api.nvidia.com/v1"
-    ));
+    assert!(builtin_presets()
+        .endpoint_host_is_chat_completions_only("https://integrate.api.nvidia.com/v1"));
     // Other chat-only built-in hosts too.
     for endpoint in [
         "https://api.deepseek.com/v1",
@@ -222,7 +234,7 @@ fn nvidia_host_is_chat_completions_only_regardless_of_slug() {
         "https://api.mistral.ai/v1",
     ] {
         assert!(
-            endpoint_host_is_chat_completions_only(endpoint),
+            builtin_presets().endpoint_host_is_chat_completions_only(endpoint),
             "{endpoint} is a chat-completions-only built-in host"
         );
     }
@@ -232,9 +244,7 @@ fn nvidia_host_is_chat_completions_only_regardless_of_slug() {
 fn openai_host_and_unknown_proxies_keep_the_responses_fallback() {
     // OpenAI's first-party host serves /responses — must NOT be gated off,
     // even via a custom proxy slug pointed at it.
-    assert!(!endpoint_host_is_chat_completions_only(
-        "https://api.openai.com/v1"
-    ));
+    assert!(!builtin_presets().endpoint_host_is_chat_completions_only("https://api.openai.com/v1"));
     // Genuinely unknown proxy hosts keep the permissive default (they may be
     // real OpenAI proxies that implement /responses).
     for endpoint in [
@@ -243,7 +253,7 @@ fn openai_host_and_unknown_proxies_keep_the_responses_fallback() {
         "",
     ] {
         assert!(
-            !endpoint_host_is_chat_completions_only(endpoint),
+            !builtin_presets().endpoint_host_is_chat_completions_only(endpoint),
             "{endpoint:?} is an unknown host and must keep the fallback"
         );
     }
@@ -274,15 +284,16 @@ fn local_gateway_capabilities_are_isolated_by_origin() {
 /// can't silently desync the two gates.
 #[test]
 fn host_gate_agrees_with_slug_capability_for_every_builtin() {
-    for provider in BUILTIN_CLOUD_PROVIDERS.iter() {
+    for provider in builtin_cloud_providers().iter() {
         // OpenhumanJwt / Anthropic presets never route through the
         // OpenAI-compatible Responses fallback; the gate only matters for
         // the Bearer OpenAI-compatible hosts.
         if provider.auth_style != AuthStyle::Bearer {
             continue;
         }
-        let host_chat_only = endpoint_host_is_chat_completions_only(provider.endpoint);
-        let slug_supports = builtin_cloud_supports_responses_api(provider.slug);
+        let host_chat_only =
+            builtin_presets().endpoint_host_is_chat_completions_only(provider.endpoint);
+        let slug_supports = builtin_presets().builtin_cloud_supports_responses_api(provider.slug);
         assert_eq!(
             host_chat_only, !slug_supports,
             "host gate for built-in {} disagrees with its slug capability",
@@ -316,16 +327,25 @@ fn generated_provider_ids_sanitize_and_bound_the_slug_prefix() {
 }
 
 #[test]
-fn builtin_table_is_the_upstream_catalog_plus_the_managed_route() {
+fn builtin_table_is_only_the_upstream_provider_catalog() {
     use tinyinference_providers::builtin::BUILTIN_CLOUD_PROVIDERS as UPSTREAM;
-    let host = &*BUILTIN_CLOUD_PROVIDERS;
-    assert_eq!(
-        host.len(),
-        UPSTREAM.len() + 1 + super::EXTRA_CLOUD_PROVIDERS.len()
+    let host = builtin_cloud_providers();
+    let extras = super::EXTRA_CLOUD_PROVIDERS
+        .iter()
+        .filter(|preset| !UPSTREAM.iter().any(|upstream| upstream.slug == preset.slug))
+        .count();
+    assert_eq!(host.len(), UPSTREAM.len() + extras);
+    assert!(
+        !host
+            .iter()
+            .any(|preset| preset.auth_style == AuthStyle::OpenhumanJwt),
+        "managed presets belong to the installed host, not the core"
     );
-    assert_eq!(host[0].slug, "openhuman");
-    assert_eq!(host[0].auth_style, AuthStyle::OpenhumanJwt);
-    for (mapped, upstream) in host[1..1 + UPSTREAM.len()].iter().zip(UPSTREAM) {
+    for upstream in UPSTREAM {
+        let mapped = host
+            .iter()
+            .find(|preset| preset.slug == upstream.slug)
+            .unwrap();
         assert_eq!(mapped.slug, upstream.slug);
         assert_eq!(mapped.label, upstream.label);
         assert_eq!(mapped.endpoint, upstream.endpoint);
@@ -590,8 +610,8 @@ fn additional_fork_cloud_presets_are_represented_exactly_once() {
         "qwen-pay-as-you-go",
         "qwen-token-plan",
     ] {
-        let rows: Vec<_> = BUILTIN_CLOUD_PROVIDERS
-            .iter()
+        let rows: Vec<_> = builtin_cloud_providers()
+            .into_iter()
             .filter(|p| p.slug == slug)
             .collect();
         assert_eq!(rows.len(), 1, "{slug} must have one canonical preset");
@@ -643,8 +663,8 @@ fn llmtr_preset_uses_provider_native_bearer_endpoint() {
 
 #[test]
 fn prodex_gateway_is_a_builtin_responses_capable_bearer_provider() {
-    let rows: Vec<_> = BUILTIN_CLOUD_PROVIDERS
-        .iter()
+    let rows: Vec<_> = builtin_cloud_providers()
+        .into_iter()
         .filter(|provider| provider.slug == "prodex")
         .collect();
     assert_eq!(rows.len(), 1, "one canonical Prodex entry");

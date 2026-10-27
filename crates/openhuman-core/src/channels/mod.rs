@@ -10,7 +10,7 @@ pub mod contract_schema;
 #[cfg(any(feature = "voice", feature = "channels"))]
 pub(crate) mod credentials;
 
-pub use tinychannels_bus::{Channel, ChannelSendExt, SendMessage};
+pub use tinychannels_bus::Channel;
 
 #[cfg(feature = "channels")]
 pub mod bus;
@@ -27,13 +27,19 @@ pub mod controllers;
 #[cfg(feature = "channels")]
 pub mod host;
 #[cfg(feature = "channels")]
+mod outbound;
+#[cfg(feature = "channels")]
 pub mod proactive;
 pub(crate) mod prompt;
 #[cfg(feature = "channels")]
 pub mod providers;
 #[cfg(feature = "channels")]
 mod routes;
-#[cfg(feature = "channels")]
+#[cfg(all(test, feature = "channels"))]
+pub(crate) use routes::register_hosted_route_test_policy;
+// Ungated: the agent domain's `agent.run_turn` handler drives every turn
+// through `runtime::turn_driver`, with or without the `channels` feature.
+// Everything else in `runtime` carries its own `channels` gate.
 mod runtime;
 #[cfg(feature = "channels")]
 pub(crate) mod system_prompt;
@@ -104,14 +110,13 @@ pub use yuanbao::YuanbaoChannel;
 pub use runtime::test_support;
 
 #[cfg(feature = "channels")]
-pub use commands::doctor_channels;
-#[cfg(feature = "channels")]
 // Channel system-prompt assembly lives in
 // `crate::channels::prompt` alongside the rest of
 // the prompt-building code. Re-exported here for callers that used the
 // old `channels::build_system_prompt` path.
 #[cfg(feature = "channels")]
 pub use prompt::build_system_prompt;
+pub(crate) use runtime::turn_driver::run_channel_turn;
 #[cfg(feature = "channels")]
 pub(crate) use runtime::{session, start_channels_with_session};
 #[cfg(feature = "channels")]

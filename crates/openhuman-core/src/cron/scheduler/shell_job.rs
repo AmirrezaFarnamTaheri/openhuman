@@ -41,7 +41,7 @@ pub(crate) async fn authorize_shell_command(
                     return Ok(());
                 }
                 #[cfg(not(test))]
-                return Err("Command analysis is unavailable.".to_owned());
+                return Err(format!("Command analysis is unavailable: {e}"));
             }
         };
         security
@@ -123,7 +123,14 @@ pub(super) async fn run_job_command_with_timeout(
     .await
     {
         Ok(output) => output,
-        Err(_) => return (false, "Command execution is unavailable.".to_owned()),
+        Err(error) => {
+            tracing::warn!(
+                job_id = %job.id,
+                error = %format!("{error:#}"),
+                "[cron:shell] command could not run"
+            );
+            return (false, "Command execution is unavailable.".to_owned());
+        }
     };
     if output.timed_out {
         return (

@@ -2,9 +2,14 @@
 //!
 //! TinyMCP owns the install store and connections. These tests use its
 //! checksum-pinned module artifact through the host's public config and
-//! registry operations, with the Cargo-built MCP stub as the local server.
+//! registry operations, with independent loopback HTTP MCP fixtures.
 
 #![cfg(feature = "mcp")]
+
+#[path = "support/env_guard.rs"]
+mod env_guard;
+#[path = "support/mcp_http.rs"]
+mod mcp_http;
 
 use openhuman_core::config::{
     schema::{ModuleOverride, ModulesConfig},
@@ -13,9 +18,23 @@ use openhuman_core::config::{
 use serde_json::{json, Map, Value};
 
 const MODULE_ARTIFACT_ENV: &str = "OPENHUMAN_TINYMCP_TEST_MODULE";
+static STORAGE_SETUP_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+static TEST_MASTER_KEY: std::sync::Once = std::sync::Once::new();
 
-fn fresh_workspace_config() -> (tempfile::TempDir, Config) {
+async fn fresh_workspace_config() -> (tempfile::TempDir, Config) {
+    TEST_MASTER_KEY.call_once(|| {
+        std::env::set_var("OPENHUMAN_KEYRING_MASTER_KEY", "55".repeat(32));
+        std::env::remove_var("OPENHUMAN_KEYRING_MASTER_KEY_FILE");
+    });
+    env_guard::init_keyring_workspace();
     let workspace = tempfile::tempdir().expect("temporary MCP workspace");
+    let backend = openhuman_core::storage::open(&format!(
+        "sqlite:{}",
+        workspace.path().join("storage").display()
+    ))
+    .await
+    .expect("open isolated module storage backend");
+    openhuman_core::storage::install(backend);
     let artifact = std::env::var_os(MODULE_ARTIFACT_ENV)
         .map(std::path::PathBuf::from)
         .or_else(|| openhuman_core::modules::local_artifact("tinymcp"))
@@ -24,6 +43,7 @@ fn fresh_workspace_config() -> (tempfile::TempDir, Config) {
         .expect("TinyMCP artifact exists");
     let config = Config {
         workspace_dir: workspace.path().to_path_buf(),
+        config_path: workspace.path().join("config.toml"),
         modules: ModulesConfig {
             enabled: true,
             allow_download: false,
@@ -46,8 +66,8 @@ fn stdio_server(command: impl Into<String>, enabled: bool) -> Value {
     })
 }
 
-fn stub_server(enabled: bool) -> Value {
-    stdio_server(env!("CARGO_BIN_EXE_test-mcp-stub"), enabled)
+fn http_server(server: &wiremock::MockServer) -> Value {
+    json!({ "url": server.uri(), "enabled": false })
 }
 
 async fn install_servers(
@@ -120,15 +140,14 @@ async fn disconnect(config: &Config, server_id: &str) {
 }
 
 #[tokio::test]
-#[cfg_attr(
-    target_os = "linux",
-    ignore = "registry stdio MCP servers need network; TinyBox refuses a network-sharing jail for untrusted code until it has isolated networking (https://github.com/tinyhumansai/tinybox/issues/109)"
-)]
 async fn two_servers_same_tool_name_no_collision() {
-    let (_workspace, config) = fresh_workspace_config();
+    let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
+    let first = mcp_http::echo_server().await;
+    let second = mcp_http::echo_server().await;
+    let (_workspace, config) = fresh_workspace_config().await;
     let servers = Map::from_iter([
-        ("@multi-test/echo-a".to_owned(), stub_server(false)),
-        ("@multi-test/echo-b".to_owned(), stub_server(false)),
+        ("@multi-test/echo-a".to_owned(), http_server(&first)),
+        ("@multi-test/echo-b".to_owned(), http_server(&second)),
     ]);
     let installed = install_servers(&config, servers).await;
     let server_a = &installed["@multi-test/echo-a"];
@@ -185,15 +204,14 @@ async fn two_servers_same_tool_name_no_collision() {
 }
 
 #[tokio::test]
-#[cfg_attr(
-    target_os = "linux",
-    ignore = "registry stdio MCP servers need network; TinyBox refuses a network-sharing jail for untrusted code until it has isolated networking (https://github.com/tinyhumansai/tinybox/issues/109)"
-)]
 async fn tool_calls_route_to_the_correct_server() {
-    let (_workspace, config) = fresh_workspace_config();
+    let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
+    let first = mcp_http::echo_server().await;
+    let second = mcp_http::echo_server().await;
+    let (_workspace, config) = fresh_workspace_config().await;
     let servers = Map::from_iter([
-        ("@route-test/echo-a".to_owned(), stub_server(false)),
-        ("@route-test/echo-b".to_owned(), stub_server(false)),
+        ("@route-test/echo-a".to_owned(), http_server(&first)),
+        ("@route-test/echo-b".to_owned(), http_server(&second)),
     ]);
     let installed = install_servers(&config, servers).await;
     let server_a = &installed["@route-test/echo-a"];
@@ -212,18 +230,16 @@ async fn tool_calls_route_to_the_correct_server() {
 }
 
 #[tokio::test]
-#[cfg_attr(
-    target_os = "linux",
-    ignore = "registry stdio MCP servers need network; TinyBox refuses a network-sharing jail for untrusted code until it has isolated networking (https://github.com/tinyhumansai/tinybox/issues/109)"
-)]
 async fn failed_connect_does_not_block_healthy_peer() {
-    let (_workspace, config) = fresh_workspace_config();
+    let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
+    let upstream = mcp_http::echo_server().await;
+    let (_workspace, config) = fresh_workspace_config().await;
     let servers = Map::from_iter([
         (
             "@isolation-test/bad".to_owned(),
             stdio_server("/this/path/does/not/exist/bad-mcp", false),
         ),
-        ("@isolation-test/good".to_owned(), stub_server(false)),
+        ("@isolation-test/good".to_owned(), http_server(&upstream)),
     ]);
     let installed = install_servers(&config, servers).await;
     let bad = &installed["@isolation-test/bad"];
@@ -270,15 +286,14 @@ async fn failed_connect_does_not_block_healthy_peer() {
 }
 
 #[tokio::test]
-#[cfg_attr(
-    target_os = "linux",
-    ignore = "registry stdio MCP servers need network; TinyBox refuses a network-sharing jail for untrusted code until it has isolated networking (https://github.com/tinyhumansai/tinybox/issues/109)"
-)]
 async fn disabled_server_contributes_no_tools_to_agent_surface() {
-    let (_workspace, config) = fresh_workspace_config();
+    let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
+    let first = mcp_http::echo_server().await;
+    let second = mcp_http::echo_server().await;
+    let (_workspace, config) = fresh_workspace_config().await;
     let servers = Map::from_iter([
-        ("@disabled-test/live".to_owned(), stub_server(false)),
-        ("@disabled-test/quiet".to_owned(), stub_server(false)),
+        ("@disabled-test/live".to_owned(), http_server(&first)),
+        ("@disabled-test/quiet".to_owned(), http_server(&second)),
     ]);
     let installed = install_servers(&config, servers).await;
     let live = &installed["@disabled-test/live"];

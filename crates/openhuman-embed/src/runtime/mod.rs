@@ -260,6 +260,12 @@ impl Drop for CoreGuard {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .take(),
         );
+        // Workspace-backed session and storage fallbacks are cached by the
+        // core. Release this runtime's handles before removing its scratch
+        // directory (Windows refuses removal while SQLite files are open).
+        if self.workspace._temp.is_some() {
+            openhuman_core::storage::sessions::release_workspace(&self.workspace.workspace_dir);
+        }
         if self
             .preserve_ephemeral_workspace
             .load(std::sync::atomic::Ordering::Acquire)
@@ -282,7 +288,6 @@ impl Drop for CoreGuard {
 /// [`crate::Workspace::Ephemeral`], removes the workspace — see `CoreGuard`.
 pub struct Runtime {
     id: String,
-    guard: Arc<CoreGuard>,
     /// The config every agent starts from. Already carries the runtime-wide
     /// defaults (backend URL, access, provider model, supplied overrides).
     base_config: Config,
@@ -300,6 +305,9 @@ pub struct Runtime {
     selection: Option<ModuleSelection>,
     storage_info: StorageInfo,
     storage_backend: Option<Arc<dyn openhuman_core::storage::StorageBackend>>,
+    // Fields drop in declaration order. Close config/backend handles before
+    // the last guard removes an ephemeral workspace.
+    guard: Arc<CoreGuard>,
 }
 
 impl Runtime {

@@ -1,10 +1,36 @@
 use super::*;
 
 #[test]
+fn conversation_organization_and_archive_are_discoverable() {
+    for id in ["conversation.organization", "conversation.archive"] {
+        let capability = lookup(id).expect("implemented conversation capability");
+        assert_eq!(capability.category, CapabilityCategory::Conversation);
+        assert_eq!(capability.status, CapabilityStatus::Beta);
+        assert!(!capability.how_to.is_empty());
+    }
+    let tools = lookup("security.always_allow_tool").unwrap();
+    assert!(tools.how_to.contains("add a tool name"));
+}
+
+#[test]
 fn lookup_returns_expected_capability() {
     let capability = lookup("local_ai.configure_provider").expect("capability should exist");
     assert_eq!(capability.category, CapabilityCategory::LocalAI);
     assert_eq!(capability.status, CapabilityStatus::Beta);
+}
+
+#[test]
+fn doctor_health_is_advertised_as_an_intelligence_capability() {
+    let capability = lookup("intelligence.doctor_health")
+        .expect("the doctor health diagnostic is a user-facing capability");
+
+    assert_eq!(capability.domain, "doctor");
+    assert_eq!(capability.category, CapabilityCategory::Intelligence);
+    assert!(capability
+        .description
+        .to_ascii_lowercase()
+        .contains("diagnostic"));
+    assert!(capability.how_to.contains("doctor_health"));
 }
 
 /// The removed desktop push-to-talk server must not be advertised, while the

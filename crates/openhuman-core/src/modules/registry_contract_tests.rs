@@ -75,12 +75,6 @@ fn contract_names() -> Vec<(&'static str, &'static str, &'static str)> {
         tinyhosts_bus::BUS_NAME,
         tinyhosts_bus::OBJECT_PATH,
     ));
-    #[cfg(feature = "tinymemes")]
-    names.push((
-        "tinymemes",
-        tinymemes_bus::STATE_INTERFACE,
-        tinymemes_bus::STATE_PATH,
-    ));
     #[cfg(feature = "inbound-queues")]
     names.push((
         "tinyeventqueues",
@@ -121,12 +115,11 @@ fn a_drifted_contract_constant_is_reported_as_a_mismatch() {
     feature = "web3",
     feature = "voice",
     feature = "hosting",
-    feature = "tinymemes",
     feature = "inbound-queues"
 ))]
 #[test]
-fn a_product_feature_build_carries_all_fourteen_records() {
-    assert_eq!(ALL.len(), 14);
+fn a_product_feature_build_carries_all_thirteen_records() {
+    assert_eq!(ALL.len(), 13);
     for id in [
         "tinycomputer",
         "tinysearch",
@@ -140,7 +133,6 @@ fn a_product_feature_build_carries_all_fourteen_records() {
         "tinychannels",
         "tinyflows",
         "tinyhosts",
-        "tinymemes",
         "tinyeventqueues",
     ] {
         assert!(find(id).is_some(), "{id} missing from the registry");
@@ -163,12 +155,7 @@ fn every_record_maps_to_a_real_component() {
                 || !cfg!(feature = "modules")
                 || matches!(
                     *id,
-                    "tinydocs"
-                        | "tinywallet"
-                        | "tinyvoice"
-                        | "tinyhosts"
-                        | "tinymemes"
-                        | "tinyeventqueues"
+                    "tinydocs" | "tinywallet" | "tinyvoice" | "tinyhosts" | "tinyeventqueues"
                 ),
             "mapping for unknown module '{id}'"
         );
@@ -187,60 +174,60 @@ fn the_flows_record_serves_the_schedule_object() {
     assert_ne!(record.object_path, schedule::OBJECT_PATH);
     assert_ne!(schedule::INTERFACE, schedule::CALLBACK_INTERFACE);
     assert_ne!(schedule::INTERFACE, schedule::DOCUMENT_INTERFACE);
-    assert_eq!(schedule::CONTRACT_VERSION, 6, "the host speaks contract v6");
+    assert_eq!(schedule::CONTRACT_VERSION, 8, "the host speaks contract v8");
     assert_eq!(component_for("tinyflows"), Some("tinyflows"));
 }
 
-/// The pins are copied from the published v0.8.28 `checksum.toml`.
+/// The pins are copied from the published v0.9.0 `checksum.toml`.
 #[test]
 fn the_flows_record_pins_every_host_of_one_release() {
     let record = find("tinyflows").unwrap();
-    assert_eq!(record.version, "0.8.28");
+    assert_eq!(record.version, "0.9.0");
     assert_eq!(record.assets.len(), 11);
     let expected = [
         (
-            "tinyflows-module-0.8.28-macos-26-arm64.tar.gz",
-            "387b2fdf527b087700cc7b68fee2866fe5590a34f5041819793b5b05caf97e90",
+            "tinyflows-module-0.9.0-macos-26-arm64.tar.gz",
+            "5b3747231ad717342a55fd51f50e51b7a0d917ea776a5631d361030b6dce53d2",
         ),
         (
-            "tinyflows-module-0.8.28-macos-26-x86_64.tar.gz",
-            "fdcba79686d466ec2d163ab23ed0a56e148884c360b66a074c0dbb918decb6a3",
+            "tinyflows-module-0.9.0-macos-26-x86_64.tar.gz",
+            "8c51d3469a449a5819fee44f359458bc890f3af77e00318d40b6fc529e2e78e6",
         ),
         (
-            "tinyflows-module-0.8.28-macos-15-arm64.tar.gz",
-            "923d720d622a535e6cd547ffda1c6f73cc70b7b1c13681a374633d81f51069eb",
+            "tinyflows-module-0.9.0-macos-15-arm64.tar.gz",
+            "13699ad57e71a90245a889a0d3168cd2996d495d45fa8be119806396f26bfe06",
         ),
         (
-            "tinyflows-module-0.8.28-macos-15-x86_64.tar.gz",
-            "d2f34c52863cb1d3a78256f59fa9e54e26af62b39540f24f072c89e18de6ae65",
+            "tinyflows-module-0.9.0-macos-15-x86_64.tar.gz",
+            "4c5ee2bc248551916ba9f8b2199fbc8009a1486b89f987bdf9ba71ecd7083d6d",
         ),
         (
-            "tinyflows-module-0.8.28-ubuntu-24.04-x86_64.tar.gz",
-            "c3224ba59b7683cf2459a1e1e8946b5ad2c6200d729c96bfd9c084450c6cd65d",
+            "tinyflows-module-0.9.0-ubuntu-24.04-x86_64.tar.gz",
+            "9a280dc919bb3aa5631808d958aaf70fd12d0dc00cacad01f889262577cef8cc",
         ),
         (
-            "tinyflows-module-0.8.28-ubuntu-24.04-arm64.tar.gz",
-            "2306e7fda0f1edb75e90b79bd645ec1806f04d004b5ec615c83f67789c8a3655",
+            "tinyflows-module-0.9.0-ubuntu-24.04-arm64.tar.gz",
+            "833fc554c39ab6f01597cb73a6d859464bc81dfa94b3118a5cd58bbeb6484aca",
         ),
         (
-            "tinyflows-module-0.8.28-ubuntu-22.04-x86_64.tar.gz",
-            "54bb2ac4e085cac962d368815d485df3e0050b8b475a66b58cd96a044c4de40e",
+            "tinyflows-module-0.9.0-ubuntu-22.04-x86_64.tar.gz",
+            "77e8deb1197ecb58870e1db85c5c94d60ae9da77649c95face27a4a3dde4b146",
         ),
         (
-            "tinyflows-module-0.8.28-ubuntu-22.04-arm64.tar.gz",
-            "3d92636d08b549533452ac971c01edb42a02be170ea974286c215647c09f3491",
+            "tinyflows-module-0.9.0-ubuntu-22.04-arm64.tar.gz",
+            "67f7df072b4c25393308f06078a4f9fc7fbb0111a282d7cb26bd364d702d1d4d",
         ),
         (
-            "tinyflows-module-0.8.28-windows-2025-x86_64.zip",
-            "d8772f00d1dce3ff6000cee492348bdb8176660d798fa55edecf172c3d279ef0",
+            "tinyflows-module-0.9.0-windows-2025-x86_64.zip",
+            "28caaea85c38f81b7020b05c6f2ac1bd3d2d01d1be0adab7343b939103b35359",
         ),
         (
-            "tinyflows-module-0.8.28-windows-2022-x86_64.zip",
-            "e1c926be3b5f1e8d4b2d1492797df2357ddfb3d90fdeb190664fe972f9703ddf",
+            "tinyflows-module-0.9.0-windows-2022-x86_64.zip",
+            "8226887661e0dcf1a78858a61771f90a4256b8be3a302d5571544f97f5238ee7",
         ),
         (
-            "tinyflows-module-0.8.28-windows-11-arm64.zip",
-            "8395463124c85256009fae44e0b34c95b3a494270bbc7f8e80cc03d4f174fd9a",
+            "tinyflows-module-0.9.0-windows-11-arm64.zip",
+            "1daec664a8c6f92c13ece028c1c5311d9ef2471f12f4eedb2898d1f6ef709c6c",
         ),
     ];
     for (asset, (archive, sha256)) in record.assets.iter().zip(expected) {

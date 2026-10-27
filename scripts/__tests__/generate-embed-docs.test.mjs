@@ -3,10 +3,15 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { extractAnchors, spliceSnippets, lintEmbedMarkdown, checkLocalLinks, exampleMetadata, exportedNames, runtimeBuilderSetters, proseDescription, generateEmbedDocs } from '../generate-embed-docs.mjs';
+import { extractAnchors, spliceSnippets, lintEmbedMarkdown, checkLocalLinks, exampleMetadata, exportedNames, runtimeBuilderSetters, proseDescription, generateEmbedDocs, portablePath } from '../generate-embed-docs.mjs';
 
 const example = '//! Title: Hello\n//! Summary: Builds an offline agent.\n//! Run: offline\n// ANCHOR: hello\nfn main() {}\n// ANCHOR_END: hello\n';
 const marker = '<!-- BEGIN EMBED: crates/openhuman-embed/examples/hello.rs#hello -->\nstale\n<!-- END EMBED -->';
+
+test('repository references normalize Windows separators before sorting or publication', () => {
+  assert.equal(portablePath('docs\\embed\\nested\\page.md'), 'docs/embed/nested/page.md');
+  assert.equal(portablePath('docs/embed/nested/page.md'), 'docs/embed/nested/page.md');
+});
 
 test('extracts real source, excludes marker comments, validates anchors', () => {
   assert.equal(extractAnchors(example).get('hello'), 'fn main() {}');
@@ -25,12 +30,14 @@ test('rejects manually typed rust fences, alternative fence style, and hidden li
   assert.doesNotThrow(() => lintEmbedMarkdown('# Title\n\n```text\nnormal\n```'));
 });
 test('local links verify files and headings without following external services', () => {
-  const read = path => { if (path === '/repo/other.md') return '# Some API\n'; throw Error('missing'); };
-  assert.doesNotThrow(() => checkLocalLinks('# Here\n[x](other.md#some-api) [external](https://example.com) [self](#here)', '/repo/doc.md', '/repo', read));
-  assert.throws(() => checkLocalLinks('[x](missing.md)', '/repo/doc.md', '/repo', read), /Broken local/);
-  assert.throws(() => checkLocalLinks('[x](other.md#missing)', '/repo/doc.md', '/repo', read), /Broken heading/);
-  assert.throws(() => checkLocalLinks('[x](../secret)', '/repo/doc.md', '/repo', read), /escapes/);
-  assert.doesNotThrow(() => checkLocalLinks('```rust\nlet x = "[x](missing.md)";\n```', '/repo/doc.md', '/repo', read));
+  const root = resolve('/repo');
+  const document = resolve(root, 'doc.md');
+  const read = path => { if (path === resolve(root, 'other.md')) return '# Some API\n'; throw Error('missing'); };
+  assert.doesNotThrow(() => checkLocalLinks('# Here\n[x](other.md#some-api) [external](https://example.com) [self](#here)', document, root, read));
+  assert.throws(() => checkLocalLinks('[x](missing.md)', document, root, read), /Broken local/);
+  assert.throws(() => checkLocalLinks('[x](other.md#missing)', document, root, read), /Broken heading/);
+  assert.throws(() => checkLocalLinks('[x](../secret)', document, root, read), /escapes/);
+  assert.doesNotThrow(() => checkLocalLinks('```rust\nlet x = "[x](missing.md)";\n```', document, root, read));
 });
 test('cookbook metadata must come from example headers', () => {
   assert.deepEqual(exampleMetadata(example, 'hello'), { name: 'hello', title: 'Hello', summary: 'Builds an offline agent.', run: 'offline', feature: undefined });
@@ -69,6 +76,9 @@ test('generate then check is stable, edited source fails check, no prose authore
     writeFileSync(resolve(root, 'docs/gitbooks/en/developing/embed/index.md'), '---\ndescription: Metadata description\nicon: code\n---\n\n# Introduction\n\nThe actual introduction explains the host.\n\n' + marker + '\n');
     writeFileSync(resolve(root, 'docs/gitbooks/en/developing/embedding.md'), '---\ndescription: >-\n  Preserved existing GitBook metadata.\nicon: code\nlayout:\n  width: wide\n---\n\n# Compatibility\n\n[Introduction](embed/index.md)\n');
     writeFileSync(resolve(root, 'docs/gitbooks/en/developing/embed/retired.md'), '# Retired page\n\nA temporary canonical page.\n');
+    mkdirSync(resolve(root, 'docs/gitbooks/en/developing/embed/a'), { recursive: true });
+    writeFileSync(resolve(root, 'docs/gitbooks/en/developing/embed/a/child.md'), '# Nested page\n\nNested documentation.\n');
+    writeFileSync(resolve(root, 'docs/gitbooks/en/developing/embed/a0.md'), '# Sibling page\n\nSibling documentation.\n');
     const capabilities = resolve(root, 'capabilities.json');
     writeFileSync(capabilities, '{"schema_version":1,"compiled_features":{"mcp":true,"channels":false}}');
     generateEmbedDocs({ root, capabilities });
@@ -76,6 +86,12 @@ test('generate then check is stable, edited source fails check, no prose authore
     assert.match(readFileSync(resolve(root, 'llms-full.txt'), 'utf8'), /fn main\(\)/);
     assert.match(readFileSync(resolve(root, 'docs/gitbooks/en/developing/embedding.md'), 'utf8'), /Preserved existing GitBook metadata[\s\S]*width: wide[\s\S]*# Compatibility/);
     const llms = readFileSync(resolve(root, 'llms.txt'), 'utf8');
+    // Native Windows separators sort after digits; repository '/' sorts
+    // before them. Both platforms must publish the same document order.
+    assert.ok(llms.indexOf('embed/a/child.md') < llms.indexOf('embed/a0.md'));
+    const full = readFileSync(resolve(root, 'llms-full.txt'), 'utf8');
+    assert.match(full, /<!-- Source: docs\/gitbooks\/en\/developing\/embed\/a\/child.md -->/);
+    assert.doesNotMatch(full, /<!-- Source: [^\n]*\\/);
     assert.match(llms, /Introduction.*The actual introduction explains the host/);
     assert.doesNotMatch(llms, /Metadata description/);
     assert.equal((readFileSync(resolve(root, 'llms-full.txt'), 'utf8').match(/# Introduction/g) ?? []).length, 1);
@@ -104,7 +120,7 @@ test('generate then check is stable, edited source fails check, no prose authore
     generateEmbedDocs({ root, capabilities });
     generateEmbedDocs({ root, capabilities, check: true });
     writeFileSync(path, example.replace('fn main() {}', 'fn main() { println!("changed"); }'));
-    assert.throws(() => generateEmbedDocs({ root, capabilities, check: true }), /docs\/gitbooks\/en\/developing\/embed\/index[.]md/);
+    assert.throws(() => generateEmbedDocs({ root, capabilities, check: true }), /docs[\\/]gitbooks[\\/]en[\\/]developing[\\/]embed[\\/]index[.]md/);
     generateEmbedDocs({ root, capabilities });
     generateEmbedDocs({ root, capabilities, check: true });
     assert.match(readFileSync(resolve(root, 'docs/gitbooks/en/developing/embed/index.md'), 'utf8'), /println!\("changed"\)/);

@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::agent::session_host::types::OpenHumanSessionHost;
-use crate::agent_registry::host_definition::AgentDefinitionRegistry;
+use crate::agent_registry::host_definition::{AgentDefinitionExt, AgentDefinitionRegistry};
 use tinyagents_definition::{PromptSource, SandboxMode, ToolScope};
 
 fn explicit_definition(id: &str) -> crate::agent_registry::host_definition::AgentDefinition {
@@ -95,4 +95,37 @@ async fn registry_built_sessions_resolve_the_registry_definition() {
         .map(|d| d.sandbox_mode)
         .expect("registry orchestrator");
     assert_eq!(resolved.sandbox_mode, registry_mode);
+}
+
+#[tokio::test]
+async fn mcp_snapshot_follows_the_selected_prompt_for_a_renamed_builtin() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let config = test_config(&tmp);
+    let mut definition = AgentDefinitionRegistry::builtins_only()
+        .get("orchestrator")
+        .cloned()
+        .expect("built-in orchestrator");
+    definition.id = "renamed-mcp-prompt".to_string();
+    // Worker conversion changes tool policy while retaining the prompt source.
+    definition.extensions.searches_connected_mcp = false;
+    let dynamic = definition.system_prompt.clone();
+    for (source, expected) in [
+        (dynamic, true),
+        (PromptSource::Inline("Custom prompt.".to_string()), false),
+        (PromptSource::Verbatim("Exact prompt.".to_string()), false),
+    ] {
+        definition.system_prompt = source;
+        assert_eq!(definition.prompt_needs_connected_mcp(), expected);
+        let agent = OpenHumanSessionHost::from_config_with_definition(
+            &crate::core::runtime::DispatchCtx::ambient(),
+            &config,
+            &definition,
+        )
+        .expect("renamed builtin builds with its selected prompt");
+        assert_eq!(
+            agent.prompt_builder.needs_connected_mcp_snapshot(),
+            expected,
+            "only the selected MCP-aware prompt may request a snapshot"
+        );
+    }
 }

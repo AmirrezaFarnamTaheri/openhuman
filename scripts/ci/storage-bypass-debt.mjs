@@ -125,7 +125,13 @@ export function historicalFindings(root, scanner, env = process.env) {
   // new files retain their own identity. Only the path changes: exact writer
   // text and occurrence remain part of every debt/allowance key.
   const changes = git([
-    "diff", "--name-status", "-z", "--find-renames=50%", base, "--", "crates",
+    "diff",
+    "--name-status",
+    "-z",
+    "--find-renames=50%",
+    base,
+    "--",
+    "crates",
   ]).split("\0");
   const renamed = new Map();
   for (let at = 0; at < changes.length && changes[at];) {
@@ -136,9 +142,10 @@ export function historicalFindings(root, scanner, env = process.env) {
       if (status.startsWith("R")) renamed.set(from, to);
     }
   }
-  const relocated = (record) => renamed.has(record.path)
-    ? { ...record, path: renamed.get(record.path) }
-    : record;
+  const relocated = (record) =>
+    renamed.has(record.path)
+      ? { ...record, path: renamed.get(record.path) }
+      : record;
   const files = git([
     "ls-tree",
     "-r",
@@ -221,7 +228,11 @@ export function validateAllowances(raw, records, history) {
     seen.add(id);
     if (!current.has(id))
       errors.push(`Stale audited allowance: ${record.path}: ${record.site}`);
-    if (oldRecords && !oldRecords.has(id))
+    if (
+      oldRecords &&
+      !oldRecords.has(id) &&
+      !isReviewedArtifactReplacement(record, raw, current, oldSites, oldRecords)
+    )
       errors.push(`Audited allowance growth forbidden: ${record.path}`);
     if (history && !oldRecords && !oldSites.has(id))
       errors.push(
@@ -229,4 +240,43 @@ export function validateAllowances(raw, records, history) {
       );
   }
   return errors;
+}
+
+/**
+ * User-approved 2026-10-23 replacement of the existing artifact writer policy.
+ * This is one exact source transformation, not a general allowance migration:
+ * the historical approved site must disappear and the new site occurs once.
+ * Remove this compatibility case once canonical history contains the new site.
+ */
+function isReviewedArtifactReplacement(
+  record,
+  raw,
+  current,
+  oldSites,
+  oldRecords,
+) {
+  const path = "crates/openhuman-core/src/artifacts/files.rs";
+  const before = "match tokio::fs::OpenOptions::new()";
+  const after = "let mut options = cap_std::fs::OpenOptions::new();";
+  if (
+    record.rule !== "json-write" ||
+    record.path !== path ||
+    record.site !== after
+  )
+    return false;
+  const previous = key({
+    rule: "json-write",
+    path,
+    text: before,
+    occurrence: 1,
+  });
+  return (
+    oldRecords.has(previous) &&
+    oldSites.has(previous) &&
+    !current.has(previous) &&
+    raw.filter(
+      (site) =>
+        site.rule === record.rule && site.path === path && site.text === after,
+    ).length === 1
+  );
 }

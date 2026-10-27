@@ -3,6 +3,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::{LazyLock, Mutex};
 
+use crate::flows::trace_observation::TraceObservation;
 use serde_json::Value;
 use tinyflows_bus::runs::FlowRunTrigger;
 use tinyflows_bus::runs::{self, RunEvent};
@@ -44,7 +45,7 @@ pub(super) async fn project(session: &RunSession, event: &RunEvent) {
             }
         }
         "graph_observation" => {
-            match serde_json::from_value::<tinyagents_graph::GraphObservation>(event.data.clone()) {
+            match serde_json::from_value::<TraceObservation>(event.data.clone()) {
                 Ok(observation) => session.add_observation(observation),
                 Err(_) => tracing::warn!(
                     target: "flows",

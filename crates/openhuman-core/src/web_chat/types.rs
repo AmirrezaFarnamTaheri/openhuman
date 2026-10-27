@@ -65,6 +65,8 @@ pub(crate) struct SessionCacheFingerprint {
     pub(super) temperature: Option<f64>,
     pub(super) target_agent_id: String,
     pub(super) provider_binding: String,
+    /// Digest of persisted configuration and resolved runtime directories.
+    /// The legacy name is kept for diagnostics; raw secrets are never retained here.
     pub(super) autonomy_signature: String,
     /// Signature of `config.model_registry`. The cached `Agent` stores a
     /// build-time `model_vision` bool; toggling a model's "Supports vision" flag
@@ -154,12 +156,6 @@ pub struct ChatRequestMetadata {
     /// is resolved — used purely for trace attribution (Langfuse `agent.id` /
     /// `agent.turn:<id>` trace name), never for routing.
     pub agent_id: Option<String>,
-    /// Do not stream the orchestrator's answer text (`text_delta`) to the
-    /// client; the reply arrives whole in `chat_done`. Set for threads whose
-    /// final reply is post-processed (TinyMemes treatment arm), so the user
-    /// never sees the original stream in and then get replaced. Interim
-    /// narration before tool calls is still flushed as `chat_interim`.
-    pub hold_text_stream: bool,
 }
 
 #[derive(Debug, Deserialize)]

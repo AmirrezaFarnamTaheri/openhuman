@@ -360,6 +360,8 @@ mod tests;
 #[path = "bus_host_context_tests.rs"]
 mod context_tests;
 
-#[cfg(test)]
+// Boots the module runtime (`crate::modules::runtime`), which only exists
+// with the `modules` feature.
+#[cfg(all(test, feature = "modules"))]
 #[path = "bus_host_trusted_system_tests.rs"]
 mod trusted_system_tests;

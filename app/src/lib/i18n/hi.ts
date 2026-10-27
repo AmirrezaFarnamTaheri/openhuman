@@ -426,6 +426,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': 'पिछले 7 दिन',
   'chat.sidebar.group.previous30Days': 'पिछले 30 दिन',
   'chat.sidebar.group.older': 'पुरानी',
+  'chat.sidebar.archived': 'संग्रहीत',
+  'chat.sidebar.restoreThread': 'पुनर्स्थापित करें',
   'chat.sidebar.pinThread': 'बातचीत पिन करें',
   'chat.sidebar.unpinThread': 'बातचीत अनपिन करें',
   'chat.sidebar.unread': 'नया जवाब',
@@ -604,6 +606,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'लंबित डेस्कटॉप अनुमोदन लोड नहीं हो सके। फिर कोशिश करने के लिए रीफ़्रेश करें।',
   'desktop.unsupported': 'इस रनटाइम में डेस्कटॉप नियंत्रण उपलब्ध नहीं है।',
+  'desktop.unsupportedWindows':
+    'Windows पर डेस्कटॉप नियंत्रण अभी उपलब्ध नहीं है। ब्राउज़र नियंत्रण Windows पर अभी काम करता है।',
   'desktop.localOnly': 'यह सेटिंग केवल इस कंप्यूटर पर लागू होती है।',
   'desktop.permissions': 'सिस्टम अनुमतियाँ',
   'desktop.openSettings': 'सेटिंग्स खोलें',
@@ -623,6 +627,10 @@ const messages: TranslationMap = {
     'अभी मेमोरी तक नहीं पहुँचा जा सकता। संग्रहीत कुछ भी खोया नहीं है; थोड़ी देर में फिर से कोशिश करें।',
   'memory.outOfCredits.title': 'क्रेडिट खत्म हो गए',
   'memory.outOfCredits.action': 'टॉप अप करें',
+  'memory.error.planRequired':
+    'आपके मौजूदा प्लान में मेमोरी शामिल नहीं है, इसलिए OpenHuman जो सीखता है उसे न सहेज सकता है, न खोज सकता है। मेमोरी चालू करने के लिए अपग्रेड करें, या सेटिंग्स में कोई दूसरा मेमोरी विकल्प चुनें।',
+  'memory.planRequired.title': 'मेमोरी आपके प्लान का हिस्सा नहीं है',
+  'memory.planRequired.action': 'प्लान देखें',
   'alerts.title': 'अलर्ट',
   'alerts.empty': 'अभी कोई अलर्ट नहीं',
   'alerts.markAllRead': 'सभी पढ़ा हुआ मार्क करें',
@@ -684,6 +692,15 @@ const messages: TranslationMap = {
   'invites.title': 'इनवाइट्स',
   'invites.noInvites': 'कोई पेंडिंग इनवाइट नहीं',
   'devOptions.titleDiagnostics': 'डेवलपर और डायग्नोस्टिक्स',
+  'devOptions.doctor.run': 'डायग्नोस्टिक्स चलाएँ',
+  'devOptions.doctor.runLive': 'लाइव जाँच चलाएँ',
+  'devOptions.doctor.liveWarning':
+    'लाइव जाँच मॉडल या एम्बेडिंग कॉल पर टोकन खर्च कर सकती है। जारी रखें?',
+  'devOptions.doctor.severity.pass': 'पास',
+  'devOptions.doctor.severity.info': 'जानकारी',
+  'devOptions.doctor.severity.warn': 'चेतावनी',
+  'devOptions.doctor.severity.error': 'त्रुटि',
+  'devOptions.doctor.severity.skipped': 'छोड़ा गया',
   'devOptions.diagnostics': 'डायग्नोस्टिक्स',
   'devOptions.toolPolicyDiagnosticsDesc':
     'उपकरण सूची, नीति मुद्रा, MCP अनुमतिसूची, और हाल के ब्लॉक',
@@ -1319,6 +1336,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'मैसेज लोड नहीं हो पाए',
   'chat.thinkingDots': 'सोच रहा है...',
   'chat.status.thinkingElapsed': 'सोच रहा है · {elapsed}',
+  'chat.status.compacting': 'पिछली बातचीत का सारांश बना रहा है…',
+  'chat.status.compactingElapsed': 'पिछली बातचीत का सारांश बना रहा है · {elapsed}',
   'chat.status.waitingApproval': 'आपकी स्वीकृति की प्रतीक्षा',
   'chat.status.waitingReview': 'आपकी समीक्षा की प्रतीक्षा',
   'chat.status.waitingAnswer': 'आपके उत्तर की प्रतीक्षा',
@@ -1844,11 +1863,6 @@ const messages: TranslationMap = {
   'chat.todos.ofTotal': '{total} में से {done}',
   'chat.todos.receipt': 'प्रगति अपडेट हुई · {done}/{total}',
   'chat.subagents.ranFor': '{duration} तक चला',
-  'chat.subagents.ofTotal': '{total} में से {complete}',
-  'chat.subagents.runningCount': '{count} चल रहे हैं',
-  'chat.subagents.failedCount': '{count} विफल',
-  'chat.subagents.incompleteCount': '{count} अधूरे',
-  'chat.subagents.settled': 'उप-कार्य पूरे हुए। उनके परिणाम संसाधित हो रहे हैं।',
   'conversations.planReview.title': 'योजना की समीक्षा करें',
   'conversations.planReview.subtitle':
     'इसे चलाने के लिए स्वीकृत करें, हटाने के लिए अस्वीकार करें, या संशोधित करने के लिए प्रतिक्रिया भेजें।',
@@ -1884,7 +1898,6 @@ const messages: TranslationMap = {
   'conversations.mcpUi.confirmAllow': 'अनुमति दें',
   'conversations.mcpUi.confirmDeny': 'अस्वीकार करें',
   'conversations.tools.delegatedTo': '{agent} को सौंपा गया',
-  'conversations.tools.parallelAgentsAggregating': 'परिणाम एकत्रित किए जा रहे हैं',
   'conversations.tools.openInBrowser': 'ब्राउज़र में खोलें',
   'conversations.tools.status.running': 'चल रहा है',
   'conversations.tools.status.done': 'पूरा',
@@ -1952,22 +1965,6 @@ const messages: TranslationMap = {
     'फिर से कोशिश विफल। लेटेस्ट ऐप बिल्ड डाउनलोड करके दोबारा कोशिश करें।',
   'daemon.serviceBlockingGate.retrying': 'फिर से कोशिश हो रही है...',
   'daemon.serviceBlockingGate.title': 'OpenHuman कोर उपलब्ध नहीं है',
-  'worktree.label': 'वर्कट्री',
-  'worktree.dirty': 'बिना कमिट किए बदलाव',
-  'worktree.clean': 'साफ़',
-  'worktree.removing': 'हटाया जा रहा है…',
-  'worktree.removeFailed': 'वर्कट्री हटाने में विफल',
-  'worktree.diffFailed': 'डिफ़ लोड करने में विफल',
-  'worktree.diffLoading': 'डिफ़ लोड हो रहा है…',
-  'worktree.diffEmpty': 'HEAD की तुलना में कोई बदलाव नहीं।',
-  'worktree.dirtyConfirm':
-    'इस वर्कट्री में बिना कमिट किए बदलाव हैं। इसे हटाने पर वह काम छूट जाएगा। वर्कर ब्रांच बनी रहती है।',
-  'worktree.action.open': 'फ़ोल्डर खोलें',
-  'worktree.action.diff': 'डिफ़',
-  'worktree.action.hideDiff': 'डिफ़ छिपाएँ',
-  'worktree.action.remove': 'हटाएँ',
-  'worktree.action.removeAnyway': 'छोड़ें और हटाएँ',
-  'worktree.action.preserve': 'सुरक्षित रखें',
   'notifications.card.dismiss': 'नोटिफिकेशन हटाएं',
   'notifications.card.importanceTitle': 'महत्व: {pct}%',
   'notifications.center.empty': 'अभी कोई नोटिफिकेशन नहीं',
@@ -2391,6 +2388,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'एक प्रदाता समूह में अधिकतम 128 API कुंजियाँ हो सकती हैं।',
   'settings.ai.fleet.partialKeyVerified':
     'कुछ API कुंजियाँ अस्वीकृत हुईं, लेकिन दूसरी कुंजी सत्यापित हुई। कुंजियों की स्थिति जाँचें।',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman प्रदाता की मॉडल सूची से इस कुंजी समूह की पुष्टि नहीं कर सका। कुंजियाँ सहेज दी गई हैं और मॉडल अनुरोध भेजे जाने पर जाँची जाएँगी।',
   'settings.ai.apiKeyFieldLabel': 'API key फील्ड लेबल',
   'settings.ai.apiKeyRequired': 'जारी रखने के लिए अपनी API key पेस्ट करें।',
   'settings.ai.apiKeyStoredEncrypted': 'API key एन्क्रिप्टेड रूप में स्टोर है',
@@ -3795,6 +3794,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'नौकरी खोजें...',
   'settings.developerMenu.eventLog.column.time': 'समय',
   'settings.developerMenu.eventLog.column.event': 'घटना',
+  'settings.agentAccess.totalTimeout.label': 'पूरे टर्न की समय सीमा',
+  'settings.agentAccess.totalTimeout.desc':
+    'डिफ़ॉल्ट रूप से पूरे टर्न की कोई कुल समय सीमा नहीं है। सीमा तय करने के लिए OPENHUMAN_AGENT_TURN_TIMEOUT_SECS सेट करें; 0 इसे बंद करता है। अलग-अलग कार्रवाइयों और अटकी हुई कॉल के सुरक्षा उपाय लागू रहते हैं।',
   'settings.agentAccess.group.approvals': 'स्वीकृति',
   'settings.agentAccess.group.fileSystem': 'फ़ाइल प्रणाली',
   'settings.agentAccess.group.limits': 'सीमा',
@@ -4880,8 +4882,6 @@ const messages: TranslationMap = {
   'conversations.tools.updateLearnings.done': 'सीखी बातें अपडेट कीं',
   'conversations.tools.delegateTask.active': 'कार्य सौंप रहा है',
   'conversations.tools.delegateTask.done': 'कार्य सौंपा',
-  'conversations.tools.runAgentsInParallel.active': 'एजेंट समानांतर चला रहा है',
-  'conversations.tools.runAgentsInParallel.done': 'एजेंट समानांतर चलाए',
   'conversations.tools.messageAgent.active': 'एजेंट को संदेश भेज रहा है',
   'conversations.tools.messageAgent.done': 'एजेंट को संदेश भेजा',
   'conversations.tools.waitForAgent.active': 'एजेंट की प्रतीक्षा कर रहा है',
@@ -4918,6 +4918,8 @@ const messages: TranslationMap = {
   'conversations.tools.checkGoal.done': 'लक्ष्य जाँचा',
   'conversations.tools.completeGoal.active': 'लक्ष्य पूरा कर रहा है',
   'conversations.tools.completeGoal.done': 'लक्ष्य पूरा किया',
+  'conversations.tools.resumeGoal.active': 'लक्ष्य फिर से शुरू कर रहा है',
+  'conversations.tools.resumeGoal.done': 'लक्ष्य फिर से शुरू किया',
   'conversations.tools.scheduleTask.active': 'कार्य शेड्यूल कर रहा है',
   'conversations.tools.scheduleTask.done': 'कार्य शेड्यूल किया',
   'conversations.tools.checkSchedules.active': 'शेड्यूल जाँच रहा है',
@@ -5111,6 +5113,9 @@ const messages: TranslationMap = {
   'onboarding.custom.localDefaultDisabledReason':
     'प्रबंधित सेटअप के लिए OpenHuman खाता आवश्यक है। लोकल सेशन में आपको हर सेवा खुद कॉन्फ़िगर करनी होती है।',
   'settings.layout.contrast.strong': 'मज़बूत',
+  'settings.agentAccess.hideShellWindows.label': 'शेल विंडो छिपाएँ',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Windows पर नए शेल सत्रों के लिए मूल टर्मिनल विंडो छिपाएँ।',
 };
 
 export default messages;

@@ -74,6 +74,7 @@ import {
   type ToolTimelineEntry,
 } from '../../store/chatRuntimeSlice';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { togglePanelGroup } from '../../store/layoutSlice';
 import { pendingFollowupAdded } from '../../store/queueSlice';
 import { selectSocketStatus } from '../../store/socketSelectors';
 import {
@@ -91,8 +92,9 @@ import {
   truncateMessagesFrom,
   updateThreadTitle,
 } from '../../store/threadSlice';
+import { userScopedStorage } from '../../store/userScopedStorage';
 import type { ConfirmationModal as ConfirmationModalType } from '../../types/intelligence';
-import type { ThreadMessage } from '../../types/thread';
+import type { Thread, ThreadMessage } from '../../types/thread';
 import { chatThreadPath } from '../../utils/chatRoutes';
 import { CHAT_ATTACHMENTS_ENABLED } from '../../utils/config';
 import {
@@ -110,7 +112,12 @@ import { StallWarning } from './aui/StallWarning';
 import { ThreadWorkspaceChip } from './aui/ThreadWorkspaceChip';
 import { useChatSurfaceRegistration } from './hooks/useChatSurfaceRegistration';
 import { useThreadArtifactsHydration } from './hooks/useThreadArtifactsHydration';
-import { useThreadDraft } from './hooks/useThreadDraft';
+import { draftStorageKey, useThreadDraft } from './hooks/useThreadDraft';
+import {
+  isThreadArchived,
+  labelsWithArchived,
+  labelsWithCategory,
+} from './threadList/groupThreads';
 import { ThreadList } from './threadList/ThreadList';
 import { useThreadPins } from './threadList/useThreadPins';
 import { useUnreadThreads } from './threadList/useUnreadThreads';
@@ -265,6 +272,9 @@ const Conversations = ({
   const composer = composerOverride ?? composerProp;
   const { t } = useT();
   const dispatch = useAppDispatch();
+  const collapsedConversationGroups = useAppSelector(
+    state => state.layout?.panels['conversation-dock']?.collapsedGroups
+  );
   const store = useStore<RootState>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -287,6 +297,10 @@ const Conversations = ({
   // Per-thread, reload-surviving draft (`useThreadDraft`): switching threads
   // swaps it instead of carrying half-typed text into the next conversation.
   const [inputValue, setInputValue] = useThreadDraft(selectedThreadId ?? null);
+  // The live selection, for async send paths that finish after the user may
+  // have switched threads.
+  const selectedThreadIdRef = useRef(selectedThreadId);
+  selectedThreadIdRef.current = selectedThreadId;
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   // Failed sends retain their attachments by originating thread. A send may
   // reject after the user has navigated elsewhere, so restoring into the
@@ -503,6 +517,9 @@ const Conversations = ({
   // `default_model` (the core keys per-model levels by it after a restart,
   // before anything is picked here).
   const [persistedDefaultModel, setPersistedDefaultModel] = useState<string | null>(null);
+  // Set once the user picks or clears a model here, so a slow mount read of
+  // the persisted default can't overwrite that choice when it lands.
+  const composerModelChosenRef = useRef(false);
   const reasoningModel = composerModelOverride ?? persistedDefaultModel;
   const composerReasoningEffort: ReasoningEffortChoice =
     (reasoningModel ? reasoningEffortByModel[reasoningModel] : undefined) ?? globalReasoningEffort;
@@ -512,7 +529,9 @@ const Conversations = ({
       .then(res => {
         if (!cancelled) {
           setGlobalReasoningEffort(toReasoningEffortChoice(res.result?.reasoning_effort));
-          setPersistedDefaultModel(res.result?.default_model?.trim() || null);
+          if (!composerModelChosenRef.current) {
+            setPersistedDefaultModel(res.result?.default_model?.trim() || null);
+          }
           const byModel: Record<string, ReasoningEffortChoice> = {};
           for (const [model, effort] of Object.entries(
             res.result?.reasoning_effort_by_model ?? {}
@@ -618,6 +637,7 @@ const Conversations = ({
 
   const applyComposerModel = useCallback(
     (value: string | null, contextWindow?: number | null) => {
+      composerModelChosenRef.current = true;
       setComposerModelOverride(value);
       setPersistedDefaultModel(value);
       setComposerModelContextWindow(contextWindow ?? null);
@@ -635,7 +655,7 @@ const Conversations = ({
     let cancelled = false;
     (async () => {
       try {
-        const hint = composerModelOverride ?? CHAT_MODEL_HINT;
+        const hint = composerModelOverride ?? persistedDefaultModel ?? CHAT_MODEL_HINT;
         const res = await callCoreRpc<{ model: string }>({
           method: 'openhuman.inference_resolve_model',
           params: { hint },
@@ -652,7 +672,7 @@ const Conversations = ({
     return () => {
       cancelled = true;
     };
-  }, [composerModelOverride]);
+  }, [composerModelOverride, persistedDefaultModel]);
 
   // One-shot guard for the Stop/ESC partial-preservation path (#4862): request
   // ids whose partial reply has already been persisted, so a repeated Stop/ESC
@@ -821,7 +841,9 @@ const Conversations = ({
         }
         // Match the sidebar's default General filter here so initial/resume
         // selection can't auto-pick a thread hidden by the selected tab.
-        const visibleThreads = data.threads.filter(t => isThreadVisibleInTab(t, GENERAL_TAB_VALUE));
+        const visibleThreads = data.threads.filter(
+          t => isThreadVisibleInTab(t, GENERAL_TAB_VALUE) && !isThreadArchived(t)
+        );
         // An explicit "open this session" intent (e.g. View work from the Agent
         // Tasks board) wins over passive resume — and bypasses the General-tab
         // visibility filter so a task-labelled session thread can actually be
@@ -853,7 +875,7 @@ const Conversations = ({
         // unrelated General thread or spawn a fresh chat — losing the
         // conversation the user was in (#chat-tab-active-thread).
         const persistedThread = selectedThreadId
-          ? data.threads.find(t => t.id === selectedThreadId)
+          ? data.threads.find(t => t.id === selectedThreadId && !isThreadArchived(t))
           : undefined;
         if (persistedThread) {
           dispatch(setSelectedThread(persistedThread.id));
@@ -1348,6 +1370,18 @@ const Conversations = ({
       }
       const msg = error instanceof Error ? error.message : String(error);
       setSendError(chatSendError('cloud_send_failed', msg));
+      // assistant-ui already cleared the composer; give the draft back to its
+      // own thread so a failed persist doesn't lose what the user typed.
+      failedAttachmentsByThreadRef.current.set(sendingThreadId, pendingAttachments);
+      if (selectedThreadIdRef.current === sendingThreadId) {
+        preserveSendErrorForRestoredDraftRef.current = true;
+        setInputValue(normalized);
+        attachmentsRef.current = pendingAttachments.slice();
+        setAttachments(pendingAttachments);
+      } else {
+        // The user moved on: keep it as that thread's draft, not this one's.
+        void userScopedStorage.setItem(draftStorageKey(sendingThreadId), normalized);
+      }
       pendingSendsRef.current.delete(sendingThreadId);
       removePendingSendingThread(sendingThreadId);
       return;
@@ -1687,14 +1721,7 @@ const Conversations = ({
       }
     }
     return true;
-  }, [
-    handleStopGeneration,
-    inputValue,
-    lastVisibleUserPrompt,
-    selectedThreadActive,
-    selectedThreadId,
-    setInputValue,
-  ]);
+  }, [inputValue, lastVisibleUserPrompt, selectedThreadActive, selectedThreadId, setInputValue]);
 
   // ArrowUp in an empty composer recalls this thread's last prompt for a
   // quick resend or tweak. Returns whether it did, so the caret key otherwise
@@ -1871,13 +1898,39 @@ const Conversations = ({
     [threads, isThreadRunning]
   );
   const unreadThreadIds = useUnreadThreads(runningThreadIds, selectedThreadId ?? null);
-  const { isPinned: isThreadPinnedNow, togglePin: toggleThreadPin } = useThreadPins();
+  const threadLabelWritesRef = useRef(new Map<string, Promise<void>>());
+  const persistThreadLabels = useCallback(
+    (thread: Thread, update: (labels: readonly string[] | undefined) => string[]) => {
+      const writes = threadLabelWritesRef.current;
+      const previous = writes.get(thread.id) ?? Promise.resolve();
+      const operation = previous
+        .catch(() => {})
+        .then(async () => {
+          const latest =
+            store.getState().thread.threads.find(item => item.id === thread.id) ?? thread;
+          await threadApi.updateLabels(thread.id, update(latest.labels));
+          await dispatch(loadThreads()).unwrap();
+        });
+      writes.set(thread.id, operation);
+      const clear = () => {
+        if (writes.get(thread.id) === operation) writes.delete(thread.id);
+      };
+      void operation.then(clear, clear);
+      return operation;
+    },
+    [dispatch, store]
+  );
+  const { isPinned: isThreadPinnedNow, togglePin: toggleThreadPin } =
+    useThreadPins(persistThreadLabels);
 
   // Thread list (left pane). Rendered through `TwoPanelLayout` below in page
   // mode; the embedded `variant="sidebar"` mode shows no thread list at all.
   const threadSidebar = (
     <ThreadList
       threads={sortedThreads}
+      childThreads={threads.filter(thread => Boolean(thread.parentThreadId))}
+      collapsedGroups={collapsedConversationGroups}
+      onToggleGroup={group => dispatch(togglePanelGroup({ id: 'conversation-dock', group }))}
       selectedThreadId={selectedThreadId ?? null}
       onCreateThread={() => handleCreateNewThread()}
       onSelectThread={id => {
@@ -1892,6 +1945,12 @@ const Conversations = ({
       unreadThreadIds={unreadThreadIds}
       isPinned={isThreadPinnedNow}
       onTogglePin={toggleThreadPin}
+      onArchiveThread={(thread, archived) =>
+        persistThreadLabels(thread, labels => labelsWithArchived(labels, archived))
+      }
+      onSetThreadCategory={(thread, category) =>
+        persistThreadLabels(thread, labels => labelsWithCategory(labels, category))
+      }
       onRequestDelete={thread =>
         setDeleteModal({
           isOpen: true,
@@ -2297,7 +2356,7 @@ const Conversations = ({
           : 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
       }>
       <AssistantUiChat
-        model={composerModelOverride ?? resolvedModel ?? CHAT_MODEL_HINT}
+        model={composerModelOverride ?? persistedDefaultModel ?? resolvedModel ?? CHAT_MODEL_HINT}
         modelContextWindow={composerModelContextWindow}
         composerHeader={assistantComposerHeader}
         composerFooterExtras={assistantComposerFooterExtras}

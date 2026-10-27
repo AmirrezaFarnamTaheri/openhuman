@@ -63,10 +63,12 @@ test("previous ownership records cannot be removed while the declaration survive
   });
 });
 
-test("non-ASCII and newline filenames cannot bypass the tracked source scan", () => {
+test("non-ASCII and unusual filenames cannot bypass the tracked source scan", () => {
   withRepository("pub fn example() {}", [], (root, git, base) => {
     for (const name of ["缓存.rs", "line\nbreak.rs"]) {
-      const path = "crates/openhuman-core/src/" + name;
+      // Windows rejects newline filenames; spaces still exercise Git path quoting.
+      const portableName = process.platform === "win32" ? name.replace("\n", " ") : name;
+      const path = "crates/openhuman-core/src/" + portableName;
       writeFileSync(join(root, path), source);
       git("add", path);
     }

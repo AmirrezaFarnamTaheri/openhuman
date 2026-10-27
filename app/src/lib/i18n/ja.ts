@@ -349,6 +349,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': '過去7日間',
   'chat.sidebar.group.previous30Days': '過去30日間',
   'chat.sidebar.group.older': 'それ以前',
+  'chat.sidebar.archived': 'アーカイブ済み',
+  'chat.sidebar.restoreThread': '復元',
   'chat.sidebar.pinThread': '会話をピン留め',
   'chat.sidebar.unpinThread': '会話のピン留めを解除',
   'chat.sidebar.unread': '新しい返信',
@@ -552,6 +554,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     '保留中のデスクトップ承認を読み込めませんでした。更新して再試行してください。',
   'desktop.unsupported': 'このランタイムではデスクトップ制御は利用できません。',
+  'desktop.unsupportedWindows':
+    'Windows ではデスクトップ制御はまだ利用できません。ブラウザ制御は Windows でも利用できます。',
   'desktop.localOnly': 'この設定はこのコンピュータにのみ適用されます。',
   'desktop.permissions': 'システム権限',
   'desktop.openSettings': '設定を開く',
@@ -732,6 +736,15 @@ const messages: TranslationMap = {
 
   // Developer Options / Developer & Diagnostics
   'devOptions.titleDiagnostics': '開発者向けと診断',
+  'devOptions.doctor.run': '診断を実行',
+  'devOptions.doctor.runLive': 'ライブチェックを実行',
+  'devOptions.doctor.liveWarning':
+    'ライブチェックではモデルまたは埋め込みの呼び出しにトークンを消費する場合があります。続行しますか？',
+  'devOptions.doctor.severity.pass': '合格',
+  'devOptions.doctor.severity.info': '情報',
+  'devOptions.doctor.severity.warn': '警告',
+  'devOptions.doctor.severity.error': 'エラー',
+  'devOptions.doctor.severity.skipped': 'スキップ',
   'devOptions.diagnostics': '診断',
   'devOptions.toolPolicyDiagnosticsDesc':
     'ツールインベントリ、ポリシー状態、MCP 許可リスト、および最近のブロック',
@@ -1502,6 +1515,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'メッセージの読み込みに失敗しました',
   'chat.thinkingDots': '思考中...',
   'chat.status.thinkingElapsed': '思考中 · {elapsed}',
+  'chat.status.compacting': 'これまでの会話を要約中…',
+  'chat.status.compactingElapsed': 'これまでの会話を要約中 · {elapsed}',
   'chat.status.waitingApproval': '承認を待っています',
   'chat.status.waitingReview': 'レビューを待っています',
   'chat.status.waitingAnswer': '回答を待っています',
@@ -2117,11 +2132,6 @@ const messages: TranslationMap = {
   'chat.todos.ofTotal': '{done} / {total} 件',
   'chat.todos.receipt': '進捗を更新しました · {done}/{total}',
   'chat.subagents.ranFor': '{duration}間実行',
-  'chat.subagents.ofTotal': '{complete} / {total} 件',
-  'chat.subagents.runningCount': '{count}件実行中',
-  'chat.subagents.failedCount': '{count}件失敗',
-  'chat.subagents.incompleteCount': '{count}件未完了',
-  'chat.subagents.settled': '子の実行が完了しました。結果を処理しています。',
   'conversations.planReview.title': 'プランの確認',
   'conversations.planReview.subtitle':
     '承認して実行、却下して破棄、またはフィードバックを送信して修正します。',
@@ -2158,7 +2168,6 @@ const messages: TranslationMap = {
   'conversations.mcpUi.confirmAllow': '許可',
   'conversations.mcpUi.confirmDeny': '拒否',
   'conversations.tools.delegatedTo': '{agent} に委任',
-  'conversations.tools.parallelAgentsAggregating': '結果を集約中',
   'conversations.tools.openInBrowser': 'ブラウザで開く',
   'conversations.tools.status.running': '実行中',
   'conversations.tools.status.done': '完了',
@@ -2257,25 +2266,6 @@ const messages: TranslationMap = {
     '再試行に失敗しました。最新のアプリビルドをダウンロードして再試行してください。',
   'daemon.serviceBlockingGate.retrying': '再試行中...',
   'daemon.serviceBlockingGate.title': 'OpenHuman コアが利用できません',
-  // Worktree manager (#3376): isolated worker git worktrees
-  'worktree.label': 'ワークツリー',
-  'worktree.dirty': '未コミットの変更',
-  'worktree.clean': 'クリーン',
-  'worktree.removing': '削除中…',
-  'worktree.removeFailed': 'ワークツリーの削除に失敗しました',
-  'worktree.diffFailed': '差分の読み込みに失敗しました',
-  'worktree.diffLoading': '差分を読み込み中…',
-  'worktree.diffEmpty': 'HEAD との変更はありません。',
-  'worktree.dirtyConfirm':
-    'このワークツリーには未コミットの変更があります。削除するとその作業は破棄されますが、ワーカーブランチは保持されます。',
-  'worktree.action.open': 'フォルダを開く',
-  'worktree.action.diff': '差分',
-  'worktree.action.hideDiff': '差分を非表示',
-  'worktree.action.remove': '削除',
-  'worktree.action.removeAnyway': '破棄して削除',
-  'worktree.action.preserve': '保持',
-  // Orchestration tab (#3375): multi-agent workflow runs.
-  'orchestration.detail.stop': '停止',
   'notifications.card.dismiss': '通知を閉じる',
   'notifications.card.importanceTitle': '重要度: {pct}%',
   'notifications.center.empty': '通知はまだありません',
@@ -2818,6 +2808,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'プロバイダーグループでは最大 128 個の API キーを設定できます。',
   'settings.ai.fleet.partialKeyVerified':
     '一部の API キーは拒否されましたが、別のキーは確認できました。キーの状態を確認してください。',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman はプロバイダーのカタログからこのキーグループを確認できませんでした。キーは保存され、モデルへのリクエスト送信時に検証されます。',
   'settings.ai.apiKeyFieldLabel': 'APIキー',
   'settings.ai.apiKeyRequired': '続行するにはAPIキーを貼り付けてください。',
   'settings.ai.apiKeyStoredEncrypted': 'APIキーはこのデバイス上で暗号化されて保存されます。',
@@ -3401,6 +3393,9 @@ const messages: TranslationMap = {
   'settings.agentAccess.timeout.invalid': '許容範囲内の整数秒を入力してください',
   'settings.agentAccess.timeout.envOverride':
     'OPENHUMAN_TOOL_TIMEOUT_SECS 環境変数がこの設定を上書きしているため、解除されるまでここでの変更は反映されません。',
+  'settings.agentAccess.totalTimeout.label': 'ターン全体の時間制限',
+  'settings.agentAccess.totalTimeout.desc':
+    '既定ではターン全体の時間制限はありません。制限を設定するには OPENHUMAN_AGENT_TURN_TIMEOUT_SECS を指定します。0 を指定すると無効になります。個々のアクションと停止した呼び出しに対する保護は引き続き有効です。',
   'settings.agentAccess.group.approvals': '承認',
   'settings.agentAccess.group.fileSystem': 'ファイルシステム',
   'settings.agentAccess.group.limits': '制限',
@@ -4748,6 +4743,10 @@ const messages: TranslationMap = {
     '現在、メモリーに接続できません。保存済みの内容は失われていません。少し待ってから再試行してください。',
   'memory.outOfCredits.title': 'クレジット不足',
   'memory.outOfCredits.action': 'チャージする',
+  'memory.error.planRequired':
+    '現在のプランにはメモリが含まれていないため、OpenHuman は学んだことを保存したり参照したりできません。メモリを有効にするにはプランをアップグレードするか、設定で別のメモリオプションに切り替えてください。',
+  'memory.planRequired.title': 'メモリはご利用のプランに含まれていません',
+  'memory.planRequired.action': 'プランを見る',
   'onboarding.custom.search.skipForNow': '今はスキップ',
   'onboarding.custom.search.ready': 'Web検索の準備ができました。',
   'onboarding.custom.search.notReady':
@@ -5238,11 +5237,10 @@ const messages: TranslationMap = {
   'conversations.tools.reviewLearnings.active': '学習内容をレビュー中',
   'conversations.tools.reviewLearnings.done': '学習内容をレビューしました',
   'conversations.tools.updateLearnings.active': '学習内容を更新中',
+  'orchestration.detail.stop': '停止',
   'conversations.tools.updateLearnings.done': '学習内容を更新しました',
   'conversations.tools.delegateTask.active': 'タスクを委任中',
   'conversations.tools.delegateTask.done': 'タスクを委任しました',
-  'conversations.tools.runAgentsInParallel.active': 'エージェントを並列実行中',
-  'conversations.tools.runAgentsInParallel.done': 'エージェントを並列実行しました',
   'conversations.tools.messageAgent.active': 'エージェントにメッセージ送信中',
   'conversations.tools.messageAgent.done': 'エージェントにメッセージを送信しました',
   'conversations.tools.waitForAgent.active': 'エージェントを待機中',
@@ -5279,6 +5277,8 @@ const messages: TranslationMap = {
   'conversations.tools.checkGoal.done': '目標を確認しました',
   'conversations.tools.completeGoal.active': '目標を達成中',
   'conversations.tools.completeGoal.done': '目標を達成しました',
+  'conversations.tools.resumeGoal.active': '目標を再開中',
+  'conversations.tools.resumeGoal.done': '目標を再開しました',
   'conversations.tools.scheduleTask.active': 'タスクをスケジュール中',
   'conversations.tools.scheduleTask.done': 'タスクをスケジュールしました',
   'conversations.tools.checkSchedules.active': 'スケジュールを確認中',
@@ -5468,6 +5468,9 @@ const messages: TranslationMap = {
   'settings.layout.corners.round': '丸み',
 
   'settings.layout.contrast.strong': '強',
+  'settings.agentAccess.hideShellWindows.label': 'シェルのウィンドウを非表示',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Windowsで新しいシェルセッションのターミナルウィンドウを非表示にします。',
 };
 
 export default messages;

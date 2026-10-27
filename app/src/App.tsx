@@ -1,17 +1,12 @@
 import * as Sentry from '@sentry/react';
 import { useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
-import {
-  HashRouter as Router,
-  useLocation,
-  useNavigate,
-  useNavigationType,
-} from 'react-router-dom';
+import { RouterProvider, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { PersistGate } from 'redux-persist/integration/react';
 
+import { createAppDataRouter } from './AppDataRouter';
 import AppRoutes from './AppRoutes';
 import { AnalyticsPageTracker } from './components/analytics';
-import AnnouncementGate from './components/Announcement/AnnouncementGate';
 import AppBackground from './components/AppBackground';
 import AppUpdatePrompt from './components/AppUpdatePrompt';
 import BootCheckGate from './components/BootCheckGate/BootCheckGate';
@@ -60,9 +55,18 @@ startInternetStatusListener();
 startCoreHealthMonitor();
 
 export function stopBootServicesForHmr(): void {
+  appRouter?.dispose();
+  appRouter = undefined;
   stopNativeNotificationsService();
   stopInternetStatusListener();
   stopCoreHealthMonitor();
+}
+
+let appRouter: ReturnType<typeof createAppDataRouter> | undefined;
+
+function getAppRouter() {
+  appRouter ??= createAppDataRouter(<AppRouterContent />);
+  return appRouter;
 }
 
 if (import.meta.hot) {
@@ -71,6 +75,7 @@ if (import.meta.hot) {
 
 function App() {
   const onMobile = getIsMobile();
+  const router = getAppRouter();
 
   // The desktop shell is one webview with no back button, so a link that
   // navigates it away strands the user on that page with no route back to the
@@ -110,7 +115,7 @@ function App() {
    * 7. CoreStateProvider — Core app snapshot: auth, session, onboarding state
    * 8. SocketProvider — Core socket.io events; desktop only (mobile uses the TunnelTransport relay)
    * 9. ChatRuntimeProvider — Chat runtime events, tool timeline, and approvals
-   * 10. Router — HashRouter navigation for all routes
+   * 10. RouterProvider — Hash data-router navigation and unsaved-editor guards for all routes
    * 11. CommandProvider — Command palette context
    * 12. ServiceBlockingGate — Blocks the shell until required services are configured
    * @end-source:provider-chain
@@ -137,18 +142,7 @@ function App() {
                   <CoreStateProvider>
                     {socketWrapped(
                       <ChatRuntimeProvider>
-                        <Router>
-                          <CommandProvider>
-                            <ServiceBlockingGate>
-                              <AnalyticsPageTracker />
-                              <AppShell />
-                              <SecurityBanner />
-                              {!onMobile && <AppUpdatePrompt />}
-                              <KeyringConsentOverlay />
-                              <AnnouncementGate />
-                            </ServiceBlockingGate>
-                          </CommandProvider>
-                        </Router>
+                        <RouterProvider router={router} />
                       </ChatRuntimeProvider>
                     )}
                   </CoreStateProvider>
@@ -159,6 +153,21 @@ function App() {
         </Provider>
       </Sentry.ErrorBoundary>
     </div>
+  );
+}
+
+function AppRouterContent() {
+  const onMobile = getIsMobile();
+  return (
+    <CommandProvider>
+      <ServiceBlockingGate>
+        <AnalyticsPageTracker />
+        <AppShell />
+        <SecurityBanner />
+        {!onMobile && <AppUpdatePrompt />}
+        <KeyringConsentOverlay />
+      </ServiceBlockingGate>
+    </CommandProvider>
   );
 }
 

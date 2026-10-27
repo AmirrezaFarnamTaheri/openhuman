@@ -32,4 +32,19 @@ describe('ToolFailureCard', () => {
 
     expect(screen.getByTestId('assistant-ui-tool-failure')).toHaveTextContent('rm -rf /tmp/x');
   });
+
+  it('shows an unknown failure diagnostic without invented attempts or unavailable actions', () => {
+    render(
+      <ToolFailureCard
+        toolName="cron"
+        failure={{ ...failure, class: 'Unknown' }}
+        diagnostic="Command execution is unavailable."
+      />
+    );
+    const card = screen.getByTestId('assistant-ui-tool-failure');
+    expect(card).toHaveTextContent('Command execution is unavailable.');
+    expect(card).not.toHaveTextContent('Unknown');
+    expect(card).not.toHaveTextContent('1/1');
+    expect(screen.queryByRole('button', { name: /retry|skip/i })).not.toBeInTheDocument();
+  });
 });

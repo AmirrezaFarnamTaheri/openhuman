@@ -1,6 +1,66 @@
 use super::*;
 use serde_json::json;
 
+/// A flow CatalogStorage callback can run while a synchronous catalog
+/// caller is awaiting the same process-wide bridge. Its lazy backend lookup
+/// must not try to send a second request to that occupied bridge.
+#[cfg(feature = "storage-sqlite")]
+#[test]
+fn catalog_callback_does_not_reenter_the_shared_storage_bridge() {
+    const CHILD: &str = "OPENHUMAN_CATALOG_PORT_BRIDGE_CHILD";
+    const NAME: &str = "catalog_callback_does_not_reenter_the_shared_storage_bridge";
+    let module = module_path!().split_once("::").unwrap().1;
+    let test = format!("{module}::{NAME}");
+
+    if std::env::var(CHILD).as_deref() != Ok(test.as_str()) {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &test, "--nocapture", "--test-threads=1"])
+            .env(CHILD, &test)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn isolated catalog callback test");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(35);
+        loop {
+            if let Some(status) = child.try_wait().expect("poll isolated test") {
+                let output = child.wait_with_output().expect("read isolated test");
+                assert!(
+                    status.success() && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+                    "catalog callback bridge test failed; status={status}\nstdout:\n{}\nstderr:\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                return;
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().expect("kill stalled catalog regression");
+                let output = child.wait_with_output().expect("read stalled child");
+                panic!(
+                    "CatalogStorage callback deadlocked the storage bridge\nstdout:\n{}\nstderr:\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    let workspace = tempfile::tempdir().unwrap();
+    let scope = DocScope {
+        workspace_dir: workspace.path().to_path_buf(),
+        scope: Scope::local(),
+        backend: None,
+    };
+    let port = CatalogStoragePort { scope };
+    let result = crate::storage::block_on_anyhow(async move {
+        port.doc_capabilities()
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))
+    })
+    .expect("catalog callback completes without re-entering bridge");
+    assert!(matches!(result, CatalogStorageReply::Value { .. }));
+}
+
 fn context(config: &Config, profile: &str) -> DispatchCtx {
     use crate::core::runtime::{ContextOverlay, CoreContext, DomainSet};
     use crate::tools::toolpacks::ToolGroups;
@@ -64,6 +124,29 @@ fn document_records_cannot_address_other_shared_or_graph_keys() {
             allowed_record(collection, "flows/thread/checkpoint").is_ok(),
             "{collection}"
         );
+    }
+    for collection in [
+        "graph_checkpoints",
+        "graph_threads",
+        "graph_writes",
+        "delegation_graph_checkpoints",
+        "delegation_graph_threads",
+        "delegation_graph_writes",
+        "flows_graph_checkpoints",
+        "flows_graph_threads",
+        "flows_graph_writes",
+    ] {
+        assert!(allowed_collection(collection).is_ok(), "{collection}");
+    }
+    for (collection, id) in [
+        (
+            "tsd.migrations",
+            "graph/graph.checkpoints/checkpoints_flows_v2",
+        ),
+        ("graph.checkpoints", "graph/thread/checkpoint"),
+        ("graph.checkpoints", "delegation/thread/checkpoint"),
+    ] {
+        assert!(allowed_record(collection, id).is_ok(), "{collection}: {id}");
     }
     for (collection, id) in [
         ("tsd.migrations", "other/definitions_v2"),
@@ -278,11 +361,14 @@ async fn catalog_module_uses_captured_profile_and_storage_preserves_cas_metadata
 }
 
 #[tokio::test]
+#[allow(clippy::await_holding_lock)] // Serializes access to the process-wide installed storage slot.
 async fn catalog_storage_resolves_the_current_backend_and_confines_graph_namespace_queries() {
     use tinyflows_bus::catalog::{
         CatalogCollectionSpec, CatalogDocumentPrecondition, CatalogFilter, CatalogQuery,
         CatalogStorageReply, DocDeleteWhereRequest,
     };
+
+    let _slot_lock = crate::storage::test_support::lock_storage_slot();
 
     let workspace = tempfile::tempdir().expect("isolated workspace");
     let config = Config {
@@ -293,7 +379,7 @@ async fn catalog_storage_resolves_the_current_backend_and_confines_graph_namespa
     let registration = register(&context, &config).await.unwrap();
     let proxy = callback_proxy(&registration).await;
 
-    let backend_a: Arc<dyn StorageBackend> = Arc::new(crate::storage::MemoryStorage::new());
+    let backend_a = crate::storage::test_support::memory_backend();
     let previous = crate::storage::install(Arc::clone(&backend_a));
     struct RestoreBackend(Option<Arc<dyn StorageBackend>>);
     impl Drop for RestoreBackend {
@@ -486,7 +572,7 @@ async fn catalog_storage_resolves_the_current_backend_and_confines_graph_namespa
         CatalogStorageReply::Value { ref value } if value == &Value::Bool(true)
     ));
 
-    let backend_b: Arc<dyn StorageBackend> = Arc::new(crate::storage::MemoryStorage::new());
+    let backend_b = crate::storage::test_support::memory_backend();
     crate::storage::install(Arc::clone(&backend_b));
     let ensured: CatalogStorageReply = proxy
         .call(

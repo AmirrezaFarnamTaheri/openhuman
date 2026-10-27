@@ -61,13 +61,13 @@ const RESOURCE_CATALOG: &[PromptResource] = &[
     PromptResource {
         uri: "openhuman://prompts/agents/planner",
         name: "planner",
-        description: "Read-only reasoning worker that decomposes and researches a question for workflow runs.",
+        description: "Reasoning specialist that turns requests into actionable plans.",
         content: include_str!("../../agent_registry/agents/planner/prompt.md"),
     },
     PromptResource {
         uri: "openhuman://prompts/agents/critic",
         name: "critic",
-        description: "Read-only worker that cross-checks claims and reviews changes for workflow runs.",
+        description: "Specialist that reviews proposed work and identifies concrete issues.",
         content: include_str!("../../agent_registry/agents/critic/prompt.md"),
     },
     PromptResource {

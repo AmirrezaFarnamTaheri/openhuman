@@ -1,6 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  cachedModelCatalog,
+  invalidateModelCatalogCache,
+  loadModelCatalog,
+} from '../../../../../services/modelCatalogCache';
 import { renderWithProviders } from '../../../../../test/test-utils';
 import {
   authActivateProviderCredentials,
@@ -28,7 +33,9 @@ const google: CloudProvider = {
 };
 
 describe('ProviderAccountFleet', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    invalidateModelCatalogCache();
+    await loadModelCatalog('google', async () => [{ id: 'old-account-model', owned_by: 'google' }]);
     vi.clearAllMocks();
     vi.mocked(authListProviderCredentials).mockResolvedValue({
       result: [
@@ -82,6 +89,7 @@ describe('ProviderAccountFleet', () => {
       })
     );
     expect(screen.queryByText('secret-test')).not.toBeInTheDocument();
+    expect(cachedModelCatalog('google')).toBeUndefined();
   });
 
   it('does not show account management for delegated Prodex only', () => {

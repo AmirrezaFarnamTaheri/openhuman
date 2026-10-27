@@ -3,7 +3,9 @@
 //! prompt and host tools under the `ExternalChannel` origin, its write tool is
 //! refused at once, and the reply is posted back to the chat.
 
-#![cfg(feature = "channels")]
+// The agent's turn persists its transcript in the ephemeral workspace's
+// default store, which is SQLite: without that driver the turn cannot run.
+#![cfg(all(feature = "channels", feature = "storage-sqlite"))]
 
 mod common;
 
@@ -243,8 +245,11 @@ fn a_telegram_message_is_answered_by_the_bound_runtime_agent() {
             assert!(
                 matches!(
                     origins.as_slice(),
-                    [Some(AgentTurnOrigin::ExternalChannel { channel, sender: Some(sender), .. })]
-                        if channel == "telegram" && sender == "alice"
+                    [Some(AgentTurnOrigin::ExternalChannel { channel, sender: Some(sender), sender_name, .. })]
+                        // The origin carries the stable Telegram user id (the
+                        // envelope's `sender.id`), with the username as its name.
+                        if channel == "telegram" && sender == "99"
+                            && sender_name.as_deref() == Some("alice")
                 ),
                 "{origins:?}"
             );

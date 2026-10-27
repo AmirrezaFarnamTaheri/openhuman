@@ -1,9 +1,7 @@
-pub(crate) mod delegate;
 pub mod host_extensions;
 pub(crate) mod native_ops;
 mod native_ops_types;
 pub mod ops;
-pub mod orchestrator_tools;
 pub(crate) mod per_call;
 pub(crate) mod policy_session;
 pub mod registry;
@@ -18,7 +16,6 @@ pub(crate) mod user_filter;
 #[path = "impl/mod.rs"]
 pub(crate) mod implementations;
 
-pub use delegate::DelegateTool;
 pub use implementations::*;
 pub use schemas::{
     all_controller_schemas as all_tools_controller_schemas,

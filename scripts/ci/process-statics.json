@@ -1,5 +1,15 @@
 [
   {
+    "file": "crates/openhuman-core/src/security/credentials/profiles/revision.rs",
+    "scope": "",
+    "name": "REVISIONS",
+    "type": "OnceLock<Mutex<HashMap<StoreKey,uuid::Uuid>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Contains only random invalidation tokens, keyed by storage backend identity and tenant scope or canonical configuration directory. No credentials are retained in this map.",
+    "verification": "security/credentials/profiles/revision_tests.rs: profile_revisions_change_only_for_the_saved_store; backend_revision_identity_follows_scope_instead_of_config_directory"
+  },
+  {
     "file": "crates/openhuman-core/src/mcp/ui/cache.rs",
     "scope": "",
     "name": "STORE",
@@ -18,26 +28,6 @@
     "category": "A",
     "reason": "Serializes TinyMCP open/close transitions, which the module admits one at a time process-wide; it guards no data and carries no tenant state.",
     "verification": "mcp/module_client_tests.rs: concurrent_workspaces_open_one_at_a_time_through_the_module_lifecycle_gate"
-  },
-  {
-    "file": "crates/openhuman-core/src/tinymemes/callbacks.rs",
-    "scope": "",
-    "name": "REGISTRY",
-    "type": "LazyLock<Mutex<HashMap<String,Entry>>>",
-    "count": 1,
-    "category": "B",
-    "reason": "Keyed by a random per-remix correlation id; each entry holds the registering caller's config and CoreContext, which every callback re-enters. Callbacks are accepted only from the module peer (bus name owner) for a live id, and the entry is retired by End, a failed call, or an age sweep.",
-    "verification": "tinymemes/service_tests.rs: only_the_module_may_call_back_and_only_for_a_live_remix"
-  },
-  {
-    "file": "crates/openhuman-core/src/tinymemes/service.rs",
-    "scope": "",
-    "name": "FOREGROUND",
-    "type": "std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String,std::sync::Arc<tokio::sync::Mutex<()>>>>, >",
-    "count": 1,
-    "category": "B",
-    "reason": "Holds only unit mutexes. The key is the workspace directory, so different workspaces never share or wait on a lock and no tenant data is stored.",
-    "verification": "tinymemes/service_tests.rs: foreground_remixes_share_a_lock_per_workspace_and_never_across_workspaces"
   },
   {
     "file": "crates/openhuman-core/src/modules/wallet_backend.rs",
@@ -120,16 +110,6 @@
     "verification": "flows/tinyflows/caps/tools/composio_tests.rs: backend_dispatch_forwards_the_workflow_connection_id"
   },
   {
-    "file": "crates/openhuman-core/src/storage/sessions/mod.rs",
-    "scope": "",
-    "name": "OPEN_WORKSPACE_STORES",
-    "type": "LazyLock<Mutex<HashMap<(std::path::PathBuf,String),tinyagents_session::port::WorkspaceStores>>, >",
-    "count": 1,
-    "category": "D",
-    "reason": "Holds open the workspace transcript stores used when no host session store is installed. Each entry is a handle to the SQLite store under one workspace, keyed by that workspace and the session store key (agent_key_for: <profile>~<agent> for a SaaS profile), so two profiles or agents never share an entry; the store under the workspace is the authoritative data. release_workspace_defaults drops them all for a data reset, release_workspace those of one workspace.",
-    "verification": "threads/ops/edit_tests.rs: a_profile_prefixed_key_round_trips_through_edit_and_regenerate; storage/sessions/mod_tests.rs: without_a_store_transcripts_come_from_the_workspace_store_not_files"
-  },
-  {
     "file": "crates/openhuman-core/src/storage/sessions/rebound.rs",
     "scope": "",
     "name": "PROCESS",
@@ -168,36 +148,6 @@
     "category": "A",
     "reason": "Host wiring: an id-keyed table of factories the embedding host registers at startup (core::slots::HookSlot). It holds code, never tenant data; a per-context override table lives on the CoreContext, not here.",
     "verification": "config/enrichers_tests.rs: enrichers_run_in_registration_order"
-  },
-  {
-    "file": "crates/openhuman-core/src/inference/registry.rs",
-    "scope": "",
-    "name": "CHAT_MODELS",
-    "type": "HookSlot<ChatModelEntry>",
-    "count": 1,
-    "category": "A",
-    "reason": "Host wiring: an id-keyed table of factories the embedding host registers at startup (core::slots::HookSlot). It holds code, never tenant data; a per-context override table lives on the CoreContext, not here.",
-    "verification": "inference/registry_tests.rs: a_registered_chat_model_serves_the_managed_provider_for_a_thread"
-  },
-  {
-    "file": "crates/openhuman-core/src/inference/registry.rs",
-    "scope": "",
-    "name": "EMBEDDINGS",
-    "type": "HookSlot<EmbeddingFactory>",
-    "count": 1,
-    "category": "A",
-    "reason": "Host wiring: an id-keyed table of factories the embedding host registers at startup (core::slots::HookSlot). It holds code, never tenant data; a per-context override table lives on the CoreContext, not here.",
-    "verification": "inference/registry_tests.rs: a_registered_embedding_factory_builds_the_managed_embedding_model"
-  },
-  {
-    "file": "crates/openhuman-core/src/inference/registry.rs",
-    "scope": "",
-    "name": "CATALOGS",
-    "type": "HookSlot<CatalogEntry>",
-    "count": 1,
-    "category": "A",
-    "reason": "Host wiring: an id-keyed table of factories the embedding host registers at startup (core::slots::HookSlot). It holds code, never tenant data; a per-context override table lives on the CoreContext, not here.",
-    "verification": "inference/registry_tests.rs: a_registered_catalog_answers_the_model_listing_for_its_provider"
   },
   {
     "file": "crates/openhuman-core/src/integrations/composio/client/factory.rs",
@@ -290,16 +240,6 @@
     "verification": "threads/artifact_rows_tests.rs: recording_an_artifact_twice_writes_one_row"
   },
   {
-    "file": "crates/openhuman-core/src/agent/tinyagents/turn_exec.rs",
-    "scope": "",
-    "name": "ROOT_HOSTED_HARNESS",
-    "type": "LazyLock<AgentHarness<(),OpenHumanRunContext>>",
-    "count": 1,
-    "category": "A",
-    "reason": "One unconfigured harness is process infrastructure; per-invocation models, tools, middleware, progress, and host capabilities are supplied through each invocation, so the singleton carries no tenant authority or data.",
-    "verification": "agent/tinyagents/turn_exec_tests.rs: hosted_roots_share_only_an_unconfigured_process_harness"
-  },
-  {
     "file": "crates/openhuman-core/src/agent_registry/host_definition.rs",
     "scope": "",
     "name": "GLOBAL",
@@ -330,16 +270,6 @@
     "verification": "artifacts/store_documents_tests.rs: the_store_dispatches_to_documents_when_a_backend_is_pinned"
   },
   {
-    "file": "crates/openhuman-core/src/plan_review/gate.rs",
-    "scope": "",
-    "name": "GATE",
-    "type": "OnceLock<PlanReviewGate>",
-    "count": 1,
-    "category": "B",
-    "reason": "The process gate is infrastructure, and its waiter, parked-review, and thread lookup tables use the profile-only tenant key plus request/thread id; agent requests remain available to their profile-level UI while other profiles cannot reach them.",
-    "verification": "plan_review/gate_tests.rs: parked_reviews_are_isolated_by_tenant"
-  },
-  {
     "file": "crates/openhuman-core/src/storage/sessions/mod.rs",
     "scope": "",
     "name": "PROVIDER",
@@ -348,26 +278,6 @@
     "category": "D",
     "reason": "The installed provider is a routing handle to the session storage backend; callers select AgentStores with the authenticated tenant's session_key, and durable records remain in the backend.",
     "verification": "storage/sessions/mod_tests.rs: two_profiles_default_agents_keep_separate_session_keys_and_stores; threads/ops/edit_tests.rs: a_profile_prefixed_key_round_trips_through_edit_and_regenerate"
-  },
-  {
-    "file": "crates/openhuman-core/src/storage/sessions/workspace.rs",
-    "scope": "",
-    "name": "FALLBACKS",
-    "type": "LazyLock<Mutex<HashMap<PathBuf,Fallback>>>",
-    "count": 1,
-    "category": "D",
-    "reason": "Each entry routes one workspace path to its storage backend and DriverSessionStores provider; returned stores still require the caller's tenant session key, while authoritative session data remains in the backend.",
-    "verification": "storage/sessions/mod_tests.rs: each_workspace_keeps_its_sessions_in_its_own_database; storage/sessions/mod_tests.rs: two_profiles_default_agents_keep_separate_session_keys_and_stores; threads/ops/edit_tests.rs: a_profile_prefixed_key_round_trips_through_edit_and_regenerate"
-  },
-  {
-    "file": "crates/openhuman-core/src/storage/sessions/workspace.rs",
-    "scope": "",
-    "name": "MEMORY",
-    "type": "LazyLock<Mutex<HashMap<PathBuf,Arc<dyn SessionStoreProvider>>>>",
-    "count": 1,
-    "category": "D",
-    "reason": "The in-memory provider is a workspace-keyed fallback routing handle; its AgentStores are selected with the caller's tenant session key, and an unusable workspace cannot read another workspace's provider.",
-    "verification": "storage/sessions/workspace_tests.rs: an_unusable_workspace_degrades_to_an_in_memory_store; storage/sessions/mod_tests.rs: two_profiles_default_agents_keep_separate_session_keys_and_stores; threads/ops/edit_tests.rs: a_profile_prefixed_key_round_trips_through_edit_and_regenerate"
   },
   {
     "file": "crates/openhuman-core/src/triage/evaluator/chain.rs",
@@ -510,16 +420,6 @@
     "verification": "agent/orchestration/background_delivery_slots_tests.rs: one_profiles_busy_turn_does_not_block_anothers_thread"
   },
   {
-    "file": "crates/openhuman-core/src/agent/orchestration/workflow_runs/engine/lifecycle.rs",
-    "scope": "",
-    "name": "SUPERVISOR",
-    "type": "OnceLock<WorkflowRunSupervisor>",
-    "count": 1,
-    "category": "D",
-    "reason": "The process-local supervisor holds generation cancellation handles keyed by run id, not durable workflow state or tenant data. Durable run transitions remain fenced by the storage driver's revision and lease checks.",
-    "verification": "agent/orchestration/workflow_runs/engine/lifecycle_tests.rs: losing_resume_cas_keeps_the_installed_workflow_generation"
-  },
-  {
     "file": "crates/openhuman-core/src/mcp/host_cleanup.rs",
     "scope": "",
     "name": "CLIENTS",
@@ -598,5 +498,485 @@
     "category": "A",
     "reason": "Each source-graph parser caches an immutable regular expression; the compiled patterns contain no workspace, request, or tenant state.",
     "verification": "tools/impl/filesystem/source_graph.rs: all six declarations cache only static parser expressions"
+  },
+  {
+    "file": "crates/openhuman-core/src/config/schema/cloud_providers.rs",
+    "scope": "",
+    "name": "HOSTED_AUTH_STYLE",
+    "type": "HookSlot<HostedAuthStyleClassifier>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host auth-style classification callbacks are process wiring; they receive only the style being classified and runtime-specific registrations live in CoreContext extensions.",
+    "verification": "config/schema/cloud_providers_tests.rs: hosted_presets_and_classification_are_context_scoped"
+  },
+  {
+    "file": "crates/openhuman-core/src/config/schema/cloud_providers.rs",
+    "scope": "",
+    "name": "HOSTED_CLOUD_IDENTITY",
+    "type": "HookSlot<HostedCloudIdentityClassifier>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host identity-classification callbacks are process wiring; callbacks receive the candidate slug per call and runtime-specific registrations live in CoreContext extensions.",
+    "verification": "config/schema/cloud_providers_tests.rs: hosted_presets_and_classification_are_context_scoped"
+  },
+  {
+    "file": "crates/openhuman-core/src/config/schema/cloud_providers.rs",
+    "scope": "",
+    "name": "HOSTED_PRESETS",
+    "type": "HookSlot<BuiltinCloudProvider>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host-provided provider preset metadata is process configuration; runtime-specific additions are kept in CoreContext extensions, and no credentials are stored here.",
+    "verification": "config/schema/cloud_providers_tests.rs: hosted_presets_and_classification_are_context_scoped"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/provider/factory/routing.rs",
+    "scope": "",
+    "name": "WORKLOAD_ROUTER",
+    "type": "std::sync::LazyLock<WorkloadRouter>",
+    "count": 1,
+    "category": "A",
+    "reason": "Immutable provider-neutral routing policy parsed once from the built-in hint routes; per-request route facts and user configuration are passed through ConfigRouteSource.",
+    "verification": "inference/provider/factory_egress_fallback_tests.rs: cloud_fallback_roles_match_the_roles_provider_for_role_actually_falls_back"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "BACKEND_ERROR_CLASSIFIER",
+    "type": "HookSlot<BackendErrorClassifier>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host callback wiring only; the callback receives provider and error values per call, while runtime-specific classifiers live in CoreContext extensions.",
+    "verification": "inference/provider/http_error_tests.rs: provider_http_policy_uses_registered_error_ownership_metadata"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "CATALOGS",
+    "type": "HookSlot<CatalogEntry<ProviderContext>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host wiring: the process fallback stores catalog factory code; request data and logs arrive through the explicit ProviderContext, and per-runtime overrides live in CoreContext extensions.",
+    "verification": "inference/registry_tests.rs: a_registered_catalog_answers_the_model_listing_for_its_provider"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "CHAT_MODELS",
+    "type": "HookSlot<ChatModelEntry<ProviderContext>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host wiring: the process fallback stores provider factory code; each call receives its explicit ProviderContext, and per-runtime overrides live in CoreContext extensions.",
+    "verification": "inference/registry_tests.rs: a_registered_chat_model_serves_the_managed_provider_for_a_thread"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "CONFIG_NORMALIZERS",
+    "type": "HookSlot<ConfigNormalizer>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host callback wiring only; normalizers mutate the Config explicitly passed to each invocation, and runtime-specific callbacks live in CoreContext extensions.",
+    "verification": "config/migrations/config_normalizer_tests.rs: registered_normalizer_runs_at_current_schema_and_retries_failed_save"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "EMBEDDINGS",
+    "type": "HookSlot<EmbeddingFactory<ProviderContext>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host wiring: the process fallback stores embedding factory code; each call receives its explicit ProviderContext, and per-runtime overrides live in CoreContext extensions.",
+    "verification": "inference/registry_tests.rs: a_registered_embedding_factory_builds_the_managed_embedding_model"
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/tokenjuice/savings.rs",
+    "scope": "",
+    "name": "SLOT",
+    "type": "OnceLock<Mutex<Option<String>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Stores only the process configuration model used to attribute compression savings; durable aggregate totals remain owned by the TinyJuice storage module.",
+    "verification": "inference/tokenjuice/savings_tests.rs: request_carries_attribution_and_token_counts"
+  },
+  {
+    "file": "crates/openhuman-core/src/integrations/connected_identities.rs",
+    "scope": "",
+    "name": "RUNTIME",
+    "type": "std::sync::OnceLock<Result<tokio::runtime::Runtime,std::io::Error>>",
+    "count": 1,
+    "category": "A",
+    "reason": "A dedicated one-worker runtime for synchronous prompt rendering; it owns no tenant data, and each render future receives its explicit DispatchCtx.",
+    "verification": "integrations/connected_identities_tests.rs: prompt_identity_reads_do_not_exhaust_the_callers_blocking_pool"
+  },
+  {
+    "file": "crates/openhuman-core/src/prompts/section_renderers.rs",
+    "scope": "",
+    "name": "NEXT_PROMPT_CLOCK_ID",
+    "type": "std::sync::atomic::AtomicU64",
+    "count": 1,
+    "category": "A",
+    "reason": "Generates unique process-local identifiers for temporary prompt-clock registrations; it stores no prompt, clock, or tenant data.",
+    "verification": "prompts/section_renderers_tests.rs: newest_prompt_clock_wins_and_non_lifo_drop_restores_the_remaining_provider"
+  },
+  {
+    "file": "crates/openhuman-core/src/prompts/section_renderers.rs",
+    "scope": "",
+    "name": "PROMPT_CLOCKS",
+    "type": "crate::core::slots::HookSlot<PromptClock>",
+    "count": 1,
+    "category": "A",
+    "reason": "Temporary prompt-clock callbacks are process test/host wiring and are invoked only to obtain the current instant; runtime-specific registrations use CoreContext extensions.",
+    "verification": "prompts/section_renderers_tests.rs: newest_prompt_clock_wins_and_non_lifo_drop_restores_the_remaining_provider"
+  },
+  {
+    "file": "crates/openhuman-core/src/core/observability_reporting.rs",
+    "scope": "",
+    "name": "LAST_FS_LIMIT_REPORT",
+    "type": "std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<(String,String),std::time::Instant>>, >",
+    "count": 1,
+    "category": "A",
+    "reason": "A process-wide rate limiter keyed by the content-free domain and operation names prevents repeated filesystem-limit reports from flooding observability. Entries older than the five-minute cooldown are pruned on every access, and the map stores no tenant or user data.",
+    "verification": "core/observability_reporting.rs: was_recently_reported"
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/mod.rs",
+    "scope": "",
+    "name": "RUNTIME",
+    "type": "OnceLock<Result<tokio::runtime::Runtime,String>>",
+    "count": 1,
+    "category": "A",
+    "reason": "The dedicated two-thread tokio runtime that storage drivers connect on, so their background tasks never share threads with callers parked on the blocking bridge. It is built once per process, holds no tenant, profile or per-agent state, and carries no data beyond the drivers' connection tasks.",
+    "verification": "storage/mod_tests.rs: bridged_calls_do_not_starve_a_capped_host_runtime; storage/mod_tests.rs: open_connects_on_the_storage_runtime"
+  },
+  {
+    "file": "crates/openhuman-core/src/agent/orchestration/busy_guard.rs",
+    "scope": "",
+    "name": "GATES",
+    "type": "OnceLock<Mutex<HashMap<String,ParentBusyGate>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "One ParentBusyGate per authenticated profile key; each session/thread lease and alias is also a TenantThreadKey. Unbound SaaS calls receive isolated tenant keys through isolated_unless_tenant, and no prompt or transcript is cached.",
+    "verification": "Source audit: caller, tenant_key, gate_for, TurnBusy::start and is_busy; agent/orchestration/background_completions_tenant_tests.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/agent/tinyagents/turn_exec/root_hosted_harness.rs",
+    "scope": "",
+    "name": "ROOT_HOSTED_HARNESS",
+    "type": "LazyLock<AgentHarness<(),OpenHumanRunContext>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Moved unchanged from turn_exec.rs: one unconfigured harness is process infrastructure; per-invocation models, tools, middleware, progress and host capabilities carry authority and data.",
+    "verification": "Source audit: root_hosted_harness::ROOT_HOSTED_HARNESS is initialized only with AgentHarness::new; agent/tinyagents/turn_exec_tests.rs: hosted_roots_share_only_an_unconfigured_process_harness."
+  },
+  {
+    "file": "crates/openhuman-core/src/config/schema/load/provenance.rs",
+    "scope": "",
+    "name": "CURRENT_DOTENV_LOAD",
+    "type": "OnceLock<Mutex<Option<DotenvLoadProvenance>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Records the process launcher dotenv path and loaded/skipped environment variable NAMES only. Values are discarded by from_variables; per-config field provenance is stored on Config.runtime_state, outside this process slot.",
+    "verification": "Source audit: DotenvLoadProvenance::from_variables, set_current_dotenv_load, dotenv_loaded_variable; doctor/config_provenance_tests.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/core/log_redaction.rs",
+    "scope": "",
+    "name": "NAMED_KEY_PATTERNS",
+    "type": "Lazy<Vec<(Regex, &'static str)>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Immutable compiled regexes and constant replacement strings; log text and matched credentials are processed per call and never retained in the static.",
+    "verification": "Source audit: NAMED_KEY_PATTERNS initialization and scrub_secrets in core/log_redaction.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/doctor/checks/inference_catalog.rs",
+    "scope": "",
+    "name": "CATALOG_CACHE",
+    "type": "LazyLock<Mutex<HashMap<u64,CachedCatalog>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Caches catalog metadata/errors for 60 seconds. Its keyed hash includes config path, configured and scoped workspace, profile, provider slug and the frozen prepared-request identity, which includes endpoint and exact credential. Credential rotation and profile changes therefore select different cache entries; raw credentials are not stored in the cache.",
+    "verification": "Source audit: scope_key, catalog_for_with_timeout and PreparedInspectionCatalog::new; doctor/inference_catalog_tests.rs: doctor_models_does_not_reuse_a_catalog_for_another_profiles_credential; prepared_catalog_identity_changes_when_managed_credential_rotates_in_place."
+  },
+  {
+    "file": "crates/openhuman-core/src/doctor/checks/inference_catalog.rs",
+    "scope": "",
+    "name": "CACHE_HASHER",
+    "type": "LazyLock<std::collections::hash_map::RandomState>",
+    "count": 1,
+    "category": "A",
+    "reason": "RandomState holds only process-random hash seeds used for opaque cache keys. Request fields are hashed transiently and no catalog, config or credential is retained in the hasher.",
+    "verification": "Source audit: hash_key and catalog_for_with_timeout in doctor/checks/inference_catalog.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/doctor/registry.rs",
+    "scope": "",
+    "name": "CHECK_SOURCES",
+    "type": "HookSlot<Arc<dyn DoctorCheckSource>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host check-provider wiring, keyed by source id. Checks receive explicit DoctorCtx through checks_for; context overrides live in CoreContext extensions rather than the process fallback.",
+    "verification": "Source audit: register_check_source_in and registered_checks_for; doctor/runner_tests.rs: a_context_check_source_is_reported_with_its_check_id."
+  },
+  {
+    "file": "crates/openhuman-core/src/doctor/runner.rs",
+    "scope": "",
+    "name": "CHECK_SEMAPHORE",
+    "type": "LazyLock<Arc<Semaphore>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Process resource limiter with eight permits. Holds no tenant values or reports; a timed-out blocking task retains its permit until that worker exits.",
+    "verification": "Source audit: runner::run; doctor/runner_tests.rs: timed_out_blocking_checks_keep_the_concurrency_slot_until_the_worker_exits."
+  },
+  {
+    "file": "crates/openhuman-core/src/inbound/pinned.rs",
+    "scope": "",
+    "name": "IN_FLIGHT",
+    "type": "LazyLock<InFlight>",
+    "count": 1,
+    "category": "D",
+    "reason": "Only process-local turn-id admission claims, released by Claim::drop; no event bodies, prompts, tenant config or result records are held. Durable state and completed-result checks remain in the caller-owned Results store.",
+    "verification": "Source audit: Claim::take, Claim::drop and Pinned::deliver in inbound/pinned.rs; inbound/pinned_tests.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/auth_error_registry.rs",
+    "scope": "",
+    "name": "ORIGINS",
+    "type": "OnceLock<Mutex<HashMap<String,ErrorOrigins>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Provider-id index containing per-ScopeIdentity status/time views; ScopeIdentity includes workspace, config path and profile. snapshot_for_scope returns only the exact selected scope and flags unscoped legacy errors separately.",
+    "verification": "Source audit: current_scope and snapshot_for_scope in inference/auth_error_registry.rs; doctor/inference_auth_error_tests.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "INSPECTION_CHAT_MODELS",
+    "type": "HookSlot<InspectionChatModelFactory>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host wiring for inspection-safe chat model factories, keyed by provider id. The static retains factory code, while requests receive explicit config/context and frozen credentials per invocation. Context-specific registrations are held in CoreContext extensions.",
+    "verification": "Source audit: INSPECTION_CHAT_MODELS registration, register_in and get_for paths in inference/registry.rs; doctor/inference_catalog_tests.rs and inference/provider/factory_tests.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "INSPECTION_EMBEDDINGS",
+    "type": "HookSlot<InspectionEmbeddingFactory>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host wiring for inspection-safe embedding factories, keyed by provider id. The static retains factory code, while requests receive explicit config/context and frozen credentials per invocation. Context-specific registrations are held in CoreContext extensions.",
+    "verification": "Source audit: INSPECTION_EMBEDDINGS registration, register_in and get_for paths in inference/registry.rs; doctor/inference_catalog_tests.rs and inference/provider/factory_tests.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "IDENTITY_HASHER",
+    "type": "OnceLock<RandomState>",
+    "count": 1,
+    "category": "A",
+    "reason": "RandomState retains process-random seeds only. PreparedInspectionCatalog::new hashes normalized endpoint, provider id and credential transiently into an opaque report/cache identity, without storing secrets in the hasher.",
+    "verification": "Source audit: PreparedInspectionCatalog::new in inference/registry.rs; doctor/inference_catalog_tests.rs: prepared_catalog_identity_changes_when_managed_credential_rotates_in_place."
+  },
+  {
+    "file": "crates/openhuman-core/src/inference/registry.rs",
+    "scope": "",
+    "name": "INSPECTION_CATALOGS",
+    "type": "HookSlot<InspectionCatalogListing>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host wiring for inspection-safe catalog factories, keyed by provider id. The static retains factory code, while requests receive explicit config/context and frozen credentials per invocation. Context-specific registrations are held in CoreContext extensions.",
+    "verification": "Source audit: INSPECTION_CATALOGS registration, register_in and get_for paths in inference/registry.rs; doctor/inference_catalog_tests.rs and inference/provider/factory_tests.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/integrations/composio/ops/scope_prefs.rs",
+    "scope": "",
+    "name": "LEGACY",
+    "type": "tokio::sync::Mutex<()>",
+    "count": 1,
+    "category": "A",
+    "reason": "Data-free process mutex serializing legacy preference migration against save-and-drop. Each operation loads the calling DispatchCtx/config and uses module-owned scoped preferences; the lock itself contains only unit.",
+    "verification": "Source audit: migrate_legacy and save in integrations/composio/ops/scope_prefs.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/integrations/composio/ops/scope_prefs.rs",
+    "scope": "",
+    "name": "FAIL_MIGRATING",
+    "type": "std::cell::RefCell<Option<String>>",
+    "count": 1,
+    "category": "A",
+    "reason": "cfg(test)-only thread-local failure-injection toolkit name. It is absent from production and cannot change another test thread or retain live user preferences.",
+    "verification": "Source audit: cfg(test) thread_local declaration and migration failure seam in integrations/composio/ops/scope_prefs.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/memory/engine_registry.rs",
+    "scope": "",
+    "name": "READ_ONLY_HEALTH_PROBES",
+    "type": "HookSlot<ReadOnlyHealthProbe>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host wiring for read-only memory health probes; stores factory callbacks by engine id. Selected config/engine state arrives per call, and runtime overrides are registered in CoreContext extensions.",
+    "verification": "Source audit: READ_ONLY_HEALTH_PROBES, register_in and lookup functions in memory/engine_registry.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/memory/engine_registry.rs",
+    "scope": "",
+    "name": "READ_ONLY_ENGINE_FACTORIES",
+    "type": "HookSlot<ReadOnlyEngineFactory>",
+    "count": 1,
+    "category": "A",
+    "reason": "Host wiring for read-only memory engine factories; stores factory callbacks by engine id. Selected config/engine state arrives per call, and runtime overrides are registered in CoreContext extensions.",
+    "verification": "Source audit: READ_ONLY_ENGINE_FACTORIES, register_in and lookup functions in memory/engine_registry.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/connectors/inspection.rs",
+    "scope": "",
+    "name": "SCOPE",
+    "type": "OnceLock<Mutex<Option<[u8;32]>>>",
+    "count": 2,
+    "category": "B",
+    "reason": "Two slots retain only SHA-256 fingerprints for the candidate load scope and accepted module-load scope. Fingerprints include config/workspace paths, component gates and offered-toolkit policy; candidates become accepted only after resolution is Ready. Read-only calls require a matching load/route/credential binding.",
+    "verification": "Source audit: loaded_scope, pending_load_scope, note_module_config_for_load, note_load_resolution_ready, binding_for_config; modules/connectors/inspection_tests.rs: load_scope_is_captured_only_when_the_module_receives_selected_paths_and_policy."
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/connectors/inspection.rs",
+    "scope": "",
+    "name": "GATE",
+    "type": "tokio::sync::Mutex<()>",
+    "count": 1,
+    "category": "A",
+    "reason": "Data-free async lock spanning route changes and existing-only inspection calls, preventing the process connector route from changing between scope validation and confidential dispatch.",
+    "verification": "Source audit: route_lock and call_existing_readonly in modules/connectors/inspection.rs; modules/connectors/inspection_tests.rs: a_matching_config_binding_is_pinned_to_workspace_policy_and_credential."
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/connectors/inspection.rs",
+    "scope": "",
+    "name": "BINDING",
+    "type": "OnceLock<Mutex<Option<ConfiguredBinding>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Retains only accepted load-scope, route-scope and credential SHA-256 fingerprints. Inspection refuses a mismatching selected config/credential before proxy dispatch; no raw token or connector result is kept here.",
+    "verification": "Source audit: configured_binding_for_route, binding_for_config, binding_matches_config and call_bound_proxy; modules/connectors/inspection_tests.rs: a_matching_config_binding_is_pinned_to_workspace_policy_and_credential."
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/ops.rs",
+    "scope": "",
+    "name": "STORAGE_CALLBACK_LOADS",
+    "type": "std::sync::LazyLock<StorageCallbackLoads>",
+    "count": 1,
+    "category": "D",
+    "reason": "Module-id-keyed lifetime handles for the verified module callback binding and ServedStorage endpoint. These retain transport registrations, not tenant records; storage_host authorizes each callback through its caller/claim-bound grant before opening scoped backend ports.",
+    "verification": "Source audit: needs_storage_callback and ensure_loaded_with_storage_callback in modules/ops.rs; modules/storage_host.rs callback authorization."
+  },
+  {
+    "file": "crates/openhuman-core/src/modules/storage_host_invocation.rs",
+    "scope": "",
+    "name": "NEXT_INVOCATION",
+    "type": "AtomicU64",
+    "count": 1,
+    "category": "A",
+    "reason": "Monotonic address allocator only. Each served endpoint separately captures exact module peer, claim-bound storage and active lifetime; the counter carries neither records nor grant authority and rejects exhaustion.",
+    "verification": "Source audit: InvocationStorageBinding::serve and try_update in modules/storage_host_invocation.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/plan_review/host.rs",
+    "scope": "",
+    "name": "STORE",
+    "type": "OnceLock<PlanReviewStore<Tenant>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Replacement for plan_review/gate.rs::GATE. PlanReviewStore keys are normalized to authenticated profile Tenant values so agents share their profile UI without exposing another profile review; requests/decisions remain tenant-keyed.",
+    "verification": "Source audit: global and host request/decision adapters in plan_review/host.rs; plan_review/host_tests.rs: request_event_replay_and_rpc_decision_share_the_harness_store; host request_review and decide profile normalization."
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/documents.rs",
+    "scope": "",
+    "name": "PREPARED_SCOPES",
+    "type": "LazyLock<Mutex<HashMap<PreparedKey,Weak<dyn StorageBackend>>>>",
+    "count": 1,
+    "category": "B",
+    "reason": "Preparation-success cache keyed by backend allocation identity and exact storage scope string. Weak references are upgraded and pointer-compared before reuse; a recycled allocation cannot inherit preparation and no documents are cached.",
+    "verification": "Source audit: PreparedKey, prepare_once and Arc::ptr_eq guard in storage/documents.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/lease_local.rs",
+    "scope": "",
+    "name": "CONTENDED_KEYS",
+    "type": "Mutex<Vec<String>>",
+    "count": 1,
+    "category": "A",
+    "reason": "cfg(test)-only lock-contention observation keys, used to release deterministic test probe locks; omitted from shipped builds and holds no runtime lease records.",
+    "verification": "Source audit: cfg(test) CONTENDED_KEYS and lock_past_probes in storage/lease_local.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/local.rs",
+    "scope": "",
+    "name": "TEST_WORKSPACE_URLS",
+    "type": "LazyLock<Mutex<HashMap<PathBuf,String>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "cfg(all(test, storage-sqlite))-only workspace-to-test SQLite URL routing. Fixture directories are explicit keys and no production backend configuration is changed by this map.",
+    "verification": "Source audit: use_persistent_default_for_test and initialized_backend in storage/local.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/local.rs",
+    "scope": "",
+    "name": "SYNC_BACKEND_ENTRY_TEST_SIGNAL",
+    "type": "LazyLock<Mutex<Option<SyncBackendEntryTestSignal>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "cfg(test)-only one-shot notification scoped to an exact fixture workspace path; stores a test channel sender, never a backend, credential or document.",
+    "verification": "Source audit: arm_test_sync_backend_entry_signal and workspace comparison in storage/local.rs."
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/mod.rs",
+    "scope": "",
+    "name": "ON_STORAGE_RUNTIME",
+    "type": "std::cell::Cell<bool>",
+    "count": 1,
+    "category": "A",
+    "reason": "Thread-local boolean indicating storage runtime ownership for reentrancy handling. Set only on dedicated storage thread/workers; carries no request context or tenant values.",
+    "verification": "Source audit: Blocking::new on_thread_start and storage::block_on reentrancy paths."
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/sessions/host_stores.rs",
+    "scope": "",
+    "name": "FALLBACKS",
+    "type": "LazyLock<Mutex<HashMap<PathBuf,Fallback>>>",
+    "count": 1,
+    "category": "D",
+    "reason": "Moved from storage/sessions/workspace.rs: workspace-keyed backend/provider lifetime handles. Reuse additionally requires backend Arc identity; TenantSessionStores selects profile/agent session keys, and durable data remains in the driver backend.",
+    "verification": "Source audit: fallback_provider and release_workspace in storage/sessions/host_stores.rs; storage/sessions/mod_tests.rs: two_profiles_default_agents_keep_separate_session_keys_and_stores."
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/test_support.rs",
+    "scope": "",
+    "name": "TEST_WORKSPACES",
+    "type": "OnceLock<Mutex<Vec<tempfile::TempDir>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Test-support-only TempDir lifetime registry retains isolated fixture directories until process exit, preventing unrelated unit tests from sharing the system temp root or conflicting storage indexes.",
+    "verification": "Source audit: storage/mod.rs cfg(test) test_support module and test_support::isolated_workspace."
+  },
+  {
+    "file": "crates/openhuman-core/src/storage/test_support.rs",
+    "scope": "",
+    "name": "STORAGE_SLOT_TEST_LOCK",
+    "type": "Mutex<()>",
+    "count": 1,
+    "category": "A",
+    "reason": "Test-support-only data-free mutex serializes process storage-slot replacement/restoration. InstalledBackendGuard holds it for the full fixture lifetime; production never compiles this module.",
+    "verification": "Source audit: storage/mod.rs cfg(test) test_support module, lock_storage_slot and InstalledBackendGuard."
+  },
+  {
+    "file": "crates/openhuman-core/src/threads/store/backend.rs",
+    "scope": "",
+    "name": "THREAD_ADMISSIONS",
+    "type": "OnceLock<Mutex<HashMap<PathBuf,Weak<WorkspaceThreadAdmission>>>>",
+    "count": 1,
+    "category": "A",
+    "reason": "Workspace-wide create/purge synchronization only: weak handles contain active-create count, purging flag and Condvar, with no thread rows or messages. Canonicalized workspace keys serialize aliases consistently; dead handles are pruned, and data operations resolve tenant scope separately.",
+    "verification": "Source audit: ThreadAdmissionState, normalized_workspace_path, thread_admission and ThreadPurgeGuard in threads/store/backend.rs."
   }
 ]

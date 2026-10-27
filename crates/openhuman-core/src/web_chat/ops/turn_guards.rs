@@ -11,38 +11,37 @@ use super::super::turn_close::{StopCause, StoppedTurn};
 use super::super::types::WebChatTaskResult;
 use crate::agent::turn_env::HostTurnEnv;
 
-/// Resolve the per-turn wall-clock backstop. Returns `None` when disabled
-/// (env `OPENHUMAN_WEB_TURN_TIMEOUT_SECS=0`).
+/// Resolve the per-turn wall-clock backstop. Returns `None` unless a user has
+/// configured a total-turn timeout.
 ///
 /// This is the turn's fixed total ceiling (issue #4746), and the single source
-/// of truth for the turn's deadlines (`web_chat::turn_guards::backstop`, default 3600s,
-/// the harness's own turn ceiling). The harness derives two earlier points
+/// of truth for the turn's deadlines. When configured, the harness derives
+/// two earlier points
 /// from it:
 ///
-/// * **wind-down** at backstop minus `min(120s, backstop/5)`, 3480s by
-///   default. The harness pauses the run at its next safe point, and the
+/// * **wind-down** before the backstop. The harness pauses the run at its next
+///   safe point, and the
 ///   session driver writes the grounded close from the work already done, so a
 ///   long turn still delivers an answer.
-/// * **hard stop** at backstop minus `min(60s, backstop/10)`, 3540s by default.
+/// * **hard stop** before the backstop.
 ///   The harness policy's `max_wall_clock_ms` (`tinyagents::run_policy_for`)
 ///   is clamped to it, so a tool or sub-agent call that runs across the
 ///   wind-down point ends in the harness's own typed `Timeout` → `chat_error`.
 ///
 /// It is not the hang detector. That is the idle guard
 /// ([`turn_activity`](super::super::turn_activity)), which ends a turn that has
-/// been silent with no model or tool call in flight. The backstop used to be
-/// both, at 900s: a turn working steadily for 15 minutes was dropped exactly
-/// like a wedged one. Override via `OPENHUMAN_WEB_TURN_TIMEOUT_SECS`; set it to
-/// `0` to disable the backstop and the derived deadlines with it.
+/// been silent with no model or tool call in flight. No total-turn ceiling is
+/// enabled by default. Set `OPENHUMAN_WEB_TURN_TIMEOUT_SECS` or
+/// `OPENHUMAN_AGENT_TURN_TIMEOUT_SECS` to opt in; `0` disables the selected
+/// ceiling and its derived deadlines.
 fn web_turn_deadline() -> Option<Duration> {
     crate::web_chat::turn_guards::backstop::configured_backstop()
 }
 
-/// The backstop for a turn that has to be allowed to run long: one on a local /
-/// self-hosted provider (#6042), whose prefill alone can take many minutes. The
-/// explicit `OPENHUMAN_WEB_TURN_TIMEOUT_SECS` override still wins; otherwise the
-/// default is the local turn ceiling plus a grace period, never the hosted
-/// backstop, which sits below the local harness ceilings and would pre-empt them.
+/// The backstop for a local / self-hosted provider (#6042). An explicit web
+/// override still wins; otherwise a configured agent timeout applies to local
+/// runs with a grace period for the grounded close. With no configured timeout
+/// this returns `None`.
 async fn resolve_web_turn_deadline(ctx: &crate::core::runtime::DispatchCtx) -> Option<Duration> {
     if std::env::var("OPENHUMAN_WEB_TURN_TIMEOUT_SECS").is_ok() {
         return web_turn_deadline();

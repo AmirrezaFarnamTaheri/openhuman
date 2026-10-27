@@ -46,6 +46,21 @@ const ALL = Object.fromEntries(Object.keys(AREA_ENV).map((k) => [k, true]));
 const NONE = Object.fromEntries(Object.keys(AREA_ENV).map((k) => [k, false]));
 const EX63_ENV = { CI_SCRATCH_DIR: "/scratch" };
 
+test("module consumers source exactly their lane environment", () => {
+  for (const profile of ["hosted", "ex63"]) {
+    const plan = buildPlan({ profile, areas: ALL, env: EX63_ENV });
+    for (const lane of plan.lanes) {
+      for (const check of lane.checks.filter((entry) => entry.needs?.includes("test-modules"))) {
+        const sources = [...check.run.matchAll(/\. ci-out\/test-modules-([^ ]+)\.env/g)];
+        assert.deepEqual(sources.map((match) => match[1]), [lane.name], `${profile}:${check.name}`);
+      }
+    }
+    const lane = plan.lanes.find((entry) => entry.name === (profile === "hosted" ? "storage-e2e" : "storage-drivers"));
+    const command = lane.checks.find((entry) => entry.name === "storage-e2e").run;
+    assert.match(command, /--features storage-sqlite,storage-file,flows,modules\s/);
+  }
+});
+
 test("EX63 verifies preinstalled tools before cache setup and validation", () => {
   const privateJob = ciLanes.slice(
     ciLanes.indexOf("  ex63:"),
@@ -123,20 +138,51 @@ test("commands are static: no suite is ever narrowed to the diff", () => {
   }
 });
 
-test("ex63 runs the core's unit tests under nextest; hosted keeps cargo's runner", () => {
+test("both runners isolate core unit tests; other hosted shards retain cargo", () => {
   for (const plan of plans()) {
     const lanes = plan.lanes.filter((l) => l.name.startsWith("rust-cov"));
     for (const lane of lanes) {
       const cov = lane.checks.find((c) => c.name === "rust-core-coverage");
       assert.equal(
         cov.env.OH_COV_RUNNER,
-        plan.profile === "ex63" ? "nextest" : undefined,
+        plan.profile === "ex63" || lane.name === "rust-cov-core"
+          ? "nextest"
+          : undefined,
       );
     }
   }
   assert.match(
     fs.readFileSync(path.join(repoRoot, ".config/nextest.toml"), "utf8"),
     /\[profile\.ci\][\s\S]*fail-fast = false/,
+  );
+});
+
+test("hosted storage isolation preserves the private suite selection and installs its runner", () => {
+  const [privatePlan, hostedPlan] = plans();
+  const command = (plan) =>
+    plan.lanes
+      .flatMap((lane) => lane.checks)
+      .find((check) => check.name === "storage-lib-tests").run;
+  const filters = (run) =>
+    [...run.matchAll(/test\(([^)]+)\)/g)].map((match) => match[1]).sort();
+  assert.deepEqual(filters(command(hostedPlan)), filters(command(privatePlan)));
+  assert.match(
+    command(hostedPlan),
+    /cargo nextest run --profile ci --no-tests=fail --no-fail-fast/,
+  );
+  const job = Object.values(parseYaml(ciLanes).jobs).find((entry) =>
+    entry.steps?.some(
+      (step) => step.uses === "taiki-e/install-action@cargo-nextest",
+    ),
+  );
+  assert.ok(job, "hosted isolated suites require nextest to be installed");
+  const install = job.steps.findIndex(
+    (step) => step.uses === "taiki-e/install-action@cargo-nextest",
+  );
+  assert.match(job.steps[install].if, /rust-cov-core/);
+  assert.match(job.steps[install].if, /storage-lib/);
+  assert.ok(
+    install < job.steps.findIndex((step) => step.name === "Start lanes"),
   );
 });
 
@@ -279,29 +325,36 @@ test("untouched areas leave only the always-on gates", () => {
   );
 });
 
-test("the storage area arms only the storage-drivers lane, with the sqlite and file drivers on", () => {
+test("the storage area covers every driver suite in isolated hosted jobs or one EX63 lane", () => {
   for (const profile of ["hosted", "ex63"]) {
     const plan = buildPlan({
       profile,
       areas: { ...NONE, storage: true },
       env: profile === "ex63" ? EX63_ENV : {},
     });
-    const on = plan.lanes.flatMap((l) =>
-      l.checks.filter((c) => c.when).map((c) => `${l.name}:${c.name}`),
+    const on = plan.lanes.flatMap((lane) =>
+      lane.checks.filter((check) => check.when).map((check) => `${lane.name}:${check.name}`),
     );
-    // Only the always-on gates plus this lane: the storage area arms no
-    // frontend, Rust or other area lane.
-    assert.deepEqual(
-      on.filter((id) => !id.startsWith("static:")),
-      [
-        "storage-drivers:test-modules",
-        "storage-drivers:storage-e2e",
-        "storage-drivers:storage-lib-tests",
-        "storage-drivers:cron-module-tests",
-        "storage-drivers:storage-session-store-tests",
-      ],
-      profile,
-    );
+    const storageIds = on.filter((id) => !id.startsWith("static:"));
+    const expected = profile === "hosted"
+      ? [
+          "storage-e2e:test-modules",
+          "storage-e2e:storage-e2e",
+          "storage-lib:test-modules",
+          "storage-lib:storage-lib-tests",
+          "storage-lib:cron-module-tests",
+          "storage-session:storage-session-store-tests",
+        ]
+      : [
+          "frontend:pnpm-install",
+          "rust-cov:prune-coverage-binaries",
+          "storage-drivers:test-modules",
+          "storage-drivers:storage-e2e",
+          "storage-drivers:storage-lib-tests",
+          "storage-drivers:cron-module-tests",
+          "storage-drivers:storage-session-store-tests",
+        ];
+    assert.deepEqual(storageIds, expected, profile);
     assert.deepEqual(
       on.filter((id) => id.startsWith("static:")),
       [
@@ -317,51 +370,57 @@ test("the storage area arms only the storage-drivers lane, with the sqlite and f
       ],
       profile,
     );
-    const lane = plan.lanes.find((l) => l.name === "storage-drivers");
-    assert.equal(lane.active, true, profile);
-    for (const check of lane.checks.filter((c) => c.name !== "test-modules")) {
-      assert.match(
-        check.run,
-        /--features (?:session-store,)?storage-sqlite,storage-file(?:\s|$)/,
-      );
+    const laneNames = profile === "hosted"
+      ? ["storage-e2e", "storage-lib", "storage-session"]
+      : ["storage-drivers"];
+    for (const name of laneNames) {
+      const lane = plan.lanes.find((entry) => entry.name === name);
+      assert.equal(lane.active, true, name);
+      for (const check of lane.checks.filter((entry) => entry.name !== "test-modules")) {
+        assert.match(
+          check.run,
+          /--features (?:session-store,)?storage-sqlite,storage-file(?:,flows,modules)?(?:\s|$)/,
+        );
+      }
     }
-    // Every root storage target runs in the lane, so a new one cannot be
-    // forgotten: the targets on disk are exactly the targets in the command.
-    const e2e = lane.checks.find((c) => c.name === "storage-e2e").run;
+    const e2eName = profile === "hosted" ? "storage-e2e" : "storage-drivers";
+    const e2e = plan.lanes.find((lane) => lane.name === e2eName)
+      .checks.find((check) => check.name === "storage-e2e").run;
     const onDisk = fs
       .readdirSync(path.join(repoRoot, "tests"))
-      .filter((f) => /^(storage_.*_e2e|cli_storage_url_e2e)\.rs$/.test(f))
-      .map((f) => f.replace(/\.rs$/, ""))
+      .filter((file) => /^(storage_.*_e2e|cli_storage_url_e2e)\.rs$/.test(file))
+      .map((file) => file.replace(/\.rs$/, ""))
       .sort();
-    const inLane = [...e2e.matchAll(/--test (\S+)/g)].map((m) => m[1]).sort();
-    assert.deepEqual(inLane, onDisk, profile);
-    // MongoDB runs the shared storage targets that support its feature set.
-    // SQLite-only targets belong to the driver lane above, not MongoDB.
-    const mongo = fs.readFileSync(
-      path.join(repoRoot, ".github/workflows/storage-mongodb.yml"),
-      "utf8",
+    assert.deepEqual([...e2e.matchAll(/--test (\S+)/g)].map((match) => match[1]).sort(), onDisk, profile);
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, ".github/workflows/storage-mongodb.yml")),
+      false,
+      "do not restore the removed duplicate MongoDB owner workflow",
     );
-    const inMongo = [...mongo.matchAll(/--test (\S+)/g)]
-      .map((m) => m[1])
-      .sort();
-    assert.deepEqual(
-      inMongo,
-      onDisk.filter((target) => target !== "storage_default_import_e2e"),
-      "storage-mongodb.yml",
-    );
+
     if (profile === "hosted") {
       assert.deepEqual(
-        hostedMatrix(plan).map((g) => g.group),
-        ["checks", "storage"],
+        hostedMatrix(plan).map((group) => group.group),
+        ["checks", "storage-e2e", "storage-lib", "storage-session"],
       );
     }
   }
-  // Without the area the lane stays off.
   const off = buildPlan({ profile: "hosted", areas: NONE });
-  assert.equal(
-    off.lanes.find((l) => l.name === "storage-drivers").active,
-    false,
-  );
+  for (const name of ["storage-e2e", "storage-lib", "storage-session"]) {
+    assert.equal(off.lanes.find((lane) => lane.name === name).active, false);
+  }
+});
+
+test("each hosted storage shard has a streamed workflow step and an explicit time budget", () => {
+  const hosted = ciLanes.slice(ciLanes.indexOf("  lanes:"), ciLanes.indexOf("  gate:"));
+  assert.match(hosted, /startsWith\(matrix\.group, 'storage-'\) && 150/);
+  for (const name of ["storage-e2e", "storage-lib", "storage-session"]) {
+    assert.ok(
+      hosted.includes(`run: node scripts/ci/self-hosted/lanes.mjs --wait ${name}`),
+      `missing live output for ${name}`,
+    );
+  }
+  assert.ok(!hosted.includes("lanes.mjs --wait storage-drivers"));
 });
 
 test("hosted matrix only spins up groups with active lanes", () => {
@@ -383,6 +442,33 @@ test("hosted matrix only spins up groups with active lanes", () => {
     buildPlan({ profile: "hosted", areas: { ...NONE, installPs1: true } }),
   );
   assert.equal(pester.find((g) => g.group === "pester").container, "");
+});
+
+test("a browser-spec-only change runs the full-inventory skip guard without scripts area", () => {
+  const frontendOnly = buildPlan({
+    profile: "hosted",
+    areas: { ...NONE, frontend: true },
+  });
+  assert.equal(
+    frontendOnly.lanes
+      .find((lane) => lane.name === "frontend")
+      .checks.find((check) => check.name === "browser-test-skip-guard").run,
+    "node scripts/ci/check-browser-test-skips.mjs",
+  );
+  assert.equal(
+    frontendOnly.lanes
+      .find((lane) => lane.name === "frontend")
+      .checks.find((check) => check.name === "e2e-runner-ownership")?.run,
+    "pnpm e2e:ownership:check",
+  );
+
+  const filters = fs.readFileSync(
+    path.join(repoRoot, ".github/ci-paths-filter.yml"),
+    "utf8",
+  );
+  const frontendFilter = filters.split("\nscripts:\n")[0];
+  assert.match(frontendFilter, /'app\/test\/\*\*'/);
+  assert.match(frontendFilter, /'scripts\/ci\/check-browser-test-skips\.mjs'/);
 });
 
 test("private lanes reuse checkout targets, preserve mold through RUSTFLAGS resets, and omit wrappers", () => {
@@ -432,11 +518,13 @@ test("private gates-off, storage, and Tauri execute equivalent coverage suites w
   const checks = Object.fromEntries(
     plan.lanes.flatMap((l) => l.checks.map((c) => [c.name, c])),
   );
+  assert.match(checks["gate-contract-tests"].run, /core::schema_test_support::/);
   assert.match(
     checks["gate-contract-tests-features"].run,
     /--features modules,mcp,e2e-test-support/,
   );
   assert.match(checks["gate-contract-tests-features"].run, /--test-threads=1/);
+  assert.match(checks["gate-contract-tests"].run, /--test-threads=1/);
   assert.match(checks["cron-module-tests"].run, /--test-threads=1/);
   assert.equal(
     checks["storage-e2e"].env.NEXTEST_EXPECTED_TARGETS,
@@ -472,12 +560,12 @@ test("private auxiliary coverage reports after failed tests and preserves the fa
   fs.symlinkSync(
     path.join(repoRoot, "scripts"),
     path.join(dir, "scripts"),
-    "dir",
+    process.platform === "win32" ? "junction" : "dir",
   );
   fs.symlinkSync(
     path.join(repoRoot, ".config"),
     path.join(dir, ".config"),
-    "dir",
+    process.platform === "win32" ? "junction" : "dir",
   );
   fs.mkdirSync(path.join(dir, "ci-out"));
   fs.writeFileSync(
@@ -492,7 +580,7 @@ test("private auxiliary coverage reports after failed tests and preserves the fa
     cwd: dir,
     env: {
       ...process.env,
-      PATH: `${dir}:${process.env.PATH}`,
+      PATH: `${dir}${path.delimiter}${process.env.PATH}`,
       CARGO_CALLS: calls,
       NEXTEST_REPORT_DIR: path.join(dir, "reports"),
       NEXTEST_EXPECTED_TARGETS: path.join(dir, "expected-targets"),
@@ -504,7 +592,7 @@ test("private auxiliary coverage reports after failed tests and preserves the fa
       .readFileSync(path.join(dir, "expected-targets"), "utf8")
       .trim()
       .split("\n").length,
-    11,
+    12,
   );
   const commands = fs.readFileSync(calls, "utf8").trim().split("\n");
   assert.equal(commands.length, 3);
@@ -530,21 +618,22 @@ test("missing native fixtures prevent the whole storage command and its report f
     );
     for (const profile of ["ex63", "hosted"]) {
       const plan = buildPlan({ profile, areas: ALL, env: EX63_ENV });
+      const storageName = profile === "hosted" ? "storage-e2e" : "storage-drivers";
       const check = plan.lanes
-        .find((lane) => lane.name === "storage-drivers")
+        .find((lane) => lane.name === storageName)
         .checks.find((entry) => entry.name === "storage-e2e");
       const result = spawnSync("bash", ["-o", "pipefail", "-c", check.run], {
         cwd: dir,
         env: {
           ...process.env,
-          PATH: `${dir}:${process.env.PATH}`,
+          PATH: `${dir}${path.delimiter}${process.env.PATH}`,
           CARGO_CALLS: calls,
           NEXTEST_EXPECTED_TARGETS: path.join(dir, "expected-targets"),
         },
         encoding: "utf8",
       });
       assert.notEqual(result.status, 0, profile);
-      assert.match(result.stderr, /test-modules-storage-drivers\.env/);
+      assert.ok(result.stderr.includes(`test-modules-${storageName}.env`));
       assert.equal(fs.existsSync(calls), false, profile);
       assert.equal(
         fs.existsSync(path.join(dir, "expected-targets")),
@@ -975,9 +1064,17 @@ test("process-static scan uses cancellation supervision in both profiles", () =>
 
 test("each module-backed lane stages and sources native fixtures before executing", () => {
   for (const plan of plans()) {
+    const storagePairs = plan.profile === "hosted"
+      ? [
+          ["storage-lib", "storage-lib-tests"],
+          ["storage-e2e", "storage-e2e"],
+        ]
+      : [
+          ["storage-drivers", "storage-lib-tests"],
+          ["storage-drivers", "storage-e2e"],
+        ];
     for (const [laneName, runner] of [
-      ["storage-drivers", "storage-lib-tests"],
-      ["storage-drivers", "storage-e2e"],
+      ...storagePairs,
       ["rust-lint", "embed-offline-examples"],
     ]) {
       const lane = plan.lanes.find((entry) => entry.name === laneName);

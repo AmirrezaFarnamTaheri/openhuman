@@ -98,6 +98,36 @@ describe('useProviderConnect', () => {
     expect(onConnected).not.toHaveBeenCalled();
   });
 
+  it('saves a key group when the catalogue succeeds but cannot confirm authentication', async () => {
+    api.probeProviderModelFleet.mockResolvedValue({
+      rejectedKeys: 0,
+      verification: 'inconclusive_catalogue',
+    });
+    const persist = vi.fn().mockResolvedValue(undefined);
+    const onConnected = vi.fn();
+    const t = vi.fn((_key: string, fallback?: string) => fallback ?? '');
+    const { result } = renderHook(() =>
+      useProviderConnect({ draft: EMPTY_SETTINGS, saved: EMPTY_SETTINGS, persist, t, onConnected })
+    );
+
+    await act(async () => {
+      await result.current.connectProvider({
+        slug: 'nvidia',
+        value: 'candidate-1\ncandidate-2',
+        credentialMode: 'api_key',
+      });
+    });
+
+    expect(persist).toHaveBeenCalledOnce();
+    expect(api.clearCloudProviderKey).not.toHaveBeenCalled();
+    expect(onConnected).toHaveBeenCalledOnce();
+    expect(result.current.providerSaveNotice?.message).toMatch(/could not confirm/i);
+    expect(t).toHaveBeenCalledWith(
+      'settings.ai.fleet.credentialGroupUnverified',
+      expect.any(String)
+    );
+  });
+
   it('saves a group and shows a localized advisory only after another key is verified', async () => {
     api.probeProviderModelFleet.mockResolvedValue({ rejectedKeys: 1 });
     const persist = vi.fn().mockResolvedValue(undefined);

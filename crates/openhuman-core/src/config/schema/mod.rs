@@ -4,6 +4,36 @@
 
 pub mod cloud_providers;
 pub use cloud_providers::{generate_provider_id, is_slug_reserved, AuthStyle, CloudProviderCreds};
+
+fn generate_provider_id_with_prefix(prefix: &str, slug: &str) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    let chars: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+    let mut suffix = String::with_capacity(5);
+    let mut seed = nanos as usize;
+    for _ in 0..5 {
+        suffix.push(chars[seed % chars.len()] as char);
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        seed = (seed >> 33) ^ seed;
+    }
+    let safe_slug: String = slug
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(20)
+        .collect();
+    format!("{prefix}_{safe_slug}_{suffix}")
+}
 pub mod ephemeral_route;
 pub use ephemeral_route::{EphemeralRoute, EPHEMERAL_ROUTE_SLUG};
 pub mod resolved_endpoints;
@@ -34,9 +64,12 @@ pub use storage::StorageConfig;
 pub mod profile_layout;
 pub use profile_layout::{users_dir, ProfileLayout};
 mod identity_cost;
+mod inbound_debounce;
 pub(crate) mod load;
 pub(crate) use load::config_from_toml_str;
-pub(crate) use load::source::storage_schema::storage_schema as config_storage_schema;
+pub(crate) use load::source::storage_schema::collection_specs as config_storage_collections;
+#[cfg(feature = "legacy-import")]
+pub(crate) use load::source::storage_schema::upgrade_records as upgrade_config_records;
 pub use load::{
     action_dir_env_override, active_user_marker_path, active_workspace_dir,
     active_workspace_dir_cached, active_workspace_snapshot, clear_active_user, default_action_dir,
@@ -60,8 +93,8 @@ pub(crate) use load::CONFIG_OWNER_MISMATCH_MARKER;
 pub mod claude_agent_sdk;
 pub use claude_agent_sdk::ClaudeAgentSdkConfig;
 mod inbound;
+mod inbound_sources;
 mod local_ai;
-mod memes;
 pub(crate) mod memory;
 mod modules;
 mod observability;
@@ -78,8 +111,7 @@ mod update;
 mod web_chat_config;
 
 pub use agent::{
-    AgentConfig, DelegateAgentConfig, OrchestratorModelConfig, RequiredOutputContract,
-    TeamModelConfig, ToolSearchConfig,
+    AgentConfig, OrchestratorModelConfig, RequiredOutputContract, TeamModelConfig, ToolSearchConfig,
 };
 pub use autonomy::AutonomyConfig;
 pub use capability_providers::{CapabilityProviderConfig, CapabilityProviderTrustState};
@@ -96,13 +128,13 @@ pub use dashboard::{DashboardConfig, DiagramViewerConfig, EventStreamConfig, Mod
 pub use identity_cost::{
     BudgetAction, BudgetPeriod, BudgetPolicy, BudgetScope, CostConfig, ModelPricing,
 };
-pub use inbound::InboundConfig;
+pub use inbound::{InboundConfig, InboundSourceConfig};
+pub use inbound_debounce::{InboundDebounceConfig, InboundDebounceOverride};
 pub use local_ai::{LocalAiConfig, LocalAiUsage};
-pub use memes::MemesConfig;
 pub use memory::{
     migrate_legacy_source, MemoryAgentConfig, MemoryConfig, MemoryConversationsConfig,
     MemoryEngineSettings, MemoryLayoutMode, MemorySourceConfig, MemorySourceKind, RecallSettings,
-    MEMORY_CORTEXDB_KEY_NAME,
+    MEMORY_CORTEXDB_KEY_NAME, MEMORY_CORTEXDB_LOCAL_KEY_NAME,
 };
 pub use modules::{
     module_source_env_for, ModuleOverride, ModuleSourceMode, ModulesConfig, MODULE_SOURCE_ENV,

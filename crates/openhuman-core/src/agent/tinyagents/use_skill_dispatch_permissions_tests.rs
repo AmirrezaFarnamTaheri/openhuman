@@ -1,7 +1,7 @@
 use super::*;
 
 use serde_json::json;
-use tinyagents_harness::tool::packs::UseSkillTool;
+use tinyagents_harness_tools::skills::UseSkillTool;
 use tinytools::PermissionLevel;
 
 struct MixedCodeTool;

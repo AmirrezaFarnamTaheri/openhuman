@@ -103,6 +103,35 @@ async fn files_folder_is_created_on_first_use() {
     assert!(files_dir.is_dir());
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn reservation_and_published_bytes_are_private_to_the_owner() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = TempDir::new().unwrap();
+    let files = dir.path().join("Files");
+    let path = reserve_file(&files, "private", "txt", "private-artifact")
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o077,
+        0
+    );
+    write_visible_projection(
+        &crate::core::runtime::DispatchCtx::unbound(),
+        &FileRoots::new(&files),
+        &path,
+        b"private content",
+    )
+    .await
+    .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"private content");
+    assert_eq!(
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o077,
+        0
+    );
+}
+
 #[tokio::test]
 async fn a_repeated_title_gets_a_numbered_name_instead_of_overwriting() {
     let tmp = TempDir::new().unwrap();
@@ -431,4 +460,43 @@ async fn a_previously_trusted_folder_still_resolves() {
         .await
         .unwrap_err();
     assert!(err.contains("not a files folder"), "{err}");
+}
+
+/// A legacy record goes through the same escape guard: a symlink placed at its
+/// path must not serve a file from outside `artifacts/`.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_legacy_record_symlinked_out_of_the_artifacts_root_is_refused() {
+    let tmp = TempDir::new().unwrap();
+    let secret = tmp.path().join("secret.txt");
+    std::fs::write(&secret, b"private").unwrap();
+    let meta = legacy_meta("legacy-3", "legacy-3/x.txt");
+    save_artifact_meta(tmp.path(), &meta).await.unwrap();
+    std::fs::create_dir_all(tmp.path().join("artifacts/legacy-3")).unwrap();
+    std::os::unix::fs::symlink(&secret, tmp.path().join("artifacts/legacy-3/x.txt")).unwrap();
+
+    let read = read_artifact_bytes(tmp.path(), tmp.path(), "legacy-3").await;
+    assert!(
+        read.is_err(),
+        "legacy symlink served: {:?}",
+        read.map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+    );
+}
+
+/// An embedder may pass a relative workspace; a legacy record must still
+/// resolve through the escape guard, which only accepts absolute paths.
+#[tokio::test]
+async fn a_legacy_record_in_a_relative_workspace_still_resolves() {
+    let tmp = tempfile::Builder::new()
+        .prefix("artifacts-relative-ws-")
+        .tempdir_in(".")
+        .unwrap();
+    let ws = Path::new(tmp.path().file_name().unwrap());
+    let meta = legacy_meta("legacy-4", "legacy-4/x.txt");
+    save_artifact_meta(ws, &meta).await.unwrap();
+    std::fs::create_dir_all(ws.join("artifacts/legacy-4")).unwrap();
+    std::fs::write(ws.join("artifacts/legacy-4/x.txt"), b"abc").unwrap();
+
+    let bytes = read_artifact_bytes(ws, ws, "legacy-4").await.unwrap();
+    assert_eq!(bytes, b"abc");
 }

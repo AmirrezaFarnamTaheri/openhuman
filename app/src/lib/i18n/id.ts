@@ -428,6 +428,8 @@ const messages: TranslationMap = {
   'chat.sidebar.group.previous7Days': '7 hari terakhir',
   'chat.sidebar.group.previous30Days': '30 hari terakhir',
   'chat.sidebar.group.older': 'Lebih lama',
+  'chat.sidebar.archived': 'Diarsipkan',
+  'chat.sidebar.restoreThread': 'Pulihkan',
   'chat.sidebar.pinThread': 'Sematkan percakapan',
   'chat.sidebar.unpinThread': 'Lepas sematan percakapan',
   'chat.sidebar.unread': 'Balasan baru',
@@ -610,6 +612,8 @@ const messages: TranslationMap = {
   'desktop.pendingUnavailable':
     'Persetujuan desktop yang tertunda tidak dapat dimuat. Segarkan untuk mencoba lagi.',
   'desktop.unsupported': 'Kontrol desktop tidak tersedia di lingkungan ini.',
+  'desktop.unsupportedWindows':
+    'Kontrol desktop belum tersedia di Windows. Kontrol Browser sudah berfungsi di Windows.',
   'desktop.localOnly': 'Pengaturan ini hanya berlaku untuk komputer ini.',
   'desktop.permissions': 'Izin sistem',
   'desktop.openSettings': 'Buka pengaturan',
@@ -630,6 +634,10 @@ const messages: TranslationMap = {
     'Memori tidak dapat dijangkau saat ini. Tidak ada data tersimpan yang hilang; coba lagi sebentar lagi.',
   'memory.outOfCredits.title': 'Kredit habis',
   'memory.outOfCredits.action': 'Isi ulang',
+  'memory.error.planRequired':
+    'Paket Anda saat ini tidak mencakup memori, sehingga OpenHuman tidak dapat menyimpan atau mencari apa yang dipelajarinya. Tingkatkan paket untuk mengaktifkan memori, atau beralih ke opsi memori lain di Pengaturan.',
+  'memory.planRequired.title': 'Memori tidak termasuk dalam paket Anda',
+  'memory.planRequired.action': 'Lihat paket',
   'alerts.title': 'Peringatan',
   'alerts.empty': 'Belum ada peringatan',
   'alerts.markAllRead': 'Tandai semua sudah dibaca',
@@ -693,6 +701,15 @@ const messages: TranslationMap = {
   'invites.title': 'Undangan',
   'invites.noInvites': 'Tidak ada undangan tertunda',
   'devOptions.titleDiagnostics': 'Developer & Diagnostik',
+  'devOptions.doctor.run': 'Jalankan diagnosis',
+  'devOptions.doctor.runLive': 'Jalankan pemeriksaan langsung',
+  'devOptions.doctor.liveWarning':
+    'Pemeriksaan langsung dapat menggunakan token untuk panggilan model atau embedding. Lanjutkan?',
+  'devOptions.doctor.severity.pass': 'Lulus',
+  'devOptions.doctor.severity.info': 'Info',
+  'devOptions.doctor.severity.warn': 'Peringatan',
+  'devOptions.doctor.severity.error': 'Error',
+  'devOptions.doctor.severity.skipped': 'Dilewati',
   'devOptions.diagnostics': 'Diagnostik',
   'devOptions.toolPolicyDiagnosticsDesc':
     'Alat inventaris, postur kebijakan, allowzes MCP, dan blok terbaru',
@@ -1329,6 +1346,8 @@ const messages: TranslationMap = {
   'chat.failedToLoadMessages': 'Gagal memuat pesan',
   'chat.thinkingDots': 'Berpikir...',
   'chat.status.thinkingElapsed': 'Berpikir · {elapsed}',
+  'chat.status.compacting': 'Meringkas percakapan sebelumnya…',
+  'chat.status.compactingElapsed': 'Meringkas percakapan sebelumnya · {elapsed}',
   'chat.status.waitingApproval': 'Menunggu persetujuan Anda',
   'chat.status.waitingReview': 'Menunggu tinjauan Anda',
   'chat.status.waitingAnswer': 'Menunggu jawaban Anda',
@@ -1858,11 +1877,6 @@ const messages: TranslationMap = {
   'chat.todos.ofTotal': '{done} dari {total}',
   'chat.todos.receipt': 'Progres diperbarui · {done}/{total}',
   'chat.subagents.ranFor': 'Berjalan selama {duration}',
-  'chat.subagents.ofTotal': '{complete} dari {total}',
-  'chat.subagents.runningCount': '{count} berjalan',
-  'chat.subagents.failedCount': '{count} gagal',
-  'chat.subagents.incompleteCount': '{count} belum selesai',
-  'chat.subagents.settled': 'Subtugas selesai. Memproses hasilnya.',
   'conversations.planReview.title': 'Tinjau rencana',
   'conversations.planReview.subtitle':
     'Setujui untuk menjalankannya, tolak untuk membuangnya, atau kirim masukan untuk merevisinya.',
@@ -1898,7 +1912,6 @@ const messages: TranslationMap = {
   'conversations.mcpUi.confirmAllow': 'Izinkan',
   'conversations.mcpUi.confirmDeny': 'Tolak',
   'conversations.tools.delegatedTo': 'Didelegasikan ke {agent}',
-  'conversations.tools.parallelAgentsAggregating': 'Menggabungkan hasil',
   'conversations.tools.openInBrowser': 'Buka di peramban',
   'conversations.tools.status.running': 'berjalan',
   'conversations.tools.status.done': 'selesai',
@@ -1966,22 +1979,6 @@ const messages: TranslationMap = {
     'Coba ulang gagal. Unduh build aplikasi terbaru dan coba lagi.',
   'daemon.serviceBlockingGate.retrying': 'Mencoba ulang...',
   'daemon.serviceBlockingGate.title': 'Core OpenHuman tidak tersedia',
-  'worktree.label': 'pohon kerja',
-  'worktree.dirty': 'Perubahan belum di-commit',
-  'worktree.clean': 'Bersih',
-  'worktree.removing': 'Menghapus…',
-  'worktree.removeFailed': 'Gagal menghapus worktree',
-  'worktree.diffFailed': 'Gagal memuat diff',
-  'worktree.diffLoading': 'Memuat diff…',
-  'worktree.diffEmpty': 'Tidak ada perubahan dibandingkan HEAD.',
-  'worktree.dirtyConfirm':
-    'Worktree ini memiliki perubahan yang belum di-commit. Menghapusnya akan membuang pekerjaan itu. Branch worker tetap dipertahankan.',
-  'worktree.action.open': 'Buka folder',
-  'worktree.action.diff': 'Beda',
-  'worktree.action.hideDiff': 'Sembunyikan diff',
-  'worktree.action.remove': 'Hapus',
-  'worktree.action.removeAnyway': 'Buang & hapus',
-  'worktree.action.preserve': 'Pertahankan',
   'notifications.card.dismiss': 'Abaikan notifikasi',
   'notifications.card.importanceTitle': 'Tingkat penting: {pct}%',
   'notifications.center.empty': 'Belum ada notifikasi',
@@ -2412,6 +2409,8 @@ const messages: TranslationMap = {
   'settings.ai.fleet.tooManyKeys': 'Satu grup penyedia mendukung maksimal 128 kunci API.',
   'settings.ai.fleet.partialKeyVerified':
     'Beberapa kunci API ditolak, tetapi kunci lain telah terverifikasi. Periksa kesehatan kunci penyedia.',
+  'settings.ai.fleet.credentialGroupUnverified':
+    'OpenHuman tidak dapat memastikan grup kunci ini melalui katalog penyedia. Kunci telah disimpan dan akan diperiksa saat permintaan model dikirim.',
   'settings.ai.apiKeyFieldLabel': 'Label kolom API key',
   'settings.ai.apiKeyRequired': 'Tempelkan API key Anda untuk melanjutkan.',
   'settings.ai.apiKeyStoredEncrypted': 'API key disimpan terenkripsi',
@@ -3824,6 +3823,9 @@ const messages: TranslationMap = {
   'settings.cron.jobs.searchPlaceholder': 'Tugas pencarian...',
   'settings.developerMenu.eventLog.column.time': 'Waktu',
   'settings.developerMenu.eventLog.column.event': 'Peristiwa',
+  'settings.agentAccess.totalTimeout.label': 'Batas waktu total giliran',
+  'settings.agentAccess.totalTimeout.desc':
+    'Secara default, tidak ada batas waktu total untuk satu giliran. Atur OPENHUMAN_AGENT_TURN_TIMEOUT_SECS untuk menetapkan batas; nilai 0 menonaktifkannya. Perlindungan untuk tindakan individual dan panggilan yang macet tetap berlaku.',
   'settings.agentAccess.group.approvals': 'Persetujuan',
   'settings.agentAccess.group.fileSystem': 'Sistem berkas',
   'settings.agentAccess.group.limits': 'Batas',
@@ -4889,8 +4891,6 @@ const messages: TranslationMap = {
   'conversations.tools.updateLearnings.done': 'Hal yang saya pelajari diperbarui',
   'conversations.tools.delegateTask.active': 'Mendelegasikan tugas',
   'conversations.tools.delegateTask.done': 'Tugas didelegasikan',
-  'conversations.tools.runAgentsInParallel.active': 'Menjalankan agen secara paralel',
-  'conversations.tools.runAgentsInParallel.done': 'Agen dijalankan secara paralel',
   'conversations.tools.messageAgent.active': 'Mengirim pesan ke agen',
   'conversations.tools.messageAgent.done': 'Pesan dikirim ke agen',
   'conversations.tools.waitForAgent.active': 'Menunggu agen',
@@ -4927,6 +4927,8 @@ const messages: TranslationMap = {
   'conversations.tools.checkGoal.done': 'Tujuan diperiksa',
   'conversations.tools.completeGoal.active': 'Menuntaskan tujuan',
   'conversations.tools.completeGoal.done': 'Tujuan dituntaskan',
+  'conversations.tools.resumeGoal.active': 'Melanjutkan tujuan',
+  'conversations.tools.resumeGoal.done': 'Tujuan dilanjutkan',
   'conversations.tools.scheduleTask.active': 'Menjadwalkan tugas',
   'conversations.tools.scheduleTask.done': 'Tugas dijadwalkan',
   'conversations.tools.checkSchedules.active': 'Memeriksa jadwal',
@@ -5156,6 +5158,9 @@ const messages: TranslationMap = {
   'flows.nodeKind.loop': 'Loop',
 
   'settings.layout.corners.round': 'Membulat',
+  'settings.agentAccess.hideShellWindows.label': 'Sembunyikan jendela terminal',
+  'settings.agentAccess.hideShellWindows.desc':
+    'Sembunyikan jendela terminal asli di Windows untuk sesi shell baru.',
 };
 
 export default messages;

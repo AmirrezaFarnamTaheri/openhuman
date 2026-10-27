@@ -43,6 +43,10 @@ async fn test_config(tmp: &TempDir) -> Config {
     tokio::fs::create_dir_all(&config.workspace_dir)
         .await
         .unwrap();
+    #[cfg(feature = "storage-sqlite")]
+    crate::storage::local::use_persistent_default_for_test(&config.workspace_dir);
+    crate::security::credentials::api_key::store_api_key(&config, "cron-scheduler-test-key")
+        .expect("store the managed inference fixture credential");
     config
 }
 
@@ -134,6 +138,8 @@ mod dispatch_tests;
 mod frequency_tests;
 #[path = "scheduler_halt_and_persist_tests.rs"]
 mod halt_and_persist_tests;
+#[path = "scheduler_headless_descendants_tests.rs"]
+mod headless_descendants_tests;
 #[path = "scheduler_host_agent_tests.rs"]
 mod host_agent_tests;
 #[path = "scheduler_transcript_isolation_tests.rs"]

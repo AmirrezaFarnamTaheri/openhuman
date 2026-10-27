@@ -7,8 +7,8 @@ use tinyagents_harness::limits::RunLimits;
 use tinyagents_harness::middleware::{AgentRun, Middleware, ToolInvocationIdentity};
 use tinyagents_harness::runtime::{AgentHarness, RunPolicy};
 use tinyagents_harness::testkit::ScriptedModel;
-use tinyagents_harness::tool::packs::{PackRegistryHandle, UseSkillTool};
 use tinyagents_harness::tool::{CanonicalSharedToolAdapter, ToolRulePolicy};
+use tinyagents_harness_tools::skills::{PackRegistryHandle, UseSkillTool};
 use tinyinference_llm::message::Message;
 use tinyinference_llm::model::ModelResponse;
 use tinyinference_llm::tool::ToolCall;
@@ -84,14 +84,11 @@ async fn run(
     let mut request = ModelResponse::assistant("");
     request.message.tool_calls = vec![call];
     request.finish_reason = Some("tool_calls".to_owned());
-    harness.register_model(
-        "mock",
-        Arc::new(ScriptedModel::new(vec![
-            request,
-            ModelResponse::assistant("draft"),
-            ModelResponse::assistant("checked"),
-        ])),
-    );
+    harness.with_model(Arc::new(ScriptedModel::new(vec![
+        request,
+        ModelResponse::assistant("draft"),
+        ModelResponse::assistant("checked"),
+    ])));
     let mut policy = RunPolicy {
         limits: RunLimits::default().with_max_model_calls(10),
         ..RunPolicy::default()

@@ -59,14 +59,12 @@ export const HOSTED_GROUPS = [
   { group: "rust-cov-facades", lanes: ["rust-cov-facades"], maxParallel: 1, container: true },
   { group: "rust-cov-integrations", lanes: ["rust-cov-integrations"], maxParallel: 1, container: true },
   { group: "tauri", lanes: ["tauri"], maxParallel: 1, container: true },
-  // The storage drivers build the core with features no other lane enables,
-  // so they get a runner (and a `target/`) of their own.
-  {
-    group: "storage",
-    lanes: ["storage-drivers"],
-    maxParallel: 1,
-    container: true,
-  },
+  // The monolithic hosted storage runner exceeded the job timeout.
+  // Independently report E2E, library/cron and session-store suites without
+  // dropping any test. EX63 retains its original storage-drivers lane.
+  { group: "storage-e2e", lanes: ["storage-e2e"], maxParallel: 1, container: true },
+  { group: "storage-lib", lanes: ["storage-lib"], maxParallel: 1, container: true },
+  { group: "storage-session", lanes: ["storage-session"], maxParallel: 1, container: true },
   // pwsh ships on the bare ubuntu-latest image, not in the CI container.
   { group: "pester", lanes: ["pester"], maxParallel: 1, container: false },
 ];
@@ -81,10 +79,11 @@ const STORAGE_E2E_TARGETS = [
   "storage_approvals_e2e",
   "storage_domains_e2e",
   "storage_flows_e2e",
+  "storage_flows_fallback_e2e",
   "storage_secrets_e2e",
   "storage_scope_e2e",
   "storage_agent_scopes_e2e",
-  "storage_delegation_e2e",
+  "storage_legacy_profile_boot_e2e",
   "storage_default_import_e2e",
   "storage_desktop_upgrade_e2e",
   "storage_layout_migration_e2e",
@@ -318,10 +317,15 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
       checks: [
         {
           name: "pnpm-install",
-          // ex63: also for a core change, so rust-core-coverage's mock backend
-          // (scripts/mock-api-server.mjs imports `ws`) can start when no
-          // frontend file changed. One install per VM: lanes share a checkout.
-          when: areas.frontend || areas.i18n || areas.scripts || (ex63 && core),
+          // ex63: also whenever rust-core-coverage runs (a core or storage
+          // change), so its mock backend (scripts/mock-api-server.mjs imports
+          // `ws`) can start when no frontend file changed. One install per VM:
+          // lanes share a checkout.
+          when:
+            areas.frontend ||
+            areas.i18n ||
+            areas.scripts ||
+            (ex63 && (core || areas.storage)),
           run: "pnpm install --frozen-lockfile",
         },
         {
@@ -362,6 +366,18 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             : "pnpm --filter openhuman-app lint",
         },
         {
+          name: "browser-test-skip-guard",
+          when: areas.frontend,
+          needs: ["pnpm-install"],
+          run: "node scripts/ci/check-browser-test-skips.mjs",
+        },
+        {
+          name: "e2e-runner-ownership",
+          when: areas.frontend,
+          needs: ["pnpm-install"],
+          run: "pnpm e2e:ownership:check",
+        },
+        {
           name: "i18n",
           when: areas.i18n,
           needs: ["pnpm-install"],
@@ -377,7 +393,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           name: "scripts-self-tests",
           when: areas.scripts,
           needs: ["pnpm-install"],
-          run: "pnpm test:scripts",
+          run: "pnpm test:scripts && pnpm e2e:ownership:check && node scripts/ci/check-browser-test-skips.mjs",
         },
         {
           name: "python-script-tests",
@@ -421,7 +437,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
         // deps the mock backend needs itself (ex63 reuses frontend's install).
         {
           name: "pnpm-install",
-          when: !ex63 && core,
+            when: !ex63 && core,
           run: "pnpm install --frozen-lockfile",
         },
         {
@@ -447,6 +463,15 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             ...(ex63 ? { OH_COV_RUNNER: "nextest" } : {}),
           },
           run: "bash scripts/ci/rust-coverage.sh",
+        },
+        // ex63: lcov-core.info is written (even after a failed suite), so drop
+        // its ~90 GB of instrumented test executables and profiles before the
+        // next lanes build on the same 320 GB disk. No `needs`: it must run
+        // after a failure too.
+        {
+          name: "prune-coverage-binaries",
+          when: ex63 && (core || areas.storage),
+          run: "bash scripts/ci/self-hosted/prune-coverage-binaries.sh target/ci-private-coverage",
         },
       ],
     },
@@ -478,6 +503,13 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           when: core,
           run: "cargo check -p openhuman-embed --no-default-features",
         },
+        // Hosts such as Chottu run modules with neither legacy storage import
+        // nor the encrypted secrets file; both are gated separately.
+        {
+          name: "embed-check-no-default-modules",
+          when: core,
+          run: "bash scripts/ci-cancel-aware.sh cargo check -p openhuman-embed --no-default-features --features modules",
+        },
         // Consumers such as TinySweeper enable tracing without native modules.
         {
           name: "embed-check-no-default-langfuse",
@@ -504,9 +536,10 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           name: "embed-offline-examples",
           when: core,
           needs: ["test-modules"],
-          // Retain release-mode fleet benchmarking on the well provisioned
-          // private runner. Hosted PR CI tests the exact same behavior in
-          // debug; a cold release/LTO build exceeded its 30-minute timeout.
+          env: { RUST_MIN_STACK: "67108864" },
+          // Dev profile: the release-declared linux_fleet measurement then
+          // shares the plain dev build instead of a thin-LTO one nothing else
+          // can reuse (and that would need cleaning afterwards).
           run: ex63
             ? "node scripts/run-embed-examples.mjs"
             : "node scripts/run-embed-examples.mjs --ci-smoke",
@@ -533,9 +566,9 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features --lib --" +
             " core::all:: core::cli:: core::invoke:: core::session_expiry:: core::legacy_aliases:: core::runtime::" +
             " agent::session_host::runtime_session::tool_surface:: agent_registry::agents::loader:: commands::ops::tests:: memory::people::contacts_gate_tests::" +
-            " memory::layout_migration:: config::schema::load::source::tests::revision_loader_tests::" +
+            " doctor::checks:: core::schema_test_support:: memory::layout_migration:: config::schema::load::source::tests::revision_loader_tests::" +
             " openhuman::config:: openhuman::platform::socket::event_handlers:: tools::schemas:: tools::ops::tests::" +
-            " tools::sources::tests:: web_chat::run_task::tests::",
+            " tools::sources::tests:: web_chat::run_task::tests:: --test-threads=1",
         },
         {
           // Share one build for these disjoint test surfaces. Enable the
@@ -551,7 +584,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
             "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features" +
             " --features modules,mcp,e2e-test-support --lib --" +
             " modules::runtime:: modules::registry:: modules::storage_grant_tinywallet::" +
-            " modules::storage_grant_tinyconnectors::" +
+            " modules::storage_grant_tinyconnectors:: modules::tinyflows::" +
+            " doctor::checks::" +
             " cron::bus_host::tests:: cron::documents_port::tests::" +
             " mcp::server::resources:: test_support::introspect:: --test-threads=1",
         },
@@ -619,17 +653,19 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           when: areas.storage,
           needs: ["test-modules"],
           run:
-            `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS}` +
+            `cargo test --no-fail-fast -p openhuman-cli --features ${STORAGE_DRIVERS},flows,modules` +
             STORAGE_E2E_TARGETS.map((t) => ` --test ${t}`).join(""),
         },
         {
           name: "storage-lib-tests",
           when: areas.storage,
           needs: ["test-modules"],
-          run:
-            `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
-            STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join("") +
-            " --skip cron::bus_host::tests:: --skip cron::documents_port::tests::",
+          run: ex63
+            ? `cargo test -p openhuman --features ${STORAGE_DRIVERS} --lib --` +
+              STORAGE_LIB_FILTERS.map((f) => ` ${f}`).join("") +
+              " --skip cron::bus_host::tests:: --skip cron::documents_port::tests::"
+            : `bash scripts/ci/nextest-coverage.sh storage-lib-tests cargo nextest run --profile ci --no-tests=fail --no-fail-fast -p openhuman --features ${STORAGE_DRIVERS} --lib -E ` +
+              `'(${STORAGE_LIB_FILTERS.map((f) => `test(${f})`).join(" | ")}) & not test(cron::bus_host::tests::) & not test(cron::documents_port::tests::)'`,
         },
         {
           // TinyFlows owns a process-global module host during these tests.
@@ -690,6 +726,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
                 env: {
                   ...check.env,
                   OH_COV_SHARD: shard,
+                  ...(shard === "core" ? { OH_COV_RUNNER: "nextest" } : {}),
                   OUT: `ci-out/lcov/lcov-core-${shard}.info`,
                 },
               };
@@ -698,6 +735,35 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           }),
         };
       }),
+    );
+  }
+
+  // Hosted storage shards compile and run independently, each with an
+  // isolated native-module fixture. The private EX63 lane is unchanged.
+  if (!ex63) {
+    const storageIndex = lanes.findIndex((lane) => lane.name === "storage-drivers");
+    if (storageIndex < 0) throw new Error("missing storage driver lane");
+    const [storage] = lanes.splice(storageIndex, 1);
+    const shard = (name, names) => ({
+      ...storage,
+      name,
+      checks: storage.checks
+        .filter((check) => names.includes(check.name))
+        .map((check) =>
+          check.name === "test-modules"
+            ? {
+                ...check,
+                run: `bash scripts/ci/self-hosted/install-test-modules.sh "${laneModuleDir(name)}" ${laneModuleEnv(name)}`,
+              }
+            : check,
+        ),
+    });
+    lanes.splice(
+      storageIndex,
+      0,
+      shard("storage-e2e", ["test-modules", "storage-e2e"]),
+      shard("storage-lib", ["test-modules", "storage-lib-tests", "cron-module-tests"]),
+      shard("storage-session", ["storage-session-store-tests"]),
     );
   }
 

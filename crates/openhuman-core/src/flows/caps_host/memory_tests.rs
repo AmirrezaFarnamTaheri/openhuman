@@ -96,9 +96,15 @@ async fn recall_rejects_unknown_scope() {
 
 #[tokio::test]
 async fn remember_flow_scope_without_trusted_origin_errs() {
-    // No `turn_origin::current()` scoped — not running inside a flow.
+    // An ordinary CLI caller may pass the write gate, but has no trusted
+    // workflow identity with which to address flow-scoped memory.
     let (_tmp, adapter) = adapter(AutonomyLevel::Full);
-    let err = adapter.remember("flow", "k", json!("v")).await.unwrap_err();
+    let err = turn_origin::with_origin(
+        AgentTurnOrigin::Cli,
+        adapter.remember("flow", "k", json!("v")),
+    )
+    .await
+    .unwrap_err();
     assert!(err.to_string().contains("trusted Workflow-scoped origin"));
 }
 

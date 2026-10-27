@@ -133,20 +133,6 @@ pub fn client_config(config: &Config) -> tinymcp_bus::McpClientConfig {
     // when the config is opened (`module_port`), since they need an async call.
     client.stdio_sandbox = super::host_sandbox::stdio_sandbox(config);
 
-    // Registry-installed stdio servers are untrusted. TinyMCP deliberately
-    // refuses to launch them without a TinyBox jail. Supply a workspace-scoped
-    // jail with enforced isolation; never mark installed servers trusted or
-    // downgrade an unavailable sandbox to a direct subprocess launch.
-    client.stdio_sandbox = Some(tinymcp_bus::StdioSandboxConfig {
-        workspace: config.workspace_dir.to_string_lossy().into_owned(),
-        read_only: Vec::new(),
-        read_write: Vec::new(),
-        deny_read: Vec::new(),
-        allow_net: true,
-        allow_subprocess: true,
-        require_process_isolation: true,
-    });
-
     // GitBooks uses dedicated deferred tools and is not part of the configured
     // server set, so first-turn tool assembly never dials it for a catalog.
     client

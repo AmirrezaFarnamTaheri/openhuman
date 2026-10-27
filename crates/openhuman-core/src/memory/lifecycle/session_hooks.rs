@@ -96,11 +96,6 @@ pub(super) fn in_prompt_window(
 impl OpenHumanTurnPrelude {
     /// The context this session's turns run under, from the host environment
     /// bound at the start of the turn.
-    /// The connected-identities prompt section, read under the session's context.
-    pub(in crate::agent::session_host) fn connected_identities_md(&self) -> String {
-        crate::integrations::render_connected_identities(&self.dispatch_ctx())
-    }
-
     pub(in crate::agent::session_host) fn dispatch_ctx(&self) -> crate::core::runtime::DispatchCtx {
         crate::core::runtime::DispatchCtx::from_weak(self.host_env.core.as_ref())
     }
@@ -200,9 +195,14 @@ impl OpenHumanTurnPrelude {
         }))
     }
 
-    /// Logs the committed reply (spawned; never delays the commit) and
-    /// publishes `ConversationTurnCommitted`.
-    pub(super) fn memory_post_turn(&self, receipt: &CommitReceipt<OpenHumanRunContext>) {
+    /// Logs the committed reply (spawned; never delays the commit), queues a
+    /// plan that finished this turn's notes as learnings, and publishes
+    /// `ConversationTurnCommitted`.
+    pub(super) fn memory_post_turn(
+        &self,
+        receipt: &CommitReceipt<OpenHumanRunContext>,
+        finished_plan: Option<crate::agent::tinyagents::state_block::FinishedPlan>,
+    ) {
         let (user_text, pending) = {
             let mut mutable = self
                 .mutable
@@ -263,6 +263,16 @@ impl OpenHumanTurnPrelude {
                 pending.channel,
             )
             .await;
+            if let Some(finished) = finished_plan {
+                crate::memory::lifecycle::plan_notes::learn_plan_notes(
+                    config.clone(),
+                    &pending.identity,
+                    Some(prelude.action_dir.display().to_string()),
+                    &finished.plan,
+                    finished.goal.as_deref(),
+                )
+                .await;
+            }
         };
         self.dispatch_ctx()
             .spawn(deferred_memory_work(profile_context, work));

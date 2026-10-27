@@ -10,6 +10,7 @@ import {
   openhumanGetAutonomySettings,
   openhumanUpdateAgentSettings,
   openhumanUpdateAutonomySettings,
+  openhumanUpdateRuntimeSettings,
 } from '../../../../utils/tauriCommands';
 import AgentAccessPanel from '../AgentAccessPanel';
 
@@ -59,6 +60,11 @@ vi.mock('../../../../utils/tauriCommands', async () => {
   );
   return {
     ...actual,
+    openhumanGetConfig: vi.fn(async () => ({
+      result: { config: { shell: { hide_window: false } } },
+      logs: [],
+    })),
+    openhumanUpdateRuntimeSettings: vi.fn(async () => ({ result: { config: {} }, logs: [] })),
     isTauri: vi.fn(() => true),
     openhumanGetAutonomySettings: vi.fn(),
     openhumanUpdateAutonomySettings: vi.fn(),
@@ -86,6 +92,17 @@ const mockUpdate = vi.mocked(openhumanUpdateAutonomySettings);
 const mockGetAgent = vi.mocked(openhumanGetAgentSettings);
 const mockUpdateAgent = vi.mocked(openhumanUpdateAgentSettings);
 describe('AgentAccessPanel (advanced)', () => {
+  it('saves the shell window preference through runtime settings', async () => {
+    renderWithProviders(<AgentAccessPanel />);
+    const toggle = await screen.findByRole('switch', { name: 'Hide shell windows' });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(openhumanUpdateRuntimeSettings).toHaveBeenCalledWith({ shell_hide_window: true })
+    );
+    await waitFor(() => expect(toggle).toBeChecked());
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(isTauri).mockReturnValue(true);
@@ -93,6 +110,17 @@ describe('AgentAccessPanel (advanced)', () => {
     mockUpdate.mockResolvedValue({ result: {} as never, logs: [] });
     mockGetAgent.mockResolvedValue({ result: agentSettings(), logs: [] });
     mockUpdateAgent.mockResolvedValue({ result: {} as never, logs: [] });
+  });
+
+  it('keeps the shell preference unchanged when saving fails', async () => {
+    vi.mocked(openhumanUpdateRuntimeSettings).mockRejectedValueOnce(new Error('Save failed'));
+    renderWithProviders(<AgentAccessPanel />);
+    const toggle = await screen.findByRole('switch', { name: 'Hide shell windows' });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
+    await screen.findByText('Save failed');
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeEnabled();
   });
 
   it('loads settings on mount and renders the advanced controls', async () => {
@@ -107,6 +135,34 @@ describe('AgentAccessPanel (advanced)', () => {
     expect(screen.getByText('Granted folders')).toBeInTheDocument();
     expect(screen.getByText('Always-allowed tools')).toBeInTheDocument();
     expect(screen.getByText('Files folder')).toBeInTheDocument();
+  });
+
+  it('adds a tool without dropping existing permissions and ignores duplicate submission', async () => {
+    mockGet.mockResolvedValue({ result: autonomy({ auto_approve: ['file_write'] }), logs: [] });
+    renderWithProviders(<AgentAccessPanel />);
+    const input = await screen.findByRole('textbox', { name: 'Always-allowed tools' });
+    fireEvent.change(input, { target: { value: ' shell ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ auto_approve: ['file_write', 'shell'] })
+      )
+    );
+    await waitFor(() => expect(input).toBeEnabled());
+    fireEvent.change(input, { target: { value: 'shell' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores the allowlist and input when adding a tool fails', async () => {
+    mockUpdate.mockRejectedValueOnce(new Error('Permission save failed'));
+    renderWithProviders(<AgentAccessPanel />);
+    const input = await screen.findByRole('textbox', { name: 'Always-allowed tools' });
+    fireEvent.change(input, { target: { value: 'shell' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await screen.findByText('Permission save failed');
+    expect(input).toHaveValue('shell');
+    expect(screen.queryByText('shell')).not.toBeInTheDocument();
   });
 
   it('toggling "confine to workspace" persists workspace_only', async () => {
@@ -126,7 +182,7 @@ describe('AgentAccessPanel (advanced)', () => {
     fireEvent.change(screen.getByLabelText('Absolute folder path'), {
       target: { value: '/tmp/proj' },
     });
-    fireEvent.click(screen.getByText('Add'));
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ trusted_roots: [{ path: '/tmp/proj', access: 'read' }] })
