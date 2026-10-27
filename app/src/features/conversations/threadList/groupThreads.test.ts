@@ -78,15 +78,16 @@ describe('groupThreads', () => {
       NOW
     );
 
-    const sections = groups.map(group => [
-      group.key,
-      group.label,
-      group.threads.map(row => row.id),
+    expect(groups.map(group => group.key)).toEqual([
+      'project:/work/alpha/repo',
+      'project:/work/beta/repo',
+      'today',
     ]);
-    expect(sections).toEqual([
-      ['project:/work/alpha/repo', 'repo', ['project-a', 'project-a2']],
-      ['project:/work/beta/repo', 'repo', ['project-b']],
-      ['today', undefined, ['general']],
+    expect(groups.map(group => group.label)).toEqual(['repo', 'repo', undefined]);
+    expect(groups.map(group => group.threads.map(row => row.id))).toEqual([
+      ['project-a', 'project-a2'],
+      ['project-b'],
+      ['general'],
     ]);
   });
 
