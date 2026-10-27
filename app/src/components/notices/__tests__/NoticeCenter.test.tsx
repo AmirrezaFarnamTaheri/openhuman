@@ -1,11 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import userErrorsReducer, { reportUserError } from '../../../store/userErrorsSlice';
+import userErrorsReducer, { dismissUserError, reportUserError } from '../../../store/userErrorsSlice';
 import type { UserErrorDescriptor } from '../../../types/userError';
 import NoticeCenter from '../NoticeCenter';
 
@@ -58,6 +58,9 @@ function renderCenter(descriptors: UserErrorDescriptor[] = []) {
   const tree = () => (
     <Provider store={store}>
       <MemoryRouter initialEntries={['/chat']}>
+        <div data-app-focus-fallback tabIndex={-1} data-testid="notice-fallback">
+          <button type="button">Resume work</button>
+        </div>
         <NoticeCenter />
         <LocationProbe />
       </MemoryRouter>
@@ -103,6 +106,48 @@ describe('NoticeCenter', () => {
 
     const panel = screen.getByTestId('notice-panel');
     expect(within(panel).getByText('API key required')).toBeInTheDocument();
+  });
+
+
+  it('focuses the close control when opened and restores focus to the bell on close', async () => {
+    renderCenter([keyError]);
+    const trigger = screen.getByTestId('notice-trigger');
+
+    await userEvent.click(trigger);
+    expect(screen.getByTestId('notice-close')).toHaveFocus();
+
+    await userEvent.click(screen.getByTestId('notice-close'));
+    expect(screen.queryByTestId('notice-panel')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('restores the previously focused app control when final dismissal removes the bell', async () => {
+    renderCenter([keyError]);
+    const previous = screen.getByRole('button', { name: 'Resume work' });
+    previous.focus();
+    await userEvent.click(screen.getByTestId('notice-trigger'));
+    await userEvent.click(screen.getByTestId('notice-dismiss'));
+    expect(screen.queryByTestId('notice-center')).not.toBeInTheDocument();
+    expect(previous).toHaveFocus();
+  });
+
+  it('falls back to persistent app content if the previous control was unmounted', async () => {
+    renderCenter([keyError]);
+    const previous = screen.getByRole('button', { name: 'Resume work' });
+    previous.focus();
+    await userEvent.click(screen.getByTestId('notice-trigger'));
+    previous.remove();
+    await userEvent.click(screen.getByTestId('notice-dismiss'));
+    expect(screen.getByTestId('notice-fallback')).toHaveFocus();
+  });
+
+  it('does not steal focus when notices disappear while work has focus outside the panel', async () => {
+    const { store } = renderCenter([keyError]);
+    await userEvent.click(screen.getByTestId('notice-trigger'));
+    const previous = screen.getByRole('button', { name: 'Resume work' });
+    previous.focus();
+    act(() => store.dispatch(dismissUserError({ id: keyError.id })));
+    expect(previous).toHaveFocus();
   });
 
   it('raises the usage limit as a notice that cannot be dismissed at the limit', async () => {
