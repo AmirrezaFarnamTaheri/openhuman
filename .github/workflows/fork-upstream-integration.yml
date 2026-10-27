@@ -83,6 +83,16 @@ jobs:
             exit 1
           fi
           # Historical upstream patch files intentionally preserve whitespace as exact diffs.
+          # GitHub Actions' GITHUB_TOKEN cannot push commits changing workflow files.
+          # Keep fork workflow paths at HEAD for this history merge; apply reviewed
+          # workflow deltas using the authorized GitHub connector afterwards.
+          git restore --source=HEAD --staged --worktree -- .github/workflows
+          git diff --cached --name-only -- .github/workflows > /tmp/upstream-merge-report/workflow-changes.txt
+          if [ -s /tmp/upstream-merge-report/workflow-changes.txt ]; then
+            echo "::error::Workflow changes remain staged and cannot be pushed with GITHUB_TOKEN"
+            cat /tmp/upstream-merge-report/workflow-changes.txt
+            exit 1
+          fi
           git diff --cached --check -- . ':!docs/handoffs/*.patch'
           python3 -m json.tool app/package.json >/dev/null
           python3 -m json.tool crates/openhuman-app/tauri.conf.json >/dev/null
