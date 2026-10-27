@@ -514,26 +514,63 @@ fn attach_workflow_proposal(
     summary
 }
 
+/// The part of a finished child's history this run produced. A reused session
+/// starts from its stored history (`seed_len` messages, the follow-up prompt
+/// included) and returns it whole, so an earlier turn's proposal or save would
+/// otherwise be found again: re-persisted as a duplicate proposal message, or
+/// recorded against a later proposal. A history shorter than its seed (it was
+/// compacted) cannot be split and is used whole, as before.
+pub(crate) fn this_run_history(
+    history: &[TranscriptMessage],
+    seed_len: usize,
+) -> &[TranscriptMessage] {
+    match history.get(seed_len..) {
+        Some(run) => run,
+        None => {
+            log::debug!(
+                "[spawn_subagent] history ({} messages) shorter than its seed ({seed_len}); using it whole",
+                history.len()
+            );
+            history
+        }
+    }
+}
+
 /// The flow a finished child persisted from a proposal: the LAST
 /// `workflow_created` (`create_workflow`) or `workflow_saved` (`save_workflow`)
-/// tool result, as `(flow_id, name)`.
+/// tool result, as `(flow_id, name)`. `None` when the run produced a proposal
+/// after that save: the save then belongs to an earlier graph, not to the
+/// revision now in front of the user.
 pub(crate) fn extract_saved_workflow_from_history(
     history: &[TranscriptMessage],
 ) -> Option<(String, String)> {
-    history
-        .iter()
-        .rev()
-        .filter(|message| message.role == "tool")
-        .find_map(|message| {
-            let value: serde_json::Value = serde_json::from_str(message.content.trim()).ok()?;
-            let kind = value.get("type").and_then(|t| t.as_str())?;
-            if kind != "workflow_created" && kind != "workflow_saved" {
-                return None;
-            }
-            let flow_id = value.get("flow_id").and_then(|v| v.as_str())?;
-            let name = value.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            Some((flow_id.to_string(), name.to_string()))
-        })
+    let tool_payload = |message: &TranscriptMessage| -> Option<serde_json::Value> {
+        (message.role == "tool")
+            .then(|| serde_json::from_str(message.content.trim()).ok())
+            .flatten()
+    };
+    let kind_of = |value: &serde_json::Value| -> Option<String> {
+        value
+            .get("type")
+            .and_then(|t| t.as_str())
+            .map(str::to_string)
+    };
+    let (save_at, saved) = history.iter().enumerate().rev().find_map(|(at, message)| {
+        let value = tool_payload(message)?;
+        let kind = kind_of(&value)?;
+        (kind == "workflow_created" || kind == "workflow_saved").then_some((at, value))
+    })?;
+    let proposed_later = history[save_at + 1..].iter().any(|message| {
+        tool_payload(message)
+            .and_then(|value| kind_of(&value))
+            .is_some_and(|kind| kind == "workflow_proposal")
+    });
+    if proposed_later {
+        return None;
+    }
+    let flow_id = saved.get("flow_id").and_then(|v| v.as_str())?;
+    let name = saved.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    Some((flow_id.to_string(), name.to_string()))
 }
 
 /// A flow the agent persisted from a delivered proposal (the user said "save

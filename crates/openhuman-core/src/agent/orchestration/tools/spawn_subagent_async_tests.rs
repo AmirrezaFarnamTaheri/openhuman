@@ -327,6 +327,74 @@ fn an_agent_save_of_another_workflow_leaves_the_proposal_alone() {
 }
 
 #[test]
+fn a_save_followed_by_a_revision_does_not_settle_the_revision() {
+    // The run saved "Digest", then proposed a revised "Digest": the earlier
+    // save must not be recorded on the revision, or the card would enable the
+    // old flow and drop the revised graph.
+    let history = vec![
+        TranscriptMessage::tool(
+            r#"{"type":"workflow_saved","flow_id":"flow-old","name":"Digest","enabled":true}"#,
+        ),
+        TranscriptMessage::tool(
+            r#"{"type":"workflow_proposal","persisted":false,"name":"Digest","graph":{"nodes":[],"edges":[]}}"#,
+        ),
+    ];
+    assert!(extract_saved_workflow_from_history(&history).is_none());
+}
+
+#[test]
+fn a_reused_session_settles_the_delivered_proposal_without_duplicating_it() {
+    // Turn 1 delivered the proposal; the continuation (same task_key) only
+    // saved it. The runner returns the whole session history, turn 1 included.
+    let temp = thread_with_delivered_proposal("Friday Inbox Wrap-up");
+    let seed = vec![
+        TranscriptMessage::user("build it"),
+        TranscriptMessage::tool(
+            r#"{"type":"workflow_proposal","persisted":false,"name":"Friday Inbox Wrap-up","graph":{"nodes":[],"edges":[]}}"#,
+        ),
+        TranscriptMessage::user("save it"),
+    ];
+    let mut full = seed.clone();
+    full.push(TranscriptMessage::tool(
+        r#"{"type":"workflow_created","flow_id":"flow-1","name":"Friday Inbox Wrap-up","enabled":false}"#,
+    ));
+
+    let summary = attach_workflow_proposal(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        temp.path(),
+        Some("thread-parent"),
+        "sub-save",
+        "workflow_builder",
+        this_run_history(&full, seed.len()),
+        "saved".to_string(),
+    );
+
+    // Turn 1's proposal is not re-delivered or re-persisted...
+    assert!(!summary.contains("[workflow_proposal]"));
+    let messages = conversations::get_messages(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        temp.path().to_path_buf(),
+        "thread-parent",
+    )
+    .expect("messages");
+    assert!(!messages
+        .iter()
+        .any(|m| m.id == "workflow-proposal:sub-save"));
+    // ...and the save settles the proposal the card shows.
+    assert_eq!(
+        delivered_proposal_metadata(&temp)["saved_flow_id"],
+        "flow-1"
+    );
+}
+
+#[test]
+fn a_history_shorter_than_its_seed_is_used_whole() {
+    let history = vec![TranscriptMessage::user("compacted")];
+    assert_eq!(this_run_history(&history, 3).len(), 1);
+    assert!(this_run_history(&history, 1).is_empty());
+}
+
+#[test]
 fn attach_workflow_proposal_without_proposal_returns_summary_unchanged() {
     let temp = tempfile::tempdir().expect("tempdir");
     let summary = attach_workflow_proposal(

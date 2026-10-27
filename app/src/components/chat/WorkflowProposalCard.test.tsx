@@ -430,6 +430,20 @@ describe('WorkflowProposalCard', () => {
     expect(mockGetThreadMessages).toHaveBeenCalledWith('t1');
   });
 
+  it('does not persist when it cannot check for an already-saved flow', async () => {
+    mockGetThreadMessages.mockRejectedValueOnce(new Error('core unavailable'));
+    render(
+      <WorkflowProposalCard
+        threadId="t1"
+        proposal={proposal({ sourceMessageId: 'workflow-proposal:sub-1' })}
+      />
+    );
+    fireEvent.click(screen.getByText('chat.flowProposal.save'));
+    await waitFor(() => expect(screen.getByText(/chat\.flowProposal\.error/)).toBeInTheDocument());
+    expect(mockCreateFlow).not.toHaveBeenCalled();
+    expect(mockUpdateFlow).not.toHaveBeenCalled();
+  });
+
   it('resumes at the enable step for a proposal whose flow was already saved', async () => {
     render(<WorkflowProposalCard threadId="t1" proposal={proposal({ savedFlowId: 'f1' })} />);
     fireEvent.click(screen.getByText('chat.flowProposal.save'));

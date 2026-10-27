@@ -298,6 +298,7 @@ impl SpawnSubagentTool {
                 driver_store.clone(),
                 resumed_session.subagent_session_id.clone(),
                 parent_thread_id.clone(),
+                0,
             );
             let options = SubagentRunOptions {
                 skill_filter_override: checkpoint.skill_filter_override,
@@ -652,6 +653,9 @@ impl SpawnSubagentTool {
         let registration_parent_session = parent_session.clone();
         let registration_agent_id = definition.id.clone();
         let registration_task_id = task_id.clone();
+        // A reused session's run starts from its stored history; only what
+        // this run adds may be read for its proposals and saves.
+        let seed_len = initial_history.as_ref().map_or(0, Vec::len);
         let completion = completion::make_completion(
             completion_core,
             completion_origin,
@@ -667,6 +671,7 @@ impl SpawnSubagentTool {
             background_store,
             background_subagent_session_id,
             background_parent_thread_id,
+            seed_len,
         );
         let background_prompt = add_background_contract(&prompt);
         let options = SubagentRunOptions {

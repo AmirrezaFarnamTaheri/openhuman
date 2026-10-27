@@ -237,18 +237,14 @@ const WorkflowProposalCard: React.FC<Props> = ({ threadId, proposal, onSaved }) 
    * message (`saved_flow_id`): by an earlier save from this card, or by the
    * agent when the user asked for the save in chat. Read fresh before
    * persisting, since an agent-side save never reaches this card's state.
-   * `null` when nothing is recorded or the read fails.
+   * `null` when nothing is recorded; a failed read throws, because treating it
+   * as "nothing recorded" could create a second copy of a saved flow.
    */
   const recordedSavedFlowId = async (): Promise<string | null> => {
     if (!proposal.sourceMessageId) return null;
-    try {
-      const { messages } = await threadApi.getThreadMessages(threadId);
-      const meta = messages.find(m => m.id === proposal.sourceMessageId)?.extraMetadata;
-      return typeof meta?.saved_flow_id === 'string' ? meta.saved_flow_id : null;
-    } catch (e) {
-      log('recordedSavedFlowId read failed (non-fatal): %o', e);
-      return null;
-    }
+    const { messages } = await threadApi.getThreadMessages(threadId);
+    const meta = messages.find(m => m.id === proposal.sourceMessageId)?.extraMetadata;
+    return typeof meta?.saved_flow_id === 'string' ? meta.saved_flow_id : null;
   };
 
   const markCompleted = (flowId: string) => {
@@ -298,7 +294,15 @@ const WorkflowProposalCard: React.FC<Props> = ({ threadId, proposal, onSaved }) 
     let flowId = savedFlowId;
     let flowPersisted = flowId !== null;
     if (!flowId) {
-      const recorded = await recordedSavedFlowId();
+      let recorded: string | null;
+      try {
+        recorded = await recordedSavedFlowId();
+      } catch (e) {
+        log('save: could not check for an already-saved flow — not persisting: %o', e);
+        setErrorMsg(t('chat.flowProposal.error'));
+        setSaving(false);
+        return;
+      }
       if (recorded) {
         log('save: flow %s already saved for this proposal — resuming at enable', recorded);
         flowId = recorded;
