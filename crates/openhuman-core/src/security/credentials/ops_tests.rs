@@ -88,3 +88,5 @@ mod credential_per_user_storage_tests;
 mod credential_tests;
 #[path = "ops_provider_oauth_tests.rs"]
 mod provider_oauth_tests;
+#[path = "ops_provider_account_activation_tests.rs"]
+mod provider_account_activation_tests;
