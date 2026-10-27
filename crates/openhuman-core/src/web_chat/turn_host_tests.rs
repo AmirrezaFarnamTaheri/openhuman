@@ -181,15 +181,16 @@ async fn a_late_subagent_failure_is_published_after_the_runner_is_gone() {
     assert_eq!(wire["success"], false);
 }
 
-/// A detached sub-agent usually finishes after its parent turn replied. Its
-/// completion still reaches the web stream, with the child's output, so the
-/// card settles instead of staying on "Working".
+/// A child's completion can queue behind a backlog the runner never reads: at
+/// turn end the runner closes its full channel and drains only what is already
+/// buffered. The completion still reaches the web stream, with the child's
+/// output, so the card settles instead of staying on "Working".
 #[cfg(all(feature = "channels", feature = "modules"))]
 #[tokio::test]
-async fn a_late_subagent_completion_is_published_after_the_runner_is_gone() {
+async fn a_completion_queued_behind_a_full_runner_channel_is_still_published() {
     let mut bus = crate::web_chat::subscribe_web_channel_events();
     let (agent_tx, agent_rx) = mpsc::channel(8);
-    let (runner_tx, runner_rx) = mpsc::channel(1);
+    let (runner_tx, mut runner_rx) = mpsc::channel(1);
     let (drained_tx, _drained_rx) = watch::channel(false);
     let _tap = tap_progress(
         &DispatchCtx::ambient(),
@@ -204,7 +205,8 @@ async fn a_late_subagent_completion_is_published_after_the_runner_is_gone() {
             config: crate::config::Config::default(),
         }),
     );
-    drop(runner_rx);
+    // TurnStarted fills the one-slot runner channel, so the tap blocks on it
+    // with the completion still behind it.
     agent_tx.send(AgentProgress::TurnStarted).await.unwrap();
     agent_tx
         .send(AgentProgress::SubagentCompleted {
@@ -222,6 +224,9 @@ async fn a_late_subagent_completion_is_published_after_the_runner_is_gone() {
         })
         .await
         .unwrap();
+    // The turn ends: the runner closes its channel and drains the buffer.
+    runner_rx.close();
+    while runner_rx.try_recv().is_ok() {}
     let event = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let event = bus.recv().await.expect("event bus");
