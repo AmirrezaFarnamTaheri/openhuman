@@ -220,7 +220,7 @@ pub(super) fn spawn_native_progress(
     mut events: mpsc::Receiver<AgentProgress>,
     reply: std::sync::Arc<NativeProgressiveReply>,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+    crate::core::runtime::DispatchCtx::ambient().spawn(async move {
         let mut failed = false;
         while let Some(progress) = events.recv().await {
             let Some(event) = output_event(progress) else {
