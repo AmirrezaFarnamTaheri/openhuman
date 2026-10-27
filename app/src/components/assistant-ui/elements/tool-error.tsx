@@ -12,7 +12,7 @@
  *   `features/conversations/aui/ToolFailureCard.tsx`, the only caller.
  */
 import { cn } from '@/components/assistant-ui/lib/utils';
-import { Button } from '@/components/assistant-ui/ui/button';
+import { Button } from '@/components/ui';
 import { AlertCircleIcon, Loader2Icon, RotateCwIcon } from 'lucide-react';
 import type { ComponentProps } from 'react';
 
@@ -83,12 +83,12 @@ export function ToolError({
       {onRetry || onSkip ? (
         <div className="flex items-center justify-end gap-2">
           {onSkip ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onSkip}>
+            <Button type="button" variant="tertiary" size="sm" onClick={onSkip}>
               {skipLabel}
             </Button>
           ) : null}
           {onRetry ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onRetry} disabled={retrying}>
+            <Button type="button" variant="tertiary" size="sm" onClick={onRetry} disabled={retrying}>
               {retrying ? (
                 <Loader2Icon className="size-3 animate-spin motion-reduce:animate-none" />
               ) : (
