@@ -414,6 +414,12 @@ pub(crate) fn upgrade_if_needed(path: &Path) -> Result<(), StorageError> {
     }
     check_integrity(&conn)?;
     let before = inventory(&conn)?;
+    // A peer can update a record without changing row counts. SQLite
+    // data_version catches that write between the consistent snapshot and
+    // our exclusive migration transaction.
+    let version_before: i64 = conn
+        .query_row("PRAGMA data_version", [], |row| row.get(0))
+        .map_err(|e| error("read source version", e))?;
     let rollback_copy = backup(&conn, &file, &before)?;
     conn.execute_batch("BEGIN IMMEDIATE")
         .map_err(|e| error("lock database for upgrade", e))?;
