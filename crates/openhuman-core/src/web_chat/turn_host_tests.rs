@@ -133,6 +133,7 @@ async fn a_dropped_runner_stops_the_tap() {
 /// A detached sub-agent that fails after its parent turn has finished (a child
 /// aborted by `subagent_cancel`) still settles its card: the tap keeps running
 /// past the runner and publishes the failure under the turn's ids.
+#[cfg(all(feature = "channels", feature = "modules"))]
 #[tokio::test]
 async fn a_late_subagent_failure_is_published_after_the_runner_is_gone() {
     let mut bus = crate::web_chat::subscribe_web_channel_events();
@@ -149,6 +150,7 @@ async fn a_late_subagent_failure_is_published_after_the_runner_is_gone() {
             client_id: "late-client".into(),
             thread_id: "late-thread".into(),
             request_id: "late-request".into(),
+            config: crate::config::Config::default(),
         }),
     );
     drop(runner_rx);
@@ -177,6 +179,66 @@ async fn a_late_subagent_failure_is_published_after_the_runner_is_gone() {
     let wire = serde_json::to_value(&event).expect("wire event");
     assert_eq!(wire["skill_id"], "task-late");
     assert_eq!(wire["success"], false);
+}
+
+/// A detached sub-agent usually finishes after its parent turn replied. Its
+/// completion still reaches the web stream, with the child's output, so the
+/// card settles instead of staying on "Working".
+#[cfg(all(feature = "channels", feature = "modules"))]
+#[tokio::test]
+async fn a_late_subagent_completion_is_published_after_the_runner_is_gone() {
+    let mut bus = crate::web_chat::subscribe_web_channel_events();
+    let (agent_tx, agent_rx) = mpsc::channel(8);
+    let (runner_tx, runner_rx) = mpsc::channel(1);
+    let (drained_tx, _drained_rx) = watch::channel(false);
+    let _tap = tap_progress(
+        &DispatchCtx::ambient(),
+        agent_rx,
+        runner_tx,
+        TurnActivity::default(),
+        drained_tx,
+        Some(LateSubagentSink {
+            client_id: "late-done-client".into(),
+            thread_id: "late-done-thread".into(),
+            request_id: "late-done-request".into(),
+            config: crate::config::Config::default(),
+        }),
+    );
+    drop(runner_rx);
+    agent_tx.send(AgentProgress::TurnStarted).await.unwrap();
+    agent_tx
+        .send(AgentProgress::SubagentCompleted {
+            agent_id: "workflow_builder".into(),
+            task_id: "task-late-done".into(),
+            elapsed_ms: 10,
+            iterations: 2,
+            output_chars: 12,
+            usage: None,
+            output: "final answer".into(),
+            worktree_path: None,
+            changed_files: Vec::new(),
+            dirty_status: None,
+            stop: None,
+        })
+        .await
+        .unwrap();
+    let event = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let event = bus.recv().await.expect("event bus");
+            if event.context().request_id == "late-done-request" {
+                return event;
+            }
+        }
+    })
+    .await
+    .expect("the late completion is published");
+    assert_eq!(event.event_name(), "subagent_completed");
+    assert_eq!(event.context().client_id, "late-done-client");
+    assert_eq!(event.context().thread_id, "late-done-thread");
+    let wire = serde_json::to_value(&event).expect("wire event");
+    assert_eq!(wire["skill_id"], "task-late-done");
+    assert_eq!(wire["success"], true);
+    assert_eq!(wire["subagent"]["output"], "final answer");
 }
 
 #[tokio::test]
