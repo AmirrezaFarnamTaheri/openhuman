@@ -29,9 +29,11 @@ const OLD_TABLES: &[&str] = &[
 ];
 
 fn database_path(path: &Path) -> PathBuf {
-    if path.extension().and_then(|s| s.to_str()).is_some_and(|s| {
-        s.eq_ignore_ascii_case("db") || s.eq_ignore_ascii_case("sqlite")
-    }) {
+    if path
+        .extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|s| s.eq_ignore_ascii_case("db") || s.eq_ignore_ascii_case("sqlite"))
+    {
         path.to_path_buf()
     } else {
         path.join("storage.db")
@@ -80,14 +82,20 @@ fn inventory(conn: &Connection) -> Result<BTreeMap<&'static str, i64>, StorageEr
             )));
         }
         let count: i64 = conn
-            .query_row(&format!("SELECT count(*) FROM \"{table}\""), [], |row| row.get(0))
+            .query_row(&format!("SELECT count(*) FROM \"{table}\""), [], |row| {
+                row.get(0)
+            })
             .map_err(|e| error("inventory", e))?;
         counts.insert(table, count);
     }
     Ok(counts)
 }
 
-fn backup(conn: &Connection, file: &Path, before: &BTreeMap<&str, i64>) -> Result<PathBuf, StorageError> {
+fn backup(
+    conn: &Connection,
+    file: &Path,
+    before: &BTreeMap<&str, i64>,
+) -> Result<PathBuf, StorageError> {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_nanos());
@@ -98,7 +106,9 @@ fn backup(conn: &Connection, file: &Path, before: &BTreeMap<&str, i64>) -> Resul
     );
     let path = file.with_file_name(name);
     if path.exists() {
-        return Err(StorageError::backend("SQLite backup already exists; migration stopped"));
+        return Err(StorageError::backend(
+            "SQLite backup already exists; migration stopped",
+        ));
     }
     conn.execute("VACUUM INTO ?1", [path.to_string_lossy().as_ref()])
         .map_err(|e| error("create consistent pre-upgrade backup", e))?;
@@ -256,10 +266,11 @@ fn copy_documents(conn: &Connection, now_ms: i64) -> Result<(), StorageError> {
         let body: String = row.get(4).map_err(|e| error("document body", e))?;
         let doc: Value = serde_json::from_str(&body)
             .map_err(|e| error("invalid historical document JSON", e))?;
-        let created = legacy_time(&doc, &["created_ms", "created_at", "createdAt"])
-            .unwrap_or(now_ms);
+        let created =
+            legacy_time(&doc, &["created_ms", "created_at", "createdAt"]).unwrap_or(now_ms);
         let updated = legacy_time(&doc, &["updated_ms", "updated_at", "updatedAt"])
-            .unwrap_or(created).max(created);
+            .unwrap_or(created)
+            .max(created);
         let expires = specs
             .get(&coll)
             .and_then(|spec| spec.ttl_field.as_deref())
@@ -272,10 +283,15 @@ fn copy_documents(conn: &Connection, now_ms: i64) -> Result<(), StorageError> {
         )
         .map_err(|e| error("copy document", e))?;
         if let Some(spec) = specs.get(&coll) {
-            let paths: BTreeSet<&str> = spec.indexes
+            let paths: BTreeSet<&str> = spec
+                .indexes
                 .iter()
                 .flat_map(|index| index.fields.iter().map(String::as_str))
-                .chain(spec.search.iter().flat_map(|search| search.fields.iter().map(String::as_str)))
+                .chain(
+                    spec.search
+                        .iter()
+                        .flat_map(|search| search.fields.iter().map(String::as_str)),
+                )
                 .collect();
             for path in paths {
                 if let Some(found) = value::lookup(&doc, path) {
@@ -294,7 +310,8 @@ fn copy_documents(conn: &Connection, now_ms: i64) -> Result<(), StorageError> {
 
 fn copy_blobs(conn: &Connection) -> Result<(), StorageError> {
     let expiry = if has_column(conn, "_tsd_blobs", "expires_at_ms")
-        .map_err(|e| error("inspect historical blob expiry", e))? {
+        .map_err(|e| error("inspect historical blob expiry", e))?
+    {
         "expires_at_ms"
     } else {
         "NULL"
@@ -311,13 +328,20 @@ fn copy_blobs(conn: &Connection) -> Result<(), StorageError> {
         let content_type: Option<String> = row.get(2).map_err(|e| error("blob media type", e))?;
         let bytes: Vec<u8> = row.get(3).map_err(|e| error("blob bytes", e))?;
         let expires: Option<i64> = row.get(4).map_err(|e| error("blob expiry", e))?;
-        let size = i64::try_from(bytes.len())
-            .map_err(|e| error("blob size", e))?;
+        let size = i64::try_from(bytes.len()).map_err(|e| error("blob size", e))?;
         let digest: [u8; 32] = Sha256::digest(&bytes).into();
         conn.execute(
             "INSERT INTO blobs (scope,key,content_type,size,sha256,expires_ms,bytes)
              VALUES (?1,?2,?3,?4,?5,?6,?7)",
-            params![scope, key, content_type, size, digest.to_vec(), expires, bytes],
+            params![
+                scope,
+                key,
+                content_type,
+                size,
+                digest.to_vec(),
+                expires,
+                bytes
+            ],
         )
         .map_err(|e| error("copy blob", e))?;
     }
@@ -325,8 +349,10 @@ fn copy_blobs(conn: &Connection) -> Result<(), StorageError> {
 }
 
 fn count(conn: &Connection, table: &str) -> Result<i64, StorageError> {
-    conn.query_row(&format!("SELECT count(*) FROM \"{table}\""), [], |row| row.get(0))
-        .map_err(|e| error("verify migrated table", e))
+    conn.query_row(&format!("SELECT count(*) FROM \"{table}\""), [], |row| {
+        row.get(0)
+    })
+    .map_err(|e| error("verify migrated table", e))
 }
 
 fn convert(conn: &Connection, before: &BTreeMap<&str, i64>) -> Result<(), StorageError> {
@@ -343,7 +369,8 @@ fn convert(conn: &Connection, before: &BTreeMap<&str, i64>) -> Result<(), Storag
     )
     .map_err(|e| error("copy tombstones, search and streams", e))?;
     let sealed = if has_column(conn, "_tsd_stream_meta", "sealed")
-        .map_err(|e| error("inspect stream seal", e))? {
+        .map_err(|e| error("inspect stream seal", e))?
+    {
         "sealed"
     } else {
         "0"
