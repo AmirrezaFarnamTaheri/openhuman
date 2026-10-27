@@ -14,7 +14,7 @@ def run(*args):
     return subprocess.check_output(args, text=True).strip()
 
 CONFLICT = re.compile(
-    r"(?ms)^<<<<<<< HEAD\n(?P<ours>.*?)^\\|\\|\\|\\|\\|\\|\\|[^\n]*\n"
+    r"(?ms)^<<<<<<< HEAD\n(?P<ours>.*?)^[|]{7}[^\n]*\n"
     r"(?P<base>.*?)^=======\n(?P<theirs>.*?)^>>>>>>>[^\n]*\n"
 )
 # Choices correspond to the October 27 recorded zdiff3 conflict inventory.
