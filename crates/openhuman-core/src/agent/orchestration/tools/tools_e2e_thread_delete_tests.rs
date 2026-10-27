@@ -13,7 +13,6 @@ async fn deleting_parent_thread_cancels_driver_child_before_discarding_completio
 
     struct GatedModel {
         started: tokio::sync::mpsc::Sender<()>,
-        release: Arc<tokio::sync::Notify>,
     }
 
     #[async_trait]
@@ -34,8 +33,7 @@ async fn deleting_parent_thread_cancels_driver_child_before_discarding_completio
             _request: ModelRequest,
         ) -> tinyinference_llm::Result<ModelResponse> {
             let _ = self.started.send(()).await;
-            self.release.notified().await;
-            Ok(ModelResponse::assistant("child released after delete"))
+            std::future::pending().await
         }
     }
 
@@ -45,10 +43,8 @@ async fn deleting_parent_thread_cancels_driver_child_before_discarding_completio
     let thread_id = "delete-live-driver-parent-thread";
     let parent_session = "delete-live-driver-parent-session";
     let (started_tx, mut started_rx) = tokio::sync::mpsc::channel(1);
-    let release = Arc::new(tokio::sync::Notify::new());
     let provider = Arc::new(GatedModel {
         started: started_tx,
-        release: release.clone(),
     });
     let mut parent = parent_context(&workspace, provider, vec![]);
     let workspace_descriptor = tinytools::WorkspaceDescriptor::new(workspace.clone());
@@ -183,18 +179,6 @@ async fn deleting_parent_thread_cancels_driver_child_before_discarding_completio
         1,
         "the deletion starts with a queued child completion"
     );
-    let release_on_cancel = {
-        let release = release.clone();
-        tokio::spawn(async move {
-            // Give thread deletion time to request cancellation and enter its
-            // settlement wait. The running snapshot stays `Running` until the
-            // provider unwinds, so the cancellation request itself is not
-            // observable through the public job snapshot.
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            release.notify_one();
-        })
-    };
-
     tokio::time::timeout(
         std::time::Duration::from_secs(6),
         crate::threads::ops::thread_delete(
@@ -261,9 +245,6 @@ async fn deleting_parent_thread_cancels_driver_child_before_discarding_completio
         background_completions::pending_for(&workspace, thread_id).is_empty(),
         "terminal driver owners do not prevent queued completions from being discarded"
     );
-    release_on_cancel
-        .await
-        .expect("cancellation-aware child release task completes");
 }
 
 #[tokio::test]
@@ -520,7 +501,6 @@ async fn purging_threads_cancels_driver_children_and_discards_completions() {
 
     struct GatedModel {
         started: tokio::sync::mpsc::Sender<()>,
-        release: Arc<tokio::sync::Notify>,
     }
 
     #[async_trait]
@@ -541,8 +521,7 @@ async fn purging_threads_cancels_driver_children_and_discards_completions() {
             _request: ModelRequest,
         ) -> tinyinference_llm::Result<ModelResponse> {
             let _ = self.started.send(()).await;
-            self.release.notified().await;
-            Ok(ModelResponse::assistant("child released after purge"))
+            std::future::pending().await
         }
     }
 
@@ -555,10 +534,8 @@ async fn purging_threads_cancels_driver_children_and_discards_completions() {
     let thread_id = "purge-live-driver-parent-thread";
     let parent_session = "purge-live-driver-parent-session";
     let (started_tx, mut started_rx) = tokio::sync::mpsc::channel(1);
-    let release = Arc::new(tokio::sync::Notify::new());
     let provider = Arc::new(GatedModel {
         started: started_tx,
-        release: release.clone(),
     });
     let mut parent = parent_context(&workspace, provider, vec![]);
     let workspace_descriptor = tinytools::WorkspaceDescriptor::new(workspace.clone());
@@ -665,14 +642,6 @@ async fn purging_threads_cancels_driver_children_and_discards_completions() {
         1,
         "the purge starts with a queued child completion"
     );
-    let release_after_cancel = {
-        let release = release.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            release.notify_one();
-        })
-    };
-
     tokio::time::timeout(
         std::time::Duration::from_secs(6),
         crate::threads::ops::threads_purge(&dispatch, crate::threads::EmptyRequest {}),
@@ -712,7 +681,4 @@ async fn purging_threads_cancels_driver_children_and_discards_completions() {
         .is_empty(),
         "settled purge releases active child owner slots"
     );
-    release_after_cancel
-        .await
-        .expect("child release task completes");
 }

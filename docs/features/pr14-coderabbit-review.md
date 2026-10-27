@@ -4,7 +4,7 @@ This record maps all **18 unique CodeRabbit findings** to the implementation and
 
 ## Review scope and revision
 
-CodeRabbit submitted [review 5559035108](https://api.github.com/repos/AmirrezaFarnamTaheri/openhuman/pulls/14/reviews/5559035108) and [review 5559036666](https://api.github.com/repos/AmirrezaFarnamTaheri/openhuman/pulls/14/reviews/5559036666) against `30ac1dda7a03977fa2ded5a405a7d83dc1d5c971`. Both primary API records remain retrievable; the links avoid PR-page fragments that GitHub does not consistently include in the initial HTML. The second review contains 17 actionable findings because posting its inline comments failed. Both submissions repeat the same additional preview-test nitpick. The duplicate is counted once.
+CodeRabbit submitted [review 5559035108](https://github.com/AmirrezaFarnamTaheri/openhuman/pull/14#pullrequestreview-5559035108) and [review 5559036666](https://github.com/AmirrezaFarnamTaheri/openhuman/pull/14#pullrequestreview-5559036666) against `30ac1dda7a03977fa2ded5a405a7d83dc1d5c971`. The links point to the public review entries. The second review contains 17 actionable findings because posting its inline comments failed. Both submissions repeat the same additional preview-test nitpick. The duplicate is counted once.
 
 The fresh review-thread and inline-comment queries returned no posted threads to resolve. The finding identifiers below are CodeRabbit's `cr-comment:v1` identifiers from the review bodies. Recording a fix here does not mark a nonexistent GitHub thread resolved or represent a new bot approval.
 
