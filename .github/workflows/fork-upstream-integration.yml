@@ -1,4 +1,4 @@
-# Third attempt: exact zdiff3 delimiter parser repaired. This workflow exists on the isolated
+# Fourth attempt: reconciled MCP storage and upstream patch whitespace. This is isolated
 # sync branch and must be removed before the final PR is merged into main.
 name: Fork upstream integration preflight
 
