@@ -72,9 +72,9 @@ const GROUP_ORDER: RecencyGroupKey[] = [
 
 /** Windows paths are case-insensitive, while Unix paths preserve case. */
 function projectDirectoryKey(path: string): string {
-  const windowsPath = /^(?:[a-z]:[\\\\/]|\\\\\\\\|\\/\\/)/i.test(path);
-  const normalized = windowsPath ? path.replace(/\\//g, '\\\\').toLowerCase() : path;
-  return normalized.replace(/[\\\\/]+$/, '') || normalized;
+  const windowsPath = /^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(path);
+  const normalized = windowsPath ? path.replace(/\//g, '\\').toLowerCase() : path;
+  return normalized.replace(/[\\/]+$/, '') || normalized;
 }
 
 /**
