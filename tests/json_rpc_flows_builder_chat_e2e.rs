@@ -1,0 +1,550 @@
+//! The workflow builder as a user reaches it: a web-chat turn to the
+//! orchestrator, which spawns `workflow_builder` asynchronously, whose proposal
+//! is delivered into the thread as the card the user saves, plus the agent-side
+//! "save it" path. Every model response is scripted (the in-process FIFO in
+//! `support/rpc_e2e_harness.rs`), so the assertions are about what the host
+//! does with them: spawn, delivery, persistence, events and saving.
+//!
+//! Two checks pin behaviour that open fixes change. Each reads a const below;
+//! when its fix lands the pinned assertion fails until the const is flipped.
+
+#![cfg(feature = "flows")]
+
+#[path = "support/rpc_e2e_harness.rs"]
+mod harness;
+use harness::*;
+
+use openhuman_core::core::events::DomainEvent;
+use tinybus::EventHandler;
+use tokio::sync::mpsc;
+
+/// #8451: a `subagent_completed` web-channel event that arrives after the
+/// parent turn ended is dropped (`LateSubagentSink` forwards only failures), so
+/// the card stays on "Working". Flip to `true` with the fix that forwards it.
+const SUBAGENT_COMPLETED_REACHES_SOCKET: bool = false;
+
+/// The agent-side save (`create_workflow` from a delegated "save it") does not
+/// record `saved_flow_id` on the proposal it saved; only the card's own save
+/// does. Flip to `true` with the fix that records it.
+const AGENT_SAVE_RECORDS_SAVED_FLOW_ID: bool = false;
+
+const CLIENT_ID: &str = "builder-chat-e2e";
+const REQUESTED_NAME: &str = "Morning digest (builder e2e)";
+/// A line of the orchestrator's own prompt: only its requests carry it.
+const ORCHESTRATOR_MARKER: &str = "Build or edit a workflow with";
+/// Host-owned text appended to `workflow_builder`'s prompt only.
+const BUILDER_MARKER: &str = "## Passing graphs to tools";
+
+/// A schedule trigger and three steps with distinct per-step config, so a
+/// config landing on the wrong node is visible. No `name`: the proposal must
+/// carry the requested one (#8448).
+fn three_step_graph() -> Value {
+    json!({
+        "schema_version": 1,
+        "nodes": [
+            { "id": "t", "kind": "trigger", "name": "Every morning",
+              "config": { "trigger_kind": "schedule", "schedule": "0 8 * * *" } },
+            { "id": "fetch", "kind": "transform", "name": "Fetch",
+              "config": { "set": { "step": "one", "marker": "S1-fetch" } } },
+            { "id": "shape", "kind": "transform", "name": "Shape",
+              "config": { "set": { "step": "two", "marker": "S2-shape" } } },
+            { "id": "notify", "kind": "transform", "name": "Notify",
+              "config": { "set": { "step": "three", "marker": "S3-notify" } } }
+        ],
+        "edges": [
+            { "from_node": "t", "from_port": "main", "to_node": "fetch", "to_port": "main" },
+            { "from_node": "fetch", "from_port": "main", "to_node": "shape", "to_port": "main" },
+            { "from_node": "shape", "from_port": "main", "to_node": "notify", "to_port": "main" }
+        ]
+    })
+}
+
+fn write_builder_config(openhuman_dir: &Path, api_origin: &str) {
+    // Tool results stay raw: the proposal is read from the builder's
+    // `propose_workflow` tool message, which compaction would replace.
+    let cfg = format!(
+        r#"api_url = "{api_origin}"
+default_model = "openrouter/deepseek/deepseek-v4-pro"
+default_temperature = 0.7
+chat_onboarding_completed = true
+
+[secrets]
+encrypt = false
+
+[context]
+compaction_enabled = false
+"#
+    );
+    std::fs::create_dir_all(openhuman_dir).expect("mkdir openhuman");
+    std::fs::write(openhuman_dir.join("config.toml"), &cfg).expect("write config");
+    let _: openhuman_core::config::Config =
+        toml::from_str(&cfg).expect("config toml must match Config schema");
+}
+
+/// Every web-channel event for `CLIENT_ID`, collected in the background so a
+/// test can ask afterwards whether one arrived.
+async fn collect_sse(events_url: String, sink: Arc<Mutex<Vec<Value>>>) -> tokio::task::JoinHandle<()> {
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        let resp = reqwest::Client::new()
+            .get(&events_url)
+            .header(AUTHORIZATION, format!("Bearer {TEST_RPC_TOKEN}"))
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("GET {events_url}: {e}"));
+        assert!(resp.status().is_success(), "SSE HTTP {}", resp.status());
+        let _ = ready_tx.send(());
+        let mut stream = resp.bytes_stream();
+        let mut buffer = String::new();
+        while let Some(Ok(chunk)) = stream.next().await {
+            buffer.push_str(std::str::from_utf8(&chunk).unwrap_or(""));
+            while let Some(idx) = buffer.find("\n\n") {
+                let block = buffer[..idx].to_string();
+                buffer = buffer[idx + 2..].to_string();
+                let data: Vec<&str> = block
+                    .lines()
+                    .filter_map(|l| l.strip_prefix("data:").map(str::trim_start))
+                    .collect();
+                if let Ok(value) = serde_json::from_str::<Value>(&data.join("\n")) {
+                    lock(&sink).push(value);
+                }
+            }
+        }
+    });
+    ready_rx.await.expect("SSE stream connected");
+    task
+}
+
+fn lock(sink: &Mutex<Vec<Value>>) -> std::sync::MutexGuard<'_, Vec<Value>> {
+    sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn events_named(sink: &Arc<Mutex<Vec<Value>>>, name: &str) -> Vec<Value> {
+    lock(sink)
+        .iter()
+        .filter(|e| e.get("event").and_then(Value::as_str) == Some(name))
+        .cloned()
+        .collect()
+}
+
+/// Poll until `probe` returns `Some`, or panic with `what`.
+async fn wait_for<T, F, Fut>(what: &str, mut probe: F) -> T
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Option<T>>,
+{
+    for _ in 0..300 {
+        if let Some(found) = probe().await {
+            return found;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    panic!("timed out waiting for {what}");
+}
+
+struct SubagentEvents(mpsc::UnboundedSender<(String, String)>);
+
+#[async_trait::async_trait]
+impl EventHandler<DomainEvent> for SubagentEvents {
+    fn name(&self) -> &str {
+        "test::json_rpc_flows_builder_chat_e2e::subagents"
+    }
+    async fn handle(&self, event: &DomainEvent) {
+        if let DomainEvent::SubagentCompleted {
+            task_id, agent_id, ..
+        } = event
+        {
+            let _ = self.0.send((task_id.clone(), agent_id.clone()));
+        }
+    }
+}
+
+async fn thread_messages(rpc_base: &str, thread_id: &str) -> Vec<Value> {
+    let list = post_json_rpc(
+        rpc_base,
+        90,
+        "openhuman.threads_messages_list",
+        json!({ "thread_id": thread_id }),
+    )
+    .await;
+    assert_no_jsonrpc_error(&list, "threads_messages_list")["data"]["messages"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn proposal_message(messages: &[Value]) -> Option<Value> {
+    messages
+        .iter()
+        .find(|m| {
+            m.get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| id.starts_with("workflow-proposal:"))
+        })
+        .cloned()
+}
+
+async fn flow_count(rpc_base: &str) -> usize {
+    let list = post_json_rpc(rpc_base, 91, "openhuman.flows_list", json!({})).await;
+    peel_logs_envelope(assert_no_jsonrpc_error(&list, "flows_list"))
+        .as_array()
+        .map_or(0, Vec::len)
+}
+
+/// Every tool call the orchestrator's requests show it made, by name.
+fn orchestrator_tool_calls(requests: &[Value]) -> Vec<String> {
+    let latest = requests
+        .iter()
+        .filter(|r| r.get("body").map(Value::to_string).is_some_and(|b| b.contains(ORCHESTRATOR_MARKER)))
+        .max_by_key(|r| r.pointer("/body/messages").and_then(Value::as_array).map_or(0, Vec::len));
+    latest
+        .and_then(|r| r.pointer("/body/messages").and_then(Value::as_array))
+        .into_iter()
+        .flatten()
+        .filter_map(|m| m.get("tool_calls").and_then(Value::as_array))
+        .flatten()
+        .filter_map(|c| c.pointer("/function/name").and_then(Value::as_str).map(str::to_string))
+        .collect()
+}
+
+async fn send_chat(rpc_base: &str, id: i64, thread_id: &str, message: &str) {
+    let chat = post_json_rpc(
+        rpc_base,
+        id,
+        "openhuman.channel_web_chat",
+        json!({
+            "client_id": CLIENT_ID,
+            "thread_id": thread_id,
+            "message": message,
+            "model_override": "e2e-mock-model",
+        }),
+    )
+    .await;
+    assert_no_jsonrpc_error(&chat, "channel_web_chat");
+}
+
+#[test]
+fn json_rpc_chat_spawns_workflow_builder_and_saves_its_proposal() {
+    const CHILD_ENV: &str = "OPENHUMAN_BUILDER_CHAT_E2E_CHILD";
+    if std::env::var_os(CHILD_ENV).is_none() {
+        // ApprovalGate is process-global and one-shot: run in an exact-filtered
+        // child so the narrow create_workflow auto-approval cannot leak.
+        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "json_rpc_chat_spawns_workflow_builder_and_saves_its_proposal",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(CHILD_ENV, "1")
+            .output()
+            .expect("run the isolated builder chat E2E child");
+        let child_output = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        print!("{child_output}");
+        assert!(
+            output.status.success()
+                && child_output.contains("running 1 test")
+                && child_output.contains("1 passed; 0 failed"),
+            "isolated builder chat E2E child must run exactly one passing test:\n{child_output}"
+        );
+        return;
+    }
+    run_json_rpc_e2e_on_agent_stack(
+        "json_rpc_chat_spawns_workflow_builder_and_saves_its_proposal",
+        chat_spawns_workflow_builder_and_saves_its_proposal,
+    );
+}
+
+async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
+    let _env_lock = json_rpc_e2e_env_lock_async().await;
+    let _fifo_guard = ScriptedFifoGuard;
+    let tmp = tempdir().expect("tempdir");
+    let home = tmp.path();
+    let openhuman_home = home.join(".openhuman");
+    let _home_guard = EnvVarGuard::set_to_path("HOME", home);
+    let _workspace_guard = EnvVarGuard::unset("OPENHUMAN_WORKSPACE");
+    let _backend_url_guard = EnvVarGuard::unset("BACKEND_URL");
+    let _vite_backend_guard = EnvVarGuard::unset("VITE_BACKEND_URL");
+    let _api_url_guard = EnvVarGuard::unset("OPENHUMAN_API_URL");
+    clear_forced_chat_completions();
+    with_chat_completion_requests(|requests| requests.clear());
+
+    let (mock_addr, mock_join) = serve_on_ephemeral(mock_upstream_router()).await;
+    let mock_origin = format!("http://{mock_addr}");
+    write_builder_config(&openhuman_home, &mock_origin);
+    write_builder_config(&openhuman_home.join("users").join("local"), &mock_origin);
+    write_builder_config(&openhuman_home.join("users").join("e2e-user"), &mock_origin);
+
+    // The agent-side save writes a flow; approve exactly that tool.
+    let mut approval_config = openhuman_core::config::Config {
+        workspace_dir: openhuman_home.join("workspace"),
+        config_path: openhuman_home.join("config.toml"),
+        ..openhuman_core::config::Config::default()
+    };
+    approval_config
+        .autonomy
+        .auto_approve
+        .push("create_workflow".to_string());
+    openhuman_core::security::approval::ApprovalGate::init_global(
+        approval_config,
+        format!("session-{}", uuid::Uuid::new_v4()),
+    );
+
+    let (rpc_addr, rpc_join) = serve_on_ephemeral(build_core_http_router(false)).await;
+    let rpc_base = format!("http://{rpc_addr}");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let store = post_json_rpc(
+        &rpc_base,
+        1,
+        "openhuman.auth_store_session",
+        json!({ "token": "e2e-test-jwt", "user_id": "e2e-user" }),
+    )
+    .await;
+    assert_no_jsonrpc_error(&store, "store_session");
+
+    let (subagent_tx, mut subagent_rx) = mpsc::unbounded_channel();
+    let _subscription = openhuman_core::core::bus::BUS
+        .subscribe(Arc::new(SubagentEvents(subagent_tx)))
+        .expect("subscribe to sub-agent domain events");
+
+    let create = post_json_rpc(&rpc_base, 2, "openhuman.threads_create_new", json!({})).await;
+    let thread_id = assert_no_jsonrpc_error(&create, "threads_create_new")["data"]["id"]
+        .as_str()
+        .expect("thread id")
+        .to_string();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let sse_task = collect_sse(
+        format!("{rpc_base}/events?client_id={CLIENT_ID}"),
+        Arc::clone(&events),
+    )
+    .await;
+
+    // ── 1. the orchestrator spawns workflow_builder once and its turn ends ──
+    let graph = three_step_graph();
+    push_forced_chat_completion_when(
+        ORCHESTRATOR_MARKER,
+        forced_tool_call_completion(
+            "spawn_subagent",
+            json!({
+                "agent_id": "workflow_builder",
+                "prompt": format!("Build a workflow named \"{REQUESTED_NAME}\" that runs every morning at 8 in three steps."),
+                "task_title": REQUESTED_NAME,
+            }),
+        ),
+    );
+    push_forced_chat_completion_when(
+        ORCHESTRATOR_MARKER,
+        forced_text_completion("TURN1-END: the workflow builder is on it; the proposal will appear here."),
+    );
+    push_forced_chat_completion_when(
+        BUILDER_MARKER,
+        forced_tool_call_completion(
+            "propose_workflow",
+            json!({ "name": REQUESTED_NAME, "graph": graph.clone() }),
+        ),
+    );
+    push_forced_chat_completion_when(BUILDER_MARKER, forced_text_completion("Proposal ready."));
+
+    send_chat(&rpc_base, 3, &thread_id, "Set up a morning digest workflow for me.").await;
+    let turn_end = wait_for("the first turn's terminal event", || {
+        let events = Arc::clone(&events);
+        async move {
+            let mut terminal = events_named(&events, "chat_done");
+            terminal.extend(events_named(&events, "chat_error"));
+            terminal.into_iter().next()
+        }
+    })
+    .await;
+    assert_eq!(
+        turn_end.get("event").and_then(Value::as_str),
+        Some("chat_done"),
+        "the spawning turn must finish cleanly: {turn_end}"
+    );
+    let turn_text = turn_end.to_string();
+    assert!(
+        turn_text.contains("TURN1-END") && !turn_text.contains("workflow_proposal"),
+        "the turn must end on its own reply after the spawn, not wait for the proposal: {turn_end}"
+    );
+
+    // ── 2. the delivered proposal: requested name, each config on its node ──
+    let message = wait_for("the workflow_proposal message", || {
+        let rpc_base = rpc_base.clone();
+        let thread_id = thread_id.clone();
+        async move { proposal_message(&thread_messages(&rpc_base, &thread_id).await) }
+    })
+    .await;
+    let task_id = message["id"]
+        .as_str()
+        .and_then(|id| id.strip_prefix("workflow-proposal:"))
+        .expect("proposal id carries the task id")
+        .to_string();
+    let meta = &message["extraMetadata"];
+    assert_eq!(meta["scope"], "workflow_proposal", "{message}");
+    assert_eq!(meta["agent_id"], "workflow_builder", "{message}");
+    let proposal = &meta["proposal"];
+    assert_eq!(proposal["type"], "workflow_proposal", "{proposal}");
+    assert_eq!(proposal["name"], REQUESTED_NAME, "{proposal}");
+    assert_eq!(
+        proposal.pointer("/graph/name").and_then(Value::as_str),
+        Some(REQUESTED_NAME),
+        "the proposed graph carries the requested name (#8448): {proposal}"
+    );
+    let nodes = proposal
+        .pointer("/graph/nodes")
+        .and_then(Value::as_array)
+        .expect("proposal graph nodes");
+    for (id, step, marker) in [
+        ("fetch", "one", "S1-fetch"),
+        ("shape", "two", "S2-shape"),
+        ("notify", "three", "S3-notify"),
+    ] {
+        let node = nodes
+            .iter()
+            .find(|n| n["id"] == id)
+            .unwrap_or_else(|| panic!("node {id} in the proposal: {proposal}"));
+        assert_eq!(node.pointer("/config/set/step"), Some(&json!(step)), "{id}: {node}");
+        assert_eq!(node.pointer("/config/set/marker"), Some(&json!(marker)), "{id}: {node}");
+    }
+    let trigger = nodes.iter().find(|n| n["id"] == "t").expect("trigger node");
+    assert_eq!(trigger.pointer("/config/trigger_kind"), Some(&json!("schedule")), "{trigger}");
+
+    let calls = orchestrator_tool_calls(&with_chat_completion_requests(|r| r.clone()));
+    assert_eq!(
+        calls.iter().filter(|c| *c == "spawn_subagent").count(),
+        1,
+        "exactly one spawn, no re-spawn to wait: {calls:?}"
+    );
+    assert!(
+        !calls.iter().any(|c| c == "shell" || c.contains("sleep")),
+        "no shell or sleep while the builder works: {calls:?}"
+    );
+    let orchestrator_prompt_says_so = with_chat_completion_requests(|requests| {
+        requests.iter().any(|r| {
+            r.get("body").map(Value::to_string).is_some_and(|b| {
+                b.contains(ORCHESTRATOR_MARKER) && b.contains("never sleep, poll or re-spawn")
+            })
+        })
+    });
+    assert!(
+        orchestrator_prompt_says_so,
+        "the orchestrator is told to end the turn on spawned work (#8448)"
+    );
+
+    // ── 3. the task's completion is published ──
+    let completed = wait_for("SubagentCompleted for the builder task", || {
+        let found = loop {
+            match subagent_rx.try_recv() {
+                Ok((id, agent)) if id == task_id => break Some((id, agent)),
+                Ok(_) => continue,
+                Err(_) => break None,
+            }
+        };
+        async move { found }
+    })
+    .await;
+    assert_eq!(completed.1, "workflow_builder");
+    let socket_completed = || {
+        events_named(&events, "subagent_completed")
+            .into_iter()
+            .any(|e| e.to_string().contains(&task_id))
+    };
+    if SUBAGENT_COMPLETED_REACHES_SOCKET {
+        wait_for("subagent_completed on the web channel", || {
+            let seen = socket_completed();
+            async move { seen.then_some(()) }
+        })
+        .await;
+    } else {
+        // Pinned (#8451): give a forwarded event time to arrive, then expect
+        // none. When the fix lands this fails: flip the const above.
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        assert!(
+            !socket_completed(),
+            "subagent_completed now reaches the socket: set SUBAGENT_COMPLETED_REACHES_SOCKET = true"
+        );
+    }
+
+    // ── 4. saving through the card's RPC: one flow, its schedule born disabled ──
+    assert_eq!(flow_count(&rpc_base).await, 0, "no flow before the save");
+    let saved = post_json_rpc(
+        &rpc_base,
+        40,
+        "openhuman.flows_create",
+        json!({ "name": proposal["name"], "graph": proposal["graph"] }),
+    )
+    .await;
+    let saved_result = assert_no_jsonrpc_error(&saved, "flows_create");
+    let flow = peel_logs_envelope(saved_result);
+    assert!(flow["id"].as_str().is_some_and(|id| !id.is_empty()), "{flow}");
+    assert_eq!(flow["enabled"], false, "a schedule trigger is born disabled: {flow}");
+    assert!(
+        saved_result["logs"].to_string().contains("created DISABLED"),
+        "the save says why it is disabled: {saved_result}"
+    );
+    assert_eq!(flow_count(&rpc_base).await, 1, "exactly one flow from the card save");
+
+    // ── 5. the agent-side "save it" ──
+    clear_forced_chat_completions();
+    push_forced_chat_completion_when(
+        ORCHESTRATOR_MARKER,
+        forced_tool_call_completion(
+            "spawn_subagent",
+            json!({
+                "agent_id": "workflow_builder",
+                "prompt": format!("Save the delivered proposal \"{REQUESTED_NAME}\" as-is with this graph: {}", graph),
+            }),
+        ),
+    );
+    push_forced_chat_completion_when(
+        ORCHESTRATOR_MARKER,
+        forced_text_completion("TURN2-END: saving it now."),
+    );
+    push_forced_chat_completion_when(
+        BUILDER_MARKER,
+        forced_tool_call_completion(
+            "create_workflow",
+            json!({ "name": REQUESTED_NAME, "graph": proposal["graph"] }),
+        ),
+    );
+    push_forced_chat_completion_when(BUILDER_MARKER, forced_text_completion("Saved it."));
+    send_chat(&rpc_base, 50, &thread_id, "save it").await;
+    wait_for("the agent-created flow", || {
+        let rpc_base = rpc_base.clone();
+        async move { (flow_count(&rpc_base).await == 2).then_some(()) }
+    })
+    .await;
+    let saved_flow_id = || {
+        let rpc_base = rpc_base.clone();
+        let thread_id = thread_id.clone();
+        async move {
+            proposal_message(&thread_messages(&rpc_base, &thread_id).await)
+                .and_then(|m| m.pointer("/extraMetadata/saved_flow_id").cloned())
+                .filter(|id| !id.is_null())
+        }
+    };
+    if AGENT_SAVE_RECORDS_SAVED_FLOW_ID {
+        wait_for("saved_flow_id on the proposal", saved_flow_id).await;
+    } else {
+        // Pinned: wait for the save's own completion, then expect no mark.
+        // When the fix lands this fails: flip the const above.
+        wait_for("SubagentCompleted for the save task", || {
+            let found = subagent_rx.try_recv().ok();
+            async move { found }
+        })
+        .await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(
+            saved_flow_id().await.is_none(),
+            "the agent save now records saved_flow_id: set AGENT_SAVE_RECORDS_SAVED_FLOW_ID = true"
+        );
+    }
+
+    clear_forced_chat_completions();
+    sse_task.abort();
+    mock_join.abort();
+    rpc_join.abort();
+}
