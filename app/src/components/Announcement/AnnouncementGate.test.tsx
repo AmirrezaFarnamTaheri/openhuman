@@ -106,11 +106,15 @@ describe('AnnouncementGate', () => {
     await waitFor(() => expect(fetchLatestAnnouncement).toHaveBeenCalled());
     expect(screen.queryByTestId('modal')).not.toBeInTheDocument();
   });
+
   it('hides an already fetched announcement immediately when the account changes', async () => {
     fetchLatestAnnouncement.mockResolvedValueOnce(sample);
     let completeSecond!: (value: Announcement | null) => void;
     fetchLatestAnnouncement.mockImplementationOnce(
-      () => new Promise<Announcement | null>(resolve => { completeSecond = resolve; })
+      () =>
+        new Promise<Announcement | null>(resolve => {
+          completeSecond = resolve;
+        })
     );
 
     const view = render(<AnnouncementGate />);
@@ -129,7 +133,10 @@ describe('AnnouncementGate', () => {
     let completeOld!: (value: Announcement | null) => void;
     fetchLatestAnnouncement
       .mockImplementationOnce(
-        () => new Promise<Announcement | null>(resolve => { completeOld = resolve; })
+        () =>
+          new Promise<Announcement | null>(resolve => {
+            completeOld = resolve;
+          })
       )
       .mockResolvedValueOnce({ ...sample, id: 'b1', title: 'For account B' });
 
@@ -143,5 +150,4 @@ describe('AnnouncementGate', () => {
     await waitFor(() => expect(screen.queryByText('Hello')).not.toBeInTheDocument());
     expect(screen.getByText('For account B')).toBeInTheDocument();
   });
-
 });
