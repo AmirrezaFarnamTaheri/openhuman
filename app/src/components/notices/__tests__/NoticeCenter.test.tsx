@@ -108,7 +108,6 @@ describe('NoticeCenter', () => {
     expect(within(panel).getByText('API key required')).toBeInTheDocument();
   });
 
-
   it('focuses the close control when opened and restores focus to the bell on close', async () => {
     renderCenter([keyError]);
     const trigger = screen.getByTestId('notice-trigger');
