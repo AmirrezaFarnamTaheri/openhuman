@@ -392,6 +392,19 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     openhuman_core::core::bus::init()
         .await
         .expect("initialise the in-process bus");
+    // The boot also installs the process default context. Without it a call
+    // has no resolved owner scope, and spawn_subagent cannot open the
+    // sub-agent session store. CLI host shape (`openhuman-core serve`), with
+    // the default tool groups (packed, as the desktop runs).
+    openhuman_core::core::runtime::CoreContext::init_with_config(
+        openhuman_core::core::types::HostKind::Cli,
+        &openhuman_core::core::runtime::TokenSource::Fixed(Arc::new(TEST_RPC_TOKEN.to_string())),
+        openhuman_core::core::runtime::DomainSet::full(),
+        Default::default(),
+        None,
+    )
+    .await
+    .expect("initialise the process default core context");
 
     // The agent-side save writes a flow; approve exactly that tool.
     let mut approval_config = openhuman_core::config::Config {
