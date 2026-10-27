@@ -22,24 +22,32 @@ export default function AnnouncementGate() {
   const isAuthenticated = snapshot.auth.isAuthenticated;
   const userId = snapshot.auth.userId ?? null;
   const shownIds = useAppSelector(state => state.announcement.shownIds);
+  // Tie every fetched result to the active identity, including the selected
+  // credential profile. A previous account's announcement must never appear
+  // while a new account's fetch is pending or returns nothing.
+  const authKey = isAuthenticated
+    ? JSON.stringify([userId, snapshot.auth.profileId ?? null])
+    : null;
 
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [result, setResult] = useState<{
+    authKey: string;
+    announcement: Announcement;
+  } | null>(null);
   // One fetch per (user) auth session — keyed by userId so a user switch refetches.
   const fetchedForRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (authKey === null) {
       // Reset on sign-out so the next sign-in fetches again. The render guard
       // below hides any stale announcement while signed out (no setState here).
       fetchedForRef.current = null;
       return;
     }
 
-    const key = userId ?? 'authenticated';
-    if (fetchedForRef.current === key) {
+    if (fetchedForRef.current === authKey) {
       return;
     }
-    fetchedForRef.current = key;
+    fetchedForRef.current = authKey;
 
     let cancelled = false;
     void (async () => {
@@ -48,7 +56,7 @@ export default function AnnouncementGate() {
         if (cancelled || !latest) {
           return;
         }
-        setAnnouncement(latest);
+        setResult({ authKey, announcement: latest });
         log('fetched announcement %s', latest.id);
       } catch (err) {
         // A missing/failed announcement is never fatal — just don't show one.
@@ -59,15 +67,16 @@ export default function AnnouncementGate() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, userId]);
+  }, [authKey]);
 
-  if (!isAuthenticated || !announcement || shownIds.includes(announcement.id)) {
+  const announcement = result?.authKey === authKey ? result.announcement : null;
+  if (!announcement || shownIds.includes(announcement.id)) {
     return null;
   }
 
   const handleDismiss = () => {
     dispatch(markAnnouncementShown(announcement.id));
-    setAnnouncement(null);
+    setResult(null);
   };
 
   return <AnnouncementModal announcement={announcement} onDismiss={handleDismiss} />;
