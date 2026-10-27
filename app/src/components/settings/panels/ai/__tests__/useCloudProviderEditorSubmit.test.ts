@@ -225,5 +225,4 @@ describe('useCloudProviderEditorSubmit', () => {
     expect(api.setCloudProviderKey).not.toHaveBeenCalled();
     expect(persist).not.toHaveBeenCalled();
   });
-
 });
