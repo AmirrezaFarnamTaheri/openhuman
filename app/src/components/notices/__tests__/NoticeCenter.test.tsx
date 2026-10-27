@@ -5,7 +5,10 @@ import { Provider } from 'react-redux';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import userErrorsReducer, { dismissUserError, reportUserError } from '../../../store/userErrorsSlice';
+import userErrorsReducer, {
+  dismissUserError,
+  reportUserError,
+} from '../../../store/userErrorsSlice';
 import type { UserErrorDescriptor } from '../../../types/userError';
 import NoticeCenter from '../NoticeCenter';
 
