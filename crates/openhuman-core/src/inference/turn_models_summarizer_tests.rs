@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use tinyinference_llm::message::Message;
-use tinyinference_llm::model::{ChatModel, ModelRequest};
+use tinyinference_llm::model::ModelRequest;
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
