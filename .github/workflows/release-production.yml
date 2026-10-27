@@ -442,7 +442,7 @@ jobs:
           VERSION: ${{ needs.prepare-build.outputs.version }}
         run: |
           set -euo pipefail
-          base="${REGISTRY}/${IMAGE_NAME}"
+          base="${REGISTRY}/${IMAGE_NAME,,}"
           {
             echo "tags<<EOF"
             echo "${base}:${TAG}"
@@ -465,9 +465,11 @@ jobs:
           cache-from: type=gha,scope=release-production
           cache-to: type=gha,scope=release-production,mode=max
       - name: Verify pushed image is pullable
+        env:
+          TAG: ${{ needs.prepare-build.outputs.tag }}
         run: |
           set -euo pipefail
-          image="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare-build.outputs.tag }}"
+          image="${REGISTRY}/${IMAGE_NAME,,}:${TAG}"
           docker pull "$image"
           docker image inspect "$image" >/dev/null
 
@@ -724,8 +726,8 @@ jobs:
           TAG: ${{ needs.prepare-build.outputs.tag }}
         run: |
           set -euo pipefail
-          src="${REGISTRY}/${IMAGE_NAME}:${TAG}"
-          dst="${REGISTRY}/${IMAGE_NAME}:latest"
+          src="${REGISTRY}/${IMAGE_NAME,,}:${TAG}"
+          dst="${REGISTRY}/${IMAGE_NAME,,}:latest"
           docker buildx imagetools create --tag "$dst" "$src"
 
   # =========================================================================
