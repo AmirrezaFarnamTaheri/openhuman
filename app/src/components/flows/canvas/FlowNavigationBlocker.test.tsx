@@ -75,7 +75,7 @@ function setup(initialEntries = ['/flows/test-id']) {
       { path: '/chat', element: <p data-testid="chat-page">Chat</p> },
       { path: '/home', element: <p data-testid="home-page">Home</p> },
     ],
-    { initialEntries }
+    { initialEntries },
   );
   render(<RouterProvider router={router} />);
   return router;
