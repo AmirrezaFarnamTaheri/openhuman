@@ -22,6 +22,9 @@ describe('ToolError', () => {
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(1);
     expect(buttons[0]).toHaveAccessibleName(action === 'retry' ? 'Retry' : 'Skip');
+    // All application actions use the canonical UI Button and tertiary hierarchy.
+    expect(buttons[0]).toHaveAttribute('data-slot', 'button');
+    expect(buttons[0]).toHaveAttribute('data-variant', 'tertiary');
     fireEvent.click(buttons[0]);
     expect(onAction).toHaveBeenCalledOnce();
   });
