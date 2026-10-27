@@ -11,8 +11,9 @@ export function providerEndpointIssue(
 ): ProviderEndpointIssue | null {
   // WHATWG URL parsing silently discards tabs and newlines, so refuse
   // control characters before normalizing even the surrounding whitespace.
-  if (/[\u0000-\u001F\u007F]/u.test(endpoint)) {
-    return 'invalid_url';
+  for (let index = 0; index < endpoint.length; index++) {
+    const code = endpoint.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return 'invalid_url';
   }
   const value = endpoint.trim();
   // The existing form can intentionally leave the endpoint unset; the
