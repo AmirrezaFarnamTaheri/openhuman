@@ -113,7 +113,7 @@ UPSTREAM_DELETIONS = {
     "tests/inbound_linked_e2e.rs",
 }
 SUBMODULE = "vendor/tinyagents"
-FORK_SUBMODULE_SHA = "ca5c45f8c0e2136098df776ea2f964bd1345aecf"
+FORK_SUBMODULE_SHA = "fc3ca874653539c6db9ddfdf938858c38f01a4de"
 raw = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=U", "-z"])
 paths = [p.decode() for p in raw.split(b"\0") if p]
 known = set(POLICY) | UPSTREAM_DELETIONS | {SUBMODULE}
@@ -134,7 +134,7 @@ for path in paths:
             "git", "update-index", "--add", "--cacheinfo",
             f"160000,{FORK_SUBMODULE_SHA},{SUBMODULE}"
         ])
-        print("TEMPORARY fork submodule pin; must replace with merged TinyAgents SHA")
+        print("Resolved fork submodule pin: merged TinyAgents SHA")
         continue
     text = Path(path).read_text()
     selections = POLICY[path]
