@@ -89,7 +89,7 @@ required-features = ["linked-modules", "documents"]
 [[test]]
 name = "inbound_linked_e2e"
 path = "../../tests/inbound_linked_e2e.rs"
-required-features = ["linked-modules", "inbound-queues"]
+required-features = ["modules", "inbound-queues", "storage-sqlite"]
 
 [[test]]
 name = "tinysearch_module_e2e"

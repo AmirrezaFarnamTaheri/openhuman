@@ -6,6 +6,8 @@
 
 #![cfg(feature = "mcp")]
 
+#[path = "support/env_guard.rs"]
+mod env_guard;
 #[path = "support/mcp_http.rs"]
 mod mcp_http;
 
@@ -16,9 +18,23 @@ use openhuman_core::config::{
 use serde_json::{json, Map, Value};
 
 const MODULE_ARTIFACT_ENV: &str = "OPENHUMAN_TINYMCP_TEST_MODULE";
+static STORAGE_SETUP_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+static TEST_MASTER_KEY: std::sync::Once = std::sync::Once::new();
 
-fn fresh_workspace_config() -> (tempfile::TempDir, Config) {
+async fn fresh_workspace_config() -> (tempfile::TempDir, Config) {
+    TEST_MASTER_KEY.call_once(|| {
+        std::env::set_var("OPENHUMAN_KEYRING_MASTER_KEY", "55".repeat(32));
+        std::env::remove_var("OPENHUMAN_KEYRING_MASTER_KEY_FILE");
+    });
+    env_guard::init_keyring_workspace();
     let workspace = tempfile::tempdir().expect("temporary MCP workspace");
+    let backend = openhuman_core::storage::open(&format!(
+        "sqlite:{}",
+        workspace.path().join("storage").display()
+    ))
+    .await
+    .expect("open isolated module storage backend");
+    openhuman_core::storage::install(backend);
     let artifact = std::env::var_os(MODULE_ARTIFACT_ENV)
         .map(std::path::PathBuf::from)
         .or_else(|| openhuman_core::modules::local_artifact("tinymcp"))
@@ -125,9 +141,10 @@ async fn disconnect(config: &Config, server_id: &str) {
 
 #[tokio::test]
 async fn two_servers_same_tool_name_no_collision() {
+    let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
     let first = mcp_http::echo_server().await;
     let second = mcp_http::echo_server().await;
-    let (_workspace, config) = fresh_workspace_config();
+    let (_workspace, config) = fresh_workspace_config().await;
     let servers = Map::from_iter([
         ("@multi-test/echo-a".to_owned(), http_server(&first)),
         ("@multi-test/echo-b".to_owned(), http_server(&second)),
@@ -188,9 +205,10 @@ async fn two_servers_same_tool_name_no_collision() {
 
 #[tokio::test]
 async fn tool_calls_route_to_the_correct_server() {
+    let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
     let first = mcp_http::echo_server().await;
     let second = mcp_http::echo_server().await;
-    let (_workspace, config) = fresh_workspace_config();
+    let (_workspace, config) = fresh_workspace_config().await;
     let servers = Map::from_iter([
         ("@route-test/echo-a".to_owned(), http_server(&first)),
         ("@route-test/echo-b".to_owned(), http_server(&second)),
@@ -213,8 +231,9 @@ async fn tool_calls_route_to_the_correct_server() {
 
 #[tokio::test]
 async fn failed_connect_does_not_block_healthy_peer() {
+    let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
     let upstream = mcp_http::echo_server().await;
-    let (_workspace, config) = fresh_workspace_config();
+    let (_workspace, config) = fresh_workspace_config().await;
     let servers = Map::from_iter([
         (
             "@isolation-test/bad".to_owned(),
@@ -268,9 +287,10 @@ async fn failed_connect_does_not_block_healthy_peer() {
 
 #[tokio::test]
 async fn disabled_server_contributes_no_tools_to_agent_surface() {
+    let _storage_lock = STORAGE_SETUP_LOCK.lock().await;
     let first = mcp_http::echo_server().await;
     let second = mcp_http::echo_server().await;
-    let (_workspace, config) = fresh_workspace_config();
+    let (_workspace, config) = fresh_workspace_config().await;
     let servers = Map::from_iter([
         ("@disabled-test/live".to_owned(), http_server(&first)),
         ("@disabled-test/quiet".to_owned(), http_server(&second)),

@@ -21,6 +21,10 @@ fn quoted_ampersand_and_redirect_literals_are_not_treated_as_operators() {
     let p = default_policy();
     assert!(p.is_command_allowed("echo \"A&B\""));
     assert!(p.is_command_allowed("echo \"A>B\""));
+    assert!(p.is_command_allowed("echo 'A&B'"));
+    assert!(p.is_command_allowed(r"echo A\&B"));
+    assert!(p.is_command_allowed(r#"echo "A\"&B""#));
+    assert!(!p.is_command_allowed("echo 'A&B' & cat file.txt"));
 }
 
 #[test]

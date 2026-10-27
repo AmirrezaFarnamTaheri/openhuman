@@ -40,7 +40,7 @@ fn borrowed_permission_view_only_offers_registered_visible_spawn_targets() {
         let visible_names = if visible {
             ["spawn_subagent".to_string()].into_iter().collect()
         } else {
-            Default::default()
+            ["another_visible_tool".to_string()].into_iter().collect()
         };
         let session = ToolPolicyEngine::build_session(
             "orchestrator",

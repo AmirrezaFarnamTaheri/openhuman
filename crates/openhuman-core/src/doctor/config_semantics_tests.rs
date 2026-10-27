@@ -162,12 +162,18 @@ async fn action_directory_without_write_access_is_an_error() {
     let findings = run_check(config, "workspace/action-dir").await;
     std::fs::set_permissions(dir.path(), original_permissions).unwrap();
 
-    assert_eq!(
-        finding(&findings, FindingSeverity::Error)
-            .config_path
-            .as_deref(),
-        Some("action_dir")
-    );
+    if unsafe { libc::geteuid() } == 0 {
+        assert!(findings
+            .iter()
+            .all(|finding| finding.severity != FindingSeverity::Error));
+    } else {
+        assert_eq!(
+            finding(&findings, FindingSeverity::Error)
+                .config_path
+                .as_deref(),
+            Some("action_dir")
+        );
+    }
     #[cfg(unix)]
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
 }

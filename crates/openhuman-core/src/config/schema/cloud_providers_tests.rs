@@ -1,5 +1,3 @@
-//! Tests for the surrounding module.
-
 use super::*;
 use tinyinference_providers::builtin::endpoint_host;
 
@@ -143,7 +141,7 @@ fn responses_api_capability_is_coupled_to_the_preset_list() {
             "openai" | "prodex" | "nebius" | "openrouter" | "xai"
         );
         assert_eq!(
-            builtin_presets().builtin_cloud_supports_responses_api(provider.slug),
+            builtin_cloud_supports_responses_api(provider.slug),
             expected,
             "built-in {} Responses-API capability drifted from the explicit-capability invariant",
             provider.slug
@@ -157,12 +155,10 @@ fn endpoint_host_parses_scheme_path_and_port() {
         endpoint_host("https://integrate.api.nvidia.com/v1").as_deref(),
         Some("integrate.api.nvidia.com")
     );
-    // Missing scheme, mixed case, trailing path.
     assert_eq!(
         endpoint_host("API.OpenAI.com/v1/chat").as_deref(),
         Some("api.openai.com")
     );
-    // Userinfo + explicit port are stripped.
     assert_eq!(
         endpoint_host("https://user:pass@api.groq.com:443/openai/v1").as_deref(),
         Some("api.groq.com")
@@ -205,7 +201,7 @@ fn host_is_builtin_cloud_provider_recognises_inference_hosts() {
         "",
     ] {
         assert!(
-            !builtin_presets().host_is_builtin_cloud_provider(host),
+            !host_is_builtin_cloud_provider(host),
             "{host:?} is not a built-in cloud inference host"
         );
     }
@@ -334,13 +330,22 @@ fn generated_provider_ids_sanitize_and_bound_the_slug_prefix() {
 fn builtin_table_is_only_the_upstream_provider_catalog() {
     use tinyinference_providers::builtin::BUILTIN_CLOUD_PROVIDERS as UPSTREAM;
     let host = builtin_cloud_providers();
-    assert_eq!(
-        host.len(),
-        UPSTREAM.len() + 1 + super::EXTRA_CLOUD_PROVIDERS.len()
+    let extras = super::EXTRA_CLOUD_PROVIDERS
+        .iter()
+        .filter(|preset| !UPSTREAM.iter().any(|upstream| upstream.slug == preset.slug))
+        .count();
+    assert_eq!(host.len(), UPSTREAM.len() + extras);
+    assert!(
+        !host
+            .iter()
+            .any(|preset| preset.auth_style == AuthStyle::OpenhumanJwt),
+        "managed presets belong to the installed host, not the core"
     );
-    assert_eq!(host[0].slug, "openhuman");
-    assert_eq!(host[0].auth_style, AuthStyle::OpenhumanJwt);
-    for (mapped, upstream) in host[1..1 + UPSTREAM.len()].iter().zip(UPSTREAM) {
+    for upstream in UPSTREAM {
+        let mapped = host
+            .iter()
+            .find(|preset| preset.slug == upstream.slug)
+            .unwrap();
         assert_eq!(mapped.slug, upstream.slug);
         assert_eq!(mapped.label, upstream.label);
         assert_eq!(mapped.endpoint, upstream.endpoint);

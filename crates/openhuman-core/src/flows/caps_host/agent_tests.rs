@@ -1,3 +1,20 @@
+// Checkpoint and close requests quote the task but do not execute it again.
+fn auxiliary_model_reply(
+    request: &tinyinference_llm::model::ModelRequest,
+    final_reply: &'static str,
+) -> Option<&'static str> {
+    let text = request.messages.last()?.text();
+    if text.starts_with("The transcript is enclosed in <transcript> tags.") {
+        Some(r#"{"goal":"headless flow fixture"}"#)
+    } else if text.starts_with("You are checking a reply before it is shown to a user.") {
+        Some("ACCEPT")
+    } else if text.starts_with("<harness_instruction>\nBefore finishing:") {
+        Some(final_reply)
+    } else {
+        None
+    }
+}
+
 // --- harness fan-out concurrency ceiling ---
 
 #[test]
@@ -65,6 +82,9 @@ async fn headless_flow_agent_includes_nested_grandchild_result() {
             _state: &(),
             request: ModelRequest,
         ) -> tinyinference_llm::Result<ModelResponse> {
+            if let Some(reply) = auxiliary_model_reply(&request, "headless-flow-root-result") {
+                return Ok(ModelResponse::assistant(reply));
+            }
             let contains_child_prompt = request.messages.iter().any(|message| {
                 matches!(message, tinyinference_llm::message::Message::User(_))
                     && message.text().contains(CHILD_PROMPT)
@@ -412,6 +432,9 @@ async fn headless_child_at_depth_cap_gets_readable_spawn_refusal() {
             _state: &(),
             request: ModelRequest,
         ) -> tinyinference_llm::Result<ModelResponse> {
+            if let Some(reply) = auxiliary_model_reply(&request, "depth-cap-root-finished") {
+                return Ok(ModelResponse::assistant(reply));
+            }
             let is_worker = request.messages.iter().any(|message| {
                 matches!(message, tinyinference_llm::message::Message::User(_))
                     && message.text().contains(WORKER_PROMPT)

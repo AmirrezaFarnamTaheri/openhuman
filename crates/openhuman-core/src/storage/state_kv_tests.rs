@@ -314,6 +314,7 @@ fn typed_quarantine_validation_is_cached_per_backend_scope_name_and_type() {
 }
 
 #[test]
+#[cfg(feature = "storage-sqlite")]
 fn failed_typed_quarantine_is_retried_after_the_conflict_is_removed() {
     let dir = tempfile::tempdir().unwrap();
     let legacy = dir.path().join("jobs.json");
@@ -321,9 +322,7 @@ fn failed_typed_quarantine_is_retried_after_the_conflict_is_removed() {
     let invalid = br#"{"job":false}"#;
     std::fs::write(&legacy, invalid).unwrap();
     std::fs::write(&backup, b"previous backup").unwrap();
-    let backend: Arc<dyn StorageBackend> =
-        Arc::new(tinystoragedrivers_testkit::MemoryBackend::new());
-    let kv = StateKv::on_backend(&backend, &Scope::local(), "test_owner", "state").unwrap();
+    let (_backend, kv) = state_with_import_claims("local");
 
     assert!(kv
         .import_file_quarantining::<BTreeMap<String, u32>>("jobs", &legacy)

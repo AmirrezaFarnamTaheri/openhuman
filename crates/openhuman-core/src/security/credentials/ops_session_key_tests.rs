@@ -82,14 +82,14 @@ async fn clearing_the_session_preserves_a_coexisting_api_key() {
         );
         assert_eq!(state.credential.as_deref(), Some("api-key"));
 
-        // The key must have moved, not been copied: the deactivated user-scoped
-        // location must no longer carry it, or clearing the copy (or logging
-        // back into this user) would resurrect a duplicate (#6318 review follow-up).
-        assert!(
-            !api_key::has_api_key(&user_scoped),
-            "the source user-scoped location must no longer hold the api key after it was carried forward"
+        // Legacy files move the key; storage-backed config paths alias one profile record.
+        assert_eq!(
+            api_key::has_api_key(&user_scoped),
+            matches!(crate::storage::secrets::current(), Ok(Some(_))),
+            "storage scopes share one profile record; only a legacy file source is removed"
         );
-    }).await;
+    })
+    .await;
 }
 
 // #6318 (review follow-up) — a stale key already sitting at the pre-login

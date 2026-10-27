@@ -542,7 +542,12 @@ impl SecurityPolicy {
         // heredoc data out of the policy scan. Legacy scanner exports have
         // moved upstream; this fixture must exercise the current contract.
         let analysis = analyze_command(command);
-        if analysis.expansion || analysis.redirection || analysis.tee || analysis.background {
+        if analysis.hidden_execution
+            || analysis.expansion
+            || analysis.redirection
+            || analysis.tee
+            || analysis.background
+        {
             return false;
         }
         for segment in &analysis.segments {

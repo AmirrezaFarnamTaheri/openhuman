@@ -1,23 +1,10 @@
-//! The inbound event queues end to end, with the `tinyeventqueues` module
-//! served from the linked executable.
-//!
-//! Local only: it needs `--features linked-modules,inbound-queues`, which no CI
-//! lane or product build enables (the CI-run regression tests drive the same
-//! module linked into the core's unit tests). The module is admitted through
-//! the process-wide module runtime exactly as `[modules] source = "linked"`
-//! does: the host's storage backs its queues (an in-memory backend here), the
-//! host's `Deliver` callback is the production one, and triage runs for real
-//! against a backend that is not there, so it fails fast and the delivery is
-//! retried rather than acted on.
-//!
-//! Run: `cargo test -p openhuman-cli --features linked-modules --test inbound_linked_e2e`
-
-#[path = "support/linked_modules.rs"]
-mod linked_modules;
+//! Inbound queues through the checksum-verified release staged on OPENHUMAN_MODULE_PATH.
+//! The host supplies storage and its real Deliver callback; loopback-only triage fails
+//! fast so the module retries the delivery instead of acting on the trigger.
 
 use std::time::Duration;
 
-use openhuman_core::config::schema::ModuleSourceMode;
+use openhuman_core::config::schema::ModuleOverride;
 use openhuman_core::config::Config;
 use openhuman_core::inbound::{events, route};
 use openhuman_core::modules::types::{ModuleSource, ModuleState};
@@ -25,19 +12,31 @@ use openhuman_core::modules::{event_queues, ops};
 use openhuman_core::triage::TriggerEnvelope;
 use tinyeventqueues_bus::Disposition;
 
-fn config() -> Config {
+fn config(workspace: &std::path::Path) -> Config {
     let mut config = Config::default();
+    config.workspace_dir = workspace.to_path_buf();
+    config.action_dir = workspace.to_path_buf();
+    config.config_path = workspace.join("config.toml");
     config.modules.enabled = true;
     // A fallback to the release must fail loudly rather than download.
     config.modules.allow_download = false;
-    config.modules.source = ModuleSourceMode::Linked;
+    let artifact = openhuman_core::modules::local_artifact(event_queues::MODULE_ID)
+        .expect("stage TinyEventQueues on OPENHUMAN_MODULE_PATH");
+    config.modules.overrides.push(ModuleOverride::with_path(
+        event_queues::MODULE_ID,
+        artifact
+            .canonicalize()
+            .expect("module path")
+            .to_string_lossy()
+            .into_owned(),
+    ));
     config.components.eventqueues = true;
     config.inbound.enabled = true;
     config
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn linked_tinyeventqueues_queues_dedupes_and_delivers_a_composio_trigger() {
+async fn released_tinyeventqueues_queues_dedupes_and_delivers_a_composio_trigger() {
     let workspace = tempfile::tempdir().expect("workspace tempdir");
     std::fs::write(
         workspace.path().join("config.toml"),
@@ -47,13 +46,17 @@ async fn linked_tinyeventqueues_queues_dedupes_and_delivers_a_composio_trigger()
     // This target runs one test in its own process; nothing else reads these.
     std::env::set_var("OPENHUMAN_WORKSPACE", workspace.path());
     std::env::set_var("BACKEND_URL", "http://127.0.0.1:9");
-    let previous = openhuman_core::storage::install(std::sync::Arc::new(
-        tinystoragedrivers_testkit::MemoryBackend::new(),
-    ));
+    std::env::set_var("OPENHUMAN_KEYRING_MASTER_KEY", "55".repeat(32));
+    std::env::remove_var("OPENHUMAN_KEYRING_MASTER_KEY_FILE");
+    let backend = openhuman_core::storage::open(&format!(
+        "sqlite:{}",
+        workspace.path().join("storage").display()
+    ))
+    .await
+    .expect("isolated queue storage");
+    let previous = openhuman_core::storage::install(backend);
     assert!(previous.is_none());
-    linked_modules::install();
-
-    let config = config();
+    let config = config(workspace.path());
     let client = ops::client(config.clone());
     let envelope = TriggerEnvelope::from_composio(
         "gmail",
@@ -63,7 +66,7 @@ async fn linked_tinyeventqueues_queues_dedupes_and_delivers_a_composio_trigger()
         serde_json::json!({ "subject": "linked e2e" }),
     );
 
-    // Ingest: the module loads from the executable and persists the event.
+    // Ingest through the released module and persist the event.
     let event = events::composio(&envelope).expect("a composio trigger is queueable");
     let first = route::offer(&config, &client, event.clone()).await;
     assert_eq!(first, route::Offered::Queued(Disposition::Accepted));
@@ -72,7 +75,7 @@ async fn linked_tinyeventqueues_queues_dedupes_and_delivers_a_composio_trigger()
         .find(|module| module.id == event_queues::MODULE_ID)
         .expect("tinyeventqueues is registered");
     assert_eq!(status.state, ModuleState::Ready);
-    assert_eq!(status.source, Some(ModuleSource::Linked));
+    assert_eq!(status.source, Some(ModuleSource::LocalFile));
 
     // A redelivery of the same trigger is rejected at ingress.
     let again = route::offer(&config, &client, event).await;

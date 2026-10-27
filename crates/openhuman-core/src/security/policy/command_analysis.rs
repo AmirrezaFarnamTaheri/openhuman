@@ -110,10 +110,32 @@ impl CommandAnalysis {
 
 fn has_background_operator(source: &str) -> bool {
     let bytes = source.as_bytes();
-    bytes.iter().enumerate().any(|(index, byte)| {
-        *byte == b'&'
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, byte) in bytes.iter().copied().enumerate() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if byte == b'\\' && quote != Some(b'\'') {
+            escaped = true;
+            continue;
+        }
+        if let Some(delimiter) = quote {
+            if byte == delimiter {
+                quote = None;
+            }
+            continue;
+        }
+        if matches!(byte, b'\'' | b'"') {
+            quote = Some(byte);
+        } else if byte == b'&'
             && bytes.get(index + 1) != Some(&b'&')
             && (index == 0 || bytes[index - 1] != b'&')
             && (index == 0 || bytes[index - 1] != b'>')
-    })
+        {
+            return true;
+        }
+    }
+    false
 }

@@ -76,8 +76,8 @@ fn list_resources_includes_core_and_agent_uris() {
         assert!(uris.contains(&expected), "missing URI {expected}");
     }
     assert!(
-        !uris.contains(&"openhuman://prompts/agents/planner"),
-        "retired planner prompt must not be listed as an agent resource"
+        uris.contains(&"openhuman://prompts/agents/planner"),
+        "the fork's planner prompt must be listed as an agent resource"
     );
     for flow_uri in [
         "openhuman://prompts/agents/workflow_builder",

@@ -50,6 +50,7 @@ async fn sweep_scope_reclaims_only_lapsed_blobs_of_that_scope() {
     put_expiring(&backend, &other, "short", 10).await;
 
     wait_until_expired(&backend, &local, "short").await;
+    wait_until_expired(&backend, &other, "short").await;
     assert_eq!(sweep_scope(backend.as_ref(), &local).await, 1);
     assert_eq!(sweep_scope(backend.as_ref(), &local).await, 0, "idempotent");
     assert_eq!(

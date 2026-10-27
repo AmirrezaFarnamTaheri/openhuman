@@ -11,6 +11,7 @@ fn isolated_context(
         ..Default::default()
     };
     std::fs::create_dir_all(&config.workspace_dir).unwrap();
+    crate::mcp::install_test_module_port(&config);
     let ctx = DispatchCtx::new(CoreContext::for_test_with_config(
         DomainSet::full(),
         config.clone(),

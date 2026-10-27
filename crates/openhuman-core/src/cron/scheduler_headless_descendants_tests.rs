@@ -172,6 +172,30 @@ impl ChatModel<()> for CronChildModel {
         _state: &(),
         request: ModelRequest,
     ) -> tinyinference_llm::Result<ModelResponse> {
+        // Close verification is a separate request, not another scheduled or child task.
+        if request.messages.last().is_some_and(|message| {
+            message
+                .text()
+                .starts_with("The transcript is enclosed in <transcript> tags.")
+        }) {
+            return Ok(ModelResponse::assistant(
+                r#"{"goal":"headless cron fixture"}"#,
+            ));
+        }
+        if request.messages.last().is_some_and(|message| {
+            message
+                .text()
+                .starts_with("You are checking a reply before it is shown to a user.")
+        }) {
+            return Ok(ModelResponse::assistant("ACCEPT"));
+        }
+        if request.messages.last().is_some_and(|message| {
+            message
+                .text()
+                .starts_with("<harness_instruction>\nBefore finishing:")
+        }) {
+            return Ok(ModelResponse::assistant("headless-cron-root-result"));
+        }
         if request.messages.iter().any(|message| {
             matches!(message, tinyinference_llm::message::Message::User(_))
                 && message.text().contains(CHILD_PROMPT)
