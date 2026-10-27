@@ -48,6 +48,14 @@ describe('usePageWelcomeView when the working view is default', () => {
     expect(screen.getByTestId('workflow-view-url')).toHaveTextContent('?view=welcome');
   });
 
+  it('keeps unrelated query filters when returning to the default working view', () => {
+    renderAt('/flows?filter=recent&view=welcome');
+    fireEvent.click(screen.getByTestId('two-pane-nav-main'));
+    expect(screen.getByTestId('active-workflow-view')).toHaveTextContent('main');
+    expect(screen.getByTestId('workflow-view-url')).toHaveTextContent('?filter=recent');
+    expect(screen.getByTestId('workflow-view-url')).not.toHaveTextContent('view=main');
+  });
+
   it('respects an explicit introductory URL even with a main default', () => {
     renderAt('/flows?view=welcome');
     expect(screen.getByTestId('active-workflow-view')).toHaveTextContent('welcome');
