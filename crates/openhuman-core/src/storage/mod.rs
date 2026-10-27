@@ -301,7 +301,8 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
     #[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
     if let StorageUrl::Sqlite { path } = &parsed {
         let path = path.clone();
-        tokio::task::spawn_blocking(move || import::sqlite_v0::upgrade_if_needed(&path))
+        crate::core::runtime::DispatchCtx::ambient()
+            .spawn_blocking(move || import::sqlite_v0::upgrade_if_needed(&path))
             .await
             .map_err(|e| {
                 StorageError::backend(format!("SQLite migration did not finish: {e}"))
