@@ -33,6 +33,14 @@ describe('ToolFailureCard', () => {
     expect(screen.getByTestId('assistant-ui-tool-failure')).toHaveTextContent('rm -rf /tmp/x');
   });
 
+  it('localizes unknown failure copy when the core provides no diagnostic', () => {
+    render(<ToolFailureCard toolName="cron" failure={{ ...failure, class: 'Unknown' }} />);
+    const card = screen.getByTestId('assistant-ui-tool-failure');
+    expect(card).toHaveTextContent('Something went wrong with this action.');
+    expect(card).toHaveTextContent('Try again; if it keeps failing, run diagnostics from Settings.');
+    expect(card).not.toHaveTextContent('The app needs calendar access.');
+  });
+
   it('shows an unknown failure diagnostic without invented attempts or unavailable actions', () => {
     render(
       <ToolFailureCard
@@ -43,6 +51,8 @@ describe('ToolFailureCard', () => {
     );
     const card = screen.getByTestId('assistant-ui-tool-failure');
     expect(card).toHaveTextContent('Command execution is unavailable.');
+    expect(card).toHaveTextContent('Try again; if it keeps failing, run diagnostics from Settings.');
+    expect(card).not.toHaveTextContent('Grant calendar access and try again.');
     expect(card).not.toHaveTextContent('Unknown');
     expect(card).not.toHaveTextContent('1/1');
     expect(screen.queryByRole('button', { name: /retry|skip/i })).not.toBeInTheDocument();
