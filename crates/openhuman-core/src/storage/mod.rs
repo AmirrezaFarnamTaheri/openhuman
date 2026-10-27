@@ -267,6 +267,11 @@ fn slot_visible_here() -> bool {
 }
 
 /// libtest names each test's thread after its path (`module::tests::name`).
+///
+/// Assumes no other thread is named with `::`: runtime workers, the storage
+/// bridge and the module runtime are not. A test that spawns a helper thread
+/// with such a name makes it a "different test", so the helper stops seeing
+/// the slot its installer test set, and that installer test fails.
 #[cfg(test)]
 fn is_test_thread(name: &str) -> bool {
     name.contains("::")
