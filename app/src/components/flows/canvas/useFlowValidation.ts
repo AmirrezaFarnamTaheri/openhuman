@@ -17,6 +17,7 @@
 import createDebug from 'debug';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { validateLoopCycleSafety } from '../../../lib/flows/loopCycleSafety';
 import type { WorkflowGraph } from '../../../lib/flows/types';
 import { type FlowValidation, validateFlow } from '../../../services/api/flowsApi';
 
@@ -30,7 +31,7 @@ interface FlowValidationState {
   validation: FlowValidation | null;
   /** True while a validation RPC is in flight (debounced or manual). */
   validating: boolean;
-  /** Validate the current draft; return null on error or superseded completion. */
+  /** Validate the current graph immediately; returns null on error or if superseded by an edit. */
   validateNow: () => Promise<FlowValidation | null>;
 }
 
@@ -46,8 +47,9 @@ export function useFlowValidation(
   graphKey: string,
   enabled = true
 ): FlowValidationState {
-  // A result belongs to the exact draft key validated, not to the editor globally.
-  // Derive visibility immediately on render, before the next debounce elapses.
+  // Validation is meaningful only for the exact serialized draft that was
+  // checked. Derive visibility during render, not after the debounce: an RPC
+  // from the previous draft must never unblock/re-block Save on a new one.
   const [snapshot, setSnapshot] = useState<{ key: string; result: FlowValidation } | null>(null);
   const validation = snapshot?.key === graphKey ? snapshot.result : null;
   const [pendingKey, setPendingKey] = useState<string | null>(null);
@@ -82,12 +84,38 @@ export function useFlowValidation(
     const checkedKey = graphKeyRef.current;
     setPendingKey(checkedKey);
     try {
-      const result = await validateFlow(graphRef.current);
+      // Reject cycles whose execution could bypass a bounded loop before
+      // touching the remote validator. This local check also stays active
+      // when the daemon is offline; the core remains the save-time authority.
+      const graph = graphRef.current;
+      const issues = validateLoopCycleSafety(graph);
+      if (issues.length > 0) {
+        const local: FlowValidation = {
+          valid: false,
+          errors: issues.map(issue => issue.message),
+          error_details: issues.map(issue => ({
+            code: issue.code,
+            message: issue.message,
+            node_id: issue.nodeIds[0],
+          })),
+          warnings: [],
+        };
+        if (
+          !mountedRef.current ||
+          requestId !== requestIdRef.current ||
+          graphKeyRef.current !== checkedKey
+        )
+          return null;
+        setSnapshot({ key: checkedKey, result: local });
+        return local;
+      }
+      const result = await validateFlow(graph);
       if (
         !mountedRef.current ||
         requestId !== requestIdRef.current ||
         graphKeyRef.current !== checkedKey
-      ) return null;
+      )
+        return null;
       log(
         'validated (req=%d): valid=%s errors=%d warnings=%d',
         requestId,
