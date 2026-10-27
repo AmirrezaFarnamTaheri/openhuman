@@ -41,7 +41,7 @@ async fn old_sqlite_upgrades_before_backend_opens_and_retains_an_original_backup
     let docs = backend.for_scope(&Scope::local()).unwrap().documents().clone();
     let record = docs.get("migrated", "one").await.unwrap().unwrap();
     assert_eq!(record.doc["value"], "preserved");
-    assert_eq!(record.version, 7);
+    assert_eq!(record.version, tinystoragedrivers_types::Version(7));
     assert!(docs.get("migrated", "deleted").await.unwrap().is_none());
     let conn = rusqlite::Connection::open(&db).unwrap();
     assert!(!table_exists(&conn, "_tsd_docs").unwrap());
