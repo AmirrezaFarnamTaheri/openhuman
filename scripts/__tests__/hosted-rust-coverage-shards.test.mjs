@@ -58,10 +58,10 @@ test("hosted gate demands three reports and preserves whole-tree plus diff cover
   for (const shard of shards) {
     assert.ok(workflow.includes(`--wait rust-cov-${shard}`));
   }
-  assert.match(workflow, /lcov-core-\\*\\.info/);
-  assert.match(workflow, /#reports\\[@\\].*-ne 3/);
-  assert.match(workflow, /assert-coverage-presence\\.sh merged-rust-core\\.info --all/);
-  assert.match(workflow, /diff-cover\\.sh ci-artifacts/);
+  assert.ok(workflow.includes('lcov-core-*.info'));
+  assert.ok(workflow.includes('"${#reports[@]}" -ne 3'));
+  assert.ok(workflow.includes('assert-coverage-presence.sh merged-rust-core.info --all'));
+  assert.ok(workflow.includes('diff-cover.sh ci-artifacts'));
   assert.match(workflow, /cargo-nextest/);
 });
 
@@ -72,6 +72,6 @@ test("all three Rust shards retain the original suite and one aggregate presence
     assert.match(coverage, new RegExp(`has_cov_section ${shard}`));
   }
   assert.match(coverage, /COV_SHARD.*full/);
-  assert.match(coverage, /assert-coverage-presence\\.sh/);
+  assert.ok(coverage.includes('assert-coverage-presence.sh'));
   assert.match(coverage, /whole-tree coverage presence deferred/);
 });
