@@ -13,7 +13,7 @@
 # Simulate with: scripts/dep-sim.py --cut <crates>
 #
 # History
-#   334/311/3  2026-10-19  Two first-party crates split out of existing ones
+#   331/301/3  2026-10-27  CI Fast (hosted) run 40532060640 measured the fork's\n#                      synchronized flows dependency graph at 331 resolved\n#                      packages, 301 unique names, and 3 native builds.\n#                      Ratchet the fork's reconciled module graph rather than\n#                      silently permit the superseded 341/312 ceiling.\n#   334/311/3  2026-10-19  Two first-party crates split out of existing ones
 #                      (EX63 run 39182774906, Linux: 334 packages / 311 names /
 #                      3 native, against 332/309/3). New names: `tinyagents-hooks`
 #                      v2.2.0 (the stop and tool hook traits, extracted from
@@ -790,4 +790,4 @@
 #                      measures this floor. +10 packages / +9 unique names;
 #                      native unchanged. Measured with scripts/kernel-floor.sh
 #                      flows --json.
-flows:341:312:3
+flows:331:301:3
