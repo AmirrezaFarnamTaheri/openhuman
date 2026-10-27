@@ -209,6 +209,13 @@ async fn a_completion_queued_behind_a_full_runner_channel_is_still_published() {
     // TurnStarted fills the one-slot runner channel, so the tap blocks on it
     // with the completion still behind it.
     agent_tx.send(AgentProgress::TurnStarted).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while runner_rx.is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the tap fills the runner channel");
     agent_tx
         .send(AgentProgress::SubagentCompleted {
             agent_id: "workflow_builder".into(),
