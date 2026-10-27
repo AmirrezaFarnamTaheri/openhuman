@@ -12,6 +12,7 @@ import {
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
+import { providerEndpointIssue } from './providerEndpointPolicy';
 import {
   type AISettings,
   type CloudProvider,
@@ -36,6 +37,20 @@ export function useCloudProviderEditorSubmit({
 }) {
   return useCallback(
     async (next: CloudProvider, apiKey: string, opts?: { skipProbe?: boolean }) => {
+      // Validate before writing either config or credentials, including when
+      // editing an existing keyed provider or explicitly skipping /models.
+      const issue = providerEndpointIssue(
+        next.endpoint,
+        Boolean(apiKey || next.maskedKey.startsWith('••••'))
+      );
+      if (issue === 'invalid_url') {
+        throw new Error(t('settings.ai.providerEndpointInvalid', 'Invalid provider endpoint URL.'));
+      }
+      if (issue === 'insecure_bearer') {
+        throw new Error(
+          t('settings.ai.keyedEndpointInvalid', 'Provider API keys require HTTPS or a loopback HTTP endpoint.')
+        );
+      }
       const id =
         editing === 'new' || !editing?.id
           ? `p_${next.slug}_${Math.random().toString(36).slice(2, 7)}`
