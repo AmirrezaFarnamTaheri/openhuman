@@ -36,7 +36,11 @@ function isComposioCredentialRejection(error: unknown): boolean {
   }
   const message = error instanceof Error ? error.message : String(error);
   // Only a provider-key-specific rejection is terminal for this credential generation.
-  return /invalid (?:api[ -]?key|composio credentials)|composio.{0,40}(?:unauthori[sz]ed|\b401\b)|(?:api[ -]?key|composio credentials).{0,30}(?:rejected|revoked)/i.test(message);
+  return (
+    /invalid (?:api[ -]?key|composio credentials)/i.test(message) ||
+    /composio.{0,40}(?:unauthori[sz]ed|\b401\b)/i.test(message) ||
+    /(?:api[ -]?key|composio credentials).{0,30}(?:rejected|revoked)/i.test(message)
+  );
 }
 
 const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
