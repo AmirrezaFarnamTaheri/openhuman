@@ -380,9 +380,13 @@ const ThreadListItemRename: FC<{ onDone: (restoreFocus: boolean) => void }> = ({
         if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
         if (event.key === 'Enter') {
           event.preventDefault();
+          // The composer also listens for Enter. A thread rename must not
+          // submit the current draft message through a document-level handler.
+          event.stopPropagation();
           commit(true);
         } else if (event.key === 'Escape') {
           event.preventDefault();
+          event.stopPropagation();
           cancel();
         }
       }}
