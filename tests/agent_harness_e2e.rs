@@ -2072,10 +2072,19 @@ async fn delegated_background_task_completion_flow_inner() {
             ["messages"]
             .as_array()
             .expect("thread message list");
-        if messages
-            .iter()
-            .any(|message| message.to_string().contains("TASK_MANAGER_RESULT_CANARY"))
-        {
+        // Verify the durable background-delivery reply, not an earlier
+        // parent/child message. The scripted child relays WHICH_VERSION_CANARY;
+        // it never emits the obsolete TASK_MANAGER_RESULT_CANARY sentinel.
+        if messages.iter().any(|message| {
+            message
+                .pointer("/extraMetadata/scope")
+                .and_then(Value::as_str)
+                == Some("background_delivery")
+                && message
+                    .get("content")
+                    .and_then(Value::as_str)
+                    .is_some_and(|content| content.contains("WHICH_VERSION_CANARY"))
+        }) {
             break;
         }
         assert!(
