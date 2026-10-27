@@ -88,7 +88,12 @@ export function ToolError({
             </Button>
           ) : null}
           {onRetry ? (
-            <Button type="button" variant="tertiary" size="sm" onClick={onRetry} disabled={retrying}>
+            <Button
+              type="button"
+              variant="tertiary"
+              size="sm"
+              onClick={onRetry}
+              disabled={retrying}>
               {retrying ? (
                 <Loader2Icon className="size-3 animate-spin motion-reduce:animate-none" />
               ) : (
