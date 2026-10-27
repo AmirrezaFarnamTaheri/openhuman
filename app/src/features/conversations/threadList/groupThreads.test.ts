@@ -105,10 +105,7 @@ describe('groupThreads', () => {
     ]);
     expect(
       groups.find(group => group.key === 'project:c:\\work\\repo')?.threads.map(row => row.id)
-    ).toEqual([
-      'windows-a',
-      'windows-b',
-    ]);
+    ).toEqual(['windows-a', 'windows-b']);
   });
 
   it('retains pinned-first semantics and keeps blank project paths in recency', () => {
