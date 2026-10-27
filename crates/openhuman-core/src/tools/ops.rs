@@ -142,6 +142,7 @@ pub fn all_tools_with_runtime_and_pack_handle(
         Box::new(GrepTool::new(security.clone())),
         Box::new(GlobTool::new(security.clone())),
         Box::new(ListFilesTool::new(security.clone())),
+        Box::new(SourceEvidenceTool::new(security.clone())),
         Box::new(EditFileTool::new(security.clone())),
         Box::new(ApplyPatchTool::new(security.clone())),
         Box::new(CsvExportTool::new(security.clone())),
