@@ -103,12 +103,5 @@
     "site": "let mut file = tokio::fs::OpenOptions::new()",
     "reason": "User-visible artifact content is retained as a local deliverable; versioned records and native blob storage are separate capabilities and this file does not establish shared storage authority.",
     "issue": "https://github.com/tinyhumansai/openhuman/issues/7425"
-  },
-  {
-    "path": "crates/openhuman-core/src/tools/impl/filesystem/source_evidence.rs",
-    "rule": "json-write",
-    "site": "let opened = tokio::fs::OpenOptions::new()",
-    "reason": "Read-only, per-file SecurityPolicy-authorized source-handle open with O_NOFOLLOW on Unix; never creates or modifies a persistent store. The exact source is bounded and descriptor identity rechecked to reject symlink substitution; retain a narrow site allowance rather than weaken the storage-port rule for writers.",
-    "issue": "https://github.com/tinyhumansai/openhuman/issues/8449"
   }
 ]
