@@ -23,6 +23,13 @@ struct AuthStoreProviderCredentialsParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct AuthActivateProviderCredentialsParams {
+    provider: String,
+    profile: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AuthRemoveProviderCredentialsParams {
     provider: String,
     #[serde(default)]
@@ -50,6 +57,7 @@ pub fn all_controller_schemas() -> Vec<ControllerSchema> {
         schemas("auth_get_state"),
         schemas("auth_get_session_token"),
         schemas("auth_store_provider_credentials"),
+        schemas("auth_activate_provider_credentials"),
         schemas("auth_remove_provider_credentials"),
         schemas("auth_list_provider_credentials"),
     ]
@@ -76,6 +84,10 @@ pub fn all_registered_controllers() -> Vec<RegisteredController> {
         RegisteredController {
             schema: schemas("auth_store_provider_credentials"),
             handler: handle_auth_store_provider_credentials,
+        },
+        RegisteredController {
+            schema: schemas("auth_activate_provider_credentials"),
+            handler: handle_auth_activate_provider_credentials,
         },
         RegisteredController {
             schema: schemas("auth_remove_provider_credentials"),
@@ -162,6 +174,16 @@ pub fn schemas(function: &str) -> ControllerSchema {
                 optional_bool("setActive", "Whether to set profile as active."),
             ],
             outputs: vec![json_output("profile", "Stored provider profile summary.")],
+        },
+        "auth_activate_provider_credentials" => ControllerSchema {
+            namespace: "auth",
+            function: "activate_provider_credentials",
+            description: "Select an existing named cloud-provider credential profile without revealing its key.",
+            inputs: vec![
+                required_string("provider", "Named provider namespace (provider:<slug>)."),
+                required_string("profile", "Existing account profile name."),
+            ],
+            outputs: vec![json_output("result", "Active provider-account identity (no secret).")],
         },
         "auth_remove_provider_credentials" => ControllerSchema {
             namespace: "auth",
@@ -256,6 +278,24 @@ fn handle_auth_store_provider_credentials(
                 payload.token,
                 payload.fields,
                 payload.set_active,
+            )
+            .await?,
+        )
+    })
+}
+
+fn handle_auth_activate_provider_credentials(
+    ctx: DispatchCtx,
+    params: Map<String, Value>,
+) -> ControllerFuture {
+    Box::pin(async move {
+        let config = ctx.load_config().await?;
+        let payload = deserialize_params::<AuthActivateProviderCredentialsParams>(params)?;
+        to_json(
+            crate::security::credentials::rpc::activate_provider_credentials(
+                &config,
+                &payload.provider,
+                &payload.profile,
             )
             .await?,
         )
