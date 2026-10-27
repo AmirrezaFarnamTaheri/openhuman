@@ -3818,8 +3818,11 @@ async fn agent_installs_a_registry_skill_then_runs_it_inner() {
             json!({ "agent_id": "skill_setup", "prompt": "Install the harness registry skill" }),
         ),
         text_completion("Handed the install to the skill specialist."),
-        text_completion("The skill specialist owns the install and will report its result."),
-        // skill_setup finds the entry, then installs it (the gate parks here).
+        // The barrier waits for two parent responses before dispatching the
+        // child's first model response. Keep the CHILD's registry calls in
+        // those next slots: otherwise the child consumes the extra parent
+        // acknowledgement and exits, while the parent later issues the
+        // registry calls against its narrower (correctly denied) tool belt.
         tool_call_completion(
             "skill_registry_search",
             json!({ "query": "harness-registry" }),
@@ -3828,12 +3831,12 @@ async fn agent_installs_a_registry_skill_then_runs_it_inner() {
             "skill_registry_install",
             json!({ "entry_id": REGISTRY_SKILL_ID }),
         ),
+        // The install writes state; the child reports success only after
+        // installation has passed the approval gate.
         text_completion("Installed the skill."),
-        // The install writes state, so the child verifies before returning.
-        text_completion("Installed the skill."),
-        // The delivery turn: the child's result reaches the orchestrator, which
-        // answers. (The `workflows` pack is closed to it while it can hand off
-        // to `workflow_builder`, so it does not load the skill itself.)
+        // The background delivery turn runs on the parent after three child
+        // completions. Keep the remaining parent follow-ups after that fence.
+        text_completion("The skill specialist owns the install and will report its result."),
         text_completion("The skill is installed."),
     ]);
     serialize_children_after_parent(2, 3);
