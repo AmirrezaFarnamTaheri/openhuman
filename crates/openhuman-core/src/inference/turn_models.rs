@@ -20,6 +20,9 @@ pub(crate) struct TurnModels {
     /// A model for the context-window summarizer (a distinct adapter instance so
     /// its provider errors don't touch the turn's `error_slot`).
     pub(crate) summarizer: Arc<dyn tinyinference_llm::model::ChatModel<()>>,
+    /// The model id [`summarizer`](Self::summarizer) calls, as the compaction
+    /// summarizer reports it in its logs and summary provenance.
+    pub(crate) summarizer_model_id: String,
     /// Recovers the primary's original (downcastable) provider error on failure.
     pub(crate) error_slot: tinyinference_llm::model::ModelErrorSlot,
     /// Native owner set retained so its route and primary error slots are
@@ -75,6 +78,11 @@ impl TurnModels {
     ) -> Self {
         self.routes.push((name.to_string(), model));
         self
+    }
+
+    /// The model id the context-compaction summarizer calls.
+    pub(crate) fn summarizer_model_id(&self) -> &str {
+        &self.summarizer_model_id
     }
 
     /// Provider telemetry id for this turn (`{provider_id}.{model}`).
@@ -197,6 +205,7 @@ fn build_turn_models_crate(
         primary,
         routes,
         summarizer,
+        summarizer_model_id: model.to_owned(),
         error_slot,
         native_model_set: Some(built),
         provider_id,
@@ -466,6 +475,7 @@ impl TurnModelSource {
                 primary,
                 routes: Vec::new(),
                 summarizer,
+                summarizer_model_id: model.to_owned(),
                 error_slot: Arc::new(std::sync::Mutex::new(None)),
                 native_model_set: None,
                 provider_id,
