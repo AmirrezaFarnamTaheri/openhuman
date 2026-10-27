@@ -432,11 +432,13 @@ pub fn installed() -> Option<Arc<dyn StorageBackend>> {
 
 /// Removes the installed backend; returns whether there was one.
 pub fn clear() -> bool {
-    #[cfg(test)]
-    set_slot_owner(None);
     set_installed_url(None);
     agents::reset_recorded();
-    BACKEND.clear()
+    let cleared = BACKEND.clear();
+    // Only after the backend is gone, so other tests never see it in between.
+    #[cfg(test)]
+    set_slot_owner(None);
+    cleared
 }
 
 /// The storage scope of the current call: the tenant's profile
