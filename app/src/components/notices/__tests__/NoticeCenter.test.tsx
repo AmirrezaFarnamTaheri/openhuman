@@ -120,7 +120,7 @@ describe('NoticeCenter', () => {
     expect(trigger).toHaveFocus();
   });
 
-  it('restores the previously focused app control when final dismissal removes the bell', async () => {
+  it('restores app focus after dismissing the last notice', async () => {
     renderCenter([keyError]);
     const previous = screen.getByRole('button', { name: 'Resume work' });
     previous.focus();
@@ -140,7 +140,7 @@ describe('NoticeCenter', () => {
     expect(screen.getByTestId('notice-fallback')).toHaveFocus();
   });
 
-  it('does not steal focus when notices disappear while work has focus outside the panel', async () => {
+  it('preserves outside focus when notices disappear', async () => {
     const { store } = renderCenter([keyError]);
     await userEvent.click(screen.getByTestId('notice-trigger'));
     const previous = screen.getByRole('button', { name: 'Resume work' });
