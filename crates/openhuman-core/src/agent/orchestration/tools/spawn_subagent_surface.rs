@@ -485,6 +485,129 @@ pub(crate) fn extract_workflow_proposal_from_history(
         })
 }
 
+/// Settle a finished child's workflow output in the parent thread: surface a
+/// proposal it produced (see [`persist_workflow_proposal`]), then record a flow
+/// it persisted onto the thread's live proposal (see
+/// [`record_agent_saved_workflow`]), in that order, so a save made in the same
+/// run settles the proposal the user is now looking at.
+fn attach_workflow_proposal(
+    ctx: &DispatchCtx,
+    workspace_dir: &std::path::Path,
+    parent_thread_id: Option<&str>,
+    task_id: &str,
+    agent_id: &str,
+    final_history: &[TranscriptMessage],
+    summary: String,
+) -> String {
+    let summary = persist_workflow_proposal(
+        ctx,
+        workspace_dir,
+        parent_thread_id,
+        task_id,
+        agent_id,
+        final_history,
+        summary,
+    );
+    if let Some(thread_id) = parent_thread_id {
+        record_agent_saved_workflow(ctx, workspace_dir, thread_id, task_id, final_history);
+    }
+    summary
+}
+
+/// The flow a finished child persisted from a proposal: the LAST
+/// `workflow_created` (`create_workflow`) or `workflow_saved` (`save_workflow`)
+/// tool result, as `(flow_id, name)`.
+pub(crate) fn extract_saved_workflow_from_history(
+    history: &[TranscriptMessage],
+) -> Option<(String, String)> {
+    history
+        .iter()
+        .rev()
+        .filter(|message| message.role == "tool")
+        .find_map(|message| {
+            let value: serde_json::Value = serde_json::from_str(message.content.trim()).ok()?;
+            let kind = value.get("type").and_then(|t| t.as_str())?;
+            if kind != "workflow_created" && kind != "workflow_saved" {
+                return None;
+            }
+            let flow_id = value.get("flow_id").and_then(|v| v.as_str())?;
+            let name = value.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            Some((flow_id.to_string(), name.to_string()))
+        })
+}
+
+/// A flow the agent persisted from a delivered proposal (the user said "save
+/// it" in chat rather than clicking the card) is recorded on the thread's live
+/// proposal message as `saved_flow_id`, the same field the card writes. The
+/// card then resumes at the enable step for that flow instead of creating a
+/// second copy. Only the newest proposal message counts, and only while it is
+/// unsettled and has the saved flow's name, so an unrelated proposal is never
+/// claimed. Best-effort: a failure is logged and the delivery is unaffected.
+fn record_agent_saved_workflow(
+    ctx: &DispatchCtx,
+    workspace_dir: &std::path::Path,
+    thread_id: &str,
+    task_id: &str,
+    final_history: &[TranscriptMessage],
+) {
+    let Some((flow_id, name)) = extract_saved_workflow_from_history(final_history) else {
+        return;
+    };
+    let messages = match conversations::get_messages(ctx, workspace_dir.to_path_buf(), thread_id) {
+        Ok(messages) => messages,
+        Err(err) => {
+            log::warn!(
+                "[spawn_subagent] agent-saved workflow: could not read thread_id={thread_id} \
+                 task_id={task_id} error={err}"
+            );
+            return;
+        }
+    };
+    let Some(proposal) = messages
+        .iter()
+        .rev()
+        .find(|m| m.extra_metadata["scope"] == "workflow_proposal")
+    else {
+        log::debug!(
+            "[spawn_subagent] agent-saved workflow: no proposal in thread_id={thread_id} \
+             task_id={task_id} flow_id={flow_id}"
+        );
+        return;
+    };
+    let meta = &proposal.extra_metadata;
+    let settled = meta["consumed"] == true || meta.get("saved_flow_id").is_some();
+    if settled || meta["proposal"]["name"] != name.as_str() {
+        log::debug!(
+            "[spawn_subagent] agent-saved workflow: newest proposal {} not claimed \
+             (settled={settled}) task_id={task_id} flow_id={flow_id}",
+            proposal.id
+        );
+        return;
+    }
+    let patch = conversations::ConversationMessagePatch {
+        merge_extra_metadata: Some(json!({ "saved_flow_id": flow_id })),
+        ..Default::default()
+    };
+    match conversations::update_message(
+        ctx,
+        workspace_dir.to_path_buf(),
+        thread_id,
+        &proposal.id,
+        patch,
+    ) {
+        Ok(_) => log::info!(
+            "[spawn_subagent] agent-saved workflow recorded on proposal {} \
+             flow_id={flow_id} task_id={task_id}",
+            proposal.id
+        ),
+        Err(err) => log::warn!(
+            "[spawn_subagent] agent-saved workflow: could not mark proposal {} \
+             flow_id={flow_id} task_id={task_id} error={err}",
+            proposal.id
+        ),
+    }
+}
+
 /// Durably surface a workflow proposal found in a finished child's history:
 /// persist it as a parent-thread conversation message (metadata carries the
 /// full payload so the UI can rehydrate the proposal card after reload) and
@@ -492,7 +615,7 @@ pub(crate) fn extract_workflow_proposal_from_history(
 /// follow-up turn presents it faithfully. Returns the (possibly extended)
 /// summary; on any persistence error the summary still carries the envelope —
 /// losing durability must not lose delivery.
-fn attach_workflow_proposal(
+fn persist_workflow_proposal(
     ctx: &DispatchCtx,
     workspace_dir: &std::path::Path,
     parent_thread_id: Option<&str>,

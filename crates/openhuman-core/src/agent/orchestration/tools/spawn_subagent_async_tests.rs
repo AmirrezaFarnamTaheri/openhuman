@@ -240,6 +240,92 @@ fn attach_workflow_proposal_persists_thread_message_and_extends_summary() {
     assert_eq!(proposal_msg.extra_metadata["task_id"], "sub-task-1");
 }
 
+/// A thread holding one delivered proposal (task `sub-propose`), named `name`.
+fn thread_with_delivered_proposal(name: &str) -> tempfile::TempDir {
+    use crate::threads::store::CreateConversationThread;
+    let temp = tempfile::tempdir().expect("tempdir");
+    conversations::ensure_thread(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        temp.path().to_path_buf(),
+        CreateConversationThread {
+            id: "thread-parent".into(),
+            title: "Main chat".into(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            parent_thread_id: None,
+            labels: None,
+            personality_id: None,
+            working_dir: None,
+        },
+    )
+    .expect("thread created");
+    attach_workflow_proposal(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        temp.path(),
+        Some("thread-parent"),
+        "sub-propose",
+        "workflow_builder",
+        &[TranscriptMessage::tool(format!(
+            r#"{{"type":"workflow_proposal","persisted":false,"name":"{name}","graph":{{"nodes":[],"edges":[]}}}}"#
+        ))],
+        "proposal".to_string(),
+    );
+    temp
+}
+
+fn delivered_proposal_metadata(temp: &tempfile::TempDir) -> serde_json::Value {
+    conversations::get_messages(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        temp.path().to_path_buf(),
+        "thread-parent",
+    )
+    .expect("messages")
+    .into_iter()
+    .find(|m| m.id == "workflow-proposal:sub-propose")
+    .expect("proposal message")
+    .extra_metadata
+}
+
+#[test]
+fn an_agent_save_of_the_delivered_proposal_is_recorded_on_its_card() {
+    // The user said "save it" in chat: a later builder run created the flow.
+    // The proposal card must resume at that flow instead of creating another.
+    let temp = thread_with_delivered_proposal("Friday Inbox Wrap-up");
+    attach_workflow_proposal(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        temp.path(),
+        Some("thread-parent"),
+        "sub-save",
+        "workflow_builder",
+        &[TranscriptMessage::tool(
+            r#"{"type":"workflow_created","flow_id":"flow-1","name":"Friday Inbox Wrap-up","enabled":false}"#,
+        )],
+        "saved".to_string(),
+    );
+    assert_eq!(
+        delivered_proposal_metadata(&temp)["saved_flow_id"],
+        "flow-1"
+    );
+}
+
+#[test]
+fn an_agent_save_of_another_workflow_leaves_the_proposal_alone() {
+    let temp = thread_with_delivered_proposal("Friday Inbox Wrap-up");
+    attach_workflow_proposal(
+        &crate::core::runtime::DispatchCtx::ambient(),
+        temp.path(),
+        Some("thread-parent"),
+        "sub-save",
+        "workflow_builder",
+        &[TranscriptMessage::tool(
+            r#"{"type":"workflow_saved","flow_id":"flow-9","name":"Something Else","enabled":true}"#,
+        )],
+        "saved".to_string(),
+    );
+    assert!(delivered_proposal_metadata(&temp)
+        .get("saved_flow_id")
+        .is_none());
+}
+
 #[test]
 fn attach_workflow_proposal_without_proposal_returns_summary_unchanged() {
     let temp = tempfile::tempdir().expect("tempdir");
