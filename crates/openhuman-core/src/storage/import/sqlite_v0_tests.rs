@@ -101,9 +101,11 @@ async fn old_sqlite_upgrades_before_backend_opens_and_retains_an_original_backup
         .unwrap();
     assert_eq!(row_count, 1);
     let stream_count: i64 = conn
-        .query_row("SELECT count(*) FROM streams WHERE name = 'events'", [], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT count(*) FROM streams WHERE name = 'events'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(stream_count, 1);
     let backups: Vec<_> = std::fs::read_dir(db.parent().unwrap())
