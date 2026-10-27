@@ -930,7 +930,7 @@ function FlowEditor({
             preauthNavRef.current = savedFlowId;
           } else {
             bypassRouteBlockRef.current = true;
-          navigate(`/flows/${savedFlowId}`, { replace: true });
+            navigate(`/flows/${savedFlowId}`, { replace: true });
           }
         }
       } catch (err) {
