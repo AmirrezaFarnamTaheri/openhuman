@@ -58,15 +58,17 @@ describe('ThreadList', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('groups threads into pinned and recency sections in order', () => {
+  it('groups pinned, project-scoped and unscoped recency threads in order', () => {
     renderList();
     const sections = screen.getAllByRole('region');
     expect(sections.map(s => s.getAttribute('data-testid'))).toEqual([
       'thread-group-pinned',
+      'thread-group-project:/home/me/projects/site',
       'thread-group-today',
       'thread-group-yesterday',
-      'thread-group-previous7Days',
     ]);
+    expect(within(sections[1]).getByTestId('thread-row-t4')).toBeInTheDocument();
+    expect(sections[1]).toHaveAccessibleName('site');
     expect(within(sections[0]).getByTestId('thread-row-t3')).toBeInTheDocument();
   });
 
