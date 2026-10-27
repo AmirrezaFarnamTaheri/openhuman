@@ -262,7 +262,7 @@ describe('FlowsPage', () => {
 
   it('opens the chooser from the explicitly selected welcome landing', async () => {
     listFlows.mockResolvedValue([]);
-    renderWithProviders(<FlowsPage />);
+    renderWithProviders(<FlowsPage />, { initialEntries: ['/?view=welcome'] });
 
     fireEvent.click(await screen.findByTestId('flows-welcome-cta-new'));
 
