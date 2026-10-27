@@ -27,8 +27,12 @@ const COMPOSIO_FETCH_RETRY_BACKOFF_MS = 400;
 /** A local RPC bearer failure is not a rejected Composio API key. */
 function isComposioCredentialRejection(error: unknown): boolean {
   if (error instanceof CoreRpcError) {
-    if (error.kind === 'provider_auth') return true;
-    if (error.kind !== 'unknown') return false;
+    if (error.kind === 'provider_auth') {
+      return true;
+    }
+    if (error.kind !== 'unknown') {
+      return false;
+    }
   }
   const message = error instanceof Error ? error.message : String(error);
   // Only a provider-key-specific rejection is terminal for this credential generation.
@@ -254,7 +258,9 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
             !mountedRef.current ||
             generation !== configGenerationRef.current ||
             pollRequestId !== pollRequestIdRef.current
-          ) return;
+          ) {
+            return;
+          }
           const freshConnections = resp.connections ?? [];
           setConnections(freshConnections);
           // Keep the durable cache current with each poll so a restart paints
@@ -268,7 +274,9 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
             !mountedRef.current ||
             generation !== configGenerationRef.current ||
             pollRequestId !== pollRequestIdRef.current
-          ) return;
+          ) {
+            return;
+          }
           const message = err instanceof Error ? err.message : String(err);
           if (isComposioCredentialRejection(err)) {
             authRejectedPollRef.current = true;
