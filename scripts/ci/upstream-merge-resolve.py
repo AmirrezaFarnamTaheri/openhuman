@@ -43,7 +43,7 @@ POLICY = {
     "crates/openhuman-core/src/web_chat/README.md": ["ours"],
     "crates/openhuman-core/src/web_chat/turn_guards/backstop.rs": ["ours"],
     "crates/openhuman-core/src/web_chat/turn_guards/backstop_tests.rs": ["ours", "ours"],
-    "crates/openhuman-embed/examples/mcp.rs": ["theirs", "ours", "ours"],
+    "crates/openhuman-embed/examples/mcp.rs": ["theirs", "artifact", "storage"],
     "crates/openhuman-embed/examples/support/mod.rs": ["ours"],
     "docs/gitbooks/en/developing/architecture/agent-harness.md": ["theirs", "ours"],
     "scripts/__tests__/self-hosted-lanes.test.mjs": ["ours"],
@@ -60,6 +60,21 @@ POLICY = {
 # These are semantically composed: keep both the fork's new capabilities and
 # the upstream module runtime's new exports and model source contract.
 CUSTOM = {
+    "artifact": (
+        "    // Prefer the checksum-verified staged TinyMCP artifact and accept\n"
+        "    // the explicit upstream offline-test path as a fallback.\n"
+        "    let artifact = openhuman_core::modules::local_artifact(\"tinymcp\")\n"
+        "        .or_else(|| std::env::var(\"OPENHUMAN_TINYMCP_TEST_MODULE\").ok().map(std::path::PathBuf::from))\n"
+        "        .ok_or_else(|| anyhow::anyhow!(\"stage TinyMCP or provide OPENHUMAN_TINYMCP_TEST_MODULE\"))?;\n"
+    ),
+    "storage": (
+        "    config.modules.overrides.push(ModuleOverride::with_path(\n"
+        "        \"tinymcp\",\n"
+        "        artifact.canonicalize()?.to_string_lossy().into_owned(),\n"
+        "    ));\n"
+        "    let storage_dir = tempfile::tempdir()?;\n"
+        "    let storage_url = openhuman_core::storage::config::default_url(storage_dir.path());\n"
+    ),
     "exports": (
         "pub use startup::{start_channels, start_channels_in};\n"
         "#[cfg(feature = \"channels\")]\n"
