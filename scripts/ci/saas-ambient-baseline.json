@@ -7,13 +7,6 @@
     "occurrence": 1
   },
   {
-    "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/agent/subagent_host/ops/graph/dispatch_helpers.rs",
-    "line": 23,
-    "text": "tokio::spawn(async move {",
-    "occurrence": 1
-  },
-  {
     "rule": "ambient-config",
     "path": "crates/openhuman-core/src/agent_registry/host_definition.rs",
     "line": 245,
@@ -46,13 +39,6 @@
     "path": "crates/openhuman-core/src/channels/runtime/dispatch/processor/turn.rs",
     "line": 134,
     "text": "_acknowledgment_task = Some(AbortOnDropHandle::new(tokio::spawn(async move {",
-    "occurrence": 1
-  },
-  {
-    "rule": "bare-spawn",
-    "path": "crates/openhuman-core/src/channels/runtime/dispatch/processor/turn.rs",
-    "line": 265,
-    "text": "Some(AbortOnDropHandle::new(tokio::spawn(async move {",
     "occurrence": 1
   },
   {
@@ -396,13 +382,6 @@
     "path": "crates/openhuman-core/src/hooks/host.rs",
     "line": 58,
     "text": "let loaded = tokio::task::spawn_blocking(move || {",
-    "occurrence": 1
-  },
-  {
-    "rule": "ambient-context",
-    "path": "crates/openhuman-core/src/inference/auth_error_registry.rs",
-    "line": 186,
-    "text": "let Some(context) = crate::core::runtime::CoreContext::current() else {",
     "occurrence": 1
   },
   {
