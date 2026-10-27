@@ -38,6 +38,11 @@ vi.mock('three', async importOriginal => {
   };
 });
 
+class MockResizeObserver {
+  observe = vi.fn();
+  disconnect = vi.fn();
+}
+
 describe('RotatingTetrahedronCanvas animation lifecycle', () => {
   const originalGetContext = HTMLCanvasElement.prototype.getContext;
   let frames: FrameRequestCallback[];
@@ -56,7 +61,7 @@ describe('RotatingTetrahedronCanvas animation lifecycle', () => {
     cancelFrame = vi.fn();
     vi.stubGlobal('requestAnimationFrame', requestFrame);
     vi.stubGlobal('cancelAnimationFrame', cancelFrame);
-    vi.stubGlobal('ResizeObserver', vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })));
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
       configurable: true,
       value: vi.fn(() => ({})),
