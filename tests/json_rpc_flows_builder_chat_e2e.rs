@@ -5,9 +5,6 @@
 //! Every model response is scripted (the in-process FIFO in
 //! `support/rpc_e2e_harness.rs`), so the assertions are about what the host
 //! does with them: spawn, delivery, persistence, events and saving.
-//!
-//! Two checks pin behaviour that open fixes change. Each reads a const below;
-//! when its fix lands the pinned assertion fails until the const is flipped.
 
 #![cfg(feature = "flows")]
 
@@ -18,18 +15,6 @@ use harness::*;
 use openhuman_core::core::events::DomainEvent;
 use tinybus::EventHandler;
 use tokio::sync::mpsc;
-
-/// #8451: a `subagent_completed` web-channel event that arrives after the
-/// parent turn ended is dropped (`LateSubagentSink` forwards only failures), so
-/// the card stays on "Working". Flip to `true` with the fix that forwards it.
-const SUBAGENT_COMPLETED_REACHES_SOCKET: bool = false;
-
-/// The agent-side save (`create_workflow` from a delegated "save it") does not
-/// record `saved_flow_id` on the proposal it saved; only the card's own save
-/// does. So the card, pressed after the agent saved, creates a second copy of
-/// the flow (the duplicate-save bug). Flip to `true` with the fix that records
-/// it; the test then requires the card to enable the agent's flow instead.
-const AGENT_SAVE_RECORDS_SAVED_FLOW_ID: bool = false;
 
 const CLIENT_ID: &str = "builder-chat-e2e";
 const REQUESTED_NAME: &str = "Morning digest (builder e2e)";
@@ -586,26 +571,14 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     })
     .await;
     assert_eq!(completed.1, "workflow_builder");
-    let socket_completed = || {
-        events_named(&events, "subagent_completed")
+    // #8451: a completion after the parent turn ended still reaches the card.
+    wait_for("subagent_completed on the web channel", || {
+        let seen = events_named(&events, "subagent_completed")
             .into_iter()
-            .any(|e| e.to_string().contains(&task_id))
-    };
-    if SUBAGENT_COMPLETED_REACHES_SOCKET {
-        wait_for("subagent_completed on the web channel", || {
-            let seen = socket_completed();
-            async move { seen.then_some(()) }
-        })
-        .await;
-    } else {
-        // Pinned (#8451): give a forwarded event time to arrive, then expect
-        // none. When the fix lands this fails: flip the const above.
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        assert!(
-            !socket_completed(),
-            "subagent_completed now reaches the socket: set SUBAGENT_COMPLETED_REACHES_SOCKET = true"
-        );
-    }
+            .any(|e| e.to_string().contains(&task_id));
+        async move { seen.then_some(()) }
+    })
+    .await;
 
     // ── 4. the agent-side "save it": one flow, its schedule born disabled ──
     // The order a user takes: ask the agent to save, then press the card.
@@ -751,30 +724,15 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
         assert_eq!(enabled["enabled"], true, "{enabled}");
     }
 
-    if AGENT_SAVE_RECORDS_SAVED_FLOW_ID {
-        assert!(
-            recorded.is_some(),
-            "the agent save records saved_flow_id on the proposal"
-        );
-        assert_eq!(
-            flow_count(&rpc_base).await,
-            1,
-            "saving the card after the agent saved must not create a second flow"
-        );
-    } else {
-        // Pinned duplicate-save bug: the agent save leaves no saved_flow_id on
-        // the proposal, so the card creates a second copy of the same flow.
-        // When the fix lands this fails: set AGENT_SAVE_RECORDS_SAVED_FLOW_ID = true.
-        assert!(
-            recorded.is_none(),
-            "the agent save now records saved_flow_id: set AGENT_SAVE_RECORDS_SAVED_FLOW_ID = true"
-        );
-        assert_eq!(
-            flow_count(&rpc_base).await,
-            2,
-            "duplicate-save bug pinned: the card saved a second flow after the agent's"
-        );
-    }
+    assert!(
+        recorded.is_some(),
+        "the agent save records saved_flow_id on the proposal"
+    );
+    assert_eq!(
+        flow_count(&rpc_base).await,
+        1,
+        "saving the card after the agent saved must not create a second flow"
+    );
 
     clear_forced_chat_completions();
     sse_task.abort();
