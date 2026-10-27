@@ -1,4 +1,5 @@
 name: Fork release kickoff
+# Retry after PR #18 fixed mixed-case GHCR image tags (push, verify, latest).
 on:
   push:
     paths:
