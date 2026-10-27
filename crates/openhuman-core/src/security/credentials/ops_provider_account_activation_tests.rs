@@ -43,11 +43,11 @@ async fn activating_one_account_only_changes_its_named_cloud_provider() {
         .unwrap();
     assert_eq!(listed.value.len(), 2);
     assert_eq!(
-        listed.value.iter().filter(|profile| profile.is_active).count(), 1,
+        listed.value.iter().filter(|profile| profile.is_active == Some(true)).count(), 1,
         "exactly one account should be marked preferred",
     );
     assert!(listed.value.iter().find(|profile| profile.profile_name == "personal").unwrap().is_active);
-    assert!(!listed.value.iter().find(|profile| profile.profile_name == "work").unwrap().is_active);
+    assert_eq!(listed.value.iter().find(|profile| profile.profile_name == "work").unwrap().is_active, Some(false));
 }
 
 #[tokio::test]
@@ -114,10 +114,10 @@ async fn storing_a_non_active_account_does_not_claim_to_make_it_active() {
     )
     .await
     .unwrap();
-    assert!(!stored.value.is_active);
+    assert_eq!(stored.value.is_active, None, "write response does not claim active state without listing");
     let listed = list_provider_credentials(&config, Some("provider:openai".into()))
         .await
         .unwrap();
-    assert!(listed.value.iter().find(|p| p.profile_name == "work").unwrap().is_active);
-    assert!(!listed.value.iter().find(|p| p.profile_name == "personal").unwrap().is_active);
+    assert_eq!(listed.value.iter().find(|p| p.profile_name == "work").unwrap().is_active, Some(true));
+    assert_eq!(listed.value.iter().find(|p| p.profile_name == "personal").unwrap().is_active, Some(false));
 }
