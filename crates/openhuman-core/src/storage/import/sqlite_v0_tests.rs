@@ -46,6 +46,20 @@ async fn old_sqlite_upgrades_before_backend_opens_and_retains_an_original_backup
     let conn = rusqlite::Connection::open(&db).unwrap();
     assert!(!table_exists(&conn, "_tsd_docs").unwrap());
     assert!(table_exists(&conn, "docs").unwrap());
+    // TSD v2 compares stored CREATE statements, including quoted identifiers.
+    // Merely retaining the v0 collection table under its original spelling
+    // looks structurally valid but makes the v2 driver reject every open.
+    let declarations: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_schema WHERE type='table' AND name='_tsd_collections'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(
+        declarations.contains("\\"_tsd_collections\\""),
+        "upgraded collection DDL must use the v2 driver's quoted identifier"
+    );
     let row_count: i64 = conn.query_row("SELECT count(*) FROM blobs WHERE key = 'binary'", [], |r| r.get(0)).unwrap();
     assert_eq!(row_count, 1);
     let stream_count: i64 = conn.query_row("SELECT count(*) FROM streams WHERE name = 'events'", [], |r| r.get(0)).unwrap();
