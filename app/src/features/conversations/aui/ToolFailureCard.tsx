@@ -54,7 +54,7 @@ export function ToolFailureCard({
 }) {
   const { t } = useT();
   const camel = toCamelClass(failure.class);
-  const known = LOCALIZED_FAILURE_CLASSES.has(camel);
+  const known = LOCALIZED_FAILURE_CLASSES.has(camel) || camel === 'unknown';
   const cause =
     camel === 'unknown' && diagnostic?.trim()
       ? diagnostic.trim().split('\n').slice(0, 3).join('\n').slice(0, 360)
