@@ -260,7 +260,7 @@ describe('FlowsPage', () => {
     expect(screen.getByTestId('new-workflow-scratch')).toBeInTheDocument();
   });
 
-  it('opens the chooser from the welcome landing "New workflow" action', async () => {
+  it('opens the chooser from the explicitly selected welcome landing', async () => {
     listFlows.mockResolvedValue([]);
     renderWithProviders(<FlowsPage />);
 
