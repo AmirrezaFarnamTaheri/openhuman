@@ -121,7 +121,7 @@ async fn collect_sse(
     task
 }
 
-fn lock(sink: &Mutex<Vec<Value>>) -> std::sync::MutexGuard<'_, Vec<Value>> {
+fn lock<T>(sink: &Mutex<Vec<T>>) -> std::sync::MutexGuard<'_, Vec<T>> {
     sink.lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
@@ -177,12 +177,21 @@ fn request_trace() -> String {
                 .flatten()
                 .filter_map(|c| c.pointer("/function/name").and_then(Value::as_str))
                 .collect();
+            let last_text: String = messages
+                .and_then(|m| m.last())
+                .and_then(|m| m.get("content"))
+                .map(|c| c.as_str().map_or_else(|| c.to_string(), str::to_string))
+                .unwrap_or_default()
+                .chars()
+                .take(300)
+                .collect();
             out.push_str(&format!(
-                "  #{i} {agent}: {} messages, last {last_role}, tool calls so far {calls:?}\n",
+                "  #{i} {agent}: {} messages, last {last_role}, tool calls so far {calls:?}\n      last: {last_text}\n",
                 messages.map_or(0, Vec::len)
             ));
         }
     });
+    out.push_str(&format!("sub-agent events: {:?}\n", *lock(&SUBAGENT_LOG)));
     let left = with_forced_chat_completions(|q| q.len());
     out.push_str(&format!("scripted completions not consumed: {left}\n"));
     out
@@ -190,17 +199,31 @@ fn request_trace() -> String {
 
 struct SubagentEvents(mpsc::UnboundedSender<(String, String)>);
 
+/// Every sub-agent outcome the bus carried, for the timeout trace.
+static SUBAGENT_LOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
 #[async_trait::async_trait]
 impl EventHandler<DomainEvent> for SubagentEvents {
     fn name(&self) -> &str {
         "test::json_rpc_flows_builder_chat_e2e::subagents"
     }
     async fn handle(&self, event: &DomainEvent) {
-        if let DomainEvent::SubagentCompleted {
-            task_id, agent_id, ..
-        } = event
-        {
-            let _ = self.0.send((task_id.clone(), agent_id.clone()));
+        match event {
+            DomainEvent::SubagentCompleted {
+                task_id, agent_id, ..
+            } => {
+                lock(&SUBAGENT_LOG).push(format!("completed {agent_id} task={task_id}"));
+                let _ = self.0.send((task_id.clone(), agent_id.clone()));
+            }
+            DomainEvent::SubagentFailed {
+                task_id,
+                agent_id,
+                error,
+                ..
+            } => {
+                lock(&SUBAGENT_LOG).push(format!("FAILED {agent_id} task={task_id}: {error}"));
+            }
+            _ => {}
         }
     }
 }
@@ -340,6 +363,11 @@ fn json_rpc_chat_spawns_workflow_builder_and_saves_its_proposal() {
 }
 
 async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
+    // The child's own log: RUST_LOG picks what a failing run shows.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .try_init();
     let _env_lock = json_rpc_e2e_env_lock_async().await;
     let _fifo_guard = ScriptedFifoGuard;
     let tmp = tempdir().expect("tempdir");
