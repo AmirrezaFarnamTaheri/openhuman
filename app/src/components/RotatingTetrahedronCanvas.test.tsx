@@ -12,13 +12,9 @@ const renderer = vi.hoisted(() => ({
   failConstruction: false,
 }));
 
-vi.mock('../hooks/useAnimationActivity', () => ({
-  useAnimationActivity: () => motion.allowed,
-}));
+vi.mock('../hooks/useAnimationActivity', () => ({ useAnimationActivity: () => motion.allowed }));
 
-vi.mock('../lib/i18n/I18nContext', () => ({
-  useT: () => ({ t: (key: string) => key }),
-}));
+vi.mock('../lib/i18n/I18nContext', () => ({ useT: () => ({ t: (key: string) => key }) }));
 
 vi.mock('three', async importOriginal => {
   const actual = await importOriginal<typeof import('three')>();
