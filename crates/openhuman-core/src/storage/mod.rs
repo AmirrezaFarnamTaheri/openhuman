@@ -303,7 +303,9 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
         let path = path.clone();
         tokio::task::spawn_blocking(move || import::sqlite_v0::upgrade_if_needed(&path))
             .await
-            .map_err(|e| StorageError::backend(format!("SQLite migration did not finish: {e}")))??;
+            .map_err(|e| {
+                StorageError::backend(format!("SQLite migration did not finish: {e}"))
+            })??;
     }
     // Every opened backend checks the process's lease fences on write; with
     // no fence registered (every single-user host) that is a pass-through.
