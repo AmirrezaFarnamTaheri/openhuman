@@ -49,7 +49,11 @@ fn legacy_db(dir: &std::path::Path, broken: bool) -> std::path::PathBuf {
         [],
     )
     .unwrap();
-    conn.execute("INSERT INTO _tsd_blobs VALUES ('local','binary','application/octet-stream',x'010203',NULL)", []).unwrap();
+    conn.execute(
+        "INSERT INTO _tsd_blobs VALUES ('local','binary','application/octet-stream',x'010203',NULL)",
+        [],
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO _tsd_fts (scope,coll,id,body) VALUES ('local','migrated','one','preserved')",
         [],
@@ -87,16 +91,31 @@ async fn old_sqlite_upgrades_before_backend_opens_and_retains_an_original_backup
         )
         .unwrap();
     assert!(
-        declarations.contains("\\"_tsd_collections\\""),
+        declarations.contains("\"_tsd_collections\""),
         "upgraded collection DDL must use the v2 driver's quoted identifier"
     );
-    let row_count: i64 = conn.query_row("SELECT count(*) FROM blobs WHERE key = 'binary'", [], |r| r.get(0)).unwrap();
+    let row_count: i64 = conn
+        .query_row("SELECT count(*) FROM blobs WHERE key = 'binary'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
     assert_eq!(row_count, 1);
-    let stream_count: i64 = conn.query_row("SELECT count(*) FROM streams WHERE name = 'events'", [], |r| r.get(0)).unwrap();
+    let stream_count: i64 = conn
+        .query_row("SELECT count(*) FROM streams WHERE name = 'events'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
     assert_eq!(stream_count, 1);
-    let backups: Vec<_> = std::fs::read_dir(db.parent().unwrap()).unwrap()
+    let backups: Vec<_> = std::fs::read_dir(db.parent().unwrap())
+        .unwrap()
         .map(|entry| entry.unwrap().path())
-        .filter(|path| path.file_name().unwrap().to_string_lossy().contains("pre-v2-")).collect();
+        .filter(|path| {
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains("pre-v2-")
+        })
+        .collect();
     assert_eq!(backups.len(), 1, "upgrade must retain one rollback copy");
     let old = rusqlite::Connection::open(&backups[0]).unwrap();
     assert!(table_exists(&old, "_tsd_docs").unwrap());
