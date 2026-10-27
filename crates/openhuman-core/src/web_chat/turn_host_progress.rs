@@ -150,7 +150,8 @@ impl LateSubagentSink {
         };
         // The turn's own projection is closed, so the event gets a projection
         // turn of its own: the module still owns the wire form, including the
-        // child's output and spend a detached completion carries.
+        // child's output and spend a detached completion carries. Its restarted
+        // sequence would fall below the turn's, so it is published without one.
         let surface = super::super::surface::Surface::new(
             ctx,
             super::super::surface::TurnIds {
@@ -160,7 +161,8 @@ impl LateSubagentSink {
             },
             self.config.clone(),
         )
-        .await;
+        .await
+        .unsequenced();
         surface.output(output).await;
         surface.close().await;
     }

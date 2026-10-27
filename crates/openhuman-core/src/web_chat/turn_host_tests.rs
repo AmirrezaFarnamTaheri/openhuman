@@ -179,6 +179,7 @@ async fn a_late_subagent_failure_is_published_after_the_runner_is_gone() {
     let wire = serde_json::to_value(&event).expect("wire event");
     assert_eq!(wire["skill_id"], "task-late");
     assert_eq!(wire["success"], false);
+    assert_eq!(event.context().seq, None);
 }
 
 /// A child's completion can queue behind a backlog the runner never reads: at
@@ -244,6 +245,8 @@ async fn a_completion_queued_behind_a_full_runner_channel_is_still_published() {
     assert_eq!(wire["skill_id"], "task-late-done");
     assert_eq!(wire["success"], true);
     assert_eq!(wire["subagent"]["output"], "final answer");
+    // Unsequenced, so a client that saw the turn's higher seq does not drop it.
+    assert_eq!(event.context().seq, None);
 }
 
 #[tokio::test]
