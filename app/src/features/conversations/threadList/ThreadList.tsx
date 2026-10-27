@@ -16,9 +16,9 @@ import { createContext, useContext, useMemo } from 'react';
 
 import { useT } from '../../../lib/i18n/I18nContext';
 import type { Thread } from '../../../types/thread';
-import { folderBasename, groupThreads, isThreadPinned, type ThreadGroupKey } from './groupThreads';
+import { folderBasename, groupThreads, isThreadPinned } from './groupThreads';
 
-const GROUP_LABEL_KEYS: Record<ThreadGroupKey, string> = {
+const GROUP_LABEL_KEYS: Record<string, string> = {
   pinned: 'chat.sidebar.group.pinned',
   today: 'chat.sidebar.group.today',
   yesterday: 'chat.sidebar.group.yesterday',
@@ -165,12 +165,13 @@ function ThreadListView() {
           <section
             key={group.key}
             data-testid={`thread-group-${group.key}`}
-            aria-label={t(GROUP_LABEL_KEYS[group.key])}
+            aria-label={group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')}
             className="flex flex-col gap-0.5">
             <h3
+              title={group.key.startsWith('project:') ? group.threads[0]?.actionDir : undefined}
               data-slot="aui_thread-list-group-label"
               className="text-muted-foreground px-2.5 pt-3 pb-1 text-xs font-medium">
-              {t(GROUP_LABEL_KEYS[group.key])}
+              {group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')}
             </h3>
             {group.threads.map(thread => (
               <ThreadListPrimitive.ItemByIndex
