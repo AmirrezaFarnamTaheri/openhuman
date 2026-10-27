@@ -9,8 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusqlite::types::Value as SqlValue;
-use rusqlite::{params, Connection, OpenFlags};
+use crate::storage::rusqlite::types::Value as SqlValue;
+use crate::storage::rusqlite::{self, params, Connection, OpenFlags};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tinystoragedrivers::CollectionSpec;
