@@ -48,7 +48,10 @@ export function useCloudProviderEditorSubmit({
       }
       if (issue === 'insecure_bearer') {
         throw new Error(
-          t('settings.ai.keyedEndpointInvalid', 'Provider API keys require HTTPS or a loopback HTTP endpoint.')
+          t(
+            'settings.ai.keyedEndpointInvalid',
+            'Provider API keys require HTTPS or a loopback HTTP endpoint.'
+          )
         );
       }
       const id =
