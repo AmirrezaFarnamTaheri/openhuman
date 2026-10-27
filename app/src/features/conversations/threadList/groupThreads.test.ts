@@ -112,14 +112,14 @@ describe('groupThreads', () => {
     const groups = groupThreads(
       [
         { ...thread('unpinned-project', daysAgo(1)), actionDir: '/work/code' },
-        { ...thread('pinned-project', daysAgo(8), [PINNED_THREAD_LABEL]), actionDir: '/work/code' },
+        { ...thread('pinned', daysAgo(8), [PINNED_THREAD_LABEL]), actionDir: '/work/code' },
         { ...thread('blank', daysAgo(0)), actionDir: '   ' },
       ],
       NOW
     );
 
     expect(groups.map(group => [group.key, group.threads.map(row => row.id)])).toEqual([
-      ['pinned', ['pinned-project']],
+      ['pinned', ['pinned']],
       ['project:/work/code', ['unpinned-project']],
       ['today', ['blank']],
     ]);
