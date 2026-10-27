@@ -87,7 +87,9 @@ export function useFlowValidation(
         !mountedRef.current ||
         requestId !== requestIdRef.current ||
         graphKeyRef.current !== checkedKey
-      ) return null;
+      ) {
+        return null;
+      }
       log(
         'validated (req=%d): valid=%s errors=%d warnings=%d',
         requestId,
