@@ -67,7 +67,7 @@ describe('groupThreads', () => {
     expect(groups).toEqual([{ key: 'pinned', threads: [expect.objectContaining({ id: 'a' })] }]);
   });
 
-  it('groups conversation threads by their complete working directory without merging projects sharing a basename', () => {
+  it('does not merge project directories sharing a basename', () => {
     const groups = groupThreads(
       [
         { ...thread('project-a', daysAgo(4)), actionDir: '/work/alpha/repo' },
@@ -78,7 +78,9 @@ describe('groupThreads', () => {
       NOW
     );
 
-    expect(groups.map(group => [group.key, group.label, group.threads.map(row => row.id)])).toEqual([
+    expect(
+      groups.map(group => [group.key, group.label, group.threads.map(row => row.id)])
+    ).toEqual([
       ['project:/work/alpha/repo', 'repo', ['project-a', 'project-a2']],
       ['project:/work/beta/repo', 'repo', ['project-b']],
       ['today', undefined, ['general']],
@@ -101,7 +103,9 @@ describe('groupThreads', () => {
       'project:/work/repo',
       'project:c:\\work\\repo',
     ]);
-    expect(groups.find(group => group.key === 'project:c:\\work\\repo')?.threads.map(row => row.id)).toEqual([
+    expect(
+      groups.find(group => group.key === 'project:c:\\work\\repo')?.threads.map(row => row.id)
+    ).toEqual([
       'windows-a',
       'windows-b',
     ]);
