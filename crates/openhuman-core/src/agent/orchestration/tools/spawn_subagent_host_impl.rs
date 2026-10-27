@@ -551,13 +551,8 @@ impl SpawnSubagentTool {
             }
         };
 
-        let initial_history = reusable
-            .as_ref()
-            .and_then(|session| session.latest_history.clone())
-            .map(|mut history| {
-                history.push(TranscriptMessage::user(follow_up_prompt.clone()));
-                history
-            });
+        let (initial_history, seed_len) =
+            reused_session_history(reusable.as_ref(), &follow_up_prompt);
 
         log::info!(
             "[subagent_reuse] parent_thread_id={} subagent_session_id={} task_id={} agent_id={} reuse_decision={} task_key={}",
@@ -653,9 +648,6 @@ impl SpawnSubagentTool {
         let registration_parent_session = parent_session.clone();
         let registration_agent_id = definition.id.clone();
         let registration_task_id = task_id.clone();
-        // A reused session's run starts from its stored history; only what
-        // this run adds may be read for its proposals and saves.
-        let seed_len = initial_history.as_ref().map_or(0, Vec::len);
         let completion = completion::make_completion(
             completion_core,
             completion_origin,
