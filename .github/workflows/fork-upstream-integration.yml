@@ -23,10 +23,11 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout isolated fork branch, with complete history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          filter: blob:none
+          # Do NOT use a partial promisor clone: Git resolves missing upstream
+          # objects against fork origin, causing 'not our ref' during the merge.
           submodules: false
           persist-credentials: true
       - name: Fetch current upstream main and attempt a real three-way merge
