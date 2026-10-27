@@ -62,6 +62,8 @@ pub(crate) mod session_db;
 pub mod sessions;
 #[cfg(feature = "legacy-import")]
 mod snapshot;
+#[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+pub(crate) mod sqlite_v0;
 #[cfg(feature = "legacy-import")]
 pub mod tinyflows;
 #[cfg(feature = "legacy-import")]

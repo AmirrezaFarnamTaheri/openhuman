@@ -82,11 +82,15 @@ async fn clearing_the_session_preserves_a_coexisting_api_key() {
         );
         assert_eq!(state.credential.as_deref(), Some("api-key"));
 
-        // Legacy files move the key; storage-backed config paths alias one profile record.
+        // Storage-backend selection is process-scoped after sign-out, so
+        // probing the inactive config against the current backend cannot
+        // establish whether an old user scope still owns the original key.
+        // Assert the important contract instead: the active signed-out scope
+        // keeps the exact credential, not just an unrelated or stale key.
         assert_eq!(
-            api_key::has_api_key(&user_scoped),
-            matches!(crate::storage::secrets::current(), Ok(Some(_))),
-            "storage scopes share one profile record; only a legacy file source is removed"
+            api_key::get_api_key(&signed_out).unwrap().as_deref(),
+            Some("sk-live"),
+            "sign-out must preserve the exact active API key"
         );
     })
     .await;

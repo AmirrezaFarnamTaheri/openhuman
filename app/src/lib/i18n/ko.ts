@@ -3457,6 +3457,21 @@ const messages: TranslationMap = {
   'composer.settings.loadingModels': '모델 불러오는 중…',
   'composer.voiceMode': '음성 모드',
   'composer.humanMode': '휴먼 모드',
+  'voiceNote.record': '음성 메모 녹음',
+  'voiceNote.stop': '녹음 중지',
+  'voiceNote.discard': '음성 메모 삭제',
+  'voiceNote.send': '음성 메모 보내기',
+  'voiceNote.recording': '녹음 중…',
+  'voiceNote.play': '음성 메모 재생',
+  'voiceNote.pause': '음성 메모 일시정지',
+  'voiceNote.seek': '음성 메모 탐색',
+  'voiceNote.transcript': '텍스트 변환본',
+  'voiceNote.noTranscript': '사용 가능한 텍스트 변환본이 없습니다',
+  'voiceNote.label': '음성 메모 {duration}',
+  'voiceNote.micDenied': '마이크 접근이 거부되었거나 사용할 수 없습니다.',
+  'voiceNote.transcribeFailed': '음성 메모를 텍스트로 변환하지 못했습니다.',
+  'voiceNote.loadFailed': '이 음성 메모를 불러오지 못했습니다.',
+  'voiceNote.sendFailed': '음성 메모를 보내지 못했습니다.',
 
   // Sync budget dialog
 

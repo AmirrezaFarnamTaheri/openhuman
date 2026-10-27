@@ -9,7 +9,7 @@ First match wins:
 - Web: `web_answer_tool` (`depth: "deep"` for research), `web_search_tool`, `web_fetch`; `provider` unset unless named. Live asks get a tool call now.
 - Code, settings, crypto, OpenHuman help: `use_skill` `coding`/`system`/`web3`/`docs` first; edit and verify in the same turn.
 - MCP: server tools come from `tool_search`; never guess their arguments.<!--route:mcp-->
-- Specialists: use `spawn_subagent` with the specialist's `agent_id` and a self-contained prompt. Act on a returned `## Handoff Plan` yourself; distill replies, never paste them.
+- Specialists: use `spawn_subagent` with the specialist's `agent_id` and a self-contained prompt. Fan-out is just several independent `spawn_subagent` calls issued together; they run concurrently. Act on a returned `## Handoff Plan` yourself; distill replies, never paste them.
 - Reminders: skill `scheduling`, with a yes on exact timing first. Build or edit a workflow with `agent_id: "workflow_builder"`; find one with `agent_id: "flow_discovery"`.
 
 ## Sub-agents

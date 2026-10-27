@@ -4088,6 +4088,21 @@ const messages: TranslationMap = {
   'composer.settings.loadingModels': 'モデルを読み込み中…',
   'composer.voiceMode': '音声モード',
   'composer.humanMode': 'ヒューマンモード',
+  'voiceNote.record': 'ボイスメモを録音',
+  'voiceNote.stop': '録音を停止',
+  'voiceNote.discard': 'ボイスメモを破棄',
+  'voiceNote.send': 'ボイスメモを送信',
+  'voiceNote.recording': '録音中…',
+  'voiceNote.play': 'ボイスメモを再生',
+  'voiceNote.pause': 'ボイスメモを一時停止',
+  'voiceNote.seek': 'ボイスメモをシーク',
+  'voiceNote.transcript': '文字起こし',
+  'voiceNote.noTranscript': '文字起こしはありません',
+  'voiceNote.label': 'ボイスメモ {duration}',
+  'voiceNote.micDenied': 'マイクへのアクセスが拒否されたか、利用できません。',
+  'voiceNote.transcribeFailed': 'ボイスメモを文字起こしできませんでした。',
+  'voiceNote.loadFailed': 'このボイスメモを読み込めませんでした。',
+  'voiceNote.sendFailed': 'ボイスメモを送信できませんでした。',
   // Sync budget dialog
 
   // Sync confirm dialog

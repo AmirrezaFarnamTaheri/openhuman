@@ -3296,6 +3296,21 @@ const messages: TranslationMap = {
   'composer.settings.loadingModels': '正在加载模型…',
   'composer.voiceMode': '语音模式',
   'composer.humanMode': '助手模式',
+  'voiceNote.record': '录制语音消息',
+  'voiceNote.stop': '停止录音',
+  'voiceNote.discard': '丢弃语音消息',
+  'voiceNote.send': '发送语音消息',
+  'voiceNote.recording': '正在录音…',
+  'voiceNote.play': '播放语音消息',
+  'voiceNote.pause': '暂停语音消息',
+  'voiceNote.seek': '拖动语音消息进度',
+  'voiceNote.transcript': '文字记录',
+  'voiceNote.noTranscript': '没有可用的文字记录',
+  'voiceNote.label': '语音消息 {duration}',
+  'voiceNote.micDenied': '麦克风权限被拒绝或不可用。',
+  'voiceNote.transcribeFailed': '无法转写语音消息。',
+  'voiceNote.loadFailed': '无法加载此语音消息。',
+  'voiceNote.sendFailed': '无法发送语音消息。',
 
   // Sync budget dialog
 

@@ -3595,6 +3595,21 @@ const messages: TranslationMap = {
   'composer.settings.loadingModels': 'Modelle werden geladen…',
   'composer.voiceMode': 'Sprachmodus',
   'composer.humanMode': 'Mensch-Modus',
+  'voiceNote.record': 'Sprachnachricht aufnehmen',
+  'voiceNote.stop': 'Aufnahme beenden',
+  'voiceNote.discard': 'Sprachnachricht verwerfen',
+  'voiceNote.send': 'Sprachnachricht senden',
+  'voiceNote.recording': 'Aufnahme läuft…',
+  'voiceNote.play': 'Sprachnachricht abspielen',
+  'voiceNote.pause': 'Sprachnachricht pausieren',
+  'voiceNote.seek': 'In der Sprachnachricht springen',
+  'voiceNote.transcript': 'Transkript',
+  'voiceNote.noTranscript': 'Kein Transkript verfügbar',
+  'voiceNote.label': 'Sprachnachricht {duration}',
+  'voiceNote.micDenied': 'Der Mikrofonzugriff wurde verweigert oder ist nicht verfügbar.',
+  'voiceNote.transcribeFailed': 'Die Sprachnachricht konnte nicht transkribiert werden.',
+  'voiceNote.loadFailed': 'Diese Sprachnachricht konnte nicht geladen werden.',
+  'voiceNote.sendFailed': 'Die Sprachnachricht konnte nicht gesendet werden.',
 
   // Sync budget dialog
 

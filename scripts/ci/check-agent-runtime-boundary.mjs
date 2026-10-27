@@ -41,6 +41,12 @@ const embedContractExports = new Map(
       ],
     ],
     [
+      // Exact legacy host facade over the shared TinyAgents progress event
+      // vocabulary; not a locally redefined event or a new permission boundary.
+      "crates/openhuman-core/src/progress.rs",
+      ["pub use tinyagents_harness::progress::{AgentProgress, SubagentUsage};"],
+    ],
+    [
       "crates/openhuman-core/src/tools/per_call.rs",
       ["pub(crate) use tinyagents_harness_tools::per_call::PerCallTool;"],
     ],
@@ -64,6 +70,9 @@ const embedContractExports = new Map(
       "crates/openhuman-embed/src/lib.rs",
       [
         "pub use tinytools::ToolPolicy;",
+        // The progress event type an in-process embedder receives; the host
+        // consumes TinyAgents' own event vocabulary.
+        "pub use tinyagents_harness::progress::AgentProgress;",
         "pub use tinyagents_session::port::{AgentStores, SessionStoreProvider};",
         // Persisted codecs added to the public session-store API in #7462.
         "pub use tinyagents_harness_tools::todos::TodoList;",

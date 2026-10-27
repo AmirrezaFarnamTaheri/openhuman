@@ -136,6 +136,10 @@ fn reset_script(responses: Vec<Value>) {
     });
     with_captured(|c| c.clear());
     with_captured_managed_gemini(|requests| requests.clear());
+    PARENT_FIRST_LIMIT.store(0, std::sync::atomic::Ordering::SeqCst);
+    PARENT_ANSWERED.store(0, std::sync::atomic::Ordering::SeqCst);
+    CHILD_RESPONSES_REQUIRED.store(0, std::sync::atomic::Ordering::SeqCst);
+    CHILD_RESPONSES.store(0, std::sync::atomic::Ordering::SeqCst);
 }
 
 fn tool_call_completion(name: &str, arguments: Value) -> Value {
@@ -245,6 +249,10 @@ fn canary_overlap_observed() -> bool {
     CANARY_OVERLAP.load(std::sync::atomic::Ordering::SeqCst)
 }
 
+fn canary_request_in_flight(canary: &str) -> bool {
+    lock_or_recover(canary_in_flight()).contains(canary)
+}
+
 /// Which armed canary this request is a **worker's own** request for, if any.
 ///
 /// Structural, not a substring search over the serialized body, and that
@@ -291,10 +299,15 @@ async fn hold_for_canary_peer(canary: String) {
 /// completion; arming this makes the order deterministic (`0` = off).
 static PARENT_FIRST_LIMIT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 static PARENT_ANSWERED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static CHILD_RESPONSES_REQUIRED: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+static CHILD_RESPONSES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-fn serialize_children_after_parent(parent_requests: usize) {
+fn serialize_children_after_parent(parent_requests: usize, child_responses: usize) {
     PARENT_ANSWERED.store(0, std::sync::atomic::Ordering::SeqCst);
     PARENT_FIRST_LIMIT.store(parent_requests, std::sync::atomic::Ordering::SeqCst);
+    CHILD_RESPONSES_REQUIRED.store(child_responses, std::sync::atomic::Ordering::SeqCst);
+    CHILD_RESPONSES.store(0, std::sync::atomic::Ordering::SeqCst);
 }
 
 fn body_is_orchestrator(body: &Value) -> bool {
@@ -338,15 +351,6 @@ async fn scripted_chat_completions(
     {
         return completion_response(streaming, json!({ "role": "assistant", "content": "[]" }));
     }
-    with_captured(|reqs| {
-        reqs.push(json!({
-            "path": uri.path(),
-            "model": body.get("model").and_then(Value::as_str),
-            "stream": streaming,
-            "body": body.clone(),
-        }))
-    });
-
     // Park an armed fan-out worker before it is answered, so a peer has a
     // chance to arrive. Before the queue pop, not after: holding the popped
     // entry would serialize the FIFO itself and deadlock the peer.
@@ -358,17 +362,38 @@ async fn scripted_chat_completions(
 
     let parent_first = PARENT_FIRST_LIMIT.load(std::sync::atomic::Ordering::SeqCst);
     let is_orchestrator = parent_first > 0 && body_is_orchestrator(&body);
-    if parent_first > 0 && !is_orchestrator {
+    let child_responses_required =
+        CHILD_RESPONSES_REQUIRED.load(std::sync::atomic::Ordering::SeqCst);
+    if parent_first > 0 {
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
-        while PARENT_ANSWERED.load(std::sync::atomic::Ordering::SeqCst) < parent_first
-            && std::time::Instant::now() < deadline
-        {
+        while std::time::Instant::now() < deadline {
+            let parent_ready =
+                PARENT_ANSWERED.load(std::sync::atomic::Ordering::SeqCst) >= parent_first;
+            let child_ready = CHILD_RESPONSES.load(std::sync::atomic::Ordering::SeqCst)
+                >= child_responses_required;
+            if if is_orchestrator {
+                parent_ready && child_ready
+            } else {
+                parent_ready
+            } {
+                break;
+            }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
+    with_captured(|reqs| {
+        reqs.push(json!({
+            "path": uri.path(),
+            "model": body.get("model").and_then(Value::as_str),
+            "stream": streaming,
+            "body": body.clone(),
+        }))
+    });
     let next = with_scripted(|q| q.pop_front());
     if is_orchestrator {
         PARENT_ANSWERED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    } else if next.is_some() && parent_first > 0 {
+        CHILD_RESPONSES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
     let Some(mut entry) = next else {
         let message = json!({ "role": "assistant", "content": "default scripted completion" });
@@ -395,7 +420,21 @@ async fn scripted_chat_completions(
                 continue;
             }
             let name = scripted_discovered_mcp_tool_name(&body).unwrap_or_else(|| {
-                panic!("the next model request did not advertise the searched MCP action")
+                let tools = body
+                    .pointer("/tools")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .map(|tool| {
+                        let function = &tool["function"];
+                        json!({
+                            "name": function["name"],
+                            "description": function["description"],
+                            "parameters": function["parameters"]
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                panic!("the next model request did not advertise the searched MCP action; tools: {tools:#?}")
             });
             call["name"] = json!(name);
             call["id"] = json!(format!("call_{name}"));
@@ -1523,7 +1562,7 @@ async fn managed_tinysearch_answer_reaches_followup_model_request_inner() {
     let _lock = env_lock();
     let pinned = openhuman_core::modules::registry::find("tinysearch")
         .expect("TinySearch is registered in the module asset registry");
-    assert_eq!(pinned.version, "0.5.3", "use the pinned module release");
+    assert_eq!(pinned.version, "0.5.4", "use the pinned module release");
     assert!(
         std::env::var_os("OPENHUMAN_MODULE_SOURCE").is_none()
             && std::env::var_os("OPENHUMAN_MODULE_SOURCE_DIR").is_none()
@@ -1593,7 +1632,7 @@ async fn managed_tinysearch_answer_reaches_followup_model_request_inner() {
         .unwrap_or_else(|| panic!("modules_list omitted TinySearch: {modules_response}"));
     assert_eq!(
         tinysearch.get("version").and_then(Value::as_str),
-        Some("0.5.3")
+        Some("0.5.4")
     );
     assert_eq!(
         tinysearch.get("state").and_then(Value::as_str),
@@ -1909,13 +1948,14 @@ async fn subagent_delegation_happy_path_inner() {
     stack.shutdown();
 }
 
-// ─── Task 4: Delegated clarification flow ─────────────────────────────────────
+// ─── Task 4: Background delegation completes on a best-effort basis ───────────
 //
 // The blocking `manage_tasks` delegate aliases were retired when specialist
 // hand-offs moved onto `spawn_subagent` (da9d535c6d "route specialist hand-offs
-// through spawn_subagent", 4bcc2f6773 "assert retired specialist aliases are
-// unpacked"), so the old flow — a blocking delegate whose pause came back as the
-// `manage_tasks` tool result — no longer exists. The contract now is:
+// through spawn_subagent"), so the old blocking delegate flow no longer exists.
+// Background children receive a contract to finish without requiring attention
+// from the parent or user, so a child cannot pause for clarification. The
+// contract now is:
 //
 //   * `spawn_subagent` is asynchronous: the parent gets a task id back and ends
 //     its turn on an acknowledgement (turn 1);
@@ -1923,8 +1963,8 @@ async fn subagent_delegation_happy_path_inner() {
 //     owns asking the user and relays that result in its own reply;
 //   * the user's next message resumes the thread with that relay in context.
 //
-// Deterministic request ordering (`serialize_children_after_parent(3)` holds the
-// child's first model call through the parent's verification request):
+// Deterministic request ordering (the explicit parent/child barrier below
+// holds specialist requests until the orchestrator has acknowledged):
 //   request[0] = orchestrator turn 1 → spawn_subagent(task_manager_agent)
 //   request[1] = orchestrator acknowledges
 //   request[2] = orchestrator verifies its hand-off; turn 1 ends (chat_done)
@@ -1933,20 +1973,18 @@ async fn subagent_delegation_happy_path_inner() {
 //                relays the question as text
 //   request[5] = orchestrator turn 2 ("version 2") → synthesis (chat_done)
 
-/// A delegated request whose specialist needs clarification surfaces its question
-/// to the parent, then preserves that question in the context used to answer the
-/// user's reply.
+/// A detached specialist completes without asking the user, and its result is
+/// delivered to the parent thread and preserved for the next user turn.
 #[test]
-fn delegated_clarification_flow() {
+fn delegated_background_task_completion_flow() {
     run_on_agent_stack(
-        "delegated_clarification_flow",
-        delegated_clarification_flow_inner,
+        "delegated_background_task_completion_flow",
+        delegated_background_task_completion_flow_inner,
     );
 }
 
-async fn delegated_clarification_flow_inner() {
+async fn delegated_background_task_completion_flow_inner() {
     let _lock = env_lock();
-    serialize_children_after_parent(3);
     reset_script(vec![
         tool_call_completion(
             "spawn_subagent",
@@ -1961,6 +1999,7 @@ async fn delegated_clarification_flow_inner() {
         text_completion("The task manager needs one detail: WHICH_VERSION_CANARY?"),
         text_completion("Final: ANSWER_CANARY_V2"),
     ]);
+    serialize_children_after_parent(2, 1);
     let stack = boot_stack().await;
     // The delivery turn persists its reply on the thread, so the thread must
     // exist (the UI creates it before the first message).
@@ -2000,7 +2039,7 @@ async fn delegated_clarification_flow_inner() {
         "turn-1 expected chat_done: {first}"
     );
 
-    // ── the child's pause reaches the parent, which relays it ──
+    // ── the child's result reaches the parent's thread ──
     // The delivery turn is host-authored (no web client waits on it), so wait for
     // the script to drain: the relay is the fifth completion consumed.
     let deadline = std::time::Instant::now() + Duration::from_secs(120);
@@ -2014,11 +2053,46 @@ async fn delegated_clarification_flow_inner() {
     let dump = || serde_json::to_string_pretty(&with_captured(|c| c.clone())).unwrap_or_default();
     assert!(
         with_scripted(|q| q.len()) <= 1,
-        "the child's clarification was never delivered to the parent; requests: {}",
+        "the child's best-effort result was never delivered to the parent; requests: {}",
         dump()
     );
-    // Let the relay turn commit to the thread before the user replies.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    // Queue exhaustion only proves that the delivery call took its scripted
+    // response. Wait until the thread's durable message list contains the
+    // delivery reply before asking the parent to resume the thread.
+    let deadline = std::time::Instant::now() + Duration::from_secs(120);
+    loop {
+        let response = post_json_rpc(
+            &stack.rpc_base,
+            402,
+            "openhuman.threads_messages_list",
+            json!({ "thread_id": "thread-clarify" }),
+        )
+        .await;
+        let messages = assert_no_jsonrpc_error(&response, "threads_messages_list")["data"]
+            ["messages"]
+            .as_array()
+            .expect("thread message list");
+        // Verify the durable background-delivery reply, not an earlier
+        // parent/child message. The scripted child relays WHICH_VERSION_CANARY;
+        // it never emits the obsolete TASK_MANAGER_RESULT_CANARY sentinel.
+        if messages.iter().any(|message| {
+            message
+                .pointer("/extraMetadata/scope")
+                .and_then(Value::as_str)
+                == Some("background_delivery")
+                && message
+                    .get("content")
+                    .and_then(Value::as_str)
+                    .is_some_and(|content| content.contains("WHICH_VERSION_CANARY"))
+        }) {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "delivery turn did not commit before turn 2; persisted messages: {messages:#?}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     // ── turn 2: the user's answer resumes the thread ──
     let request_id = send_web_chat(
@@ -2060,38 +2134,80 @@ async fn delegated_clarification_flow_inner() {
         serde_json::to_string_pretty(&requests).unwrap_or_default()
     );
 
-    // request[3] went to task_manager_agent, not the orchestrator: its system
-    // prompt is task-manager-specific. Without this the flow degrades to the
-    // orchestrator asking the user itself, which never exercises delegation.
-    let child_request = requests.get(3).map(Value::to_string).unwrap_or_default();
+    // Verify the *actor* and the durable result, not fixed FIFO indices.
+    // The host may issue a verification/nudge request between asynchronous
+    // child and delivery turns; that does not change which agent ran.
+    let task_manager_prompt = "You own the user's task-source feeds and artifacts";
+    let child_request = requests.iter().find(|request| {
+        request
+            .pointer("/body/messages")
+            .and_then(Value::as_array)
+            .is_some_and(|messages| {
+                messages.iter().any(|message| {
+                    message.get("role").and_then(Value::as_str) == Some("system")
+                        && message
+                            .get("content")
+                            .and_then(Value::as_str)
+                            .is_some_and(|content| content.contains(task_manager_prompt))
+                })
+            })
+    });
+    let child_request = child_request.unwrap_or_else(|| {
+        panic!(
+            "no task_manager_agent model request was observed; requests: {}",
+            serde_json::to_string_pretty(&requests).unwrap_or_default()
+        )
+    });
     assert!(
-        child_request.contains("You own the user's task-source feeds and artifacts"),
-        "request[3] did not carry the task_manager_agent prompt — spawn_subagent did not \
-         run the specialist; request: {child_request}"
+        child_request
+            .to_string()
+            .contains("Do not call ask_user_clarification"),
+        "the background child must not request interactive user attention"
     );
-    assert!(child_request.contains("Do not call ask_user_clarification"));
 
-    // The background child reports missing detail to its parent without requesting user attention.
-    let relay_request = requests.get(4).map(Value::to_string).unwrap_or_default();
+    // Locate the *second user turn* structurally. A later verification nudge
+    // or background delivery may add provider calls after the user's answer,
+    // so the last captured request is not necessarily the turn-2 request.
+    let is_turn_two = |request: &Value| {
+        request
+            .pointer("/body/messages")
+            .and_then(Value::as_array)
+            .is_some_and(|messages| {
+                messages.iter().any(|message| {
+                    message.get("role").and_then(Value::as_str) == Some("user")
+                        && message
+                            .get("content")
+                            .and_then(Value::as_str)
+                            .is_some_and(|content| content.trim_end().ends_with("version 2"))
+                })
+            })
+    };
+    let turn2_request = requests
+        .iter()
+        .find(|request| is_turn_two(request))
+        .unwrap_or_else(|| {
+            panic!(
+                "no second user turn reached the model; requests: {}",
+                serde_json::to_string_pretty(&requests).unwrap_or_default()
+            )
+        });
+
+    // The completed child reply must reach a separate orchestrator relay,
+    // rather than merely appear in the child's own provider history.
     assert!(
-        relay_request.contains("WHICH_VERSION_CANARY"),
-        "request[4] did not carry the child's missing-detail result; \
-         request: {relay_request}"
+        requests.iter().any(|request| {
+            !is_turn_two(request)
+                && body_is_orchestrator(&request["body"])
+                && request.to_string().contains("WHICH_VERSION_CANARY")
+        }),
+        "no orchestrator relay carried the background child's missing-detail result"
     );
 
-    // The turn-2 request must still hold the question: the relay was persisted in
-    // thread history. Scoped to the last request because request[4] carries the
-    // canary through the envelope, so an `any()` over all requests would pass
-    // without persistence.
-    let turn2_contains_question = requests
-        .last()
-        .map(|request| request.to_string().contains("WHICH_VERSION_CANARY"))
-        .unwrap_or(false);
+    // The turn-2 model context must include the persisted child result, not
+    // the obsolete TASK_MANAGER_RESULT_CANARY string used by an old fixture.
     assert!(
-        turn2_contains_question,
-        "WHICH_VERSION_CANARY not found in the turn-2 request — the clarification \
-         question was not persisted in thread history; requests: {}",
-        serde_json::to_string_pretty(&requests).unwrap_or_default()
+        turn2_request.to_string().contains("WHICH_VERSION_CANARY"),
+        "the persisted background child result was missing from the resumed turn"
     );
 
     stack.shutdown();
@@ -3385,12 +3501,12 @@ mod streaming_support {
 ///   5. Final answer is "stream final".
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn streaming_tool_call_accumulation() {
-    use openhuman_core::progress::AgentProgress;
     use std::sync::Mutex;
     use streaming_support::{
         agent_with_s, native_tool_response_s, text_response_s, workspace_s, EchoTool,
         ScriptedProvider,
     };
+    use tinyagents_harness::progress::AgentProgress;
     use tinyinference_llm::model::{ModelProfile, ModelStreamItem};
     use tinyinference_llm::tool::ToolDelta;
 
@@ -3738,15 +3854,17 @@ async fn agent_installs_a_registry_skill_then_runs_it_inner() {
     // The hand-off is a `spawn_subagent` (asynchronous): the parent's
     // acknowledgement is answered before the child's first call, and the child's
     // result is delivered to a later parent turn that loads the skill.
-    serialize_children_after_parent(3);
     reset_script(vec![
         tool_call_completion(
             "spawn_subagent",
             json!({ "agent_id": "skill_setup", "prompt": "Install the harness registry skill" }),
         ),
         text_completion("Handed the install to the skill specialist."),
-        text_completion("The skill specialist owns the install and will report its result."),
-        // skill_setup finds the entry, then installs it (the gate parks here).
+        // The barrier waits for two parent responses before dispatching the
+        // child's first model response. Keep the CHILD's registry calls in
+        // those next slots: otherwise the child consumes the extra parent
+        // acknowledgement and exits, while the parent later issues the
+        // registry calls against its narrower (correctly denied) tool belt.
         tool_call_completion(
             "skill_registry_search",
             json!({ "query": "harness-registry" }),
@@ -3755,14 +3873,15 @@ async fn agent_installs_a_registry_skill_then_runs_it_inner() {
             "skill_registry_install",
             json!({ "entry_id": REGISTRY_SKILL_ID }),
         ),
+        // The install writes state; the child reports success only after
+        // installation has passed the approval gate.
         text_completion("Installed the skill."),
-        // The install writes state, so the child verifies before returning.
-        text_completion("Installed the skill."),
-        // The delivery turn: the child's result reaches the orchestrator, which
-        // answers. (The `workflows` pack is closed to it while it can hand off
-        // to `workflow_builder`, so it does not load the skill itself.)
+        // The background delivery turn runs on the parent after three child
+        // completions. Keep the remaining parent follow-ups after that fence.
+        text_completion("The skill specialist owns the install and will report its result."),
         text_completion("The skill is installed."),
     ]);
+    serialize_children_after_parent(2, 3);
     let stack = boot_stack().await;
 
     let mut events = spawn_sse_collector(format!(
@@ -5557,23 +5676,6 @@ async fn cancelling_a_running_background_subagent_settles_it_inner() {
     )
     .await;
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    eprintln!(
-        "DBG {}",
-        with_captured(|c| serde_json::to_string(
-            &c.iter()
-                .map(|r| r.pointer("/body/messages").cloned())
-                .collect::<Vec<_>>()
-        )
-        .unwrap()
-        .chars()
-        .rev()
-        .take(3000)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect::<String>())
-    );
     let spawned = wait_for_event(&mut events, "subagent_spawned", Duration::from_secs(120)).await;
     let task_id = spawned
         .get("skill_id")
@@ -5584,11 +5686,7 @@ async fn cancelling_a_running_background_subagent_settles_it_inner() {
     // Cancel only once the worker is really in flight (its own model request
     // is parked on the barrier), so this is a live run, not a queued one.
     let deadline = std::time::Instant::now() + Duration::from_secs(60);
-    while with_captured(|c| {
-        !c.iter()
-            .filter_map(|r| canary_worker_request(r.get("body")?))
-            .any(|canary| canary == "CANCEL_E2E_CANARY")
-    }) {
+    while !canary_request_in_flight("CANCEL_E2E_CANARY") {
         assert!(
             std::time::Instant::now() < deadline,
             "the worker never issued its request"

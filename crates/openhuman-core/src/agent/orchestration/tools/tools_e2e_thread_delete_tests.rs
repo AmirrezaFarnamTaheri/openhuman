@@ -642,6 +642,11 @@ async fn purging_threads_cancels_driver_children_and_discards_completions() {
         1,
         "the purge starts with a queued child completion"
     );
+    // Keep the child gated until purge has settled it. The harness races the
+    // in-flight model call against the job's cancellation token, so purge's
+    // cancel unwinds the child without a release. Releasing on a timer let the
+    // child complete on its own before purge cancelled it whenever purge's
+    // admission and fencing took longer than the timer.
     tokio::time::timeout(
         std::time::Duration::from_secs(6),
         crate::threads::ops::threads_purge(&dispatch, crate::threads::EmptyRequest {}),

@@ -94,7 +94,6 @@ web3/stub.rs
 web3/wallet/stub.rs
 web3/x402/stub.rs
 web_chat/mod.rs
-web_chat/run_task.rs
 web_chat/web_tests.rs
 web_chat/web_tests_ptt_source_tests.rs
 web3/stub.rs
@@ -129,6 +128,16 @@ doctor/checks/voice.rs
 doctor/checks/wallet.rs
 doctor/checks/wallet_tests.rs
 skills/ops_discover.rs
+agent/host_agents.rs
+agent/turn_host.rs
+cron/mod.rs
+cron/scheduler/delivery.rs
+cron/scheduler/origin_delivery.rs
+agent/queued_turn_tests.rs
+cron/ops_tests.rs
+cron/scheduler_tests.rs
+web_chat/web_tests_turn_lifecycle_tests.rs
+channels/host/voice_tests.rs
 EOF
 )
 

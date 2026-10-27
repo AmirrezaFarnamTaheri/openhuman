@@ -295,6 +295,19 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
         url = %redact_url(url),
         "[storage] opening the configured backend"
     );
+    // The v2 SQLite driver refuses historical _tsd_docs databases. Preserve
+    // and upgrade them at the host boundary, before the driver is opened.
+    // Explicit SQLite URLs and legacy workspace defaults share this path.
+    #[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+    if let StorageUrl::Sqlite { path } = &parsed {
+        let path = path.clone();
+        crate::core::runtime::DispatchCtx::ambient()
+            .spawn_blocking(move || import::sqlite_v0::upgrade_if_needed(&path))
+            .await
+            .map_err(|e| {
+                StorageError::backend(format!("SQLite migration did not finish: {e}"))
+            })??;
+    }
     // Every opened backend checks the process's lease fences on write; with
     // no fence registered (every single-user host) that is a pass-through.
     let backend =

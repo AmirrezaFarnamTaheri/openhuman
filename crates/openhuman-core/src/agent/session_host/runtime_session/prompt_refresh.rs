@@ -69,8 +69,14 @@ impl OpenHumanTurnPrelude {
         snapshot: &TranscriptSnapshotSink,
         request: &mut SessionTurnRequest,
     ) -> Result<TurnPreparation, RuntimeError> {
+        // Imported conversations can already be durable while lacking the
+        // prefix the first host turn must commit. Only an authoritative or
+        // inferred frozen prefix suppresses prompt preparation.
         let mut preparation = self
-            .prepare(new_session)
+            .prepare(super::turn::prepare_prefix_for_turn(
+                new_session,
+                view.prefix_is_frozen,
+            ))
             .await
             .map_err(|error| RuntimeError::Driver(error.to_string()))?;
         // Whether this turn rendered the current prompt. Only then can a

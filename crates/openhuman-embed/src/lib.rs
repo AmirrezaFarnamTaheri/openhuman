@@ -258,6 +258,9 @@ pub mod session_store {
     pub use tinyagents_session::port::{
         InMemorySessionStores, InMemoryTranscriptLocator, InMemoryTurnStates,
     };
+    /// What a provider's `lease_for_agent` returns: stores the provider promises
+    /// stay bound to one backend for the life of the lease.
+    pub use tinyagents_session::port::{SessionStoreLease, SessionStoreLeaseError};
     #[cfg(feature = "testkit")]
     pub use tinyagents_session::testkit::conformance::{
         session_store_conformance, session_store_isolation_conformance,

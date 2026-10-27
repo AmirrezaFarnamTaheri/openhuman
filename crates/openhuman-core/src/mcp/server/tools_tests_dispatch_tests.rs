@@ -122,6 +122,8 @@ async fn call_tool_judges_the_policy_of_the_explicit_context_across_scopes() {
         crate::storage::test_support::install_for_test(&storage.url, Arc::clone(&storage.backend));
     denying.storage.url = Some(storage.url.clone());
     allowing.storage.url = Some(storage.url.clone());
+    crate::mcp::test_module_port::install(&denying);
+    crate::mcp::test_module_port::install(&allowing);
     let deny_core = CoreContext::for_test_with_config(DomainSet::full(), denying);
     let allow_core = CoreContext::for_test_with_config(DomainSet::full(), allowing);
 

@@ -1325,6 +1325,17 @@ test("failed offline examples block release cleanup while independent Rust valid
   }
 });
 
+test("offline embed examples use the installed native fixture dependency", () => {
+  for (const plan of plans()) {
+    const lint = plan.lanes.find((lane) => lane.name === "rust-lint");
+    const install = lint.checks.find((check) => check.name === "test-modules");
+    const examples = lint.checks.find((check) => check.name === "embed-offline-examples");
+    assert.ok(install, `${plan.profile} rust-lint must provision its module artifacts`);
+    assert.match(install.run, /install-test-modules\.sh/);
+    assert.deepEqual(examples.needs, ["test-modules"]);
+  }
+});
+
 test("private ordinary Rust builds keep line tables while coverage and hosted profiles remain unchanged", () => {
   for (const plan of plans()) {
     for (const lane of plan.lanes.filter((lane) => lane.heavy != null)) {

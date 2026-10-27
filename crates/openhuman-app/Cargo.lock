@@ -4643,7 +4643,7 @@ dependencies = [
  "x25519-dalek",
  "zeroize",
  "zip 2.6.1",
- "zstd",
+ "zstd 0.14.3",
 ]
 
 [[package]]
@@ -6059,6 +6059,7 @@ version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "687274d293b6cdc6e73e0fee520bf2049650090d7164f87672d212a3c530cf4a"
 dependencies = [
+ "chrono",
  "dyn-clone",
  "ref-cast",
  "schemars_derive 1.2.2",
@@ -7394,7 +7395,7 @@ dependencies = [
  "serde_with",
  "swift-rs",
  "thiserror 2.0.20",
- "toml 0.9.12+spec-1.1.0",
+ "toml 1.1.6+spec-1.1.0",
  "url",
  "urlpattern",
  "uuid",
@@ -7539,7 +7540,7 @@ dependencies = [
 
 [[package]]
 name = "tiny-artifacts"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7593,6 +7594,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "rustix 1.1.5",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -7636,6 +7638,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "rustix 1.1.5",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -7748,6 +7751,7 @@ dependencies = [
  "chrono",
  "hex",
  "parking_lot",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -7793,7 +7797,7 @@ dependencies = [
 
 [[package]]
 name = "tinybox-bus"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -7802,7 +7806,7 @@ dependencies = [
 
 [[package]]
 name = "tinybus"
-version = "0.1.6"
+version = "0.3.6"
 dependencies = [
  "async-trait",
  "flate2",
@@ -7823,7 +7827,7 @@ dependencies = [
 
 [[package]]
 name = "tinybus-macros"
-version = "0.1.6"
+version = "0.3.6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7832,7 +7836,7 @@ dependencies = [
 
 [[package]]
 name = "tinybus-module"
-version = "0.1.6"
+version = "0.3.6"
 dependencies = [
  "async-trait",
  "serde",
@@ -7844,22 +7848,19 @@ dependencies = [
 
 [[package]]
 name = "tinychannels-bus"
-version = "0.1.42"
+version = "0.1.45"
 dependencies = [
- "anyhow",
- "async-trait",
  "base64 0.23.1",
  "schemars 1.2.2",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
  "tinystoragedrivers-types",
- "tokio",
 ]
 
 [[package]]
 name = "tinycomputer-bus"
-version = "0.15.1"
+version = "0.15.2"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -7869,7 +7870,7 @@ dependencies = [
 
 [[package]]
 name = "tinyconnectors-bus"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -7877,7 +7878,7 @@ dependencies = [
 
 [[package]]
 name = "tinydocs-bus"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "serde",
  "thiserror 2.0.20",
@@ -7885,11 +7886,31 @@ dependencies = [
 
 [[package]]
 name = "tinyeventqueues-bus"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
  "tinystoragedrivers-types",
+]
+
+[[package]]
+name = "tinyflows"
+version = "0.9.4"
+dependencies = [
+ "async-trait",
+ "base64 0.23.1",
+ "futures-timer",
+ "futures-util",
+ "getrandom 0.4.3",
+ "hex",
+ "jaq-core",
+ "jaq-json",
+ "jaq-std",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -7903,7 +7924,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhosts-bus"
-version = "0.4.3"
+version = "0.4.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -7912,7 +7933,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhumans-sdk"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "futures",
@@ -8101,7 +8122,7 @@ dependencies = [
 
 [[package]]
 name = "tinyliveagents"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -8119,7 +8140,7 @@ dependencies = [
 
 [[package]]
 name = "tinymcp-bus"
-version = "0.20.2"
+version = "0.20.4"
 dependencies = [
  "base64 0.23.1",
  "schemars 1.2.2",
@@ -8130,7 +8151,7 @@ dependencies = [
 
 [[package]]
 name = "tinymemory-api"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -8144,7 +8165,7 @@ dependencies = [
 
 [[package]]
 name = "tinymemory-integrations"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -8169,7 +8190,7 @@ dependencies = [
 
 [[package]]
 name = "tinymemory-tools"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -8189,7 +8210,7 @@ dependencies = [
 
 [[package]]
 name = "tinyredact"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "log",
  "regex",
@@ -8198,7 +8219,7 @@ dependencies = [
 
 [[package]]
 name = "tinysearch-bus"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "schemars 1.2.2",
  "serde",
@@ -8207,7 +8228,7 @@ dependencies = [
 
 [[package]]
 name = "tinyskills"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
@@ -8224,7 +8245,7 @@ dependencies = [
 
 [[package]]
 name = "tinyskills-drivers"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "cap-std",
  "serde",
@@ -8322,7 +8343,7 @@ dependencies = [
  "tinystoragedrivers-types",
  "tokio",
  "url",
- "zstd",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -8342,7 +8363,7 @@ dependencies = [
  "tinystoragedrivers-connect",
  "tinystoragedrivers-types",
  "tokio",
- "zstd",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -8484,7 +8505,7 @@ dependencies = [
 
 [[package]]
 name = "tinywallet-bus"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -10668,7 +10689,16 @@ version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
 dependencies = [
- "zstd-safe",
+ "zstd-safe 7.3.0",
+]
+
+[[package]]
+name = "zstd"
+version = "0.14.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db3ae9bf90af6e40197bef767eeefc46ad6397420fe873830bd85e5fbbfb3c70"
+dependencies = [
+ "zstd-safe 8.2.0",
 ]
 
 [[package]]
@@ -10676,6 +10706,15 @@ name = "zstd-safe"
 version = "7.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64d80649ab6db9d9f6f9c80a40becd948eda4714a0a5ac8c4d157a32231c7882"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "8.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ded520f16b29e1a9b771c722221b2b0a0398c2316d9bb3c42b458a5414d7434b"
 dependencies = [
  "zstd-sys",
 ]
