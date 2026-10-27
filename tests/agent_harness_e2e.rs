@@ -2159,7 +2159,9 @@ async fn delegated_background_task_completion_flow_inner() {
         )
     });
     assert!(
-        child_request.to_string().contains("Do not call ask_user_clarification"),
+        child_request
+            .to_string()
+            .contains("Do not call ask_user_clarification"),
         "the background child must not request interactive user attention"
     );
 
