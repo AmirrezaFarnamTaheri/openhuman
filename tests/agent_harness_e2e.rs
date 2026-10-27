@@ -1963,8 +1963,8 @@ async fn subagent_delegation_happy_path_inner() {
 //     owns asking the user and relays that result in its own reply;
 //   * the user's next message resumes the thread with that relay in context.
 //
-// Deterministic request ordering (`serialize_children_after_parent(3)` holds the
-// child's first model call through the parent's verification request):
+// Deterministic request ordering (the explicit parent/child barrier below
+// holds specialist requests until the orchestrator has acknowledged):
 //   request[0] = orchestrator turn 1 → spawn_subagent(task_manager_agent)
 //   request[1] = orchestrator acknowledges
 //   request[2] = orchestrator verifies its hand-off; turn 1 ends (chat_done)
@@ -1985,7 +1985,6 @@ fn delegated_background_task_completion_flow() {
 
 async fn delegated_background_task_completion_flow_inner() {
     let _lock = env_lock();
-    serialize_children_after_parent(3);
     reset_script(vec![
         tool_call_completion(
             "spawn_subagent",
@@ -2149,7 +2148,7 @@ async fn delegated_background_task_completion_flow_inner() {
     // thread history. Scoped to the last request because request[4] carries the
     // canary through the envelope, so an `any()` over all requests would pass
     // without persistence.
-    let turn2_contains_question = requests
+    let turn2_contains_result = requests
         .last()
         .map(|request| request.to_string().contains("TASK_MANAGER_RESULT_CANARY"))
         .unwrap_or(false);
@@ -3804,7 +3803,6 @@ async fn agent_installs_a_registry_skill_then_runs_it_inner() {
     // The hand-off is a `spawn_subagent` (asynchronous): the parent's
     // acknowledgement is answered before the child's first call, and the child's
     // result is delivered to a later parent turn that loads the skill.
-    serialize_children_after_parent(3);
     reset_script(vec![
         tool_call_completion(
             "spawn_subagent",
