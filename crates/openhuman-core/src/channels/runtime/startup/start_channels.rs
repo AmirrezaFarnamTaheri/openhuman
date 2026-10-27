@@ -47,9 +47,8 @@ async fn start_channels_inner(
     if session.is_cancelled() {
         return Ok(());
     }
-    // The listener runs for the host's own tenant (none in SaaS, where hosted
-    // channels go through the relay under their profile's context).
-    let dispatch = crate::core::runtime::DispatchCtx::host_default();
+    // Preserve the caller's dispatch context for agent-bound channels.
+    // The host entrypoint passes host_default explicitly when appropriate.
     // Initialize the global event bus singleton.
     crate::core::bus::init().await.expect("bus init");
     let bus = crate::core::bus::BUS.get().expect("bus initialised");
