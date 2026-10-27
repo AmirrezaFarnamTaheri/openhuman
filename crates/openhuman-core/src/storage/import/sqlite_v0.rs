@@ -434,9 +434,9 @@ pub(crate) fn upgrade_if_needed(path: &Path) -> Result<(), StorageError> {
         let _ = conn.execute_batch("ROLLBACK");
         return Err(error);
     }
-    if let Err(error) = conn.execute_batch("COMMIT") {
+    if let Err(commit_error) = conn.execute_batch("COMMIT") {
         let _ = conn.execute_batch("ROLLBACK");
-        return Err(super::sqlite_v0::error("commit upgrade", error));
+        return Err(error("commit upgrade", commit_error));
     }
     tracing::info!(
         target: "openhuman::storage",
