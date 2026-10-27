@@ -9,18 +9,15 @@ export function providerEndpointIssue(
   endpoint: string,
   hasBearerCredential: boolean
 ): ProviderEndpointIssue | null {
+  // WHATWG URL parsing silently discards tabs and newlines, so refuse
+  // control characters before normalizing even the surrounding whitespace.
+  if (/[\u0000-\u001F\u007F]/u.test(endpoint)) {
+    return 'invalid_url';
+  }
   const value = endpoint.trim();
   // The existing form can intentionally leave the endpoint unset; the
   // downstream provider configuration owns its default/required-url rules.
   if (!value) return null;
-  // WHATWG URL parsing silently discards tabs and newlines, so reject them
-  // before parsing. Keep user input rather than normalizing a different host.
-  if (Array.from(value).some(char => {
-    const code = char.charCodeAt(0);
-    return code <= 31 || code === 127;
-  })) {
-    return 'invalid_url';
-  }
   let url: URL;
   try {
     url = new URL(value);
