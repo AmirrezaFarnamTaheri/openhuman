@@ -103,15 +103,17 @@ async fn process_channel_message_handles_models_command_without_llm_call() {
     );
 
     let mut config = crate::config::Config::default();
-    config.cloud_providers.push(crate::config::schema::CloudProviderCreds {
-        id: "p_managed_models_test".to_string(),
-        slug: "openhuman".to_string(),
-        label: "Managed Backend".to_string(),
-        endpoint: "https://api.openhuman.ai/v1".to_string(),
-        auth_style: crate::config::schema::AuthStyle::OpenhumanJwt,
-        default_model: Some("default-model".to_string()),
-        ..Default::default()
-    });
+    config
+        .cloud_providers
+        .push(crate::config::schema::CloudProviderCreds {
+            id: "p_managed_models_test".to_string(),
+            slug: "openhuman".to_string(),
+            label: "Managed Backend".to_string(),
+            endpoint: "https://api.openhuman.ai/v1".to_string(),
+            auth_style: crate::config::schema::AuthStyle::OpenhumanJwt,
+            default_model: Some("default-model".to_string()),
+            ..Default::default()
+        });
     let mut runtime_ctx = ChannelRuntimeContext {
         relay_thread: None,
         channels_by_name: Arc::new(channels_by_name),
