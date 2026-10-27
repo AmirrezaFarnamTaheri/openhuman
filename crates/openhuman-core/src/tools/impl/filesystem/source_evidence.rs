@@ -301,7 +301,7 @@ async fn read_checked(policy: &SecurityPolicy, path: &Path) -> anyhow::Result<Op
     // can grow between metadata and reading. On Unix do not follow a symlink
     // substituted at the canonical final component after initial validation.
     #[cfg(unix)]
-    let opened = tokio::fs::OpenOptions::new()
+    let opened = tokio::fs::File::options()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW)
         .open(&actual)
