@@ -17,7 +17,11 @@ async fn run() -> anyhow::Result<()> {
     // Prefer the checksum-verified staged TinyMCP artifact and accept
     // the explicit upstream offline-test path as a fallback.
     let artifact = openhuman_core::modules::local_artifact("tinymcp")
-        .or_else(|| std::env::var("OPENHUMAN_TINYMCP_TEST_MODULE").ok().map(std::path::PathBuf::from))
+        .or_else(|| {
+            std::env::var("OPENHUMAN_TINYMCP_TEST_MODULE")
+                .ok()
+                .map(std::path::PathBuf::from)
+        })
         .ok_or_else(|| anyhow::anyhow!("stage TinyMCP or provide OPENHUMAN_TINYMCP_TEST_MODULE"))?;
     let mut config = support::offline_config();
     config.modules.allow_download = false;
