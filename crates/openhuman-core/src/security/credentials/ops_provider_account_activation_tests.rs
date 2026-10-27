@@ -46,7 +46,7 @@ async fn activating_one_account_only_changes_its_named_cloud_provider() {
         listed.value.iter().filter(|profile| profile.is_active == Some(true)).count(), 1,
         "exactly one account should be marked preferred",
     );
-    assert!(listed.value.iter().find(|profile| profile.profile_name == "personal").unwrap().is_active);
+    assert_eq!(listed.value.iter().find(|profile| profile.profile_name == "personal").unwrap().is_active, Some(true));
     assert_eq!(listed.value.iter().find(|profile| profile.profile_name == "work").unwrap().is_active, Some(false));
 }
 
