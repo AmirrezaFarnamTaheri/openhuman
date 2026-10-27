@@ -484,3 +484,7 @@ mod tests;
 #[cfg(test)]
 #[path = "spawn_subagent_tests.rs"]
 mod surface_tests;
+
+#[cfg(all(test, feature = "flows"))]
+#[path = "spawn_subagent_proposal_tests.rs"]
+mod proposal_tests;
