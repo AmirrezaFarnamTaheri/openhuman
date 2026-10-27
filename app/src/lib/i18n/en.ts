@@ -4058,6 +4058,21 @@ const en: TranslationMap = {
   'composer.settings.loadingModels': 'Loading models…',
   'composer.voiceMode': 'Voice mode',
   'composer.humanMode': 'Human mode',
+  'voiceNote.record': 'Record a voice note',
+  'voiceNote.stop': 'Stop recording',
+  'voiceNote.discard': 'Discard voice note',
+  'voiceNote.send': 'Send voice note',
+  'voiceNote.recording': 'Recording…',
+  'voiceNote.play': 'Play voice note',
+  'voiceNote.pause': 'Pause voice note',
+  'voiceNote.seek': 'Seek in voice note',
+  'voiceNote.transcript': 'Transcript',
+  'voiceNote.noTranscript': 'No transcript available',
+  'voiceNote.label': 'Voice note {duration}',
+  'voiceNote.micDenied': 'Microphone access was denied or is unavailable.',
+  'voiceNote.transcribeFailed': 'Could not transcribe the voice note.',
+  'voiceNote.loadFailed': 'Could not load this voice note.',
+  'voiceNote.sendFailed': 'Could not send the voice note.',
   // Sync budget dialog
 
   // Sync confirm dialog

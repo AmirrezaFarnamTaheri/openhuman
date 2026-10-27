@@ -563,7 +563,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           name: "gate-contract-tests",
           when: gateSmoke,
           run:
-            "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features --lib --" +
+            "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features" +
+            " --features storage-sqlite --lib --" +
             " core::all:: core::cli:: core::invoke:: core::session_expiry:: core::legacy_aliases:: core::runtime::" +
             " agent::session_host::runtime_session::tool_surface:: agent_registry::agents::loader:: commands::ops::tests:: memory::people::contacts_gate_tests::" +
             " doctor::checks:: core::schema_test_support:: memory::layout_migration:: config::schema::load::source::tests::revision_loader_tests::" +
@@ -574,6 +575,8 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           // Share one build for these disjoint test surfaces. Enable the
           // module host while keeping web3 disabled, so its wallet callback
           // gate is exercised rather than silently selecting zero tests.
+          // storage-sqlite supplies the test-only persistence fixtures needed
+          // to compile the core test crate when the product defaults are off.
           // MCP resources do not touch test_support; introspection stays
           // scoped to avoid tests that require the complete product. The
           // wallet grant's ungated tests sit beside a web3-gated one, so they
@@ -582,7 +585,7 @@ export function buildPlan({ profile, areas, env = {}, isPullRequest = true }) {
           when: gateSmoke,
           run:
             "cargo test --manifest-path Cargo.toml -p openhuman --no-default-features" +
-            " --features modules,mcp,e2e-test-support --lib --" +
+            " --features modules,mcp,e2e-test-support,storage-sqlite --lib --" +
             " modules::runtime:: modules::registry:: modules::storage_grant_tinywallet::" +
             " modules::storage_grant_tinyconnectors:: modules::tinyflows::" +
             " doctor::checks::" +

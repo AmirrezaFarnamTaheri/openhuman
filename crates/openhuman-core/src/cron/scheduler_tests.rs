@@ -109,14 +109,18 @@ async fn cron_alerts(config: &Config) -> usize {
 /// #4169); only a terminal `Empty`/`Closed` — the matching event genuinely was
 /// not published — panics.
 fn next_user_error(
-    rx: &mut tokio::sync::broadcast::Receiver<crate::web_chat::WebChannelEvent>,
+    rx: &mut tokio::sync::broadcast::Receiver<crate::web_chat::ScopedWebEvent>,
     kind: &str,
-) -> crate::web_chat::WebChannelEvent {
+) -> crate::web_chat::ScopedWebEvent {
     use tokio::sync::broadcast::error::TryRecvError;
     loop {
         match rx.try_recv() {
-            Ok(ev) if ev.event == "user_error" && ev.error_type.as_deref() == Some(kind) => {
-                break ev
+            Ok(ev)
+                if matches!(ev.wire_event(), crate::web_chat::WebChannelEvent::UserError {
+                    error_type: Some(error_type), ..
+                } if error_type == kind) =>
+            {
+                break ev;
             }
             Ok(_) => continue,
             // Receiver fell behind a concurrent flood — the dropped slots can't
@@ -128,6 +132,7 @@ fn next_user_error(
     }
 }
 
+#[cfg(feature = "channels")]
 #[path = "scheduler_announce_delivery_tests.rs"]
 mod announce_delivery_tests;
 #[path = "scheduler_classifier_and_delivery_tests.rs"]

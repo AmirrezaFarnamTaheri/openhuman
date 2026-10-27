@@ -216,12 +216,6 @@ fn for_each_secret(
     if let Some(ref mut m) = ch.mattermost {
         string_secret(&mut m.bot_token, "mattermost.bot_token", f)?;
     }
-    if let Some(ref mut w) = ch.webhook {
-        f(&mut w.secret, "webhook.secret")?;
-    }
-    if let Some(ref mut mx) = ch.matrix {
-        string_secret(&mut mx.access_token, "matrix.access_token", f)?;
-    }
     if let Some(ref mut wa) = ch.whatsapp {
         f(&mut wa.access_token, "whatsapp.access_token")?;
         f(&mut wa.verify_token, "whatsapp.verify_token")?;

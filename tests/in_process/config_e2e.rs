@@ -721,14 +721,6 @@ async fn config_save_and_load_encrypts_channel_secret_fields() {
         channel_id: Some("C123".into()),
         allowed_users: vec![],
     });
-    config.channels_config.matrix = Some(MatrixConfig {
-        homeserver: "https://matrix.example.test".into(),
-        access_token: "matrix-secret".into(),
-        user_id: Some("@worker:example.test".into()),
-        device_id: None,
-        room_id: "!room:example.test".into(),
-        allowed_users: vec![],
-    });
     config.channels_config.whatsapp = Some(WhatsAppConfig {
         access_token: Some("whatsapp-access-secret".into()),
         phone_number_id: Some("phone".into()),
@@ -738,10 +730,6 @@ async fn config_save_and_load_encrypts_channel_secret_fields() {
         pair_phone: None,
         pair_code: None,
         allowed_numbers: vec![],
-    });
-    config.channels_config.webhook = Some(WebhookConfig {
-        port: 0,
-        secret: Some("webhook-secret".into()),
     });
     config.channels_config.irc = Some(IrcConfig {
         server: "irc.example.test".into(),
@@ -786,9 +774,7 @@ async fn config_save_and_load_encrypts_channel_secret_fields() {
         "discord-secret",
         "slack-bot-secret",
         "slack-app-secret",
-        "matrix-secret",
         "whatsapp-access-secret",
-        "webhook-secret",
         "irc-server-secret",
         "lark-app-secret",
         "dingtalk-secret",

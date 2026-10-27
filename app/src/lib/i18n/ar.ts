@@ -3424,6 +3424,21 @@ const messages: TranslationMap = {
   'composer.settings.loadingModels': 'جارٍ تحميل النماذج…',
   'composer.voiceMode': 'وضع الصوت',
   'composer.humanMode': 'وضع الإنسان',
+  'voiceNote.record': 'تسجيل ملاحظة صوتية',
+  'voiceNote.stop': 'إيقاف التسجيل',
+  'voiceNote.discard': 'تجاهل الملاحظة الصوتية',
+  'voiceNote.send': 'إرسال الملاحظة الصوتية',
+  'voiceNote.recording': 'جارٍ التسجيل…',
+  'voiceNote.play': 'تشغيل الملاحظة الصوتية',
+  'voiceNote.pause': 'إيقاف الملاحظة الصوتية مؤقتًا',
+  'voiceNote.seek': 'التنقل داخل الملاحظة الصوتية',
+  'voiceNote.transcript': 'النص المكتوب',
+  'voiceNote.noTranscript': 'لا يتوفر نص مكتوب',
+  'voiceNote.label': 'ملاحظة صوتية {duration}',
+  'voiceNote.micDenied': 'تم رفض الوصول إلى الميكروفون أو أنه غير متاح.',
+  'voiceNote.transcribeFailed': 'تعذر تفريغ الملاحظة الصوتية إلى نص.',
+  'voiceNote.loadFailed': 'تعذر تحميل هذه الملاحظة الصوتية.',
+  'voiceNote.sendFailed': 'تعذر إرسال الملاحظة الصوتية.',
 
   // Sync budget dialog
 

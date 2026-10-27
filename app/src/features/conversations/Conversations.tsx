@@ -34,6 +34,15 @@ import {
   useChatMascotSendBinding,
 } from '../../features/human/chatMascot';
 import MicComposer from '../../features/human/MicComposer';
+import type { VoiceNoteDraft } from '../../features/voiceNotes/useVoiceNoteRecorder';
+import {
+  storeVoiceNote,
+  transcribeVoiceNote,
+  VOICE_NOTE_SOURCE,
+  voiceNoteContentPart,
+  type VoiceNoteMeta,
+} from '../../features/voiceNotes/voiceNoteApi';
+import { VoiceNoteComposer } from '../../features/voiceNotes/VoiceNoteComposer';
 import { useFlowApprovalRequests } from '../../hooks/useFlowApprovalRequests';
 import { useUnroutedApprovals } from '../../hooks/useUnroutedApprovals';
 import { useUsageState } from '../../hooks/useUsageState';
@@ -42,7 +51,7 @@ import {
   ATTACHMENT_MAX_FILES,
   ATTACHMENT_MAX_IMAGES,
   attachmentMetadata,
-  buildMessageWithAttachments,
+  attachmentsToParts,
   imageMarkerCost,
   parseMessageImages,
   validateAndReadFile,
@@ -56,9 +65,11 @@ import {
   aiRegenerate,
   chatCancel,
   chatSend,
+  chatSendWithAck,
   editMessage,
   useRustChat,
 } from '../../services/chatService';
+import type { ContentPart } from '../../services/chatWire';
 import { callCoreRpc } from '../../services/coreRpcClient';
 import type { RootState } from '../../store';
 import {
@@ -1236,7 +1247,10 @@ const Conversations = ({
     return run;
   };
 
-  const handleSendMessage = async (text?: string) => {
+  const handleSendMessage = async (
+    text?: string,
+    opts?: { voiceNote?: VoiceNoteMeta; voicePart?: ContentPart }
+  ) => {
     // Guard double-submit to the SAME thread only; a send to another thread
     // may proceed concurrently.
     if (selectedThreadId && pendingSendsRef.current.has(selectedThreadId)) return;
@@ -1292,12 +1306,19 @@ const Conversations = ({
     failedAttachmentsByThreadRef.current.set(sendingThreadId, pendingAttachments);
     const modelOverride = composerModelOverride ?? undefined;
     const modelClearBarrier = modelOverride === undefined ? waitForComposerModelClear() : null;
-    let messageText = buildMessageWithAttachments(trimmed, pendingAttachments);
+    // Originals ride beside the text as typed parts; the core stages them.
+    const attachmentParts = attachmentsToParts(pendingAttachments);
+    let messageText = trimmed;
+    let persistedMessageId: string | undefined;
+    let persistedAttachmentParts: ContentPart[] = [];
     const userMessage: ThreadMessage = {
       id: `msg_${globalThis.crypto.randomUUID()}`,
       content: messageText,
       type: 'text',
-      extraMetadata: attachmentMetadata(pendingAttachments),
+      extraMetadata: {
+        ...attachmentMetadata(pendingAttachments),
+        ...(opts?.voiceNote ? { voiceNote: opts.voiceNote } : {}),
+      },
       sender: 'user',
       createdAt: new Date().toISOString(),
     };
@@ -1324,6 +1345,8 @@ const Conversations = ({
       if (retryingUnchangedMessage) {
         // The core already has this exact prompt from the failed attempt.
         messageText = previousFailedMessage.content;
+        persistedMessageId = previousFailedMessage.id;
+        persistedAttachmentParts = previousFailedMessage.attachments ?? [];
       } else if (previousFailedMessage) {
         // A corrected retry must replace the already-persisted failed prompt;
         // appending it would leave both prompts in the transcript. The edit
@@ -1339,6 +1362,7 @@ const Conversations = ({
           threadId: sendingThreadId,
           messageId: previousFailedMessage.id,
           content: messageText,
+          attachments: attachmentParts,
         });
         setInputValue('');
         setAttachments([]);
@@ -1351,10 +1375,16 @@ const Conversations = ({
         return;
       } else {
         const persisted = await dispatch(
-          addMessageLocal({ threadId: sendingThreadId, message: userMessage })
+          addMessageLocal({
+            threadId: sendingThreadId,
+            message: userMessage,
+            attachments: attachmentParts,
+          })
         ).unwrap();
         // The core saved the originals before returning this durable reference.
         messageText = persisted.message.content;
+        persistedMessageId = persisted.message.id;
+        persistedAttachmentParts = persisted.message.attachments ?? [];
         persistedFailedMessageByThreadRef.current.set(sendingThreadId, persisted.message);
       }
     } catch (error) {
@@ -1416,12 +1446,22 @@ const Conversations = ({
       await chatSend({
         threadId: sendingThreadId,
         message: messageText,
+        ...(persistedAttachmentParts.length || opts?.voicePart
+          ? {
+              persistedMessageId,
+              attachments: [
+                ...persistedAttachmentParts,
+                ...(opts?.voicePart ? [opts.voicePart] : []),
+              ],
+            }
+          : {}),
         ...(modelOverride !== undefined ? { model: modelOverride } : {}),
         locale: uiLocale,
         reasoningEffort: composerReasoningEffort,
+        ...(opts?.voiceNote ? { source: VOICE_NOTE_SOURCE } : {}),
       });
       trackAnalyticsEvent('chat_message_sent', {
-        send_mode: 'standard',
+        send_mode: opts?.voiceNote ? 'voice_note' : 'standard',
         has_attachments: pendingAttachments.length > 0,
       });
       // Backend accepted the send; lifecycle ('started' → 'streaming') now
@@ -1478,6 +1518,27 @@ const Conversations = ({
 
   handleSendMessageRef.current = handleSendMessage;
 
+  // Voice note: transcribe (the text the agent reads), keep the audio in the
+  // core, then send the transcript as a normal turn whose row points at the
+  // audio. A failure throws so the composer keeps the draft for another try.
+  const handleSendVoiceNote = async (draft: VoiceNoteDraft) => {
+    const transcript = await transcribeVoiceNote(draft.blob);
+    if (!transcript) throw new Error(t('voiceNote.transcribeFailed'));
+    const noteId = `vn_${globalThis.crypto.randomUUID().replace(/-/g, '')}`;
+    const { mime } = await storeVoiceNote(noteId, draft.blob);
+    const voicePart = await voiceNoteContentPart(
+      noteId,
+      mime,
+      draft.blob,
+      draft.durationMs,
+      draft.waveform
+    );
+    await handleSendMessage(transcript, {
+      voiceNote: { noteId, mime, durationMs: draft.durationMs, waveform: draft.waveform },
+      voicePart,
+    });
+  };
+
   // Queue a FOLLOW-UP on the selected thread while a turn is streaming
   // (queue_mode 'followup'): the backend sends it as a fresh turn once the
   // current turn finishes. We do NOT insert it into the transcript now —
@@ -1496,7 +1557,8 @@ const Conversations = ({
 
     const modelOverride = composerModelOverride ?? undefined;
     const modelClearBarrier = modelOverride === undefined ? waitForComposerModelClear() : null;
-    const messageText = buildMessageWithAttachments(normalized, pendingAttachments);
+    const attachmentParts = attachmentsToParts(pendingAttachments);
+    const messageText = normalized;
     // Build the full user message exactly like a normal send (content +
     // attachment metadata) so the follow-up persists identically when it is
     // flushed into the transcript on turn end. Guard `crypto.randomUUID` like
@@ -1526,19 +1588,34 @@ const Conversations = ({
           throw error;
         }
       }
-      await chatSend({
+      const ack = await chatSendWithAck({
         threadId,
         message: messageText,
+        attachments: attachmentParts,
         ...(modelOverride !== undefined ? { model: modelOverride } : {}),
         locale: uiLocale,
         queueMode: 'followup',
         reasoningEffort: composerReasoningEffort,
       });
+      if (!ack.requestId) throw new Error('The core did not identify the queued follow-up');
+      if (attachmentParts.length > 0 && ack.queuedAttachments.length === 0) {
+        throw new Error(
+          'The core did not return staged attachment references for the queued follow-up'
+        );
+      }
       // Only clear the composer once the backend has accepted the queue, so a
       // failed send leaves the user's draft + attachments intact to retry.
       setInputValue('');
       setAttachments([]);
-      dispatch(pendingFollowupAdded({ threadId, message: followupMessage, text: messageText }));
+      dispatch(
+        pendingFollowupAdded({
+          threadId,
+          message: followupMessage,
+          text: messageText,
+          requestId: ack.requestId,
+          attachments: ack.queuedAttachments,
+        })
+      );
       trackAnalyticsEvent('chat_message_sent', {
         send_mode: 'followup',
         has_attachments: pendingAttachments.length > 0,
@@ -2277,6 +2354,11 @@ const Conversations = ({
         value={composerReasoningEffort}
         onChange={applyComposerReasoningEffort}
         modelLabel={reasoningModel}
+      />
+      <VoiceNoteComposer
+        disabled={composerInteractionBlocked || isSending || !selectedThreadId}
+        onSend={handleSendVoiceNote}
+        onError={message => setSendError(chatSendError('voice_transcription', message))}
       />
     </>
   );

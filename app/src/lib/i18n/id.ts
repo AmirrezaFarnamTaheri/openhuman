@@ -3521,6 +3521,21 @@ const messages: TranslationMap = {
   'composer.settings.loadingModels': 'Memuat model…',
   'composer.voiceMode': 'Mode suara',
   'composer.humanMode': 'Mode manusia',
+  'voiceNote.record': 'Rekam pesan suara',
+  'voiceNote.stop': 'Hentikan perekaman',
+  'voiceNote.discard': 'Buang pesan suara',
+  'voiceNote.send': 'Kirim pesan suara',
+  'voiceNote.recording': 'Merekam…',
+  'voiceNote.play': 'Putar pesan suara',
+  'voiceNote.pause': 'Jeda pesan suara',
+  'voiceNote.seek': 'Geser pesan suara',
+  'voiceNote.transcript': 'Transkrip',
+  'voiceNote.noTranscript': 'Transkrip tidak tersedia',
+  'voiceNote.label': 'Pesan suara {duration}',
+  'voiceNote.micDenied': 'Akses mikrofon ditolak atau tidak tersedia.',
+  'voiceNote.transcribeFailed': 'Tidak dapat mentranskripsikan pesan suara.',
+  'voiceNote.loadFailed': 'Tidak dapat memuat pesan suara ini.',
+  'voiceNote.sendFailed': 'Tidak dapat mengirim pesan suara.',
 
   // Sync budget dialog
 

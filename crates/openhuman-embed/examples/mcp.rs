@@ -5,7 +5,7 @@
 
 mod support;
 use openhuman_core::config::schema::ModuleOverride;
-use openhuman_embed::{AgentSpec, Runtime, Workspace};
+use openhuman_embed::{AgentSpec, Runtime, RuntimeModule, ServiceSet, Workspace};
 
 fn main() -> anyhow::Result<()> {
     support::run(run())
@@ -14,21 +14,34 @@ fn main() -> anyhow::Result<()> {
 async fn run() -> anyhow::Result<()> {
     let backend = support::stub_backend().await;
     let provider = support::provider("hello from the stub").await;
-    // CI stages the checksum-verified module; storage callbacks require this local-file source.
-    let artifact = openhuman_core::modules::local_artifact("tinymcp").ok_or_else(|| {
-        anyhow::anyhow!("stage TinyMCP on OPENHUMAN_MODULE_PATH before running this example")
-    })?;
+    // Prefer the checksum-verified staged TinyMCP artifact and accept
+    // the explicit upstream offline-test path as a fallback.
+    let artifact = openhuman_core::modules::local_artifact("tinymcp")
+        .or_else(|| std::env::var("OPENHUMAN_TINYMCP_TEST_MODULE").ok().map(std::path::PathBuf::from))
+        .ok_or_else(|| anyhow::anyhow!("stage TinyMCP or provide OPENHUMAN_TINYMCP_TEST_MODULE"))?;
     let mut config = support::offline_config();
     config.modules.allow_download = false;
     config.modules.overrides.push(ModuleOverride::with_path(
         "tinymcp",
         artifact.canonicalize()?.to_string_lossy().into_owned(),
     ));
+    let storage_dir = tempfile::tempdir()?;
+    let storage_url = openhuman_core::storage::config::default_url(storage_dir.path());
     let runtime = Runtime::builder()
         .config(config)
         .workspace(Workspace::Ephemeral)
+        .storage(storage_url)
         .backend_url(backend.uri())
         .provider(support::route(&provider, "fixture"))
+        .services(ServiceSet::none())
+        .modules([
+            RuntimeModule::Agent,
+            RuntimeModule::Inference,
+            RuntimeModule::Modules,
+            RuntimeModule::Memory,
+            RuntimeModule::Mcp,
+            RuntimeModule::Skills,
+        ])
         .build()
         .await?;
     // ANCHOR: mcp

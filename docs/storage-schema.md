@@ -33,6 +33,9 @@ TinyChannels also declares its exact pre-v2 source collections so existing recor
 | `subagents.sessions` |  |  |  |
 | `task_sources.ingested` | `by_source` (`source_id`, `ingested_ms`) |  |  |
 | `task_sources.sources` | `by_created` (`created_ms`) |  |  |
+| `threads.channel_messages` |  |  |  |
+| `threads.reply_viseme_timelines` |  |  |  |
+| `threads.staged_attachments` |  |  |  |
 | `threads.transcript_keys` |  |  |  |
 
 ## tinyagents-harness
@@ -64,7 +67,7 @@ TinyChannels also declares its exact pre-v2 source collections so existing recor
 | `ledger.tool_effects` | `run` (`run_id`)<br>`started` (`started_ms`)<br>`status` (`status`) |  |  |
 | `ledger.workflow_runs` | `definition` (`definition_id`)<br>`status` (`status`)<br>`thread` (`parent_thread_id`)<br>`updated` (`updated_ms`) |  |  |
 | `session.transcript_entries` | `by_stem_written` (`stem`, `written`)<br>`by_stem` (`stem`, `seq`) |  |  |
-| `session.transcripts` | `by_agent_id` (`agent_id`, `created_ms`)<br>`by_agent_name` (`agent_name`, `created_ms`)<br>`by_thread` (`thread_id`, `created_ms`) |  |  |
+| `session.transcripts` | `by_agent_id_created` (`agent_id`, `created_ms`)<br>`by_agent_name_created` (`agent_name`, `created_ms`)<br>`by_thread_created` (`thread_id`, `created_ms`) |  |  |
 | `session.turn_states` | `by_thread` (`thread_id`) |  |  |
 | `tsd.counters` |  |  |  |
 | `tsd.kv` | `kv_by_key` (`owner`, `ns`, `key`) |  |  |

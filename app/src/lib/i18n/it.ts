@@ -3554,6 +3554,21 @@ const messages: TranslationMap = {
   'composer.settings.loadingModels': 'Caricamento modelli…',
   'composer.voiceMode': 'Modalità vocale',
   'composer.humanMode': 'Modalità umano',
+  'voiceNote.record': 'Registra un messaggio vocale',
+  'voiceNote.stop': 'Interrompi la registrazione',
+  'voiceNote.discard': 'Elimina messaggio vocale',
+  'voiceNote.send': 'Invia messaggio vocale',
+  'voiceNote.recording': 'Registrazione in corso…',
+  'voiceNote.play': 'Riproduci messaggio vocale',
+  'voiceNote.pause': 'Metti in pausa il messaggio vocale',
+  'voiceNote.seek': 'Scorri il messaggio vocale',
+  'voiceNote.transcript': 'Trascrizione',
+  'voiceNote.noTranscript': 'Nessuna trascrizione disponibile',
+  'voiceNote.label': 'Messaggio vocale {duration}',
+  'voiceNote.micDenied': 'L’accesso al microfono è stato negato o non è disponibile.',
+  'voiceNote.transcribeFailed': 'Impossibile trascrivere il messaggio vocale.',
+  'voiceNote.loadFailed': 'Impossibile caricare questo messaggio vocale.',
+  'voiceNote.sendFailed': 'Impossibile inviare il messaggio vocale.',
 
   // Sync budget dialog
 

@@ -183,6 +183,14 @@ else
 fi
 export OPENHUMAN_CHANNELS_TEST_ARTIFACT="$tinychannels_artifact"
 
+# The native Telegram voice-note E2E loads the released TinyVoice by file, as
+# the CI installer exports it. It stays off OPENHUMAN_MODULE_PATH so no other
+# suite starts loading it.
+if [ -z "${OPENHUMAN_VOICE_TEST_ARTIFACT:-}" ]; then
+  OPENHUMAN_VOICE_TEST_ARTIFACT="$(stage_release_artifact tinyvoice "$wallet_platform" "$module_ext")"
+  export OPENHUMAN_VOICE_TEST_ARTIFACT
+fi
+
 # The MCP registry E2E targets exercise real TinyMCP lifecycle calls through
 # the host's module adapter, so they load the released, checksum-pinned module
 # just as the self-hosted CI installer does (source mode builds it instead).

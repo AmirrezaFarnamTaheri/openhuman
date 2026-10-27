@@ -3495,6 +3495,21 @@ const messages: TranslationMap = {
   'composer.settings.loadingModels': 'मॉडल लोड हो रहे हैं…',
   'composer.voiceMode': 'वॉइस मोड',
   'composer.humanMode': 'मानव मोड',
+  'voiceNote.record': 'वॉइस नोट रिकॉर्ड करें',
+  'voiceNote.stop': 'रिकॉर्डिंग रोकें',
+  'voiceNote.discard': 'वॉइस नोट हटाएँ',
+  'voiceNote.send': 'वॉइस नोट भेजें',
+  'voiceNote.recording': 'रिकॉर्ड हो रहा है…',
+  'voiceNote.play': 'वॉइस नोट चलाएँ',
+  'voiceNote.pause': 'वॉइस नोट रोकें',
+  'voiceNote.seek': 'वॉइस नोट में आगे-पीछे जाएँ',
+  'voiceNote.transcript': 'ट्रांसक्रिप्ट',
+  'voiceNote.noTranscript': 'कोई ट्रांसक्रिप्ट उपलब्ध नहीं',
+  'voiceNote.label': 'वॉइस नोट {duration}',
+  'voiceNote.micDenied': 'माइक्रोफ़ोन की अनुमति अस्वीकृत या अनुपलब्ध है।',
+  'voiceNote.transcribeFailed': 'वॉइस नोट का ट्रांसक्रिप्शन नहीं हो सका।',
+  'voiceNote.loadFailed': 'यह वॉइस नोट लोड नहीं हो सका।',
+  'voiceNote.sendFailed': 'वॉइस नोट भेजा नहीं जा सका।',
 
   // Sync budget dialog
 

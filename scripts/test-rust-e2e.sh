@@ -236,6 +236,17 @@ else
   done
 fi
 
+# The native Telegram E2E loads TinyChannels and TinyVoice by file. The CI
+# installer exports both; stage the same pinned releases when it has not.
+if [ -z "${OPENHUMAN_CHANNELS_TEST_ARTIFACT:-}" ]; then
+  OPENHUMAN_CHANNELS_TEST_ARTIFACT="$(stage_release_artifact tinychannels "$module_platform" "$module_ext")"
+  export OPENHUMAN_CHANNELS_TEST_ARTIFACT
+fi
+if [ -z "${OPENHUMAN_VOICE_TEST_ARTIFACT:-}" ]; then
+  OPENHUMAN_VOICE_TEST_ARTIFACT="$(stage_release_artifact tinyvoice "$module_platform" "$module_ext")"
+  export OPENHUMAN_VOICE_TEST_ARTIFACT
+fi
+
 # Module-backed Composio coverage must use a staged artifact as well. Without
 # it the core resolves TinyConnectors through release metadata at run time,
 # turning an otherwise hermetic mock-backend suite into a network dependency
