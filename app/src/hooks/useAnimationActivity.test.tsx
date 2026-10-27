@@ -21,7 +21,9 @@ describe('useAnimationActivity', () => {
       listeners.delete(cb);
     });
     matchMedia = vi.fn(() => ({
-      get matches() { return reduced; },
+      get matches() {
+        return reduced;
+      },
       media: '(prefers-reduced-motion: reduce)',
       addEventListener: addListener,
       removeEventListener: removeListener,
