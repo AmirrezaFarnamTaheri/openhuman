@@ -78,9 +78,12 @@ describe('groupThreads', () => {
       NOW
     );
 
-    expect(
-      groups.map(group => [group.key, group.label, group.threads.map(row => row.id)])
-    ).toEqual([
+    const sections = groups.map(group => [
+      group.key,
+      group.label,
+      group.threads.map(row => row.id),
+    ]);
+    expect(sections).toEqual([
       ['project:/work/alpha/repo', 'repo', ['project-a', 'project-a2']],
       ['project:/work/beta/repo', 'repo', ['project-b']],
       ['today', undefined, ['general']],
@@ -103,22 +106,25 @@ describe('groupThreads', () => {
       'project:/work/repo',
       'project:c:\\work\\repo',
     ]);
-    expect(
-      groups.find(group => group.key === 'project:c:\\work\\repo')?.threads.map(row => row.id)
-    ).toEqual(['windows-a', 'windows-b']);
+    const windows = groups.find(group => group.key === 'project:c:\\work\\repo');
+    expect(windows?.threads.map(row => row.id)).toEqual(['windows-a', 'windows-b']);
   });
 
   it('retains pinned-first semantics and keeps blank project paths in recency', () => {
     const groups = groupThreads(
       [
         { ...thread('unpinned-project', daysAgo(1)), actionDir: '/work/code' },
-        { ...thread('pinned', daysAgo(8), [PINNED_THREAD_LABEL]), actionDir: '/work/code' },
+        {
+          ...thread('pinned', daysAgo(8), [PINNED_THREAD_LABEL]),
+          actionDir: '/work/code',
+        },
         { ...thread('blank', daysAgo(0)), actionDir: '   ' },
       ],
       NOW
     );
 
-    expect(groups.map(group => [group.key, group.threads.map(row => row.id)])).toEqual([
+    const groupsAndThreads = groups.map(group => [group.key, group.threads.map(row => row.id)]);
+    expect(groupsAndThreads).toEqual([
       ['pinned', ['pinned']],
       ['project:/work/code', ['unpinned-project']],
       ['today', ['blank']],
