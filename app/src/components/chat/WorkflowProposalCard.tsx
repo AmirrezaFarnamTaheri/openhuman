@@ -232,6 +232,21 @@ const WorkflowProposalCard: React.FC<Props> = ({ threadId, proposal, onSaved }) 
       .catch(e => log('markSaved message write failed (non-fatal): %o', e));
   };
 
+  /**
+   * The flow already persisted for this proposal and recorded on its source
+   * message (`saved_flow_id`): by an earlier save from this card, or by the
+   * agent when the user asked for the save in chat. Read fresh before
+   * persisting, since an agent-side save never reaches this card's state.
+   * `null` when nothing is recorded; a failed read throws, because treating it
+   * as "nothing recorded" could create a second copy of a saved flow.
+   */
+  const recordedSavedFlowId = async (): Promise<string | null> => {
+    if (!proposal.sourceMessageId) return null;
+    const { messages } = await threadApi.getThreadMessages(threadId);
+    const meta = messages.find(m => m.id === proposal.sourceMessageId)?.extraMetadata;
+    return typeof meta?.saved_flow_id === 'string' ? meta.saved_flow_id : null;
+  };
+
   const markCompleted = (flowId: string) => {
     setCompletedFlowId(flowId);
     dispatch(
@@ -278,6 +293,23 @@ const WorkflowProposalCard: React.FC<Props> = ({ threadId, proposal, onSaved }) 
     // what just happened in this attempt.
     let flowId = savedFlowId;
     let flowPersisted = flowId !== null;
+    if (!flowId) {
+      let recorded: string | null;
+      try {
+        recorded = await recordedSavedFlowId();
+      } catch (e) {
+        log('save: could not check for an already-saved flow — not persisting: %o', e);
+        setErrorMsg(t('chat.flowProposal.error'));
+        setSaving(false);
+        return;
+      }
+      if (recorded) {
+        log('save: flow %s already saved for this proposal — resuming at enable', recorded);
+        flowId = recorded;
+        flowPersisted = true;
+        markSaved(recorded);
+      }
+    }
     // A revision without the version it was derived from (an older persisted
     // proposal, or a flow edited after its draft was seeded) cannot be checked
     // against newer edits, so it is never written onto the flow.
