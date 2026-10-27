@@ -248,17 +248,21 @@ async fn approve_always_for_create_workflow_persists_and_skips_the_next_prompt()
     };
 
     let first = intercept(gate.clone());
-    let pending = loop {
-        if let Some(p) = gate
-            .list_pending()
-            .unwrap()
-            .into_iter()
-            .find(|p| p.tool_name == "create_workflow")
-        {
-            break p;
+    let pending = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(p) = gate
+                .list_pending()
+                .unwrap()
+                .into_iter()
+                .find(|p| p.tool_name == "create_workflow")
+            {
+                break p;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    };
+    })
+    .await
+    .expect("the first create_workflow must park for approval");
     let row = gate
         .decide(&pending.request_id, ApprovalDecision::ApproveAlwaysForTool)
         .unwrap()

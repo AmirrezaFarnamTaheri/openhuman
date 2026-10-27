@@ -109,6 +109,7 @@ fn tiny_skills_rejects_unsafe_resource_paths_without_writing_outside_scope() {
 /// While the local legacy flow import is incomplete, workflow access is paused
 /// (`ensure_flow_scope_ready`), so the builtin must stay hidden; once the
 /// import finishes, the next prewarm must surface it.
+#[cfg(feature = "storage-sqlite")]
 #[tokio::test]
 // The guard serializes the process-wide storage slot for this async test.
 #[allow(clippy::await_holding_lock)]
