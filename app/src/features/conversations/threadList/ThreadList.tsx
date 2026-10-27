@@ -168,7 +168,11 @@ function ThreadListView() {
             aria-label={group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')}
             className="flex flex-col gap-0.5">
             <h3
-              title={group.key.startsWith('project:') ? (group.threads[0]?.actionDir ?? undefined) : undefined}
+              title={
+                group.key.startsWith('project:')
+                  ? (group.threads[0]?.actionDir ?? undefined)
+                  : undefined
+              }
               data-slot="aui_thread-list-group-label"
               className="text-muted-foreground px-2.5 pt-3 pb-1 text-xs font-medium">
               {group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')}
