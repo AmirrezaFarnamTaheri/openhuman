@@ -15,6 +15,7 @@ fn credential_schema_wire_contracts_are_preserved() {
     let key_contracts = [
         ("auth_get_state", "get_state"),
         ("auth_get_session_token", "get_session_token"),
+        ("auth_activate_provider_credentials", "activate_provider_credentials"),
         (
             "auth_store_provider_credentials",
             "store_provider_credentials",
@@ -37,6 +38,9 @@ fn credential_schema_wire_contracts_are_preserved() {
     expect_schema_identity(&clear, "auth", "clear_credential");
     expect_schema_required_inputs(&clear, &[]);
     expect_schema_fields(&clear, &[("kind", Some(false))]);
+
+    let activate = schemas("auth_activate_provider_credentials");
+    expect_schema_required_inputs(&activate, &["provider", "profile"]);
 
     let list = schemas("auth_list_provider_credentials");
     expect_schema_identity(&list, "auth", "list_provider_credentials");
@@ -76,6 +80,22 @@ fn deserialize_params_reports_missing_required_fields() {
     let err = deserialize_params::<crate::security::credentials::SetCredentialRequest>(Map::new())
         .unwrap_err();
     assert!(err.contains("invalid params"));
+}
+
+#[test]
+fn deserialize_params_requires_both_named_provider_and_profile() {
+    assert!(
+        deserialize_params::<AuthActivateProviderCredentialsParams>(Map::new()).is_err()
+    );
+    let mut params = Map::new();
+    params.insert("provider".into(), Value::String("provider:openai".into()));
+    assert!(
+        deserialize_params::<AuthActivateProviderCredentialsParams>(params.clone()).is_err()
+    );
+    params.insert("profile".into(), Value::String("work".into()));
+    let parsed: AuthActivateProviderCredentialsParams = deserialize_params(params).unwrap();
+    assert_eq!(parsed.provider, "provider:openai");
+    assert_eq!(parsed.profile, "work");
 }
 
 #[test]
