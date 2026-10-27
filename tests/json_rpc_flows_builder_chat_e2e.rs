@@ -86,7 +86,10 @@ compaction_enabled = false
 
 /// Every web-channel event for `CLIENT_ID`, collected in the background so a
 /// test can ask afterwards whether one arrived.
-async fn collect_sse(events_url: String, sink: Arc<Mutex<Vec<Value>>>) -> tokio::task::JoinHandle<()> {
+async fn collect_sse(
+    events_url: String,
+    sink: Arc<Mutex<Vec<Value>>>,
+) -> tokio::task::JoinHandle<()> {
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
     let task = tokio::spawn(async move {
         let resp = reqwest::Client::new()
@@ -119,7 +122,8 @@ async fn collect_sse(events_url: String, sink: Arc<Mutex<Vec<Value>>>) -> tokio:
 }
 
 fn lock(sink: &Mutex<Vec<Value>>) -> std::sync::MutexGuard<'_, Vec<Value>> {
-    sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    sink.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn events_named(sink: &Arc<Mutex<Vec<Value>>>, name: &str) -> Vec<Value> {
@@ -220,15 +224,27 @@ async fn wait_for_saved_flow_id(rpc_base: &str, thread_id: &str) -> Option<Value
 fn orchestrator_tool_calls(requests: &[Value]) -> Vec<String> {
     let latest = requests
         .iter()
-        .filter(|r| r.get("body").map(Value::to_string).is_some_and(|b| b.contains(ORCHESTRATOR_MARKER)))
-        .max_by_key(|r| r.pointer("/body/messages").and_then(Value::as_array).map_or(0, Vec::len));
+        .filter(|r| {
+            r.get("body")
+                .map(Value::to_string)
+                .is_some_and(|b| b.contains(ORCHESTRATOR_MARKER))
+        })
+        .max_by_key(|r| {
+            r.pointer("/body/messages")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len)
+        });
     latest
         .and_then(|r| r.pointer("/body/messages").and_then(Value::as_array))
         .into_iter()
         .flatten()
         .filter_map(|m| m.get("tool_calls").and_then(Value::as_array))
         .flatten()
-        .filter_map(|c| c.pointer("/function/name").and_then(Value::as_str).map(str::to_string))
+        .filter_map(|c| {
+            c.pointer("/function/name")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .collect()
 }
 
@@ -363,7 +379,9 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     );
     push_forced_chat_completion_when(
         ORCHESTRATOR_MARKER,
-        forced_text_completion("TURN1-END: the workflow builder is on it; the proposal will appear here."),
+        forced_text_completion(
+            "TURN1-END: the workflow builder is on it; the proposal will appear here.",
+        ),
     );
     push_forced_chat_completion_when(
         BUILDER_MARKER,
@@ -374,7 +392,13 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     );
     push_forced_chat_completion_when(BUILDER_MARKER, forced_text_completion("Proposal ready."));
 
-    send_chat(&rpc_base, 3, &thread_id, "Set up a morning digest workflow for me.").await;
+    send_chat(
+        &rpc_base,
+        3,
+        &thread_id,
+        "Set up a morning digest workflow for me.",
+    )
+    .await;
     let turn_end = wait_for("the first turn's terminal event", || {
         let events = Arc::clone(&events);
         async move {
@@ -431,11 +455,23 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
             .iter()
             .find(|n| n["id"] == id)
             .unwrap_or_else(|| panic!("node {id} in the proposal: {proposal}"));
-        assert_eq!(node.pointer("/config/set/step"), Some(&json!(step)), "{id}: {node}");
-        assert_eq!(node.pointer("/config/set/marker"), Some(&json!(marker)), "{id}: {node}");
+        assert_eq!(
+            node.pointer("/config/set/step"),
+            Some(&json!(step)),
+            "{id}: {node}"
+        );
+        assert_eq!(
+            node.pointer("/config/set/marker"),
+            Some(&json!(marker)),
+            "{id}: {node}"
+        );
     }
     let trigger = nodes.iter().find(|n| n["id"] == "t").expect("trigger node");
-    assert_eq!(trigger.pointer("/config/trigger_kind"), Some(&json!("schedule")), "{trigger}");
+    assert_eq!(
+        trigger.pointer("/config/trigger_kind"),
+        Some(&json!("schedule")),
+        "{trigger}"
+    );
 
     let calls = orchestrator_tool_calls(&with_chat_completion_requests(|r| r.clone()));
     assert_eq!(
@@ -525,13 +561,20 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
         async move { flows(&rpc_base).await.into_iter().next() }
     })
     .await;
-    assert_eq!(flow_count(&rpc_base).await, 1, "the agent save creates one flow");
+    assert_eq!(
+        flow_count(&rpc_base).await,
+        1,
+        "the agent save creates one flow"
+    );
     assert_eq!(agent_flow["name"], REQUESTED_NAME, "{agent_flow}");
     assert_eq!(
         agent_flow["enabled"], false,
         "an agent-created flow with a schedule trigger is born disabled: {agent_flow}"
     );
-    let agent_flow_id = agent_flow["id"].as_str().expect("agent flow id").to_string();
+    let agent_flow_id = agent_flow["id"]
+        .as_str()
+        .expect("agent flow id")
+        .to_string();
     // The save task's own completion: whatever it records on the proposal is
     // recorded by then.
     wait_for("SubagentCompleted for the save task", || {
@@ -558,7 +601,10 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
         }
     };
     if let Some(saved_id) = recorded.as_ref().and_then(Value::as_str) {
-        assert_eq!(saved_id, agent_flow_id, "the proposal names the flow the agent saved");
+        assert_eq!(
+            saved_id, agent_flow_id,
+            "the proposal names the flow the agent saved"
+        );
         let enabled = enable(saved_id.to_string()).await;
         assert_eq!(enabled["enabled"], true, "{enabled}");
     } else {
@@ -571,9 +617,14 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
         .await;
         let created_result = assert_no_jsonrpc_error(&created, "flows_create");
         let flow = peel_logs_envelope(created_result).clone();
-        assert_eq!(flow["enabled"], false, "a schedule trigger is born disabled: {flow}");
+        assert_eq!(
+            flow["enabled"], false,
+            "a schedule trigger is born disabled: {flow}"
+        );
         assert!(
-            created_result["logs"].to_string().contains("created DISABLED"),
+            created_result["logs"]
+                .to_string()
+                .contains("created DISABLED"),
             "the save says why it is disabled: {created_result}"
         );
         let enabled = enable(flow["id"].as_str().expect("created flow id").to_string()).await;
@@ -581,7 +632,10 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     }
 
     if AGENT_SAVE_RECORDS_SAVED_FLOW_ID {
-        assert!(recorded.is_some(), "the agent save records saved_flow_id on the proposal");
+        assert!(
+            recorded.is_some(),
+            "the agent save records saved_flow_id on the proposal"
+        );
         assert_eq!(
             flow_count(&rpc_base).await,
             1,
