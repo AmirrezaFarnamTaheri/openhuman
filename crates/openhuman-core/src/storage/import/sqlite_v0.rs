@@ -377,8 +377,27 @@ fn convert(conn: &Connection, before: &BTreeMap<&str, i64>) -> Result<(), Storag
             )));
         }
     }
+    // The v2 driver compares persisted CREATE TABLE statements, including
+    // quoted identifiers. A v0 _tsd_collections table may have been created
+    // without quotes: keeping its original DDL causes every v2 open to fail
+    // even when all other migrated tables are valid. Rebuild it transactionally,
+    // preserving all collection specs and the driver's canonical DDL.
+    conn.execute_batch(
+        "CREATE TABLE \"_tsd_collections_next\" (
+             coll TEXT PRIMARY KEY, spec TEXT NOT NULL
+         ) WITHOUT ROWID;
+         INSERT INTO \"_tsd_collections_next\" (coll,spec)
+           SELECT coll,spec FROM \"_tsd_collections\";
+         DROP TABLE \"_tsd_collections\";
+         ALTER TABLE \"_tsd_collections_next\" RENAME TO \"_tsd_collections\";",
+    )
+    .map_err(|e| error("rebuild legacy collection schema", e))?;
+    if count(conn, "_tsd_collections")? != before["_tsd_collections"] {
+        return Err(StorageError::backend(
+            "legacy SQLite collection specs changed during migration",
+        ));
+    }
     for table in OLD_TABLES {
-        // The collections declaration table is shared by v0 and v2; keep it.
         if *table != "_tsd_collections" {
             conn.execute_batch(&format!("DROP TABLE \"{table}\""))
                 .map_err(|e| error("retire copied legacy table", e))?;
