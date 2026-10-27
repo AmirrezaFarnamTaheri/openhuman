@@ -78,6 +78,7 @@ pub struct AgentSpec {
 pub struct MemoryBinding {
     agent_id: String,
     root: Option<String>,
+    recall_each_turn: Option<std::time::Duration>,
 }
 
 impl MemoryBinding {
@@ -86,6 +87,7 @@ impl MemoryBinding {
         Self {
             agent_id: agent_id.into(),
             root: None,
+            recall_each_turn: None,
         }
     }
 
@@ -94,6 +96,14 @@ impl MemoryBinding {
     #[must_use]
     pub fn root(mut self, root: impl Into<String>) -> Self {
         self.root = Some(root.into());
+        self
+    }
+
+    /// Recall memory for the user's current message on every turn, and wait
+    /// at most `timeout` for it before the turn's first model call.
+    #[must_use]
+    pub fn recall_each_turn(mut self, timeout: std::time::Duration) -> Self {
+        self.recall_each_turn = Some(timeout);
         self
     }
 
