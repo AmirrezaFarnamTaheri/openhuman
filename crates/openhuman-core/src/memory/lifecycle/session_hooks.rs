@@ -186,7 +186,9 @@ impl OpenHumanTurnPrelude {
                 .as_ref()
                 .and_then(crate::memory::lifecycle::sender::channel_actor),
             memory_channel,
-        );
+            None,
+        )
+        .await;
         Some(Arc::new(MemoryTurn {
             config,
             identity,

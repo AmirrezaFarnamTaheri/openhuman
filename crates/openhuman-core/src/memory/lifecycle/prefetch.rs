@@ -142,10 +142,38 @@ fn enqueue(cache: Arc<Cache>, key: Key, work: Work) {
     );
 }
 
+/// Decides which recalled hits a turn must not be shown, for a host that
+/// already puts them in front of the model some other way.
+pub(crate) type RecallExclude = Arc<dyn Fn(&tinymemory_api::Hit) -> bool + Send + Sync>;
+
+/// Recall for the current message, waited on for at most `timeout`.
+#[derive(Clone)]
+pub(crate) struct RecallEachTurn {
+    timeout: Duration,
+    exclude: Option<RecallExclude>,
+}
+
+impl RecallEachTurn {
+    /// Waits at most `timeout` for the current message's pack.
+    pub(crate) fn new(timeout: Duration) -> Self {
+        Self {
+            timeout,
+            exclude: None,
+        }
+    }
+
+    /// Leaves out a pack whose every cited hit `exclude` matches.
+    #[must_use]
+    pub(crate) fn excluding(mut self, exclude: RecallExclude) -> Self {
+        self.exclude = Some(exclude);
+        self
+    }
+}
+
 /// Returns the last completed pack immediately, then logs this user turn and
 /// refreshes its context in the background. A cold cache returns `None`.
 /// Omitted recall still logs, but cannot consume another identity's pack.
-pub(crate) fn pre_turn(
+pub(crate) async fn pre_turn(
     ctx: &DispatchCtx,
     config: Arc<Config>,
     identity: ResolvedIdentity,
@@ -157,6 +185,7 @@ pub(crate) fn pre_turn(
     resumed_after_compaction: bool,
     observed_actor: Option<tinymemory_api::ObservedActor>,
     channel: Option<String>,
+    _each_turn: Option<RecallEachTurn>,
 ) -> Option<TurnPack> {
     if !config.memory.conversations.enabled && !identity.recall {
         return None;
