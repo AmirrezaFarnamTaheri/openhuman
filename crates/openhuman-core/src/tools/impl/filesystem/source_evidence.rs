@@ -300,6 +300,8 @@ async fn read_checked(policy: &SecurityPolicy, path: &Path) -> anyhow::Result<Op
     // Limit reads at the OS handle, not after unbounded read_to_end; a file
     // can grow between metadata and reading. On Unix do not follow a symlink
     // substituted at the canonical final component after initial validation.
+    // Use Tokio's read-only File::options to make the no-write contract
+    // explicit; this is not a persisted-storage writer or an allowance.
     #[cfg(unix)]
     let opened = tokio::fs::File::options()
         .read(true)
