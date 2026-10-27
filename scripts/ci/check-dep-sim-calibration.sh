@@ -149,6 +149,9 @@ cd "$(dirname "$0")/../.."
 # adds the filesystem, network, execution, media and plan-review tool crates;
 # measured by both cargo tree and dep-sim on current upstream/main.
 # See kernel-floor.limits.
-# 312 -> 301 on 2026-10-27: fork sync run 40532060640 reports 331\n# packages / 301 names / 3 native builds; ratchet simulation and cargo\n# together without altering the dependency set.\nEXPECTED_NAMES=301
+# 312 -> 301 on 2026-10-27: fork sync run 40532060640 reports 331
+# packages / 301 names / 3 native builds; ratchet simulation and cargo
+# agree without altering the dependency set.
+EXPECTED_NAMES=301
 
 exec python3 scripts/dep-sim.py --cut-nothing --expect-names "${EXPECTED_NAMES}"
