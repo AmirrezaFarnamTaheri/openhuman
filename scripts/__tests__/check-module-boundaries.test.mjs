@@ -94,7 +94,8 @@ test('parent-scoped host exceptions do not allow direct implementation dependenc
   const direct = auditGraph(m, ['cli'], policy);
   assert.deepEqual(direct.violations.map(item => item.path), [['cli', 'tinyflows']]);
   const core = auditGraph(m, ['openhuman'], policy);
-  assert.deepEqual(core.exceptions.map(item => item.path), [['openhuman', 'tinyflows']]);
+  assert.deepEqual(core.violations.map(item => item.path), [['openhuman', 'tinyflows']]);
+  assert.deepEqual(core.exceptions, []);
 });
 test('parent-scoped exceptions are evaluated for every incoming edge', () => {
   const edgePolicy = {
@@ -357,7 +358,7 @@ test('host boundary audit ignores writer features unified only by unrelated work
       ],
     });
     const scoped = metadata({
-      openhuman: [['tinyflows-import'], ['tinyflows']],
+      openhuman: [['tinyflows-import']],
       'tinyflows-import': [['tinyflows-bus']],
     });
     const app = metadata({
@@ -380,7 +381,7 @@ test('host boundary audit ignores writer features unified only by unrelated work
     });
     assert.equal(auditGraph(unified, ['openhuman'], strict).violations.length, 4);
     assert.deepEqual(auditGraph(scoped, ['openhuman'], policy).violations, []);
-    assert.deepEqual(auditGraph(scoped, ['openhuman'], policy).exceptions.map(item => item.package), ['tinyflows']);
+    assert.deepEqual(auditGraph(scoped, ['openhuman'], policy).exceptions, []);
     const manifestToContract = new Map(policy.contracts.map(item => [
       resolve(harnessRoot, item.manifest), item.name,
     ]));
@@ -412,7 +413,6 @@ test('host boundary audit ignores writer features unified only by unrelated work
           ] : packageName === 'openhuman-cli' && defaultWriterEnabled && cargoArgs.includes('--features') ? [
             '1tinyflows v0.8.28',
           ] : packageName === 'openhuman' ? [
-            '1tinyflows v0.8.28',
             '1tinyflows-import v0.1.0',
             `2tinyflows-bus v0.1.0 (${tinyflowsBus})`,
           ] : []),
