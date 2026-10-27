@@ -232,6 +232,46 @@ impl Slot {
 
 static BACKEND: LazyLock<Slot> = LazyLock::new(Slot::default);
 
+/// The libtest thread (named after its test) that installed the slot, under
+/// `cfg(test)`. Unit tests share one process and run in parallel; without this,
+/// a backend one test installs becomes every concurrent test's storage
+/// ([`local::backend_for`] prefers the slot), and their rows mix and vanish
+/// when the installer restores it (MAIN-57).
+#[cfg(test)]
+static SLOT_OWNER: Mutex<Option<String>> = Mutex::new(None);
+
+#[cfg(test)]
+fn set_slot_owner(owner: Option<String>) {
+    *SLOT_OWNER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = owner;
+}
+
+/// Whether the installed slot belongs to the calling test. A slot a test
+/// installed is hidden from the other tests' threads; one installed off a test
+/// thread (a runtime worker, the storage bridge) stays visible to all, as in
+/// production.
+#[cfg(test)]
+fn slot_visible_here() -> bool {
+    let owner = SLOT_OWNER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let Some(owner) = owner.filter(|owner| is_test_thread(owner)) else {
+        return true;
+    };
+    match std::thread::current().name() {
+        Some(name) if is_test_thread(name) => name == owner,
+        _ => true,
+    }
+}
+
+/// libtest names each test's thread after its path (`module::tests::name`).
+#[cfg(test)]
+fn is_test_thread(name: &str) -> bool {
+    name.contains("::")
+}
+
 /// The URL the installed backend was opened from, when the host installed it
 /// by URL ([`install_for_url`]). [`rebind`] compares against it; a backend
 /// installed without one (a test's, an embedder's own) is never rebound.
@@ -246,6 +286,10 @@ fn set_installed_url(url: Option<String>) {
 /// The URL the installed backend was opened from, if the host installed it by
 /// URL.
 pub fn installed_url() -> Option<String> {
+    #[cfg(test)]
+    if !slot_visible_here() {
+        return None;
+    }
     INSTALLED_URL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -350,6 +394,8 @@ where
 
 /// Makes `backend` the process's storage backend; returns the previous one.
 pub fn install(backend: Arc<dyn StorageBackend>) -> Option<Arc<dyn StorageBackend>> {
+    #[cfg(test)]
+    set_slot_owner(std::thread::current().name().map(str::to_owned));
     set_installed_url(None);
     let previous = BACKEND.install(backend);
     // What was recorded described the previous backend.
@@ -372,11 +418,17 @@ pub fn install_for_url(
 
 /// The installed backend, when the host configured one.
 pub fn installed() -> Option<Arc<dyn StorageBackend>> {
+    #[cfg(test)]
+    if !slot_visible_here() {
+        return None;
+    }
     BACKEND.installed()
 }
 
 /// Removes the installed backend; returns whether there was one.
 pub fn clear() -> bool {
+    #[cfg(test)]
+    set_slot_owner(None);
     set_installed_url(None);
     agents::reset_recorded();
     BACKEND.clear()
