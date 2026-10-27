@@ -686,5 +686,4 @@ async fn purging_threads_cancels_driver_children_and_discards_completions() {
         .is_empty(),
         "settled purge releases active child owner slots"
     );
-    release.notify_one();
 }
