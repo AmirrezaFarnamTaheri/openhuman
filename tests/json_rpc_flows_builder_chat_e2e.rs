@@ -1,7 +1,8 @@
 //! The workflow builder as a user reaches it: a web-chat turn to the
 //! orchestrator, which spawns `workflow_builder` asynchronously, whose proposal
 //! is delivered into the thread as the card the user saves, plus the agent-side
-//! "save it" path. Every model response is scripted (the in-process FIFO in
+//! "save it" path, in the order a user takes: the agent saves, then the card.
+//! Every model response is scripted (the in-process FIFO in
 //! `support/rpc_e2e_harness.rs`), so the assertions are about what the host
 //! does with them: spawn, delivery, persistence, events and saving.
 //!
@@ -25,7 +26,9 @@ const SUBAGENT_COMPLETED_REACHES_SOCKET: bool = false;
 
 /// The agent-side save (`create_workflow` from a delegated "save it") does not
 /// record `saved_flow_id` on the proposal it saved; only the card's own save
-/// does. Flip to `true` with the fix that records it.
+/// does. So the card, pressed after the agent saved, creates a second copy of
+/// the flow (the duplicate-save bug). Flip to `true` with the fix that records
+/// it; the test then requires the card to enable the agent's flow instead.
 const AGENT_SAVE_RECORDS_SAVED_FLOW_ID: bool = false;
 
 const CLIENT_ID: &str = "builder-chat-e2e";
@@ -184,11 +187,33 @@ fn proposal_message(messages: &[Value]) -> Option<Value> {
         .cloned()
 }
 
-async fn flow_count(rpc_base: &str) -> usize {
+async fn flows(rpc_base: &str) -> Vec<Value> {
     let list = post_json_rpc(rpc_base, 91, "openhuman.flows_list", json!({})).await;
     peel_logs_envelope(assert_no_jsonrpc_error(&list, "flows_list"))
         .as_array()
-        .map_or(0, Vec::len)
+        .cloned()
+        .unwrap_or_default()
+}
+
+async fn flow_count(rpc_base: &str) -> usize {
+    flows(rpc_base).await.len()
+}
+
+/// The proposal's `saved_flow_id`. With the fix it is set; give it a moment,
+/// otherwise report what is there.
+async fn wait_for_saved_flow_id(rpc_base: &str, thread_id: &str) -> Option<Value> {
+    let read = || async {
+        proposal_message(&thread_messages(rpc_base, thread_id).await)
+            .and_then(|m| m.pointer("/extraMetadata/saved_flow_id").cloned())
+            .filter(|id| !id.is_null())
+    };
+    for _ in 0..20 {
+        if let Some(id) = read().await {
+            return Some(id);
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    read().await
 }
 
 /// Every tool call the orchestrator's requests show it made, by name.
@@ -468,26 +493,9 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
         );
     }
 
-    // ── 4. saving through the card's RPC: one flow, its schedule born disabled ──
+    // ── 4. the agent-side "save it": one flow, its schedule born disabled ──
+    // The order a user takes: ask the agent to save, then press the card.
     assert_eq!(flow_count(&rpc_base).await, 0, "no flow before the save");
-    let saved = post_json_rpc(
-        &rpc_base,
-        40,
-        "openhuman.flows_create",
-        json!({ "name": proposal["name"], "graph": proposal["graph"] }),
-    )
-    .await;
-    let saved_result = assert_no_jsonrpc_error(&saved, "flows_create");
-    let flow = peel_logs_envelope(saved_result);
-    assert!(flow["id"].as_str().is_some_and(|id| !id.is_empty()), "{flow}");
-    assert_eq!(flow["enabled"], false, "a schedule trigger is born disabled: {flow}");
-    assert!(
-        saved_result["logs"].to_string().contains("created DISABLED"),
-        "the save says why it is disabled: {saved_result}"
-    );
-    assert_eq!(flow_count(&rpc_base).await, 1, "exactly one flow from the card save");
-
-    // ── 5. the agent-side "save it" ──
     clear_forced_chat_completions();
     push_forced_chat_completion_when(
         ORCHESTRATOR_MARKER,
@@ -512,34 +520,85 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     );
     push_forced_chat_completion_when(BUILDER_MARKER, forced_text_completion("Saved it."));
     send_chat(&rpc_base, 50, &thread_id, "save it").await;
-    wait_for("the agent-created flow", || {
+    let agent_flow = wait_for("the agent-created flow", || {
         let rpc_base = rpc_base.clone();
-        async move { (flow_count(&rpc_base).await == 2).then_some(()) }
+        async move { flows(&rpc_base).await.into_iter().next() }
     })
     .await;
-    let saved_flow_id = || {
+    assert_eq!(flow_count(&rpc_base).await, 1, "the agent save creates one flow");
+    assert_eq!(agent_flow["name"], REQUESTED_NAME, "{agent_flow}");
+    assert_eq!(
+        agent_flow["enabled"], false,
+        "an agent-created flow with a schedule trigger is born disabled: {agent_flow}"
+    );
+    let agent_flow_id = agent_flow["id"].as_str().expect("agent flow id").to_string();
+    // The save task's own completion: whatever it records on the proposal is
+    // recorded by then.
+    wait_for("SubagentCompleted for the save task", || {
+        let found = subagent_rx.try_recv().ok();
+        async move { found }
+    })
+    .await;
+    let recorded = wait_for_saved_flow_id(&rpc_base, &thread_id).await;
+
+    // ── 5. the card's save, as WorkflowProposalCard does it ──
+    // With `saved_flow_id` on the proposal it only enables that flow; without
+    // it, it creates one (born disabled for a schedule) and then enables that.
+    let enable = |id: String| {
         let rpc_base = rpc_base.clone();
-        let thread_id = thread_id.clone();
         async move {
-            proposal_message(&thread_messages(&rpc_base, &thread_id).await)
-                .and_then(|m| m.pointer("/extraMetadata/saved_flow_id").cloned())
-                .filter(|id| !id.is_null())
+            let enabled = post_json_rpc(
+                &rpc_base,
+                61,
+                "openhuman.flows_set_enabled",
+                json!({ "id": id, "enabled": true }),
+            )
+            .await;
+            peel_logs_envelope(assert_no_jsonrpc_error(&enabled, "flows_set_enabled")).clone()
         }
     };
-    if AGENT_SAVE_RECORDS_SAVED_FLOW_ID {
-        wait_for("saved_flow_id on the proposal", saved_flow_id).await;
+    if let Some(saved_id) = recorded.as_ref().and_then(Value::as_str) {
+        assert_eq!(saved_id, agent_flow_id, "the proposal names the flow the agent saved");
+        let enabled = enable(saved_id.to_string()).await;
+        assert_eq!(enabled["enabled"], true, "{enabled}");
     } else {
-        // Pinned: wait for the save's own completion, then expect no mark.
-        // When the fix lands this fails: flip the const above.
-        wait_for("SubagentCompleted for the save task", || {
-            let found = subagent_rx.try_recv().ok();
-            async move { found }
-        })
+        let created = post_json_rpc(
+            &rpc_base,
+            60,
+            "openhuman.flows_create",
+            json!({ "name": proposal["name"], "graph": proposal["graph"] }),
+        )
         .await;
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        let created_result = assert_no_jsonrpc_error(&created, "flows_create");
+        let flow = peel_logs_envelope(created_result).clone();
+        assert_eq!(flow["enabled"], false, "a schedule trigger is born disabled: {flow}");
         assert!(
-            saved_flow_id().await.is_none(),
+            created_result["logs"].to_string().contains("created DISABLED"),
+            "the save says why it is disabled: {created_result}"
+        );
+        let enabled = enable(flow["id"].as_str().expect("created flow id").to_string()).await;
+        assert_eq!(enabled["enabled"], true, "{enabled}");
+    }
+
+    if AGENT_SAVE_RECORDS_SAVED_FLOW_ID {
+        assert!(recorded.is_some(), "the agent save records saved_flow_id on the proposal");
+        assert_eq!(
+            flow_count(&rpc_base).await,
+            1,
+            "saving the card after the agent saved must not create a second flow"
+        );
+    } else {
+        // Pinned duplicate-save bug: the agent save leaves no saved_flow_id on
+        // the proposal, so the card creates a second copy of the same flow.
+        // When the fix lands this fails: set AGENT_SAVE_RECORDS_SAVED_FLOW_ID = true.
+        assert!(
+            recorded.is_none(),
             "the agent save now records saved_flow_id: set AGENT_SAVE_RECORDS_SAVED_FLOW_ID = true"
+        );
+        assert_eq!(
+            flow_count(&rpc_base).await,
+            2,
+            "duplicate-save bug pinned: the card saved a second flow after the agent's"
         );
     }
 
