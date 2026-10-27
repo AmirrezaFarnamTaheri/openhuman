@@ -370,12 +370,18 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
         .with_writer(std::io::stderr)
         .try_init();
     let _env_lock = json_rpc_e2e_env_lock_async().await;
+    // Managed inference (routed to the mock below) is registered by the
+    // TinyHumans layer, not built into the core.
+    tinyhumans_boot::boot();
     let _fifo_guard = ScriptedFifoGuard;
     let tmp = tempdir().expect("tempdir");
     let home = tmp.path();
     let openhuman_home = home.join(".openhuman");
     let _home_guard = EnvVarGuard::set_to_path("HOME", home);
     let _workspace_guard = EnvVarGuard::unset("OPENHUMAN_WORKSPACE");
+    let _storage_url_guard = EnvVarGuard::unset("OPENHUMAN_STORAGE_URL");
+    // Step 4 answers the create_workflow approval: the gate must be on.
+    let _approval_gate_guard = EnvVarGuard::unset("OPENHUMAN_APPROVAL_GATE");
     let _backend_url_guard = EnvVarGuard::unset("BACKEND_URL");
     let _vite_backend_guard = EnvVarGuard::unset("VITE_BACKEND_URL");
     let _api_url_guard = EnvVarGuard::unset("OPENHUMAN_API_URL");
@@ -669,6 +675,26 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
         .as_str()
         .expect("agent flow id")
         .to_string();
+    // The save turn ends on its own reply. Turn 1 ended clean, so any
+    // chat_error is this turn's.
+    let turn2_end = wait_for("the save turn's terminal event", || {
+        let events = Arc::clone(&events);
+        async move {
+            let mut terminal = events_named(&events, "chat_error");
+            terminal.extend(
+                events_named(&events, "chat_done")
+                    .into_iter()
+                    .filter(|e| e.to_string().contains("TURN2-END")),
+            );
+            terminal.into_iter().next()
+        }
+    })
+    .await;
+    assert_eq!(
+        turn2_end.get("event").and_then(Value::as_str),
+        Some("chat_done"),
+        "the save turn must finish cleanly: {turn2_end}"
+    );
     // The save task's own completion: whatever it records on the proposal is
     // recorded by then.
     wait_for("SubagentCompleted for the save task", || {
