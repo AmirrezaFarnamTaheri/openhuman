@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useRef, useState } from 'react';
-import { createHashRouter, createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
+import {
+  createHashRouter,
+  createMemoryRouter,
+  RouterProvider,
+  useNavigate,
+} from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
 import FlowNavigationBlocker, { type BlockedFlowNavigation } from './FlowNavigationBlocker';
