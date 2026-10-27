@@ -2134,38 +2134,76 @@ async fn delegated_background_task_completion_flow_inner() {
         serde_json::to_string_pretty(&requests).unwrap_or_default()
     );
 
-    // request[3] went to task_manager_agent, not the orchestrator: its system
-    // prompt is task-manager-specific. Without this the flow degrades to the
-    // orchestrator asking the user itself, which never exercises delegation.
-    let child_request = requests.get(3).map(Value::to_string).unwrap_or_default();
+    // Verify the *actor* and the durable result, not fixed FIFO indices.
+    // The host may issue a verification/nudge request between asynchronous
+    // child and delivery turns; that does not change which agent ran.
+    let child_request = requests.iter().find(|request| {
+        request
+            .pointer("/body/messages")
+            .and_then(Value::as_array)
+            .is_some_and(|messages| {
+                messages.iter().any(|message| {
+                    message.get("role").and_then(Value::as_str) == Some("system")
+                        && message
+                            .get("content")
+                            .and_then(Value::as_str)
+                            .is_some_and(|content| {
+                                content.contains("You own the user's task-source feeds and artifacts")
+                            })
+                })
+            })
+    });
+    let child_request = child_request.unwrap_or_else(|| {
+        panic!(
+            "no task_manager_agent model request was observed; requests: {}",
+            serde_json::to_string_pretty(&requests).unwrap_or_default()
+        )
+    });
     assert!(
-        child_request.contains("You own the user's task-source feeds and artifacts"),
-        "request[3] did not carry the task_manager_agent prompt — spawn_subagent did not \
-         run the specialist; request: {child_request}"
+        child_request.to_string().contains("Do not call ask_user_clarification"),
+        "the background child must not request interactive user attention"
     );
-    assert!(child_request.contains("Do not call ask_user_clarification"));
 
-    // The background child reports missing detail to its parent without requesting user attention.
-    let relay_request = requests.get(4).map(Value::to_string).unwrap_or_default();
+    // Locate the *second user turn* structurally. A later verification nudge
+    // or background delivery may add provider calls after the user's answer,
+    // so the last captured request is not necessarily the turn-2 request.
+    let is_turn_two = |request: &Value| {
+        request
+            .pointer("/body/messages")
+            .and_then(Value::as_array)
+            .is_some_and(|messages| {
+                messages.iter().any(|message| {
+                    message.get("role").and_then(Value::as_str) == Some("user")
+                        && message
+                            .get("content")
+                            .and_then(Value::as_str)
+                            .is_some_and(|content| content.trim_end().ends_with("version 2"))
+                })
+            })
+    };
+    let turn2_request = requests.iter().find(|request| is_turn_two(request)).unwrap_or_else(|| {
+        panic!(
+            "no second user turn reached the model; requests: {}",
+            serde_json::to_string_pretty(&requests).unwrap_or_default()
+        )
+    });
+
+    // The completed child reply must reach a separate orchestrator relay,
+    // rather than merely appear in the child's own provider history.
     assert!(
-        relay_request.contains("WHICH_VERSION_CANARY"),
-        "request[4] did not carry the child's missing-detail result; \
-         request: {relay_request}"
+        requests.iter().any(|request| {
+            !is_turn_two(request)
+                && body_is_orchestrator(&request["body"])
+                && request.to_string().contains("WHICH_VERSION_CANARY")
+        }),
+        "no orchestrator relay carried the background child's missing-detail result"
     );
 
-    // The turn-2 request must still hold the question: the relay was persisted in
-    // thread history. Scoped to the last request because request[4] carries the
-    // canary through the envelope, so an `any()` over all requests would pass
-    // without persistence.
-    let turn2_contains_result = requests
-        .last()
-        .map(|request| request.to_string().contains("TASK_MANAGER_RESULT_CANARY"))
-        .unwrap_or(false);
+    // The turn-2 model context must include the persisted child result, not
+    // the obsolete TASK_MANAGER_RESULT_CANARY string used by an old fixture.
     assert!(
-        turn2_contains_result,
-        "TASK_MANAGER_RESULT_CANARY not found in the turn-2 request — the child result \
-         was not persisted in thread history; requests: {}",
-        serde_json::to_string_pretty(&requests).unwrap_or_default()
+        turn2_request.to_string().contains("WHICH_VERSION_CANARY"),
+        "the persisted background child result was missing from the resumed turn"
     );
 
     stack.shutdown();
