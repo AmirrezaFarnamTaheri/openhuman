@@ -429,9 +429,12 @@ pub(crate) fn upgrade_if_needed(path: &Path) -> Result<(), StorageError> {
                 "legacy SQLite changed while preparing upgrade; retry startup",
             ));
         }
-        if inventory(&conn)? != before {
+        let version_now: i64 = conn
+            .query_row("PRAGMA data_version", [], |row| row.get(0))
+            .map_err(|e| error("recheck source version", e))?;
+        if version_now != version_before || inventory(&conn)? != before {
             return Err(StorageError::backend(
-                "legacy SQLite records changed after backup; retry startup",
+                "legacy SQLite changed after backup; retry startup",
             ));
         }
         convert(&conn, &before)
