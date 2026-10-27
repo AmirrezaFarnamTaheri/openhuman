@@ -146,7 +146,46 @@ where
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    panic!("timed out waiting for {what}");
+    panic!("timed out waiting for {what}\n{}", request_trace());
+}
+
+/// Which agent each captured model request came from, what it ended on and
+/// how much of the script is left: the first thing to read when a wait times
+/// out.
+fn request_trace() -> String {
+    let mut out = String::from("captured model requests:\n");
+    with_chat_completion_requests(|requests| {
+        for (i, r) in requests.iter().enumerate() {
+            let body = r.get("body").map(Value::to_string).unwrap_or_default();
+            let agent = if body.contains(ORCHESTRATOR_MARKER) {
+                "orchestrator"
+            } else if body.contains(BUILDER_MARKER) {
+                "workflow_builder"
+            } else {
+                "other"
+            };
+            let messages = r.pointer("/body/messages").and_then(Value::as_array);
+            let last_role = messages
+                .and_then(|m| m.last())
+                .and_then(|m| m.get("role"))
+                .and_then(Value::as_str)
+                .unwrap_or("-");
+            let calls: Vec<&str> = messages
+                .into_iter()
+                .flatten()
+                .filter_map(|m| m.get("tool_calls").and_then(Value::as_array))
+                .flatten()
+                .filter_map(|c| c.pointer("/function/name").and_then(Value::as_str))
+                .collect();
+            out.push_str(&format!(
+                "  #{i} {agent}: {} messages, last {last_role}, tool calls so far {calls:?}\n",
+                messages.map_or(0, Vec::len)
+            ));
+        }
+    });
+    let left = with_forced_chat_completions(|q| q.len());
+    out.push_str(&format!("scripted completions not consumed: {left}\n"));
+    out
 }
 
 struct SubagentEvents(mpsc::UnboundedSender<(String, String)>);
