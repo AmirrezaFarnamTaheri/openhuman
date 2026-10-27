@@ -89,32 +89,37 @@ export function groupThreads(
 ): ThreadGroup[] {
   const buckets = new Map<ThreadGroupKey, ThreadGroup>();
   for (const thread of threads) {
-    const workingDirectory = thread.actionDir?.trim();
-    const projectName = workingDirectory ? folderBasename(workingDirectory) : null;
-    const key: ThreadGroupKey = isPinned(thread)
-      ? 'pinned'
-      : workingDirectory && projectName
-        ? `project:${projectDirectoryKey(workingDirectory)}`
-        : recencyGroupFor(thread.lastMessageAt, now);
-    const label = key.startsWith('project:') ? projectName ?? undefined : undefined;
+    const projectPath = thread.actionDir?.trim();
+    const project = projectPath ? folderBasename(projectPath) : null;
+    let key: ThreadGroupKey;
+    let label: string | undefined;
+    if (isPinned(thread)) {
+      key = 'pinned';
+    } else if (projectPath && project) {
+      key = `project:${projectDirectoryKey(projectPath)}`;
+      label = project;
+    } else {
+      key = recencyGroupFor(thread.lastMessageAt, now);
+    }
     const bucket = buckets.get(key);
     if (bucket) bucket.threads.push(thread);
     else buckets.set(key, { key, ...(label ? { label } : {}), threads: [thread] });
   }
-  const projects = [...buckets.values()]
+  const orderedDynamic = [...buckets.values()]
     .filter(group => group.key.startsWith('project:'))
     .sort((a, b) => {
-      const byName = (a.label ?? '').localeCompare(b.label ?? '', undefined, {
-        sensitivity: 'base',
-      });
-      return byName || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+      return (
+        (a.label ?? '').localeCompare(b.label ?? '', undefined, { sensitivity: 'base' }) ||
+        (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
+      );
     });
-  const recency = GROUP_ORDER.filter(key => key !== 'pinned').flatMap(key => {
+  const orderedRecency = GROUP_ORDER.flatMap(key => {
     const group = buckets.get(key);
     return group ? [group] : [];
   });
   const pinned = buckets.get('pinned');
-  return [...(pinned ? [pinned] : []), ...projects, ...recency];
+  const recencyStart = pinned ? 1 : 0;
+  return [...(pinned ? [pinned] : []), ...orderedDynamic, ...orderedRecency.slice(recencyStart)];
 }
 
 /** Last path segment of a folder, for a compact tooltip. */
