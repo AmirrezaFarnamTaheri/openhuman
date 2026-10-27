@@ -1,9 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useRef, useState } from 'react';
-import { createMemoryRouter, Route, RouterProvider, Routes, useNavigate } from 'react-router-dom';
+import { createHashRouter, createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
-import { createAppDataRouter } from '../../../AppDataRouter';
 import FlowNavigationBlocker, { type BlockedFlowNavigation } from './FlowNavigationBlocker';
 
 function GuardedEditor() {
@@ -86,12 +85,10 @@ describe('FlowNavigationBlocker', () => {
   it('guards dirty editor navigation under the production hash data router', async () => {
     const originalUrl = window.location.href;
     window.history.replaceState(null, '', '/#/flows/test-id');
-    const router = createAppDataRouter(
-      <Routes>
-        <Route path="/flows/:id" element={<GuardedEditor />} />
-        <Route path="/chat" element={<p data-testid="chat-page">Chat</p>} />
-      </Routes>
-    );
+    const router = createHashRouter([
+      { path: '/flows/:id', element: <GuardedEditor /> },
+      { path: '/chat', element: <p data-testid="chat-page">Chat</p> },
+    ]);
     const view = render(<RouterProvider router={router} />);
     try {
       fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
