@@ -9,6 +9,8 @@ import AnnouncementModal from './AnnouncementModal';
 
 const log = debugFactory('announcement');
 
+type IdentifiedAnnouncement = { authKey: string; announcement: Announcement };
+
 /**
  * Fetches the latest active announcement once the user is authenticated and,
  * if it hasn't been seen before (per-user, persisted), shows it once over the
@@ -25,14 +27,10 @@ export default function AnnouncementGate() {
   // Tie every fetched result to the active identity, including the selected
   // credential profile. A previous account's announcement must never appear
   // while a new account's fetch is pending or returns nothing.
-  const authKey = isAuthenticated
-    ? JSON.stringify([userId, snapshot.auth.profileId ?? null])
-    : null;
+  const authIdentity = JSON.stringify([userId, snapshot.auth.profileId ?? null]);
+  const authKey = isAuthenticated ? authIdentity : null;
 
-  const [result, setResult] = useState<{
-    authKey: string;
-    announcement: Announcement;
-  } | null>(null);
+  const [result, setResult] = useState<IdentifiedAnnouncement | null>(null);
   // One fetch per (user) auth session — keyed by userId so a user switch refetches.
   const fetchedForRef = useRef<string | null>(null);
 
