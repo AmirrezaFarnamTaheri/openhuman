@@ -12,13 +12,13 @@ import {
   setCloudProviderKey,
 } from '../../../../services/api/aiSettingsApi';
 import { presentProviderSetupError } from '../ProviderSetupErrorNotice';
-import { providerEndpointIssue } from './providerEndpointPolicy';
 import {
   type AISettings,
   type CloudProvider,
   maskKeyLabel,
   ProviderProbeError,
 } from './aiPanelTypes';
+import { providerEndpointIssue } from './providerEndpointPolicy';
 
 export function useCloudProviderEditorSubmit({
   editing,
