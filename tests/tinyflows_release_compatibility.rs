@@ -1,4 +1,4 @@
-//! Qualifies the source Schedule v8 contract against the pinned v0.9.0
+//! Qualifies the source Schedule v8 contract against the pinned v0.9.4
 //! artifact. This target owns a process so the existing module and
 //! storage slots cannot affect another suite. Install the registry releases
 //! with scripts/ci/self-hosted/install-test-modules.sh before running; no linked factory,
@@ -27,10 +27,10 @@ const RELEASED_MODULE_VERSION: &str = "0.1.0";
 async fn assert_released_module(config: &Config) {
     assert_eq!(schedule::CONTRACT_VERSION, 8, "review the source contract");
     let record = modules::registry::find("tinyflows").unwrap();
-    assert_eq!(record.version, "0.9.0");
+    assert_eq!(record.version, "0.9.4");
     modules::ops::ensure_loaded(config, record.id)
         .await
-        .expect("install the registry-pinned v0.9.0 TinyFlows release before this test");
+        .expect("install the registry-pinned v0.9.4 TinyFlows release before this test");
     let status = modules::ops::list(config)
         .into_iter()
         .find(|status| status.id == record.id)
@@ -46,7 +46,7 @@ async fn assert_released_module(config: &Config) {
         .into_iter()
         .find(|info| info.manifest.bus_name.as_str() == record.bus_name)
         .expect("the real module is loaded on the host bus");
-    // v0.9.0's tinyflows-module/Cargo.toml declares 0.1.0. Its exports.rs
+    // v0.9.4's tinyflows-module/Cargo.toml declares 0.1.0. Its exports.rs
     // uses that crate version for the ABI, module manifest and interfaces,
     // separately from the release archive's version and Schedule contract.
     assert_eq!(info.version, RELEASED_MODULE_VERSION);
