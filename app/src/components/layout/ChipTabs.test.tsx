@@ -140,11 +140,11 @@ describe('ChipTabs', () => {
     expect(screen.getByTestId('t-one')).not.toHaveClass('px-3', 'py-1');
   });
 
-  it('emits onChange with the clicked chip id', () => {
+  it('emits onChange with the clicked chip id', async () => {
     const onChange = vi.fn();
     render(<ChipTabs items={items} value="one" onChange={onChange} testIdPrefix="t" />);
 
-    fireEvent.click(screen.getByTestId('t-three'));
+    await userEvent.click(screen.getByTestId('t-three'));
     expect(onChange).toHaveBeenCalledWith('three');
   });
 
@@ -188,7 +188,6 @@ describe('ChipTabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Two' }));
     expect(onChange).toHaveBeenCalledExactlyOnceWith('two');
   });
-
 
   it('uses an explicit per-item testId over the prefix', () => {
     render(
