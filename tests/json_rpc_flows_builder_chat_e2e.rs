@@ -330,8 +330,9 @@ async fn send_chat(rpc_base: &str, id: i64, thread_id: &str, message: &str) {
 fn json_rpc_chat_spawns_workflow_builder_and_saves_its_proposal() {
     const CHILD_ENV: &str = "OPENHUMAN_BUILDER_CHAT_E2E_CHILD";
     if std::env::var_os(CHILD_ENV).is_none() {
-        // ApprovalGate is process-global and one-shot: run in an exact-filtered
-        // child so the narrow create_workflow auto-approval cannot leak.
+        // The bus, the default core context and the approval gate are
+        // process-wide and one-shot: run in an exact-filtered child so none
+        // of them leaks into a sibling test.
         let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
             .args([
                 "--exact",
@@ -405,21 +406,6 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     )
     .await
     .expect("initialise the process default core context");
-
-    // The agent-side save writes a flow; approve exactly that tool.
-    let mut approval_config = openhuman_core::config::Config {
-        workspace_dir: openhuman_home.join("workspace"),
-        config_path: openhuman_home.join("config.toml"),
-        ..openhuman_core::config::Config::default()
-    };
-    approval_config
-        .autonomy
-        .auto_approve
-        .push("create_workflow".to_string());
-    openhuman_core::security::approval::ApprovalGate::init_global(
-        approval_config,
-        format!("session-{}", uuid::Uuid::new_v4()),
-    );
 
     let (rpc_addr, rpc_join) = serve_on_ephemeral(build_core_http_router(false)).await;
     let rpc_base = format!("http://{rpc_addr}");
@@ -642,6 +628,28 @@ async fn chat_spawns_workflow_builder_and_saves_its_proposal() {
     );
     push_forced_chat_completion_when(BUILDER_MARKER, forced_text_completion("Saved it."));
     send_chat(&rpc_base, 50, &thread_id, "save it").await;
+    // Creating a flow asks the user first: answer the card as they would.
+    let approval = wait_for("the create_workflow approval request", || {
+        let events = Arc::clone(&events);
+        async move {
+            events_named(&events, "approval_request")
+                .into_iter()
+                .find(|e| e["tool_name"] == "create_workflow")
+        }
+    })
+    .await;
+    let request_id = approval["request_id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("approval request id: {approval}"))
+        .to_string();
+    let decided = post_json_rpc(
+        &rpc_base,
+        51,
+        "openhuman.approval_decide",
+        json!({ "request_id": request_id, "decision": "approve_once" }),
+    )
+    .await;
+    assert_no_jsonrpc_error(&decided, "approval_decide");
     let agent_flow = wait_for("the agent-created flow", || {
         let rpc_base = rpc_base.clone();
         async move { flows(&rpc_base).await.into_iter().next() }

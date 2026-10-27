@@ -243,7 +243,8 @@ required-features = ["voice", "http-server"]
 
 [[test]]
 # Chat → orchestrator → async workflow_builder → delivered proposal → saves.
-# Its own binary: it installs a process-global approval for create_workflow.
+# Its own binary: it initialises the bus and the default core context, which
+# are process-wide.
 name = "json_rpc_flows_builder_chat_e2e"
 path = "../../tests/json_rpc_flows_builder_chat_e2e.rs"
 required-features = ["flows", "http-server"]
