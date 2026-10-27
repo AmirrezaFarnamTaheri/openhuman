@@ -82,7 +82,8 @@ jobs:
             echo "::error::Unmerged index entries still exist"
             exit 1
           fi
-          git diff --cached --check
+          # Historical upstream patch files intentionally preserve whitespace as exact diffs.
+          git diff --cached --check -- . ':!docs/handoffs/*.patch'
           python3 -m json.tool app/package.json >/dev/null
           python3 -m json.tool crates/openhuman-app/tauri.conf.json >/dev/null
           python3 -m json.tool scripts/ci/process-statics.json >/dev/null
