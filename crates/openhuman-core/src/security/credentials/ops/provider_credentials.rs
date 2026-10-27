@@ -108,7 +108,16 @@ pub async fn list_provider_credentials(
                 .as_ref()
                 .is_none_or(|provider| profile.provider == *provider)
         })
-        .map(summarize_auth_profile)
+        .map(|profile| {
+            let mut summary = summarize_auth_profile(profile);
+            summary.is_active = Some(
+                profiles
+                    .active_profiles
+                    .get(&profile.provider)
+                    .is_some_and(|active_id| active_id == &profile.id),
+            );
+            summary
+        })
         .collect::<Vec<_>>();
     items.sort_by(|a, b| {
         a.provider
@@ -117,6 +126,45 @@ pub async fn list_provider_credentials(
     });
 
     Ok(Outcome::single_log(items, "provider credentials listed"))
+}
+
+/// Choose an already stored named cloud-provider account without copying or
+/// returning a credential. Do not use this entry point to modify app-session,
+/// channel, or managed backend authentication identities.
+pub async fn activate_provider_credentials(
+    config: &Config,
+    provider: &str,
+    profile: &str,
+) -> Result<Outcome<serde_json::Value>, String> {
+    let provider = provider.trim();
+    let slug = provider.strip_prefix("provider:").ok_or_else(|| {
+        "only named cloud-provider accounts may be activated here".to_string()
+    })?;
+    if slug.is_empty()
+        || !slug.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    {
+        return Err("invalid named cloud-provider account namespace".to_string());
+    }
+    let profile = profile.trim();
+    if profile.is_empty()
+        || profile.len() > 128
+        || profile.chars().any(|ch| ch.is_control() || ch == ':')
+    {
+        return Err("invalid named provider account profile".to_string());
+    }
+    let auth = AuthService::from_config(config);
+    let active_profile_id = auth
+        .set_active_profile(provider, profile)
+        .map_err(|error| error.to_string())?;
+    clear_provider_auth_error(provider);
+    Ok(Outcome::single_log(
+        json!({
+            "provider": provider,
+            "profile": profile,
+            "activeProfileId": active_profile_id,
+        }),
+        "provider account activated",
+    ))
 }
 
 /// List credentials whose provider key starts with `prefix`.
@@ -138,7 +186,16 @@ pub async fn list_provider_credentials_by_prefix(
         .values()
         .filter(|profile| profile.provider != APP_SESSION_PROVIDER)
         .filter(|profile| profile.provider.starts_with(prefix))
-        .map(summarize_auth_profile)
+        .map(|profile| {
+            let mut summary = summarize_auth_profile(profile);
+            summary.is_active = Some(
+                profiles
+                    .active_profiles
+                    .get(&profile.provider)
+                    .is_some_and(|active_id| active_id == &profile.id),
+            );
+            summary
+        })
         .collect::<Vec<_>>();
     items.sort_by(|a, b| {
         a.provider
