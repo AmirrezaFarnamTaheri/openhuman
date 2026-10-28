@@ -258,38 +258,6 @@ fn complete_byok_route(config: &mut Config, explicit: &ExplicitRolePins) {
     }
 }
 
-/// Validate saved credentials against the *effective* provider destinations,
-/// not the frontend's potentially degraded auth-list snapshot. A failed
-/// credential lookup must not let an insecure endpoint slip into config.
-fn validate_keyed_cloud_destinations(config: &Config) -> Result<(), String> {
-    use crate::config::schema::cloud_providers::AuthStyle;
-    use crate::security::credentials::AuthService;
-
-    for entry in &config.cloud_providers {
-        if !matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
-            || entry.endpoint.trim().is_empty()
-            || crate::security::transport::is_safe_endpoint_for_bearer(&entry.endpoint)
-        {
-            continue;
-        }
-        let has_stored = |provider: &str| -> Result<bool, String> {
-            AuthService::get_provider_bearer_token_read_only(config, provider, None)
-                .map(|value| value.is_some())
-                .map_err(|_| "could not verify stored credentials for an insecure endpoint".into())
-        };
-        let profile_key = format!("provider:{}", entry.slug);
-        let keyed = has_stored(&profile_key)?
-            || has_stored(&entry.slug)?
-            || (super::primary_cloud::legacy_inference_slug(config)
-                == Some(entry.slug.as_str())
-                && config.api_key.as_deref().is_some_and(|key| !key.trim().is_empty()));
-        if keyed {
-            return Err("Credentialed cloud providers require HTTPS or loopback HTTP".to_string());
-        }
-    }
-    Ok(())
-}
-
 /// Updates the model-related settings in the configuration.
 pub async fn apply_model_settings(
     config: &mut Config,
@@ -462,7 +430,7 @@ pub async fn apply_model_settings(
     }
 
     complete_byok_route(config, &explicit_role_pins);
-    validate_keyed_cloud_destinations(config)?;
+    super::model_endpoint_validation::validate_keyed_cloud_destinations(config)?;
 
     config.save().await.map_err(super::config_save_error)?;
     let snapshot = snapshot_config_json(config)?;
