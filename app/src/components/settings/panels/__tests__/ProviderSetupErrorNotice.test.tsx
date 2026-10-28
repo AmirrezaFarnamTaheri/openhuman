@@ -63,7 +63,7 @@ describe('presentProviderSetupError', () => {
     const { summary } = present(
       'Could not reach OpenAI: {"error":{"message":"Incorrect API key provided: sk-abc","type":"invalid_request_error"}}'
     );
-    expect(summary).toBe('Could not reach OpenAI: Incorrect API key provided: sk-abc');
+    expect(summary).toBe('Could not reach OpenAI: Incorrect API key provided: [redacted]');
   });
 
   it('decodes escapes and collapses whitespace in a JSON message', () => {
@@ -130,8 +130,18 @@ describe('presentProviderSetupError', () => {
       `Could not reach CustomLLM: {"error":{"message":"Invalid token: ${fakeCredential}"}}`
     );
 
-    expect(summary).toContain(fakeCredential);
-    expect(details).toContain(fakeCredential);
+    expect(summary).not.toContain(fakeCredential);
+    expect(details).not.toContain(fakeCredential);
+    expect(summary).toContain('[redacted]');
+    expect(details).toContain('[redacted]');
+  });
+
+  it('redacts structured credentials in its technical disclosure', () => {
+    const { summary, details } = present(
+      'Could not reach CustomLLM: {"password":"pw-value", "refresh_token":"refresh-value"}'
+    );
+    expect(summary + details).not.toContain('pw-value');
+    expect(summary + details).not.toContain('refresh-value');
   });
 
   it('preserves the raw error as details, untouched', () => {
