@@ -20,6 +20,27 @@
 
 use std::time::Duration;
 
+/// The updater probe has three semantically different outcomes. A failed
+/// request is never proof that the app is up to date.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateCheck<T> {
+    Available(T),
+    UpToDate,
+}
+
+/// Map the Tauri updater's `Result<Option<Update>>` into an explicit state.
+/// Separating the transport error from `Ok(None)` prevents a temporary CDN
+/// or DNS failure from displaying a false "up to date" confirmation.
+pub fn interpret_update_check<T, E: std::fmt::Display>(
+    outcome: Result<Option<T>, E>,
+) -> Result<UpdateCheck<T>, String> {
+    match outcome {
+        Ok(Some(update)) => Ok(UpdateCheck::Available(update)),
+        Ok(None) => Ok(UpdateCheck::UpToDate),
+        Err(error) => Err(format!("update check failed: {error}")),
+    }
+}
+
 /// Total download attempts before giving up (1 initial + 2 retries).
 pub const MAX_DOWNLOAD_ATTEMPTS: u32 = 3;
 
