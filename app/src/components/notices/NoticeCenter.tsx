@@ -108,6 +108,20 @@ export default function NoticeCenter() {
     if (visible && !wasOpenRef.current) {
       closeRef.current?.focus();
     } else if (!visible && wasOpenRef.current && containsFocusRef.current) {
+      // A focused notice item may unmount with a null relatedTarget, leaving
+      // the blur tracker stale. Preserve focus already moved to another app
+      // control rather than incorrectly restoring the notice trigger.
+      const active = document.activeElement;
+      const focusMovedElsewhere =
+        active instanceof HTMLElement &&
+        active !== document.body &&
+        active !== document.documentElement &&
+        !panelRef.current?.contains(active) &&
+        !triggerRef.current?.contains(active);
+      if (focusMovedElsewhere) {
+        wasOpenRef.current = false;
+        return;
+      }
       const previous = previousFocusRef.current;
       const target =
         triggerRef.current ??
