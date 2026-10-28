@@ -124,7 +124,10 @@ describe('groupThreads', () => {
       NOW
     );
 
-    const groupsAndThreads = groups.map(group => [group.key, group.threads.map(row => row.id)]);
+    const groupsAndThreads = groups.map(group => [
+      group.key,
+      group.threads.map(row => row.id),
+    ]);
     expect(groupsAndThreads).toEqual([
       ['pinned', ['pinned']],
       ['project:/work/code', ['unpinned-project']],
