@@ -4,7 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import MemoryEngineSetup from '../../../components/memory/MemoryEngineSetup';
 import { Alert, AlertDescription } from '../../../components/ui';
 import { useT } from '../../../lib/i18n/I18nContext';
-import { explainOperationalError, type OperationalErrorPresentation } from '../../../lib/operationalErrors';
+import {
+  explainOperationalError,
+  type OperationalErrorPresentation,
+} from '../../../lib/operationalErrors';
 import { trackEvent } from '../../../services/analytics';
 import { CUSTOM_WIZARD_ROUTES, CUSTOM_WIZARD_STEPS } from '../customWizardSteps';
 import { useOnboardingContext } from '../OnboardingContext';
@@ -57,10 +60,14 @@ export default function VaultSetupStep() {
         <Alert variant="destructive" className="mt-3" data-testid="onboarding-vault-exit-error">
           <AlertDescription>
             <p>{t('onboarding.custom.vault.exitError')}</p>
-            <p className="mt-2">{exitError.summary} {exitError.nextStep}</p>
+            <p className="mt-2">
+              {exitError.summary} {exitError.nextStep}
+            </p>
             {exitError.technicalDetails ? (
               <details className="mt-2">
-                <summary className="cursor-pointer">{t('providerSetup.error.technicalDetails')}</summary>
+                <summary className="cursor-pointer">
+                  {t('providerSetup.error.technicalDetails')}
+                </summary>
                 <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap wrap-break-word">
                   {exitError.technicalDetails}
                 </pre>
