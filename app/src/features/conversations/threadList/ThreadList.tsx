@@ -14,6 +14,7 @@ import {
 import { PinIcon } from 'lucide-react';
 import { createContext, useContext, useMemo } from 'react';
 
+import Tooltip from '../../../components/ui/Tooltip';
 import { useT } from '../../../lib/i18n/I18nContext';
 import type { Thread } from '../../../types/thread';
 import { folderBasename, groupThreads, isThreadPinned } from './groupThreads';
@@ -165,18 +166,28 @@ function ThreadListView() {
           <section
             key={group.key}
             data-testid={`thread-group-${group.key}`}
-            aria-label={group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')}
+            aria-label={
+              group.key.startsWith('project:')
+                ? `${group.label} — ${group.threads[0]?.actionDir ?? ''}`
+                : group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')
+            }
             className="flex flex-col gap-0.5">
-            <h3
-              title={
-                group.key.startsWith('project:')
-                  ? (group.threads[0]?.actionDir ?? undefined)
-                  : undefined
-              }
-              data-slot="aui_thread-list-group-label"
-              className="text-muted-foreground px-2.5 pt-3 pb-1 text-xs font-medium">
-              {group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')}
-            </h3>
+            {group.key.startsWith('project:') && group.threads[0]?.actionDir ? (
+              <Tooltip label={group.threads[0].actionDir} side="right" multiline>
+                <h3
+                  tabIndex={0}
+                  data-slot="aui_thread-list-group-label"
+                  className="text-muted-foreground rounded-sm px-2.5 pt-3 pb-1 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                  {group.label}
+                </h3>
+              </Tooltip>
+            ) : (
+              <h3
+                data-slot="aui_thread-list-group-label"
+                className="text-muted-foreground px-2.5 pt-3 pb-1 text-xs font-medium">
+                {group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')}
+              </h3>
+            )}
             {group.threads.map(thread => (
               <ThreadListPrimitive.ItemByIndex
                 key={thread.id}
