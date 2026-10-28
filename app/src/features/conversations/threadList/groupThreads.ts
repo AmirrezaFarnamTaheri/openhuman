@@ -74,7 +74,9 @@ const GROUP_ORDER: RecencyGroupKey[] = [
 function projectDirectoryKey(path: string): string {
   const windowsPath = /^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(path);
   const normalized = windowsPath ? path.replace(/\//g, '\\').toLowerCase() : path;
-  return (windowsPath ? normalized.replace(/\\+$/, '') : normalized.replace(/\/+$/, '')) || normalized;
+  return (
+    (windowsPath ? normalized.replace(/\\+$/, '') : normalized.replace(/\/+$/, '')) || normalized
+  );
 }
 
 /**
@@ -119,7 +121,11 @@ export function groupThreads(
   });
   const pinned = buckets.get('pinned');
   const recencyStart = pinned ? 1 : 0;
-  return [...(pinned ? [pinned] : []), ...orderedDynamic, ...orderedRecency.slice(recencyStart)];
+  return [
+    ...(pinned ? [pinned] : []),
+    ...orderedDynamic,
+    ...orderedRecency.slice(recencyStart),
+  ];
 }
 
 /** Last path segment of a folder, for a compact tooltip. */
