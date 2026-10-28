@@ -290,7 +290,7 @@ pub struct Config {
     /// the agent context middleware configuration.
     #[serde(default)]
     #[schemars(with = "super::super::context::ContextConfigSchema")]
-    pub context: ContextConfig,
+    pub context: ContextSettings,
 
     #[serde(default)]
     pub model_routes: Vec<ModelRouteConfig>,

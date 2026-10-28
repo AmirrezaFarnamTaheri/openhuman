@@ -124,7 +124,10 @@ pub use channels::{
     StreamMode, TelegramConfig, WhatsAppConfig, YuanbaoConfig,
 };
 pub(crate) use cli_overrides::set_cli_inference_overrides;
-pub use context::{CompactionSettings, CompactionStrategy, ContextConfig};
+pub use context::{
+    CompactionSettings, CompactionStrategy, ContextConfig, ContextSettings, SummarizerSettings,
+    ToolRendering,
+};
 pub use cron::CronConfig;
 pub use dashboard::{DashboardConfig, DiagramViewerConfig, EventStreamConfig, ModelHealthConfig};
 pub use identity_cost::{
