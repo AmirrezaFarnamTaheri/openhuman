@@ -85,7 +85,9 @@ const ServiceBlockingGate = ({ children }: ServiceBlockingGateProps) => {
           <p>{t('daemon.serviceBlockingGate.body')}</p>
           <p>{t('daemon.serviceBlockingGate.downloadHint')}</p>
           {restartError && (
-            <p role="alert" className="text-coral-500">{restartError}</p>
+            <p role="alert" className="text-coral-500">
+              {restartError}
+            </p>
           )}
         </div>
       </ModalShell>
