@@ -4575,7 +4575,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman"
-version = "0.64.19"
+version = "0.64.20"
 dependencies = [
  "aes-gcm",
  "aho-corasick",
@@ -4692,7 +4692,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-app"
-version = "0.64.19"
+version = "0.64.20"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4735,7 +4735,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-embed"
-version = "0.64.19"
+version = "0.64.20"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4769,7 +4769,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-rpc"
-version = "0.64.19"
+version = "0.64.20"
 dependencies = [
  "anyhow",
  "axum",
@@ -4802,7 +4802,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-tinyhumans"
-version = "0.64.19"
+version = "0.64.20"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -7611,7 +7611,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-definition"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7624,7 +7624,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-harness"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7666,7 +7666,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-harness-tools"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7699,7 +7699,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-hooks"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7717,7 +7717,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-live"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "serde_json",
  "tinyagents-harness",
@@ -7728,7 +7728,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-orchestration"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -7751,7 +7751,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-registry"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7766,7 +7766,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-runtime"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7786,7 +7786,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-session"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7811,7 +7811,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-storage-kit"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "data-encoding",
  "serde",
@@ -7825,7 +7825,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-tasks"
-version = "3.1.3"
+version = "3.0.0"
 dependencies = [
  "serde",
  "serde_json",
