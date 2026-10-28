@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.fn();
 const clearCoreRpcTokenCacheMock = vi.fn();
+const clearCoreRpcUrlCacheMock = vi.fn();
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock, isTauri: vi.fn(() => false) }));
 
@@ -23,12 +24,16 @@ vi.mock('../../utils/tauriCommands/common', () => ({
   safeInvoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-vi.mock('../coreRpcClient', () => ({ clearCoreRpcTokenCache: clearCoreRpcTokenCacheMock }));
+vi.mock('../coreRpcClient', () => ({
+  clearCoreRpcTokenCache: clearCoreRpcTokenCacheMock,
+  clearCoreRpcUrlCache: clearCoreRpcUrlCacheMock,
+}));
 
 describe('coreProcessControl — restartCoreProcess', () => {
   beforeEach(() => {
     invokeMock.mockReset();
     clearCoreRpcTokenCacheMock.mockReset();
+    clearCoreRpcUrlCacheMock.mockReset();
     isTauriMock.mockReset();
     isTauriMock.mockReturnValue(false);
   });
@@ -41,6 +46,7 @@ describe('coreProcessControl — restartCoreProcess', () => {
     );
     expect(invokeMock).not.toHaveBeenCalled();
     expect(clearCoreRpcTokenCacheMock).not.toHaveBeenCalled();
+    expect(clearCoreRpcUrlCacheMock).not.toHaveBeenCalled();
   });
 
   it('invokes restart_core_process then clears the RPC token cache (#1922, line 22)', async () => {
@@ -66,10 +72,15 @@ describe('coreProcessControl — restartCoreProcess', () => {
     await Promise.resolve();
     expect(invokeMock).toHaveBeenCalledWith('restart_core_process');
     expect(clearCoreRpcTokenCacheMock).not.toHaveBeenCalled();
+    expect(clearCoreRpcUrlCacheMock).not.toHaveBeenCalled();
 
     resolveInvoke();
     await pending;
 
+    expect(clearCoreRpcUrlCacheMock).toHaveBeenCalledTimes(1);
     expect(clearCoreRpcTokenCacheMock).toHaveBeenCalledTimes(1);
+    expect(clearCoreRpcUrlCacheMock.mock.invocationCallOrder[0]).toBeLessThan(
+      clearCoreRpcTokenCacheMock.mock.invocationCallOrder[0]
+    );
   });
 });
