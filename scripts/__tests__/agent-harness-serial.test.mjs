@@ -54,6 +54,23 @@ describe('serial libtest passthrough', () => {
     assert.match(result.stderr, /requires a value/i);
   });
 
+  it('rejects a paired override followed by another flag rather than swallowing it', () => {
+    const result = filterSerialArgs('--test-threads', '--nocapture');
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /requires a positive integer/i);
+  });
+
+  it('rejects malformed inline overrides rather than silently ignoring them', () => {
+    const result = filterSerialArgs('--test-threads=invalid', '--exact');
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /requires a positive integer/i);
+  });
+
+  it('rejects zero as a thread count', () => {
+    const result = filterSerialArgs('--test-threads=0', '--nocapture');
+    assert.equal(result.status, 2);
+  });
+
   it('wires the filter into the real serial launcher', () => {
     assert.ok(e2e.includes('source "$SCRIPT_DIR/ci/serial-libtest-args.sh"'));
     assert.ok(e2e.includes('filter_serial_libtest_args'));
