@@ -120,7 +120,10 @@ describe('groupThreads', () => {
       NOW
     );
     expect(groups).toHaveLength(2);
-    expect(groups.map(group => group.key)).toEqual(['project:/work/repo', 'project:/work/repo\\\\']);
+    expect(groups.map(group => group.key)).toEqual([
+      'project:/work/repo',
+      'project:/work/repo\\\\',
+    ]);
     expect(groups.map(group => group.label)).toEqual(['repo', 'repo\\\\']);
   });
 
@@ -134,7 +137,10 @@ describe('groupThreads', () => {
       NOW
     );
 
-    const groupsAndThreads = groups.map(group => [group.key, group.threads.map(row => row.id)]);
+    const groupsAndThreads = groups.map(group => [
+      group.key,
+      group.threads.map(row => row.id),
+    ]);
     expect(groupsAndThreads).toEqual([
       ['pinned', ['pinned']],
       ['project:/work/code', ['unpinned-project']],
