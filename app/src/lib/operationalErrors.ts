@@ -95,10 +95,7 @@ export function explainOperationalError(
       false
     );
   }
-  if (
-    lower.includes('legacy sqlite migration') ||
-    lower.includes('mixed legacy and v2 tables')
-  ) {
+  if (lower.includes('legacy sqlite migration') || lower.includes('mixed legacy and v2 tables')) {
     return diagnosed(
       'storage_migration_failed',
       'OpenHuman could not finish upgrading the workspace database.',
@@ -119,10 +116,7 @@ export function explainOperationalError(
       true
     );
   }
-  if (
-    /failed to encrypt [\w.-]*api_key/.test(lower) ||
-    lower.includes('master key unavailable')
-  ) {
+  if (/failed to encrypt [\w.-]*api_key/.test(lower) || lower.includes('master key unavailable')) {
     return diagnosed(
       'credential_save_failed',
       'OpenHuman could not save the API key securely.',
