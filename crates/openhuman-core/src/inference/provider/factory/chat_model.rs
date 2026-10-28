@@ -12,6 +12,7 @@ use super::{
     credentials::CredentialAccess,
     local_runtime::try_create_local_runtime_chat_model_from_string,
     provider_for_role,
+    routing::route_with_model,
     subprocess_providers::OpenHumanMcpEndpoint,
     BYOK_INCOMPLETE_SENTINEL, CLAUDE_AGENT_SDK_PREFIX, CLAUDE_AGENT_SDK_PROVIDER,
     PROVIDER_OPENHUMAN,
