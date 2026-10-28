@@ -205,7 +205,14 @@ impl CoreProcessHandle {
                         "[core] found stale OpenHuman listener on port {} — taking over (issue #1130)",
                         self.preferred_port
                     );
-                    self.takeover_stale_listener().await?;
+                    if let Err(err) = self.takeover_stale_listener().await {
+                        // A stale core may be protected by Windows or its PID
+                        // may no longer be resolvable. The embedded desktop
+                        // can now coexist on a fallback port instead.
+                        log::warn!(
+                            "[core] stale listener takeover unavailable ({err}); continuing with alternate-port startup"
+                        );
+                    }
                     // Fall through to spawn-and-wait below.
                 }
                 ListenerKind::Unknown { reason } => {
