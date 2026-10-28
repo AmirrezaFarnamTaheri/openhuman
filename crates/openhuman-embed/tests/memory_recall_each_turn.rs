@@ -220,7 +220,7 @@ fn recall_each_turn_reaches_the_first_request_in_time_and_never_the_transcript()
                 &plain_model,
                 MemoryBinding::new("plain").root(ROOT),
             );
-            ask(plain).await;
+            ask(plain.clone()).await;
             let requests = chat_requests(&plain_model).await;
             let first = messages(requests.first().expect("a model request")).join("\n");
             assert!(
@@ -238,7 +238,7 @@ fn recall_each_turn_reaches_the_first_request_in_time_and_never_the_transcript()
                     .root(ROOT)
                     .recall_each_turn(Duration::from_millis(300)),
             );
-            let reply = ask(late).await;
+            let reply = ask(late.clone()).await;
             assert_eq!(reply.reply, "noted");
             let requests = chat_requests(&late_model).await;
             let first = messages(requests.first().expect("a model request")).join("\n");
@@ -247,13 +247,14 @@ fn recall_each_turn_reaches_the_first_request_in_time_and_never_the_transcript()
                 "a late recall adds no note: {first}"
             );
 
-            drop(in_time);
+            // Removing awaits each agent's MCP close, so the runtime drops clean.
             for agent in ["in-time", "plain", "late"] {
                 runtime
                     .remove_agent(agent)
                     .await
-                    .expect("the agent is removed");
+                    .unwrap_or_else(|error| panic!("{agent} is removed: {error}"));
             }
+            drop((in_time, plain, late));
             drop(runtime);
         })
         .await
