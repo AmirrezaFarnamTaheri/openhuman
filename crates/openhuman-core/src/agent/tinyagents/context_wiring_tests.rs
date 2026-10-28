@@ -88,8 +88,11 @@ async fn a_compaction_records_the_summarizer_model_it_called() {
         SummarizationPolicy::default().with_trigger_override(200),
         crate::config::CompactionStrategy::TaskState,
         None,
-        state_model,
-        "scaledown/summarize",
+        CompactionSummarizer {
+            model: state_model,
+            model_id: "scaledown/summarize".into(),
+            settings: Default::default(),
+        },
         "turn-model",
         None,
         None,
@@ -133,5 +136,82 @@ async fn a_compaction_records_the_summarizer_model_it_called() {
             "{}",
             record.provenance.reason
         );
+    }
+}
+
+/// A Summary-strategy compaction with `summarizer_tool_rendering = "markers"`
+/// and an output cap sends the summarizer the conversation without any tool
+/// result, and caps its reply with `max_tokens`.
+#[tokio::test]
+async fn a_markers_compaction_sends_no_tool_output_and_caps_the_summary() {
+    use tinyagents_harness::context::{RunConfig, RunContext};
+    use tinyagents_harness::testkit::ScriptedModel;
+    use tinyinference_llm::message::AssistantMessage;
+    use tinyinference_llm::tool::ToolCall;
+
+    let summarizer_model = Arc::new(ScriptedModel::replies(vec!["## Goal\nkeep going"; 4]));
+    let mw = Arc::new(compression_middleware(
+        SummarizationPolicy::default().with_trigger_override(200),
+        crate::config::CompactionStrategy::Summary,
+        None,
+        CompactionSummarizer {
+            model: summarizer_model.clone(),
+            model_id: "scaledown/summarize".into(),
+            settings: crate::config::SummarizerSettings {
+                tool_rendering: crate::config::ToolRendering::Markers,
+                max_output_tokens: Some(4_000),
+            },
+        },
+        "turn-model",
+        None,
+        None,
+    ));
+    let mut harness: AgentHarness<()> = AgentHarness::new();
+    harness.with_model_resolver(Arc::new(
+        tinyagents_harness::host::FixedModelResolver::named(
+            "turn-model",
+            Arc::new(ScriptedModel::replies(vec!["done"])) as _,
+        ),
+    ));
+    harness.push_middleware(mw.clone());
+    harness.push_model_middleware(mw.clone());
+
+    let mut history = vec![Message::system("system")];
+    for round in 0..12 {
+        history.push(Message::user(format!("ask {round}: {}", "detail ".repeat(40))));
+        history.push(Message::Assistant(AssistantMessage {
+            id: None,
+            content: Vec::new(),
+            tool_calls: vec![ToolCall::new(
+                format!("call-{round}"),
+                "lookup",
+                serde_json::json!({"query": format!("q{round}")}),
+            )],
+            usage: None,
+            origin: None,
+        }));
+        history.push(Message::tool(
+            format!("call-{round}"),
+            format!("TOOL-OUTPUT-{round} {}", "row ".repeat(40)),
+        ));
+        history.push(Message::assistant(format!("answer {round}")));
+    }
+    history.push(Message::user("continue"));
+    harness
+        .invoke_in_context(
+            &(),
+            RunContext::new(RunConfig::new("compaction"), ()),
+            history,
+        )
+        .await
+        .expect("the turn runs");
+
+    let requests = summarizer_model.requests();
+    assert!(!requests.is_empty(), "the turn compacted");
+    for request in requests {
+        let sent: String = request.messages.iter().map(Message::text).collect();
+        assert!(!sent.contains("TOOL-OUTPUT-"), "{sent}");
+        assert!(sent.contains("[used lookup: "), "{sent}");
+        assert_eq!(request.max_tokens, Some(4_000));
     }
 }
