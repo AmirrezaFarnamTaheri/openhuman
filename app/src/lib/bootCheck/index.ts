@@ -13,12 +13,11 @@
  */
 import debug from 'debug';
 
-import { explainOperationalError } from '../operationalErrors';
-
 import { clearCoreRpcUrlCache } from '../../services/coreRpcClient';
 import type { CoreMode } from '../../store/coreModeSlice';
 import { APP_VERSION } from '../../utils/config';
 import { storeRpcUrl } from '../../utils/configPersistence';
+import { explainOperationalError } from '../operationalErrors';
 
 const log = debug('boot-check');
 const logError = debug('boot-check:error');
