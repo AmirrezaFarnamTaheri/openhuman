@@ -147,16 +147,23 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
   // Tracks whether we've already kicked off a download for the current
   // `available` detection so the auto-download effect doesn't loop on
   // re-renders.
+  const checkInFlightRef = useRef(false);
   const downloadInFlightRef = useRef(false);
   // Tracks whether bytes have been staged successfully. `install()` checks
   // this so it can fall back to the legacy combined apply path if the user
   // reaches "install" without a prior download (e.g. error mid-flow).
   const stagedRef = useRef(false);
 
-  /** Probe the updater endpoint. Does not download. */
-  const check = useCallback(async (): Promise<AppUpdateInfo | null> => {
+  /** Probe the updater endpoint. A failed scheduled probe is logged but does
+   * not interrupt the user with a recurring error banner. Manual checks report
+   * the failure; neither kind of failure means the device is up to date. */
+  const performCheck = useCallback(async (background: boolean): Promise<AppUpdateInfo | null> => {
     if (!isTauri()) {
       console.debug('[app-update] hook.check: skipped — not running in Tauri');
+      return null;
+    }
+    if (checkInFlightRef.current) {
+      console.debug('[app-update] hook.check: skipped — another check is in flight');
       return null;
     }
     if (
@@ -167,12 +174,16 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
       console.debug('[app-update] hook.check: skipped — flow in progress', phaseRef.current);
       return null;
     }
-    console.debug('[app-update] hook.check: starting');
-    setPhase('checking');
-    setError(null);
+    checkInFlightRef.current = true;
+    console.debug('[app-update] hook.check: starting', background ? 'background' : 'manual');
+    if (!background) {
+      setPhase('checking');
+      setError(null);
+    }
     try {
       const result = await checkAppUpdate();
       if (!mountedRef.current) return result;
+      setError(null);
       if (result?.available) {
         console.info(
           `[app-update] hook.check: update available ${result.current_version} -> ${result.available_version}`
@@ -187,14 +198,27 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn('[app-update] hook.check: failed', message);
+      console.warn('[app-update] hook.check: failed; availability unknown', message);
       if (mountedRef.current) {
-        setError(message);
-        setPhase('error');
+        setInfo(null);
+        if (background) {
+          // Network probes run periodically. Preserve the failure in logs
+          // without showing a disruptive banner every time an endpoint blips.
+          setError(null);
+          setPhase('idle');
+        } else {
+          setError(message);
+          setPhase('error');
+        }
       }
       return null;
+    } finally {
+      checkInFlightRef.current = false;
     }
   }, []);
+
+  /** Explicit user request: show any check failure and offer a retry. */
+  const check = useCallback(() => performCheck(false), [performCheck]);
 
   /** Download bytes in the background. Normally fires automatically. */
   const download = useCallback(async (): Promise<void> => {
@@ -381,7 +405,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
 
     const initialTimer = setTimeout(
       () => {
-        void check();
+        void performCheck(true);
       },
       Math.max(0, initialCheckDelayMs)
     );
@@ -389,7 +413,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
     let recheckTimer: ReturnType<typeof setInterval> | undefined;
     if (recheckIntervalMs > 0) {
       recheckTimer = setInterval(() => {
-        void check();
+        void performCheck(true);
       }, recheckIntervalMs);
     }
 
@@ -397,7 +421,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
       clearTimeout(initialTimer);
       if (recheckTimer) clearInterval(recheckTimer);
     };
-  }, [autoCheck, initialCheckDelayMs, recheckIntervalMs, check]);
+  }, [autoCheck, initialCheckDelayMs, recheckIntervalMs, performCheck]);
 
   // Auto-download: when a check transitions us to `available`, kick off a
   // background download so the user is only ever asked to restart, never to
