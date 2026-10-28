@@ -56,7 +56,6 @@ const ServiceBlockingGate = ({ children }: ServiceBlockingGateProps) => {
         titleId="daemon-recovery-title"
         describedBy="daemon-recovery-description"
         testId="daemon-recovery-dialog"
-        onClose={() => {}}
         closePolicy={{ escape: false, backdrop: false, button: false }}
         maxWidthClassName="max-w-xl"
         footer={
