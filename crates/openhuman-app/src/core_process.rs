@@ -425,7 +425,9 @@ impl CoreProcessHandle {
                     received_ready = true;
                 }
             }
-            if self.is_rpc_port_open().await {
+            if received_ready
+                || (!preferred_port_was_occupied && self.is_rpc_port_open().await)
+            {
                 if !received_ready {
                     log::warn!(
                         "[core] core RPC listener became reachable before the embedded ready signal at {}; continuing",
