@@ -8,6 +8,23 @@ use tinyinference_llm::model::ChatModel;
 use super::credential_fleet::CredentialFleetModel;
 use super::key_pool::RotationStrategy;
 
+/// Health and cooldown belong to a destination, not merely a provider alias:
+/// changing the endpoint must not carry its previous 429 or invalid-key state.
+pub(super) fn rotation_pool_scope(
+    workspace: &std::path::Path,
+    slug: &str,
+    model: &str,
+    endpoint: &str,
+) -> String {
+    format!(
+        "{}:{}:{}:{:016x}",
+        workspace.display(),
+        slug,
+        model,
+        super::key_pool::scope_fingerprint(endpoint),
+    )
+}
+
 pub(super) fn build_cloud_model_with_keys(
     scope: String,
     keys: Vec<String>,
