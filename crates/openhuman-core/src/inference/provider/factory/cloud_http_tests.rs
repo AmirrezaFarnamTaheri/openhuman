@@ -8,7 +8,7 @@ fn unauthenticated_cloud_routes_keep_the_optional_http_client_behavior() {
     assert!(build_cloud_http_client(
         AuthStyle::None,
         false,
-        Some(include_str!("../../util/tls/test-ca.pem")),
+        Some(include_str!("../../../util/tls/test-ca.pem")),
     )
     .expect("custom CA client")
     .is_some());
