@@ -142,3 +142,37 @@ async fn a_blank_summarizer_model_counts_as_unset() {
     assert_eq!(models.summarizer, TURN_MODEL);
     assert_eq!(models.summarizer_model_id, TURN_MODEL);
 }
+
+#[tokio::test]
+async fn a_configured_summarizer_model_is_pinned_on_the_managed_route() {
+    use crate::core::runtime::{CoreContext, DispatchCtx, DomainSet};
+
+    let extensions = crate::core::slots::Extensions::new();
+    crate::inference::registry::register_chat_model_in(
+        &extensions,
+        crate::inference::provider::factory::PROVIDER_OPENHUMAN,
+        super::scoped_model_entry("managed-default", false),
+    );
+    let context = CoreContext::for_test_with_host_kind_and_extensions(
+        crate::core::types::HostKind::Library,
+        DomainSet::full(),
+        None,
+        extensions,
+    );
+    let tmp = tempfile::tempdir().expect("isolated workspace");
+    let mut config = super::managed_fixture_config(&tmp);
+    config.context.summarizer_model = Some(SUMMARIZER_MODEL.into());
+
+    let models =
+        TurnModelSource::new_crate_native(&DispatchCtx::new(context), "chat", Arc::new(config))
+            .build(TURN_MODEL, 0.0, None, None)
+            .expect("a managed turn builds");
+    let set = models
+        .native_model_set
+        .as_ref()
+        .expect("a config-built turn keeps its native set");
+
+    assert_eq!(set.summarizer_route().model, SUMMARIZER_MODEL);
+    assert_eq!(set.primary_route().model, TURN_MODEL);
+    assert_eq!(models.summarizer_model_id(), SUMMARIZER_MODEL);
+}

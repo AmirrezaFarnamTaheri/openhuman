@@ -218,7 +218,7 @@ fn build_turn_models_crate(
         .primary_model_pin(model)
         .primary_opts(opts.clone())
         .workload_requests(workload_requests)
-        .summarization(role, Some(summarizer_model_id.clone()))
+        .summarization(role, Some(model.to_owned()))
         .summarization_opts(opts)
         .build()?;
     let mut registrations = built.registrations("primary").into_iter();
