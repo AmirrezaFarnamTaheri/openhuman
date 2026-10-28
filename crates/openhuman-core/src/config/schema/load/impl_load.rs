@@ -425,7 +425,10 @@ impl Config {
             // Otherwise *any* later settings write silently destroys the
             // encrypted values still present in the original config.toml.
             anyhow::bail!(
-                "Refusing to save config: {} unreadable encrypted credentials were                  cleared after a keyring failure. The existing encrypted config                  is preserved. Restore keyring access and reload OpenHuman before                  saving changes.",
+                "Refusing to save config: {} unreadable encrypted credentials were \
+                 cleared after a keyring failure. The existing encrypted config \
+                 is preserved. Restore keyring access and reload OpenHuman before \
+                 saving changes.",
                 self.runtime_state.unreadable_config_secrets
             );
         }
