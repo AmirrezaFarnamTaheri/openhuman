@@ -77,28 +77,13 @@ pub(crate) fn resolve_cloud_slug_for<'a>(
     )
 }
 
+pub(super) use super::cloud_fleet::rotation_pool_scope;
+
 /// The user-facing error for a failed credential lookup: the guidance, plus
 /// the expiry signal when the lookup reported one. The doctor's
 /// refresh-required check and the Codex reconnect classifier key on those
 /// fixed phrases; the rest of the lookup error can carry stored-credential
 /// content or a refresh response's body, so it is dropped.
-/// Health and cooldown belong to a destination, not merely a provider alias:
-/// changing the endpoint must not carry its previous 429 or invalid-key state.
-pub(super) fn rotation_pool_scope(
-    workspace: &std::path::Path,
-    slug: &str,
-    model: &str,
-    endpoint: &str,
-) -> String {
-    format!(
-        "{}:{}:{}:{:016x}",
-        workspace.display(),
-        slug,
-        model,
-        super::key_pool::scope_fingerprint(endpoint),
-    )
-}
-
 pub(super) fn lookup_failure(error: &anyhow::Error, guidance: String) -> anyhow::Error {
     let text = format!("{error:#}");
     let signal = if text.contains(super::credentials::OAUTH_REFRESH_REQUIRED) {
@@ -681,7 +666,10 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
     let http = match super::cloud_http::build_cloud_http_client(
         entry.auth_style,
         anthropic_native,
-        config.cloud_provider_ca_certs.get(&slug).map(String::as_str),
+        config
+            .cloud_provider_ca_certs
+            .get(&slug)
+            .map(String::as_str),
     ) {
         Ok(client) => client,
         Err(error) => return Some(Err(anyhow::anyhow!(error))),
@@ -690,16 +678,14 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
         .expect("managed JWT entries returned above");
     // Parse only actual BYOK credentials. OAuth, hosted and unauthenticated
     // routes retain their original single-key identity and provider semantics.
-    let eligible = !codex.using_oauth
-        && matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic);
+    let eligible =
+        !codex.using_oauth && matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic);
     let keys = if eligible {
         super::key_pool::parse_api_keys(&key)
     } else {
         vec![key.clone()]
     };
-    if keys.len() > 1
-        && (crate::core::runtime::is_saas() || codex.account_id.is_some())
-    {
+    if keys.len() > 1 && (crate::core::runtime::is_saas() || codex.account_id.is_some()) {
         return Some(Err(anyhow::anyhow!(
             "multi-key BYOK rotation is unavailable for shared or account-bound sessions"
         )));
