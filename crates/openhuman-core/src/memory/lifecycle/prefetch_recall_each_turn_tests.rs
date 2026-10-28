@@ -1,8 +1,6 @@
-//! Recall for the current message (`RecallEachTurn`): a turn that waits,
-//! up to its deadline, for a pack answering its own message.
+use super::*;
 
 use super::tests::{drain, HeldEngine, CACHED_NOTICE, TEST_LOCK};
-use super::*;
 
 use crate::memory::test_fixtures::{bind_reference, config_in};
 
