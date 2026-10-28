@@ -45,8 +45,9 @@ export function redactDiagnosticText(text: string): string {
     // Backend errors sometimes stringify a JSON credential-bearing response.
     .replace(
       /(["'])(api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|authorization|password|passwd|token|secret)\1(\s*:\s*)(["'])(.*?)\4/gi,
-      (_whole, quote: string, name: string, separator: string, valueQuote: string) =>
-        `${quote}${name}${quote}${separator}${valueQuote}[redacted]${valueQuote}`
+      (_whole, quote: string, name: string, separator: string, valueQuote: string) => {
+        return `${quote}${name}${quote}${separator}${valueQuote}[redacted]${valueQuote}`;
+      }
     )
     .replace(/(\bauthorization\s*:\s*(?:bearer|basic)\s+)[^\s,;]+/gi, '$1[redacted]')
     // Providers sometimes echo the submitted key in a prose error rather

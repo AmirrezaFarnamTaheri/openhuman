@@ -46,7 +46,8 @@ describe('explainOperationalError', () => {
   });
 
   it('passes through useful generic API errors but never stringifies arbitrary objects', () => {
-    expect(explainOperationalError({ error: 'The provider returned 403' }).summary).toContain('403');
+    const providerError = explainOperationalError({ error: 'The provider returned 403' });
+    expect(providerError.summary).toContain('403');
     expect(explainOperationalError({ error: { secrets: 'unsafe' } }).technicalDetails).toBeNull();
     expect(explainOperationalError({}).summary).toBe('The operation did not complete.');
   });
@@ -71,7 +72,8 @@ describe('explainOperationalError', () => {
       )
     );
     const displayed = response.summary + response.technicalDetails;
-    for (const secret of ['sk-secret-123', 'pw-123', 'token-xyz', 'refresh-123', 'pw-789', 'tkn-123']) {
+    const secrets = ['sk-secret-123', 'pw-123', 'token-xyz', 'refresh-123', 'pw-789', 'tkn-123'];
+    for (const secret of secrets) {
       expect(displayed).not.toContain(secret);
     }
     expect(displayed).toContain('[redacted]');

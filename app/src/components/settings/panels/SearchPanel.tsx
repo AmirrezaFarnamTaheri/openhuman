@@ -212,9 +212,7 @@ const SearchPanel = ({
       />
       {status.kind === 'error' && status.details ? (
         <details className="text-xs text-content-muted" data-testid="search-error-details">
-          <summary className="cursor-pointer">
-            {t('providerSetup.error.technicalDetails')}
-          </summary>
+          <summary className="cursor-pointer">{t('providerSetup.error.technicalDetails')}</summary>
           <pre
             className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap wrap-break-word rounded bg-surface p-2">
             {status.details}
