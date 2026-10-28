@@ -863,8 +863,8 @@
   {
     "rule": "bare-spawn",
     "path": "crates/openhuman-core/src/storage/local.rs",
-    "line": 268,
-    "text": "tokio::task::spawn_blocking(move || backend_for(&workspace_dir))",
+    "line": 275,
+    "text": "tokio::task::spawn_blocking(move || workspace_default(&workspace_dir))",
     "occurrence": 1
   },
   {
