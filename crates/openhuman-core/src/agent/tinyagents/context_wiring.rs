@@ -242,6 +242,76 @@ pub(crate) fn compression_middleware(
     }
 }
 
+/// What a compaction outside a turn folds against.
+pub(crate) struct IdleFold<'a> {
+    /// The caller's threshold: the conversation is at least this large.
+    pub(crate) min_tokens: u64,
+    /// The verbatim tail in tokens; `None` sizes it as a turn would against
+    /// a `min_tokens` trigger.
+    pub(crate) keep_recent_tokens: Option<u64>,
+    /// `[context] compaction_strategy`.
+    pub(crate) strategy: crate::config::CompactionStrategy,
+    /// The agent model's context window, when known.
+    pub(crate) context_window: Option<u64>,
+    /// The agent's model, for logs.
+    pub(crate) model: &'a str,
+}
+
+/// `history` compacted with no model turn, or `None` when nothing was old
+/// enough to fold.
+///
+/// This is a turn's compaction, driven over one request: the same
+/// [`compression_middleware`] runs its `before_model` over `history` and its
+/// `after_agent` reports the folded transcript, which becomes a
+/// [`CompactionCarry`](tinyagents_harness::summarization::CompactionCarry)
+/// re-applied to `history` exactly as the session driver applies a turn's.
+/// The summary is placed after the system prompt (the default
+/// `SummaryPlacement::User`). The caller has already decided the
+/// conversation is at least `min_tokens`; the policy's trigger sits just
+/// below that so the middleware compacts it.
+///
+/// # Errors
+///
+/// When the middleware fails (its failure policy normally recovers instead).
+pub(crate) async fn compact_history(
+    history: &[Message],
+    fold: IdleFold<'_>,
+    summarizer: CompactionSummarizer,
+) -> tinyagents_harness::error::Result<Option<Vec<Message>>> {
+    use tinyagents_harness::context::{RunConfig, RunContext};
+    use tinyagents_harness::middleware::{AgentRun, Middleware};
+
+    let trigger = fold.min_tokens.saturating_sub(1).max(1);
+    let Some(policy) = compression_policy(fold.context_window, Some(trigger)) else {
+        return Ok(None);
+    };
+    let mut mw = compression_middleware(
+        policy,
+        fold.strategy,
+        fold.context_window,
+        summarizer,
+        fold.model,
+        None,
+        None,
+    );
+    if let Some(tokens) = fold.keep_recent_tokens {
+        mw = mw.with_keep_recent_tokens(tokens);
+    }
+    let mut ctx = RunContext::new(RunConfig::new("compact_thread"), ());
+    let mut request = tinyinference_llm::model::ModelRequest::new(history.to_vec());
+    Middleware::<(), ()>::before_model(&mw, &mut ctx, &(), &mut request).await?;
+    let mut run = AgentRun {
+        messages: history.to_vec(),
+        ..Default::default()
+    };
+    Middleware::<(), ()>::after_agent(&mw, &mut ctx, &(), &mut run).await?;
+    let carry = run
+        .compacted_history
+        .as_deref()
+        .and_then(tinyagents_harness::summarization::CompactionCarry::from_compacted_history);
+    Ok(carry.map(|carry| carry.apply(history.to_vec())))
+}
+
 #[cfg(test)]
 #[path = "context_wiring_tests.rs"]
 mod tests;
