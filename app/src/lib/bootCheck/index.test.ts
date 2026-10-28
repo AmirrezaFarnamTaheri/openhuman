@@ -228,23 +228,22 @@ describe('runBootCheck — port conflict auto-recovery', () => {
     const recovery = vi.fn().mockResolvedValue({ success: false, message: 'no port owner' });
     const transport: BootCheckTransport = {
       callRpc: vi.fn(),
-      invokeCmd: vi.fn().mockRejectedValue(
-        new Error(
-          'in-process core server exited before becoming ready: open the storage backend ' +
-            'sqlite:C:\\Users\\ACER\\.openhuman\\users\\local-desktop\\workspace\\storage: ' +
-            'invalid input: legacy sqlite storage must be upgraded by the host'
-        )
-      ),
+      invokeCmd: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'in-process core server exited before becoming ready: open the storage backend ' +
+              'sqlite:C:\\Users\\ACER\\.openhuman\\users\\local-desktop\\workspace\\storage: ' +
+              'invalid input: legacy sqlite storage must be upgraded by the host'
+          )
+        ),
       recoverPortConflict: recovery,
     };
 
     const result = await runBootCheck({ kind: 'local' }, transport);
 
     expect(recovery).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      kind: 'unreachable',
-      portConflict: false,
-    });
+    expect(result).toMatchObject({ kind: 'unreachable', portConflict: false });
     if (result.kind === 'unreachable') {
       expect(result.reason).toContain('legacy sqlite storage must be upgraded by the host');
     }
