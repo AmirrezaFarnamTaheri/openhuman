@@ -2479,6 +2479,8 @@ const messages: TranslationMap = {
     'Где доступен {label}. По умолчанию используется локальный хост; укажите это на удаленном хосте (например, http://10.0.0.4:11434/v1), чтобы использовать общий экземпляр.',
   'settings.ai.endpointUrlRequired': 'Требуется конечная точка URL.',
   'settings.ai.endpointProtocolRequired':
+  'settings.ai.providerEndpointInvalid': 'Недопустимый URL конечной точки провайдера.',
+  'settings.ai.keyedEndpointInvalid': 'Для ключей API требуется HTTPS или локальная петлевая конечная точка HTTP.',
     'Конечная точка должна начинаться с http:// или https://..',
   'settings.ai.getProviderApiKey': 'Получить API Key',
   'settings.ai.or': 'Или',
