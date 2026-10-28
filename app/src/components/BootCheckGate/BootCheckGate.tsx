@@ -774,7 +774,7 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
           if (recovery.foreign_owner) {
             setResult({ ...result, foreignOwner: recovery.foreign_owner });
           }
-          setActionError(t('bootCheck.portConflictFixFailed'));
+          setActionError(recovery.message || t('bootCheck.portConflictFixFailed'));
           return;
         }
       }
