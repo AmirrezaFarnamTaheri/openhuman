@@ -20,6 +20,11 @@ pub(crate) struct ContextConfigSchema {
     tool_result_budget_bytes: usize,
     summarizer_payload_threshold_tokens: usize,
     summarizer_max_payload_tokens: usize,
+    /// The model the context-compaction summarizer calls, on the turn's own
+    /// provider route (same credentials and endpoint): on a BYOK OpenRouter
+    /// route, `"scaledown/summarize"` calls that model on OpenRouter. Unset
+    /// or blank, compaction uses the turn's model. Env:
+    /// `OPENHUMAN_CONTEXT_SUMMARIZER_MODEL`.
     summarizer_model: Option<String>,
     prefer_markdown_tool_output: bool,
     compaction_enabled: bool,

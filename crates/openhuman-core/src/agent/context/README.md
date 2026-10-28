@@ -58,7 +58,7 @@ No `store.rs`. State is per-session and in-memory:
 
 ## Dependencies
 
-- `crate::config`: `ContextConfig` ([`config/schema/context.rs`](../../config/schema/context.rs)): `enabled`, `microcompact_enabled` / `microcompact_keep_recent`, `autocompact_enabled`, `compaction_trigger_tokens` (absolute summarization trigger for benchmarks; env `OPENHUMAN_COMPACTION_TRIGGER_TOKENS`), `compaction_strategy` (env `OPENHUMAN_COMPACTION_STRATEGY`), `compaction_enabled`, `tool_result_budget_bytes`, `prefer_markdown_tool_output`, `summarizer_model`, and the embedded `session_memory: SessionMemoryConfig`.
+- `crate::config`: `ContextConfig` ([`config/schema/context.rs`](../../config/schema/context.rs)): `enabled`, `microcompact_enabled` / `microcompact_keep_recent`, `autocompact_enabled`, `compaction_trigger_tokens` (absolute summarization trigger for benchmarks; env `OPENHUMAN_COMPACTION_TRIGGER_TOKENS`), `compaction_strategy` (env `OPENHUMAN_COMPACTION_STRATEGY`), `compaction_enabled`, `tool_result_budget_bytes`, `prefer_markdown_tool_output`, `summarizer_model` (env `OPENHUMAN_CONTEXT_SUMMARIZER_MODEL`: the model the compaction summarizer calls on the turn's own provider route; unset or blank uses the turn's model), and the embedded `session_memory: SessionMemoryConfig`.
 - `crate::inference::provider::UsageInfo`: fed into `record_usage`.
 - `crate::agent::prompts`: owns prompt rendering; `channels_prompt.rs` uses `inject_inline_content`.
 - `crate::skills::Workflow`: `channels_prompt.rs` renders the available-skills section from a `&[Workflow]`.
