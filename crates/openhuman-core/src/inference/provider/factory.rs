@@ -13,6 +13,7 @@
 
 pub(crate) mod access_gates;
 mod chat_model;
+mod cloud_http;
 mod cloud_slug;
 mod cloud_spec;
 // The adapter is compiled and unit-tested before wiring any live BYOK route.
