@@ -11,13 +11,16 @@
 // TAURI-REACT-6 — into a rejected Promise so the caller's `await` /
 // `.catch(...)` can handle it instead of bubbling as an unhandled rejection.
 import { safeInvoke as invoke, isTauri } from '../utils/tauriCommands/common';
-import { clearCoreRpcTokenCache } from './coreRpcClient';
+import { clearCoreRpcTokenCache, clearCoreRpcUrlCache } from './coreRpcClient';
 
 export async function restartCoreProcess(): Promise<void> {
   if (!isTauri()) {
     throw new Error('Restart Core is only available in the desktop app.');
   }
   await invoke('restart_core_process');
+  // Port fallback can move the RPC endpoint. Clear it before the bearer
+  // invalidation notifies Socket.IO and other clients to reconnect.
+  clearCoreRpcUrlCache();
   // The Tauri shell mints a fresh `OPENHUMAN_CORE_TOKEN` for the new core
   // process. Drop the cached bearer so token-bearing long-lived consumers
   // (e.g. webhook SSE, see #1922) reconnect with the new value.
