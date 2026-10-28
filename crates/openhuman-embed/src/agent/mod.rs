@@ -18,6 +18,8 @@ mod approval_handler;
 mod approvals;
 pub use approval_handler::{ApprovalHandler, ApprovalSubscription};
 mod attachments;
+mod compact;
+pub use compact::{CompactOptions, CompactOutcome};
 pub(crate) mod lifecycle;
 pub(crate) mod mcp_cleanup;
 pub use approvals::{ApprovalDecision, Approvals, ApprovalsError, PendingApproval};
