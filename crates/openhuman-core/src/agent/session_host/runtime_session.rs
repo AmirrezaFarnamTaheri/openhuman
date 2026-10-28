@@ -4,6 +4,8 @@
 //! transcripts, prefixes, snapshots, resume, and persistence.
 
 mod bound_history;
+mod memory_block;
+pub(crate) use memory_block::with_memory_block;
 #[path = "runtime_session_enrichment.rs"]
 mod enrichment;
 mod permanent;
