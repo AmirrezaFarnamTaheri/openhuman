@@ -113,6 +113,10 @@ pub(super) fn applies(is_subagent: bool, agent_definition_id: Option<&str>) -> b
 }
 
 /// Whether the turn's activity makes it a multi-step task worth checking.
+///
+/// Use admitted and executed operations, not merely requested tool names:
+/// refused mutations and structural read-only previews need no extra model
+/// pass. The paired tests cover both sides of this execution boundary.
 pub(super) fn should_check(activity: &FinishActivity) -> bool {
     activity.tool_rounds >= MIN_TOOL_ROUNDS
         || activity.executed(TODO_TOOL)
