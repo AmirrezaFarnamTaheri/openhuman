@@ -222,7 +222,7 @@ fn definition_for_turn(
     }
 }
 
-fn build_turn_agent(
+pub(super) fn build_turn_agent(
     ctx: &crate::core::runtime::DispatchCtx,
     config: &Config,
     target: &AgentChatTarget<'_>,
