@@ -22,7 +22,9 @@ use common::{chat_requests, offline_config, provider, runtime, stub_backend};
 use openhuman_embed::memory::api::conformance::ReferenceEngine;
 use openhuman_embed::memory::api::{self as memory_api, MemoryEngine};
 use openhuman_embed::memory::LearnParams;
-use openhuman_embed::{Access, AgentSpec, MemoryBinding, Provider, Runtime, Workspace};
+use openhuman_embed::{
+    Access, AgentSpec, MemoryBinding, Provider, Runtime, SessionStoreProvider, Workspace,
+};
 use tinyagents_session::port::InMemorySessionStores;
 
 /// How the pack opens in a model request (`tinymemory_tools`' `OPEN_TAG`).
@@ -57,17 +59,26 @@ impl MemoryEngine for HoldableEngine {
         self.inner.health().await
     }
 
-    async fn recall(&self, req: memory_api::RecallRequest) -> memory_api::Result<memory_api::RecallAnswer> {
+    async fn recall(
+        &self,
+        req: memory_api::RecallRequest,
+    ) -> memory_api::Result<memory_api::RecallAnswer> {
         self.read_gate().await;
         self.inner.recall(req).await
     }
 
-    async fn fetch(&self, req: memory_api::FetchRequest) -> memory_api::Result<memory_api::FetchPage> {
+    async fn fetch(
+        &self,
+        req: memory_api::FetchRequest,
+    ) -> memory_api::Result<memory_api::FetchPage> {
         self.read_gate().await;
         self.inner.fetch(req).await
     }
 
-    async fn store(&self, item: memory_api::StoreItem) -> memory_api::Result<memory_api::StoreReceipt> {
+    async fn store(
+        &self,
+        item: memory_api::StoreItem,
+    ) -> memory_api::Result<memory_api::StoreReceipt> {
         self.inner.store(item).await
     }
 
@@ -122,11 +133,10 @@ fn recall_each_turn_reaches_the_first_request_in_time_and_never_the_transcript()
                 .build()
                 .await
                 .expect("a stateless runtime over the reference engine");
-            let learned: LearnParams =
-                serde_json::from_value(serde_json::json!({
-                    "text": "The user's favourite colour is teal"
-                }))
-                .expect("learn params");
+            let learned: LearnParams = serde_json::from_value(serde_json::json!({
+                "text": "The user's favourite colour is teal"
+            }))
+            .expect("learn params");
             runtime
                 .memory(ROOT)
                 .expect("the tenant's memory")
@@ -139,8 +149,11 @@ fn recall_each_turn_reaches_the_first_request_in_time_and_never_the_transcript()
                     .agent(
                         AgentSpec::new(id)
                             .provider(
-                                Provider::openai_compatible(format!("{}/v1", model.uri()), "sk-test")
-                                    .model("recall-model"),
+                                Provider::openai_compatible(
+                                    format!("{}/v1", model.uri()),
+                                    "sk-test",
+                                )
+                                .model("recall-model"),
                             )
                             .access(Access::readonly())
                             .memory(binding),
@@ -202,7 +215,11 @@ fn recall_each_turn_reaches_the_first_request_in_time_and_never_the_transcript()
 
             // ── not asked: a first turn still gets no note ─────────────────
             let plain_model = provider("noted").await;
-            let plain = agent_on("plain", &plain_model, MemoryBinding::new("plain").root(ROOT));
+            let plain = agent_on(
+                "plain",
+                &plain_model,
+                MemoryBinding::new("plain").root(ROOT),
+            );
             ask(plain).await;
             let requests = chat_requests(&plain_model).await;
             let first = messages(requests.first().expect("a model request")).join("\n");
