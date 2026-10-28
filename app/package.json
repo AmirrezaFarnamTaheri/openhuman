@@ -64,7 +64,7 @@
     "rust:format:check": "cargo fmt --manifest-path ../Cargo.toml --package openhuman --package openhuman-cli --package openhuman-embed --package openhuman-modules-linked --package openhuman-rpc --package openhuman-tinyhumans --package openhuman-tui -- --check && cargo fmt --manifest-path ../crates/openhuman-app/Cargo.toml --package openhuman-app -- --check",
     "rust:clippy": "cargo clippy --manifest-path ../crates/openhuman-app/Cargo.toml -- -D warnings",
     "format": "prettier --write . && pnpm rust:format",
-    "format:check": "prettier --check . || (echo FORMAT_DIAGNOSTIC_BEGIN && prettier src/components/flows/canvas/__tests__/useFlowValidation.test.tsx && echo FORMAT_DIAGNOSTIC_END && exit 1) && pnpm rust:format:check",
+    "format:check": "prettier --check . && pnpm rust:format:check",
     "format:check:prettier": "prettier --check .",
     "lint": "eslint . --ext .ts,.tsx --cache",
     "lint:fix": "eslint . --ext .ts,.tsx --fix --cache",
