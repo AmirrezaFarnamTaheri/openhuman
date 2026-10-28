@@ -194,7 +194,9 @@ module to forget only that channel's conversations. With
 in `lifecycle::date_hint` for one small model call to work out which days the
 user means; a late or bad answer just leaves the pack in its normal order.
 The web chat citation sink records citations only when a cached pack is
-returned to the turn and drained for the chat's memory chips.
+returned to the turn and drained for the chat's memory chips. An agent with a
+`memory_block` also gets beliefs then learnings rendered into its system
+prompt by [`lifecycle/memory_block.rs`](./lifecycle/memory_block.rs), only when a transcript generation starts.
 
 ### Background work
 
@@ -314,6 +316,7 @@ trusted call facts; queued writes retain that call's narrower reach.
 | [`lifecycle/hooks.rs`](./lifecycle/hooks.rs)                                                             | Lifecycle operations and bounded manual wrappers; `TurnPack`, `MemoryTurn`.                                                                                                                                                                                                                                 |
 | [`lifecycle/prefetch.rs`](./lifecycle/prefetch.rs)                                                       | Host adapter over `tinymemory_tools::prefetch::Prefetcher`: the key (workspace, config fingerprint, identity, thread), the per-context cache registry, the tokio runtime port and the turn-pack work.                                                                                                       |
 | [`lifecycle/jobs.rs`](./lifecycle/jobs.rs)                                                               | Host adapter over `tinymemory_tools::queue::JobQueue`: a file `QueueStore` over `memory/jobs.json`, one queue per workspace, the engine and build delay, and the `memory_background` cron run.                                                                                                              |
+| [`lifecycle/memory_block.rs`](./lifecycle/memory_block.rs) | Reads beliefs then learnings for an identity and renders the system prompt's `<memory>` block within a token budget. |
 | [`lifecycle/views.rs`](./lifecycle/views.rs)                                                             | Policy get/set, pack preview, agents list, jobs list/run for the UI.                                                                                                                                                                                                                                        |
 | [`lifecycle/sender.rs`](./lifecycle/sender.rs)                                                           | Maps a channel message's sender to an observed actor.                                                                                                                                                                                                                                                       |
 | [`lifecycle/date_hint.rs`](./lifecycle/date_hint.rs)                                                     | Optional model call that works out which days a turn refers to.                                                                                                                                                                                                                                             |

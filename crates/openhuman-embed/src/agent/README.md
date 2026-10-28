@@ -89,6 +89,14 @@ directories; transcripts and memory persist with the workspace.
   `tools(ToolScopeSpec::Named(..))` or `disallow_tools`. Also sets
   `sandbox` (`None`, `ReadOnly`, `Sandboxed`), `max_iterations`,
   `temperature`, `display_name` and `when_to_use`.
+  `memory_block(MemoryBlockSpec { max_tokens })` ends the system prompt with
+  what the agent's memory binding knows about the user (beliefs, then
+  learnings, between `<memory>` and `</memory>`). It is rendered only when a
+  transcript generation starts (a new thread, a resumed thread without one, a
+  replaced prompt, the first turn after a compaction) and re-sent byte for
+  byte on every other turn, so a memory change never costs the prefix cache
+  or adds the prompt-update note. Empty memory sends no block; a read error
+  sends the recorded one, or none.
 - `MemoryBinding` (`spec.rs`): the memory agent id the turns are logged
   under, optionally a layout root such as `team:acme`, and optionally
   `recall_each_turn(timeout)`: recall for the current message on every turn,
