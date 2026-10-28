@@ -105,7 +105,11 @@ async fn wire_models(summarizer_model: Option<&str>) -> WireModels {
             body["model"].as_str().unwrap_or_default().to_owned()
         })
         .collect();
-    assert_eq!(sent.len(), 2, "one summarizer and one primary call: {sent:?}");
+    assert_eq!(
+        sent.len(),
+        2,
+        "one summarizer and one primary call: {sent:?}"
+    );
     WireModels {
         summarizer: sent[0].clone(),
         primary: sent[1].clone(),

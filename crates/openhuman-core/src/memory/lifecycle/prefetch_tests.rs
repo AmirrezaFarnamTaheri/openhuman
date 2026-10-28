@@ -745,7 +745,11 @@ async fn recall_each_turn_gives_up_at_its_deadline_and_adds_no_latency_beyond_it
     )
     .await;
     assert!(pack.is_none(), "a late recall adds no note");
-    assert_eq!(started.elapsed(), deadline, "the turn waits the deadline, no longer");
+    assert_eq!(
+        started.elapsed(),
+        deadline,
+        "the turn waits the deadline, no longer"
+    );
 
     release.add_permits(100);
     drain(
@@ -776,7 +780,11 @@ async fn without_recall_each_turn_a_turn_still_reads_only_completed_packs() {
     let pack = turn_on(&config, &identity, "each-turn-off", 2, None)
         .await
         .expect("the next turn reads the completed pack");
-    assert!(pack.markdown.starts_with(CACHED_NOTICE), "{}", pack.markdown);
+    assert!(
+        pack.markdown.starts_with(CACHED_NOTICE),
+        "{}",
+        pack.markdown
+    );
     drain(&cache, &key).await;
 }
 
@@ -791,20 +799,28 @@ async fn an_excluded_recall_leaves_the_turn_without_a_pack() {
     let cache = cache(&crate::core::runtime::DispatchCtx::ambient());
     let key = Key::new(&config, &identity, "each-turn-excluded", false);
 
-    let unrelated = RecallEachTurn::new(Duration::from_secs(5))
-        .excluding(Arc::new(|hit: &tinymemory_api::Hit| hit.text.contains("violet")));
+    let unrelated = RecallEachTurn::new(Duration::from_secs(5)).excluding(Arc::new(
+        |hit: &tinymemory_api::Hit| hit.text.contains("violet"),
+    ));
     let kept = turn_on(&config, &identity, "each-turn-excluded", 0, Some(unrelated))
         .await
         .expect("a pack with nothing excluded is shown");
     assert!(kept.markdown.contains("teal"));
     drain(&cache, &key).await;
 
-    let everything = RecallEachTurn::new(Duration::from_secs(5))
-        .excluding(Arc::new(|hit: &tinymemory_api::Hit| hit.text.contains("teal")));
+    let everything = RecallEachTurn::new(Duration::from_secs(5)).excluding(Arc::new(
+        |hit: &tinymemory_api::Hit| hit.text.contains("teal"),
+    ));
     assert!(
-        turn_on(&config, &identity, "each-turn-excluded", 2, Some(everything))
-            .await
-            .is_none(),
+        turn_on(
+            &config,
+            &identity,
+            "each-turn-excluded",
+            2,
+            Some(everything)
+        )
+        .await
+        .is_none(),
         "a pack whose every cited hit is excluded is left out"
     );
     drain(&cache, &key).await;
