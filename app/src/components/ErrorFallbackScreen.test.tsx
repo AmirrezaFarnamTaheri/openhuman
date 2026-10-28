@@ -59,6 +59,19 @@ describe('ErrorFallbackScreen', () => {
     Object.assign(navigator, { clipboard: originalClipboard });
   });
 
+  test('does not expose secrets or credentials from a renderer exception', () => {
+    render(
+      <ErrorFallbackScreen
+        {...baseProps}
+        error={new Error('bad config: password=pw-123 Authorization: Bearer jwt-xyz')}
+        componentStack={'at <Foo api_key="sk-private-value">'}
+        eventId={null}
+      />
+    );
+    expect(screen.queryByText(/pw-123|jwt-xyz|sk-private-value/)).toBeNull();
+    expect(screen.getAllByText(/\[redacted\]/)).not.toHaveLength(0);
+  });
+
   test('hides the Error ID and support link when no event id', () => {
     render(<ErrorFallbackScreen {...baseProps} eventId={null} />);
     expect(screen.queryByText('app.errorFallback.eventIdLabel')).not.toBeInTheDocument();
