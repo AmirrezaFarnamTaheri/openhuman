@@ -48,7 +48,7 @@ pub use schema::{
     BudgetPeriod, BudgetPolicy, BudgetScope, CapabilityProviderConfig,
     CapabilityProviderTrustState, ChannelVoiceConfig, ChannelVoiceOverride, ChannelsConfig,
     CompactionSettings, CompactionStrategy, ComposioConfig, ComposioDirectBaseUrls,
-    ComposioHostCredential, ComputerConfig, Config, ContextConfig, CostConfig, CronConfig,
+    ComposioHostCredential, ComputerConfig, Config, ContextConfig, ContextSettings, CostConfig, CronConfig,
     CurlConfig, DashboardConfig, DecisionModel, DiagramViewerConfig, DiscordConfig,
     DockerRuntimeConfig, EmailConfig, EmbeddingRouteConfig, GitbooksConfig, HttpHeader,
     HttpRequestConfig, IMessageConfig, IntegrationToggle, IntegrationsConfig, LarkConfig,

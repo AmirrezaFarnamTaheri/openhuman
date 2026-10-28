@@ -66,7 +66,7 @@ impl Default for Config {
             agent: AgentConfig::default(),
             orchestrator: OrchestratorModelConfig::default(),
             teams: HashMap::new(),
-            context: ContextConfig::default(),
+            context: ContextSettings::default(),
             model_routes: Vec::new(),
             embedding_routes: Vec::new(),
             cron: CronConfig::default(),
