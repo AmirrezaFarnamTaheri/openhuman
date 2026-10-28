@@ -15,7 +15,10 @@ fn changing_a_byok_endpoint_does_not_inherit_the_previous_credential_cooldown() 
         "same-model",
         "https://second.example/v1",
     );
-    assert_ne!(original, changed, "endpoint change must isolate pool health");
+    assert_ne!(
+        original, changed,
+        "endpoint change must isolate pool health"
+    );
     assert_eq!(
         original,
         cloud_slug::rotation_pool_scope(
@@ -86,13 +89,16 @@ async fn byok_multi_key_route_retries_pre_output_429_with_an_individual_credenti
         .mount(&server)
         .await;
 
-    let model = create_chat_model_with_model_id_in(
-        &fixture_library_dispatch(), "chat", &config, 0.0,
-    )
-    .expect("create native provider model").0;
+    let model =
+        create_chat_model_with_model_id_in(&fixture_library_dispatch(), "chat", &config, 0.0)
+            .expect("create native provider model")
+            .0;
     let result = model
         .invoke(&(), ModelRequest::new(vec![Message::user("hello")]))
         .await;
-    assert!(result.is_ok(), "429 should fail over before exposing output: {result:?}");
+    assert!(
+        result.is_ok(),
+        "429 should fail over before exposing output: {result:?}"
+    );
     server.verify().await;
 }
