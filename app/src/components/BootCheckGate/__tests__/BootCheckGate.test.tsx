@@ -14,6 +14,11 @@ import { Provider } from 'react-redux';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import en from '../../../lib/i18n/en';
+import { bootCheckTransport } from '../../../services/bootCheckService';
+import {
+  clearCoreRpcTokenCache,
+  clearCoreRpcUrlCache,
+} from '../../../services/coreRpcClient';
 import coreModeReducer, { type CoreModeState } from '../../../store/coreModeSlice';
 import localeReducer from '../../../store/localeSlice';
 import { clearStoredCoreToken, storeCoreMode, storeRpcUrl } from '../../../utils/configPersistence';
@@ -597,6 +602,36 @@ describe('BootCheckGate — outdatedLocal', () => {
         screen.getByRole('button', { name: copy('bootCheck.restartCore') })
       ).toBeInTheDocument();
     });
+  });
+});
+
+describe('BootCheckGate — core restart endpoint refresh', () => {
+  it('invalidates the cached RPC URL before the bearer when the local core restart succeeds', async () => {
+    const restart = vi.spyOn(bootCheckTransport, 'invokeCmd').mockResolvedValue(undefined);
+    const clearUrl = vi.mocked(clearCoreRpcUrlCache);
+    const clearToken = vi.mocked(clearCoreRpcTokenCache);
+    clearUrl.mockClear();
+    clearToken.mockClear();
+    mockRunBootCheck.mockReset();
+    mockRunBootCheck
+      .mockResolvedValueOnce({ kind: 'outdatedLocal' })
+      .mockResolvedValue({ kind: 'match' });
+
+    renderGate(makeStore({ kind: 'local' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: copy('bootCheck.restartCore') })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-content')).toBeInTheDocument();
+    });
+    expect(restart).toHaveBeenCalledWith('restart_core_process', {});
+    expect(clearUrl).toHaveBeenCalledTimes(1);
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(clearUrl.mock.invocationCallOrder[0]).toBeLessThan(
+      clearToken.mock.invocationCallOrder[0]
+    );
+    restart.mockRestore();
   });
 });
 
