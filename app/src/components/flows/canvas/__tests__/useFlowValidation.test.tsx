@@ -66,6 +66,19 @@ describe('useFlowValidation draft revision isolation', () => {
     expect(result.current.validating).toBe(false);
   });
 
+  it('uses the latest committed graph when validating after a re-render', async () => {
+    validateFlow.mockResolvedValue(valid);
+    const { result, rerender } = renderHook(({ draft, key }) => useFlowValidation(draft, key), {
+      initialProps: { draft: graph('before'), key: 'before' },
+    });
+    rerender({ draft: graph('committed'), key: 'committed' });
+    await act(async () => {
+      await result.current.validateNow();
+    });
+    expect(validateFlow).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'committed' }));
+    expect(result.current.validation).toEqual(valid);
+  });
+
   it('clears already displayed validation synchronously when the draft key changes', async () => {
     validateFlow.mockResolvedValueOnce(invalid);
     const { result, rerender } = renderHook(({ draft, key }) => useFlowValidation(draft, key), {
