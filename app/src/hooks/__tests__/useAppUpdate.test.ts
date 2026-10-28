@@ -459,7 +459,204 @@ describe('useAppUpdate', () => {
     });
   });
 
+  describe('overlapping updater checks and actions', () => {
+    const update = {
+      current_version: '0.50.0',
+      available: true,
+      available_version: '0.51.0',
+      body: null,
+    };
+
+    it('promotes a pending background check to a visible manual failure', async () => {
+      let rejectProbe: ((reason: Error) => void) | undefined;
+      mockCheckAppUpdate.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectProbe = reject;
+          })
+      );
+
+      const { result } = renderHook(() =>
+        useAppUpdate({ initialCheckDelayMs: 100, recheckIntervalMs: 0, autoDownload: false })
+      );
+      await flush();
+
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+      });
+      expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1);
+
+      let manual: Promise<unknown> | undefined;
+      await act(async () => {
+        manual = result.current.check();
+        await Promise.resolve();
+      });
+      expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        rejectProbe?.(new Error('Release endpoint unavailable'));
+        await manual;
+      });
+      expect(result.current.phase).toBe('error');
+      expect(result.current.error).toBe('Release endpoint unavailable');
+    });
+
+    it('does not overwrite a staged update with a late successful background check', async () => {
+      let resolveProbe: ((value: unknown) => void) | undefined;
+      mockCheckAppUpdate
+        .mockResolvedValueOnce(update)
+        .mockImplementationOnce(
+          () =>
+            new Promise(resolve => {
+              resolveProbe = resolve;
+            })
+        );
+      mockDownloadAppUpdate.mockImplementationOnce(async () => {
+        await emitStatus('ready_to_install');
+        return { ready: true, version: '0.51.0', body: null };
+      });
+
+      const { result } = renderHook(() =>
+        useAppUpdate({ initialCheckDelayMs: 100, recheckIntervalMs: 0, autoDownload: true })
+      );
+      await flush();
+      await act(async () => {
+        await result.current.check();
+      });
+      expect(result.current.phase).toBe('available');
+
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+      });
+      expect(mockCheckAppUpdate).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(result.current.phase).toBe('ready_to_install');
+      expect(mockDownloadAppUpdate).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveProbe?.({ ...update, available: false, available_version: null });
+        await Promise.resolve();
+      });
+      expect(result.current.phase).toBe('ready_to_install');
+      expect(mockDownloadAppUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a download failure visible when a pending background probe also fails', async () => {
+      let rejectProbe: ((reason: Error) => void) | undefined;
+      mockCheckAppUpdate.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectProbe = reject;
+          })
+      );
+      mockDownloadAppUpdate.mockRejectedValueOnce(new Error('disk full'));
+
+      const { result } = renderHook(() =>
+        useAppUpdate({ initialCheckDelayMs: 100, recheckIntervalMs: 0, autoDownload: false })
+      );
+      await flush();
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await result.current.download();
+      });
+      expect(result.current.error).toBe('disk full');
+
+      await act(async () => {
+        rejectProbe?.(new Error('release server offline'));
+        await Promise.resolve();
+      });
+      expect(result.current.phase).toBe('error');
+      expect(result.current.error).toBe('disk full');
+    });
+
+    it('does not schedule new background checks while an action error is shown', async () => {
+      mockDownloadAppUpdate.mockRejectedValueOnce(new Error('download disk full'));
+      const { result } = renderHook(() =>
+        useAppUpdate({ initialCheckDelayMs: 100, recheckIntervalMs: 100, autoDownload: false })
+      );
+      await flush();
+      await act(async () => {
+        await result.current.download();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+        await Promise.resolve();
+      });
+
+      expect(mockCheckAppUpdate).not.toHaveBeenCalled();
+      expect(result.current.phase).toBe('error');
+      expect(result.current.error).toBe('download disk full');
+    });
+  });
+
   describe('auto-check cadence', () => {
+    it('keeps failed background update probes quiet and never claims the app is current', async () => {
+      mockCheckAppUpdate.mockRejectedValueOnce(new Error('Release manifest unavailable'));
+
+      const { result } = renderHook(() =>
+        useAppUpdate({ initialCheckDelayMs: 100, recheckIntervalMs: 0, autoDownload: false })
+      );
+      await flush();
+
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1);
+      expect(result.current.phase).toBe('idle');
+      expect(result.current.info).toBeNull();
+      expect(result.current.error).toBeNull();
+    });
+
+    it('recovers from a silent failed background check on a later successful probe', async () => {
+      mockCheckAppUpdate
+        .mockRejectedValueOnce(new Error('Temporary release endpoint error'))
+        .mockResolvedValueOnce({
+          current_version: '0.50.0',
+          available: true,
+          available_version: '0.51.0',
+          body: null,
+        });
+
+      const { result } = renderHook(() =>
+        useAppUpdate({ initialCheckDelayMs: 100, recheckIntervalMs: 500, autoDownload: false })
+      );
+      await flush();
+
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(result.current.phase).toBe('idle');
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(result.current.phase).toBe('available');
+      expect(result.current.info?.available_version).toBe('0.51.0');
+    });
+
     it('runs an initial check after the configured delay', async () => {
       mockCheckAppUpdate.mockResolvedValue({
         current_version: '0.50.0',
