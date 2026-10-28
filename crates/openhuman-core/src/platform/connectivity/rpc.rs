@@ -216,13 +216,8 @@ pub async fn pick_desktop_listen_port_for_host(
     let fallbacks: Vec<u16> = (1..=10)
         .filter_map(|delta| preferred.checked_add(delta))
         .collect();
-    pick_desktop_listen_port_with_candidates(
-        host,
-        preferred,
-        &fallbacks,
-        RetryPolicy::DEFAULT,
-    )
-    .await
+    pick_desktop_listen_port_with_candidates(host, preferred, &fallbacks, RetryPolicy::DEFAULT)
+        .await
 }
 
 async fn pick_desktop_listen_port_with_candidates(
