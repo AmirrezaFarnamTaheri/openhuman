@@ -363,9 +363,10 @@ for suite in "${SUITES[@]}"; do
     run_in_process_modules
     continue
   fi
-  if [ "$suite" = "mcp_registry_e2e" ]; then
-    # The registry tests open several process-global module clients across
-    # workspaces. Parallel libtest threads can race their module lifecycle.
+  if [ "$suite" = "mcp_registry_e2e" ] || [ "$suite" = "agent_harness_e2e" ]; then
+    # Both targets use process-global clients or scripted completion fixtures.
+    # Run every test, serially, so a child can receive its spawn/cancel event
+    # without unrelated tests racing a shared process-wide backend.
     echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (serial)"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
       --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
