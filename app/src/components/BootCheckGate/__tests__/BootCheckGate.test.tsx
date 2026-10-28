@@ -787,7 +787,11 @@ describe('BootCheckGate — port conflict recovery', () => {
       .mockResolvedValue({ kind: 'match' });
     mockRecoverPortConflict.mockResolvedValue({ success: true, message: 'ok', new_port: 7789 });
 
-    renderGate();
+    const clearUrl = vi.mocked(clearCoreRpcUrlCache);
+    const clearToken = vi.mocked(clearCoreRpcTokenCache);
+    clearUrl.mockClear();
+    clearToken.mockClear();
+    renderGate(makeStore({ kind: 'local' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('fix-automatically-btn')).toBeInTheDocument();
@@ -799,6 +803,11 @@ describe('BootCheckGate — port conflict recovery', () => {
       expect(screen.getByTestId('app-content')).toBeInTheDocument();
     });
     expect(mockRunBootCheck).toHaveBeenCalledTimes(2);
+    expect(clearUrl).toHaveBeenCalledTimes(1);
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(clearUrl.mock.invocationCallOrder[0]).toBeLessThan(
+      clearToken.mock.invocationCallOrder[0]
+    );
   });
 
   it('shows portConflictFixFailed message when recovery fails', async () => {
@@ -874,7 +883,11 @@ describe('BootCheckGate — foreign port owner', () => {
     mockRunBootCheck.mockResolvedValueOnce(foreignResult).mockResolvedValue({ kind: 'match' });
     mockForceQuitPortOwner.mockResolvedValue({ success: true, message: 'ok', new_port: 7789 });
 
-    renderGate();
+    const clearUrl = vi.mocked(clearCoreRpcUrlCache);
+    const clearToken = vi.mocked(clearCoreRpcTokenCache);
+    clearUrl.mockClear();
+    clearToken.mockClear();
+    renderGate(makeStore({ kind: 'local' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('force-quit-owner-btn')).toBeInTheDocument();
@@ -886,6 +899,11 @@ describe('BootCheckGate — foreign port owner', () => {
     });
     expect(mockForceQuitPortOwner).toHaveBeenCalledWith(4242);
     expect(mockRunBootCheck).toHaveBeenCalledTimes(2);
+    expect(clearUrl).toHaveBeenCalledTimes(1);
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(clearUrl.mock.invocationCallOrder[0]).toBeLessThan(
+      clearToken.mock.invocationCallOrder[0]
+    );
   });
 
   it('shows the force-quit failed message when termination fails', async () => {
