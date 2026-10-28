@@ -4,9 +4,9 @@
 //! transcripts, prefixes, snapshots, resume, and persistence.
 
 mod bound_history;
-pub(super) mod memory_block;
 #[path = "runtime_session_enrichment.rs"]
 mod enrichment;
+pub(super) mod memory_block;
 mod permanent;
 mod post_commit;
 #[path = "runtime_session/prelude.rs"]

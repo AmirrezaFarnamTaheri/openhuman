@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use common::{chat_completion, offline_config, runtime, stub_backend};
+use openhuman_embed::SessionStoreProvider as _;
 use openhuman_embed::{
     Access, AgentSpec, CompactOptions, CompactOutcome, Provider, Runtime, Workspace,
 };
@@ -90,7 +91,10 @@ impl Respond for ScriptedProvider {
 
 /// The messages a request sent.
 fn messages(seen: &Seen) -> Vec<serde_json::Value> {
-    seen.body["messages"].as_array().cloned().unwrap_or_default()
+    seen.body["messages"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// The text of a request message, whether a string or content parts.
@@ -116,7 +120,8 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                 .await;
             let store = Arc::new(InMemorySessionStores::new());
             let mut config = offline_config();
-            config.context.compaction_strategy = openhuman_core::config::CompactionStrategy::Summary;
+            config.context.compaction_strategy =
+                openhuman_core::config::CompactionStrategy::Summary;
             config.context.summarizer_model = Some(SUMMARIZER_MODEL.into());
             let runtime = Runtime::builder()
                 .config(config)
@@ -139,7 +144,10 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
 
             // ── a long conversation on one thread ─────────────────────────
             let first = agent
-                .turn(format!("we are planning a trip to Goa. {}", "detail ".repeat(300)))
+                .turn(format!(
+                    "we are planning a trip to Goa. {}",
+                    "detail ".repeat(300)
+                ))
                 .send()
                 .await
                 .expect("first turn");
@@ -216,7 +224,9 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
             .await;
             let turn = agent.turn("so, what was the plan?").session(&thread).send();
             let (outcome, reply) = tokio::join!(compacting, turn);
-            let outcome = outcome.expect("the task ran").expect("the compaction succeeds");
+            let outcome = outcome
+                .expect("the task ran")
+                .expect("the compaction succeeds");
             reply.expect("the racing turn");
             let CompactOutcome::Compacted {
                 tokens_before,
@@ -225,14 +235,21 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
             else {
                 panic!("expected Compacted, got {outcome:?}");
             };
-            assert!(tokens_after < tokens_before, "{tokens_after} < {tokens_before}");
+            assert!(
+                tokens_after < tokens_before,
+                "{tokens_after} < {tokens_before}"
+            );
 
             // The summary request went to the summarizer model alone.
             assert_eq!(provider.summaries().len(), 1);
 
             // The turn waited for the compaction: its request came after the
             // summary was answered, and it resent the summary.
-            let after = provider.turns().last().cloned().expect("the racing turn's request");
+            let after = provider
+                .turns()
+                .last()
+                .cloned()
+                .expect("the racing turn's request");
             assert!(
                 after.at >= summary_asked + SLOW_SUMMARY,
                 "the turn ran after the compaction released the session"
@@ -249,7 +266,10 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                 before.body.get("tools"),
                 "the tool declarations are byte-identical"
             );
-            assert_eq!(after_messages[1]["role"], "user", "the summary is user-role");
+            assert_eq!(
+                after_messages[1]["role"], "user",
+                "the summary is user-role"
+            );
             assert!(text(&after_messages[1]).contains("SUMMARY-MARKER"));
             assert!(
                 after.body.to_string().len() < before.body.to_string().len(),
@@ -263,12 +283,13 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
             // ── the sealed generation is still readable ───────────────────
             let chain = transcripts.session_chain(&session);
             assert_eq!(chain.len(), 2, "the head was sealed and the next opened");
-            assert_eq!(head_text(&chain[0]), original, "the sealed one is untouched");
+            assert_eq!(
+                head_text(&chain[0]),
+                original,
+                "the sealed one is untouched"
+            );
 
-            runtime
-                .remove_agent("asha")
-                .await
-                .expect("asha is removed");
+            runtime.remove_agent("asha").await.expect("asha is removed");
             drop(agent);
             drop(runtime);
         })

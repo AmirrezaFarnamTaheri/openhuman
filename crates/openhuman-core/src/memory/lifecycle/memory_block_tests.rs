@@ -61,7 +61,12 @@ fn a_fact_that_repeats_a_belief_or_is_one_is_listed_once() {
 #[test]
 fn the_block_stays_within_its_token_budget() {
     let facts: Vec<Hit> = (0..200)
-        .map(|n| hit(&format!("Fact number {n} about the user's long history"), &[]))
+        .map(|n| {
+            hit(
+                &format!("Fact number {n} about the user's long history"),
+                &[],
+            )
+        })
         .collect();
     let block = render(&[], &facts, 120).expect("a block");
     assert!(

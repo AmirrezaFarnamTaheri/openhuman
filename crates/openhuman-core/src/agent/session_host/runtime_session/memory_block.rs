@@ -55,7 +55,10 @@ pub(super) fn is_memory_block(message: &Message) -> bool {
 
 /// The memory block `prefix` carries, if any.
 pub(super) fn recorded_block(prefix: &PrefixSnapshot) -> Option<&Message> {
-    prefix.messages().iter().find(|message| is_memory_block(message))
+    prefix
+        .messages()
+        .iter()
+        .find(|message| is_memory_block(message))
 }
 
 /// `prefix` with `block` as its last message, in place of any block it
@@ -120,7 +123,13 @@ impl OpenHumanTurnPrelude {
                 RenderedBlock::Block(Message::system(text))
             }
             Ok(None) => {
-                tracing::info!(thread_id, agent_id, reason, tokens = 0, "[memory_block] empty");
+                tracing::info!(
+                    thread_id,
+                    agent_id,
+                    reason,
+                    tokens = 0,
+                    "[memory_block] empty"
+                );
                 RenderedBlock::Empty
             }
             Err(error) => {
@@ -183,9 +192,9 @@ impl OpenHumanTurnPrelude {
                 tracing::debug!(
                     thread_id = self.thread_id.as_deref().unwrap_or(""),
                     agent_id = self.agent_definition_id.as_str(),
-                    tokens = recorded
-                        .as_ref()
-                        .map_or(0, |block| tinymemory_tools::recall::estimate_tokens(&block.text())),
+                    tokens = recorded.as_ref().map_or(0, |block| {
+                        tinymemory_tools::recall::estimate_tokens(&block.text())
+                    }),
                     "[memory_block] kept"
                 );
                 recorded.clone()
@@ -201,7 +210,11 @@ impl OpenHumanTurnPrelude {
     /// from the generation it succeeded, and has not yet committed a turn of
     /// its own past the one that opened it. Any read failure answers `false`:
     /// the recorded block is kept.
-    pub(super) fn memory_block_inherited(&self, view: &SessionStateView<'_>, block: &Message) -> bool {
+    pub(super) fn memory_block_inherited(
+        &self,
+        view: &SessionStateView<'_>,
+        block: &Message,
+    ) -> bool {
         let Some(target) = view.transcript_target else {
             return false;
         };
@@ -219,7 +232,8 @@ impl OpenHumanTurnPrelude {
         let Ok(Some(transcript)) = read.read_session() else {
             return false;
         };
-        let Ok(messages) = super::super::OpenHumanTranscriptCodec.decode_history(&transcript) else {
+        let Ok(messages) = super::super::OpenHumanTranscriptCodec.decode_history(&transcript)
+        else {
             return false;
         };
         let prefix_len = transcript.meta.prefix_message_count.unwrap_or_else(|| {

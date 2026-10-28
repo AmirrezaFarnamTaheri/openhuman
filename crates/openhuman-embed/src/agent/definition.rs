@@ -351,6 +351,13 @@ impl AgentDefinitionSpec {
         if let Some(refresh) = self.refresh_prompt_on_resume {
             def.extensions.refresh_prompt_on_resume = refresh;
         }
+        if let Some(block) = self.memory_block {
+            def.extensions.memory_block = Some(
+                openhuman_core::agent_registry::host_definition::MemoryBlock {
+                    max_tokens: block.max_tokens,
+                },
+            );
+        }
         if custom_base {
             if let Some(requested) = &self.tools {
                 let narrows = match (requested, &def.tools) {
@@ -414,7 +421,7 @@ impl AgentDefinitionSpec {
             def.temperature = t;
         }
         log::debug!(
-            "[embed][agent] definition id={id} prompt={} refresh_prompt_on_resume={} tools={:?} sandbox={:?} max_iterations={}",
+            "[embed][agent] definition id={id} prompt={} refresh_prompt_on_resume={} memory_block={:?} tools={:?} sandbox={:?} max_iterations={}",
             match &def.system_prompt {
                 PromptSource::Inline(_) => "inline",
                 PromptSource::File { .. } => "file",
@@ -422,6 +429,7 @@ impl AgentDefinitionSpec {
                 PromptSource::Verbatim(_) => "verbatim",
             },
             def.extensions.refresh_prompt_on_resume,
+            def.extensions.memory_block.map(|block| block.max_tokens),
             def.tools,
             def.sandbox_mode,
             def.max_iterations

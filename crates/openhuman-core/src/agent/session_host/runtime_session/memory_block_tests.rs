@@ -24,9 +24,9 @@ fn host(config: &Config, prompt: &str, refresh: bool) -> OpenHumanSessionHost {
     let mut host = crate::agent::SessionHostBuilder::new()
         .with_session_history_locator(memory_locator())
         .model_name("test/session-fixture".to_string())
-        .chat_model(Arc::new(tinyagents_harness::testkit::ScriptedModel::replies(
-            Vec::<&str>::new(),
-        )))
+        .chat_model(Arc::new(
+            tinyagents_harness::testkit::ScriptedModel::replies(Vec::<&str>::new()),
+        ))
         .tools(Vec::new())
         .prompt_builder(SystemPromptBuilder::verbatim(prompt.to_string()))
         .workspace_dir(config.workspace_dir.clone())
@@ -125,7 +125,12 @@ fn sent(prepared: &TurnPreparation, recorded: &PrefixSnapshot) -> Vec<Message> {
 async fn a_new_thread_ends_its_prompt_with_the_memory_block() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    learn(&bind_reference(&config), &config, "The user's favourite colour is teal").await;
+    learn(
+        &bind_reference(&config),
+        &config,
+        "The user's favourite colour is teal",
+    )
+    .await;
     let prelude = prelude(&config, PROMPT, false);
     let empty = PrefixSnapshot::default();
 
@@ -170,7 +175,12 @@ async fn a_memory_read_error_leaves_a_new_thread_without_a_block() {
 async fn a_resumed_thread_keeps_its_recorded_block_when_memory_changes() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    learn(&bind_reference(&config), &config, "The user lives in Lisbon").await;
+    learn(
+        &bind_reference(&config),
+        &config,
+        "The user lives in Lisbon",
+    )
+    .await;
     // Refreshing the prompt renders it again on every turn: the block must
     // still be the recorded one, and the unchanged prompt adds no note.
     let prelude = prelude(&config, PROMPT, true);
@@ -191,7 +201,12 @@ async fn a_resumed_thread_keeps_its_recorded_block_when_memory_changes() {
 async fn a_resumed_thread_recorded_without_a_block_takes_one_up() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    learn(&bind_reference(&config), &config, "The user lives in Lisbon").await;
+    learn(
+        &bind_reference(&config),
+        &config,
+        "The user lives in Lisbon",
+    )
+    .await;
     let prelude = prelude(&config, PROMPT, false);
     let recorded = PrefixSnapshot::new(vec![Message::system(PROMPT)]);
     let history = [Message::system(PROMPT), Message::user("hello")];
@@ -208,16 +223,28 @@ async fn a_resumed_thread_recorded_without_a_block_takes_one_up() {
 async fn a_replaced_prompt_takes_a_fresh_block_and_still_carries_its_note() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    learn(&bind_reference(&config), &config, "The user lives in Lisbon").await;
+    learn(
+        &bind_reference(&config),
+        &config,
+        "The user lives in Lisbon",
+    )
+    .await;
     let prelude = prelude(&config, "You are blocky, v2.", true);
     let recorded = PrefixSnapshot::new(vec![Message::system(PROMPT), block("- teal")]);
-    let history = [Message::system(PROMPT), block("- teal"), Message::user("hello")];
+    let history = [
+        Message::system(PROMPT),
+        block("- teal"),
+        Message::user("hello"),
+    ];
 
     let (prepared, request) = prepare(&prelude, false, &view(&recorded, &history, None)).await;
     let offered = prepared.prefix.expect("a refreshed prefix");
     assert_eq!(offered.messages()[0].text(), "You are blocky, v2.");
     let last = offered.messages().last().expect("a block");
-    assert!(is_memory_block(last) && last.text().contains("Lisbon"), "{offered:?}");
+    assert!(
+        is_memory_block(last) && last.text().contains("Lisbon"),
+        "{offered:?}"
+    );
     assert!(request.input.text().starts_with(PROMPT_UPDATE_NOTE));
 }
 
@@ -292,7 +319,12 @@ fn generations(
 async fn a_generation_that_inherited_its_block_renders_a_fresh_one() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    learn(&bind_reference(&config), &config, "The user lives in Lisbon").await;
+    learn(
+        &bind_reference(&config),
+        &config,
+        "The user lives in Lisbon",
+    )
+    .await;
     let prelude = prelude(&config, PROMPT, false);
     let locator = memory_locator();
     let old = block("- teal");
@@ -312,7 +344,12 @@ async fn a_generation_that_inherited_its_block_renders_a_fresh_one() {
 async fn a_generation_opened_by_a_block_refresh_keeps_its_block() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    learn(&bind_reference(&config), &config, "The user lives in Lisbon").await;
+    learn(
+        &bind_reference(&config),
+        &config,
+        "The user lives in Lisbon",
+    )
+    .await;
     let prelude = prelude(&config, PROMPT, false);
     let locator = memory_locator();
     let fresh = block("- teal");
@@ -328,7 +365,12 @@ async fn a_generation_opened_by_a_block_refresh_keeps_its_block() {
 async fn an_inherited_block_is_kept_once_the_generation_has_moved_on() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    learn(&bind_reference(&config), &config, "The user lives in Lisbon").await;
+    learn(
+        &bind_reference(&config),
+        &config,
+        "The user lives in Lisbon",
+    )
+    .await;
     let prelude = prelude(&config, PROMPT, false);
     let locator = memory_locator();
     let old = block("- teal");
@@ -364,7 +406,12 @@ fn the_block_goes_after_every_other_prefix_message() {
 async fn a_generation_opened_outside_a_turn_can_take_a_fresh_block() {
     let tmp = tempfile::tempdir().unwrap();
     let config = config_in(&tmp);
-    learn(&bind_reference(&config), &config, "The user lives in Lisbon").await;
+    learn(
+        &bind_reference(&config),
+        &config,
+        "The user lives in Lisbon",
+    )
+    .await;
     let block = host(&config, PROMPT, false)
         .memory_block_for_new_generation()
         .await

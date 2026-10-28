@@ -214,7 +214,10 @@ fn summarizer_tool_rendering_defaults_to_full_and_env_selects_markers() {
     cfg.apply_env_overlay_with(
         &HashMapEnv::new().with("OPENHUMAN_CONTEXT_SUMMARIZER_TOOL_RENDERING", " Markers "),
     );
-    assert_eq!(cfg.context.summarizer_tool_rendering, ToolRendering::Markers);
+    assert_eq!(
+        cfg.context.summarizer_tool_rendering,
+        ToolRendering::Markers
+    );
 
     // Unknown and empty values leave the current rendering alone.
     cfg.apply_env_overlay_with(
@@ -223,7 +226,10 @@ fn summarizer_tool_rendering_defaults_to_full_and_env_selects_markers() {
     cfg.apply_env_overlay_with(
         &HashMapEnv::new().with("OPENHUMAN_CONTEXT_SUMMARIZER_TOOL_RENDERING", ""),
     );
-    assert_eq!(cfg.context.summarizer_tool_rendering, ToolRendering::Markers);
+    assert_eq!(
+        cfg.context.summarizer_tool_rendering,
+        ToolRendering::Markers
+    );
 
     cfg.apply_env_overlay_with(
         &HashMapEnv::new().with("OPENHUMAN_CONTEXT_SUMMARIZER_TOOL_RENDERING", "full"),
@@ -278,6 +284,12 @@ fn summarizer_settings_read_from_the_context_table_beside_the_harness_settings()
 
     // The written form keeps every key in the one `[context]` table.
     let written = toml::to_string(&cfg.context).unwrap();
-    assert!(written.contains("summarizer_tool_rendering = \"markers\""), "{written}");
-    assert!(written.contains("compaction_strategy = \"summary\""), "{written}");
+    assert!(
+        written.contains("summarizer_tool_rendering = \"markers\""),
+        "{written}"
+    );
+    assert!(
+        written.contains("compaction_strategy = \"summary\""),
+        "{written}"
+    );
 }

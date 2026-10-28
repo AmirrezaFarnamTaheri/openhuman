@@ -176,7 +176,8 @@ pub use openhuman_core::voice::VOICE_COMPILED_IN;
 pub use agent::ToolAttachmentError;
 pub use agent::{
     Agent, AgentDefinitionSpec, AgentError, AgentLayout, AgentSpec, ApprovalDecision, Approvals,
-    ApprovalsError, DefinitionBase, MemoryBinding, MemoryBlockSpec, PendingApproval, SandboxModeSpec, ToolScopeSpec,
+    ApprovalsError, DefinitionBase, MemoryBinding, MemoryBlockSpec, PendingApproval,
+    SandboxModeSpec, ToolScopeSpec,
 };
 pub use auth::{Auth, AuthState, Session};
 #[cfg(feature = "channels")]

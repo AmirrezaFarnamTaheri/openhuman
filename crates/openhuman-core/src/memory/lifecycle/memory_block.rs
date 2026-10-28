@@ -14,7 +14,7 @@
 //! known renders no block at all, and memory switched off reads as nothing
 //! known; an engine failure is an error the caller logs and survives.
 
-use tinymemory_api::{BELIEF_TAG, BeliefsRequest, Error, Hit, ListRequest, Reach, Result};
+use tinymemory_api::{BeliefsRequest, Error, Hit, ListRequest, Reach, Result, BELIEF_TAG};
 use tinymemory_tools::layout::identity::ResolvedIdentity;
 use tinymemory_tools::recall::estimate_tokens;
 

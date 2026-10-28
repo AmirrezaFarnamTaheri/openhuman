@@ -100,7 +100,8 @@ impl OpenHumanTurnPrelude {
                 .is_some_and(|prefix| !prompt_messages(prefix).eq(prompt_messages(view.prefix)));
         self.refresh_permanent_prefix(&mut preparation, view.prefix);
         // Last, so the block follows everything else the prefix carries.
-        self.refresh_memory_block(&mut preparation, view, cold).await;
+        self.refresh_memory_block(&mut preparation, view, cold)
+            .await;
         if let Some(prefix) = preparation.prefix.as_ref() {
             // The runtime sends `prefix` in place of the recorded one, so the
             // rounds this run produces start that much further on (or back).
