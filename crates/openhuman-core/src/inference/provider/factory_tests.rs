@@ -611,6 +611,26 @@ fn routed_config(endpoint: &str, api_key: &str, model: &str) -> Config {
 }
 
 #[test]
+fn credentialed_ephemeral_cloud_route_never_builds_with_remote_http() {
+    let _guard = crate::inference::inference_test_guard();
+    let config = routed_config("http://api.example.invalid/v1", "private-api-key", "test-model");
+    let provider = format!(
+        "{}:test-model",
+        crate::config::schema::ephemeral_route::EPHEMERAL_ROUTE_SLUG
+    );
+    let error = with_library_test_context(|| {
+        create_chat_model_from_string_with_model_id("chat", &provider, &config, 0.0)
+            .err()
+            .expect("a credentialed remote HTTP route must not be constructed")
+    });
+    assert!(
+        error.to_string().contains("HTTPS or loopback HTTP"),
+        "blocked endpoint should produce a secret-free transport error"
+    );
+    assert!(!error.to_string().contains("private-api-key"));
+}
+
+#[test]
 fn only_library_hosts_are_exempt_from_app_login() {
     use crate::core::types::HostKind;
 
