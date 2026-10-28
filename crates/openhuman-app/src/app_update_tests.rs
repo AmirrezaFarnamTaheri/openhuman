@@ -60,3 +60,19 @@ fn backoff_is_monotonic_and_bounded() {
         "total backoff stays bounded"
     );
 }
+
+#[test]
+fn update_check_distinguishes_network_failure_from_confirmed_no_update() {
+    assert_eq!(
+        classify_update_check::<&str, &str>(Err("release JSON unavailable")),
+        Err("release JSON unavailable"),
+    );
+    assert_eq!(
+        classify_update_check::<&str, &str>(Ok(None)),
+        Ok(UpdateCheck::UpToDate),
+    );
+    assert_eq!(
+        classify_update_check::<&str, &str>(Ok(Some("1.0.1"))),
+        Ok(UpdateCheck::Available("1.0.1")),
+    );
+}
