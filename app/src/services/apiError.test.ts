@@ -25,7 +25,9 @@ describe('messageForApiError', () => {
 
   it('explains an unavailable secret store and keeps remediation visible', () => {
     const displayed = messageForApiError(
-      new Error('Secret-storage backend error: secret store: backend: could not open the lock file'),
+      new Error(
+        'Secret-storage backend error: secret store: backend: could not open the lock file'
+      ),
       'Try again.'
     );
     expect(displayed).toContain('encrypted credential storage');
