@@ -103,6 +103,7 @@ pub(super) fn install_context_ladder(
     compaction_strategy: crate::config::CompactionStrategy,
     microcompact_keep_recent: usize,
     summarizer_model: Arc<dyn tinyinference_llm::model::ChatModel<()>>,
+    summarizer_model_id: &str,
     wrap_up_at_cap: bool,
     tool_outcome_sink: &ToolOutcomeSink,
     memory_turn: Option<Arc<crate::memory::lifecycle::hooks::MemoryTurn>>,
@@ -121,6 +122,7 @@ pub(super) fn install_context_ladder(
                 compaction_strategy,
                 context_window,
                 summarizer_model,
+                summarizer_model_id,
                 model,
                 memory_turn,
                 compaction_notice,
@@ -169,11 +171,15 @@ pub(super) fn install_context_ladder(
 
 /// The compression middleware for `strategy`: `TaskState` writes a typed
 /// checkpoint over a token-budgeted tail, `Summary` is the free-form summarizer.
+/// `summarizer_model_id` names the model `summarizer_model` calls, for the
+/// summarizer's logs and summary provenance; `model` is the turn's.
+#[allow(clippy::too_many_arguments)]
 fn compression_middleware(
     policy: SummarizationPolicy,
     strategy: crate::config::CompactionStrategy,
     context_window: Option<u64>,
     summarizer_model: Arc<dyn tinyinference_llm::model::ChatModel<()>>,
+    summarizer_model_id: &str,
     model: &str,
     memory_turn: Option<Arc<crate::memory::lifecycle::hooks::MemoryTurn>>,
     compaction_notice: Option<CompactionNotice>,

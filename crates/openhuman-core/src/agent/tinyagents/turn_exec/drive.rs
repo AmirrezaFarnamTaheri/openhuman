@@ -114,6 +114,7 @@ pub(super) async fn drive_turn(
         primary,
         routes: tier_routes,
         summarizer: summarizer_model,
+        summarizer_model_id,
         error_slot,
         ..
     } = turn_models;
@@ -325,6 +326,7 @@ pub(super) async fn drive_turn(
             }),
             memory_turn: run_context.memory_turn.clone(),
             summarizer_model,
+            summarizer_model_id,
             failure_map: failure_map.clone(),
             provider_usage_carry: provider_usage_carry.clone(),
             tool_outcome_sink: tool_outcome_sink.clone(),
