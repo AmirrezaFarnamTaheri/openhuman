@@ -402,6 +402,98 @@ describe('useComposioIntegrations', () => {
     }
   });
 
+  it('does not supersede a slow successful poll with the next interval tick', async () => {
+    const { useComposioIntegrations } = await import('./hooks');
+    mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
+    mockListConnections.mockResolvedValue({ connections: [] });
+    let tick: (() => void) | undefined;
+    const realSetInterval = window.setInterval.bind(window);
+    const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
+      if (interval === 12_345 && typeof handler === 'function') {
+        tick = handler;
+        return 1234 as unknown as ReturnType<typeof window.setInterval>;
+      }
+      return realSetInterval(handler, interval) as unknown as ReturnType<typeof window.setInterval>;
+    });
+    const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
+    try {
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      let resolveSlow!: (value: { connections: { id: string; toolkit: string; status: string }[] }) => void;
+      mockListConnections.mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            resolveSlow = resolve;
+          })
+      );
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      const started = mockListConnections.mock.calls.length;
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(started);
+      await act(async () => {
+        resolveSlow({ connections: [{ id: 'slow', toolkit: 'gmail', status: 'ACTIVE' }] });
+        await Promise.resolve();
+      });
+      expect(result.current.connectionByToolkit.get('gmail')?.id).toBe('slow');
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(started + 1);
+    } finally {
+      unmount();
+      timer.mockRestore();
+    }
+  });
+
+  it('resumes periodic polling after a successful manual refresh of rejected credentials', async () => {
+    const { useComposioIntegrations } = await import('./hooks');
+    mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
+    mockListConnections.mockResolvedValue({ connections: [] });
+    let tick: (() => void) | undefined;
+    const realSetInterval = window.setInterval.bind(window);
+    const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
+      if (interval === 12_345 && typeof handler === 'function') {
+        tick = handler;
+        return 1234 as unknown as ReturnType<typeof window.setInterval>;
+      }
+      return realSetInterval(handler, interval) as unknown as ReturnType<typeof window.setInterval>;
+    });
+    const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
+    try {
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      mockListConnections.mockRejectedValueOnce(new Error('HTTP 401 invalid API key'));
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const paused = mockListConnections.mock.calls.length;
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(paused);
+      await act(async () => {
+        await result.current.refresh();
+      });
+      const refreshed = mockListConnections.mock.calls.length;
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(refreshed + 1);
+    } finally {
+      unmount();
+      timer.mockRestore();
+    }
+  });
+
   it('ignores an older overlapping poll 401 after a newer poll succeeds', async () => {
     const { useComposioIntegrations } = await import('./hooks');
     mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
