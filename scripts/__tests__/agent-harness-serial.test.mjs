@@ -16,11 +16,12 @@ describe('agent_harness_e2e CI isolation', () => {
   });
 
   it('uses the same serial policy in ordinary Rust E2E runs', () => {
-    assert.match(
-      e2e,
-      /\[\s+"\$suite"\s+=\s+"agent_harness_e2e"\s+\][\s\S]{0,480}?--test-threads=1/,
-      'Regular E2E must not race scripted completions and process-global state.'
+    const serialBranch = e2e.match(
+      /if \[ "\$suite" = "mcp_registry_e2e" \] \|\| \[ "\$suite" = "agent_harness_e2e" \]; then([\s\S]*?)\n  fi/
     );
+    assert.ok(serialBranch, 'Agent harness must run in the explicitly serialized branch.');
+    assert.match(serialBranch[1], /filter_serial_libtest_args/);
+    assert.match(serialBranch[1], /--test-threads=1/);
   });
 });
 
