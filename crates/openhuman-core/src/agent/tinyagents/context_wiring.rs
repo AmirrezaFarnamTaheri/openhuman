@@ -247,7 +247,8 @@ pub(crate) struct IdleFold<'a> {
     /// The caller's threshold: the conversation is at least this large.
     pub(crate) min_tokens: u64,
     /// The verbatim tail in tokens; `None` sizes it as a turn would against
-    /// a `min_tokens` trigger.
+    /// a `min_tokens` trigger. Either way the policy caps it at half of
+    /// `min_tokens`, as it caps a turn's tail at half its trigger.
     pub(crate) keep_recent_tokens: Option<u64>,
     /// `[context] compaction_strategy`.
     pub(crate) strategy: crate::config::CompactionStrategy,

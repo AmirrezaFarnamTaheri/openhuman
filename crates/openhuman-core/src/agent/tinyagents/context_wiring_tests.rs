@@ -273,14 +273,17 @@ async fn an_idle_fold_puts_the_summary_after_the_system_prompt() {
     assert_eq!(summarizer_model.requests().len(), 1);
 }
 
-/// A tail that covers the whole conversation leaves nothing to fold.
+/// A conversation of one message leaves nothing older than the tail to fold.
 #[tokio::test]
 async fn an_idle_fold_with_nothing_old_enough_returns_none() {
     use tinyagents_harness::testkit::ScriptedModel;
 
     let summarizer_model = Arc::new(ScriptedModel::replies(vec!["unused"]));
     let folded = compact_history(
-        &idle_history(),
+        &[
+            Message::system("system prompt"),
+            Message::user(format!("only ask: {}", "detail ".repeat(200))),
+        ],
         IdleFold {
             min_tokens: 100,
             keep_recent_tokens: Some(1_000_000),
