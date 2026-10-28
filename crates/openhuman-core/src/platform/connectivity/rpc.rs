@@ -205,6 +205,71 @@ pub async fn pick_listen_port_for_host_with(
     .await
 }
 
+/// Desktop-only: do not fail startup just because the preferred and adjacent
+/// loopback ports are reserved. An OS-assigned port keeps the listener reserved
+/// atomically; the desktop ready signal forwards the actual port to the UI.
+/// Other hosts retain their explicit fixed-range port-selection contract.
+pub async fn pick_desktop_listen_port_for_host(
+    host: &str,
+    preferred: u16,
+) -> Result<PickListenPortResult, PickListenPortError> {
+    let fallbacks: Vec<u16> = (1..=10)
+        .filter_map(|delta| preferred.checked_add(delta))
+        .collect();
+    pick_desktop_listen_port_with_candidates(
+        host,
+        preferred,
+        &fallbacks,
+        RetryPolicy::DEFAULT,
+    )
+    .await
+}
+
+async fn pick_desktop_listen_port_with_candidates(
+    host: &str,
+    preferred: u16,
+    fallbacks: &[u16],
+    retry_policy: RetryPolicy,
+) -> Result<PickListenPortResult, PickListenPortError> {
+    match pick_listen_port_with_policy(
+        host,
+        preferred,
+        fallbacks,
+        retry_policy,
+        OccupiedByCore::Fallback,
+    )
+    .await
+    {
+        Ok(picked) => Ok(picked),
+        Err(PickListenPortError::NoAvailablePort { .. }) => {
+            // Port 0 lets the OS select a free port. Keep the bound listener
+            // instead of probing and reopening, avoiding a time-of-check race.
+            let listener = TcpListener::bind((host, 0)).await.map_err(|err| {
+                PickListenPortError::BindFailed {
+                    port: 0,
+                    reason: format!("desktop ephemeral fallback bind: {err}"),
+                }
+            })?;
+            let port = listener
+                .local_addr()
+                .map_err(|err| PickListenPortError::BindFailed {
+                    port: 0,
+                    reason: format!("desktop ephemeral fallback address: {err}"),
+                })?
+                .port();
+            warn!(
+                "[CORE] preferred port {preferred} and nearby ports unavailable; desktop bound OS-assigned loopback port {port}"
+            );
+            Ok(PickListenPortResult {
+                listener,
+                port,
+                fallback_from: Some(preferred),
+            })
+        }
+        Err(err) => Err(err),
+    }
+}
+
 async fn pick_listen_port_with_policy(
     host: &str,
     preferred: u16,
