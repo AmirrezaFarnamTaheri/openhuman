@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 const coverage = readFileSync(new URL('../ci/rust-coverage.sh', import.meta.url), 'utf8');
@@ -56,6 +56,6 @@ describe('serial libtest passthrough', () => {
   it('wires the filter into the real serial launcher', () => {
     assert.ok(e2e.includes('source "$SCRIPT_DIR/ci/serial-libtest-args.sh"'));
     assert.ok(e2e.includes('filter_serial_libtest_args'));
-    assert.ok(e2e.includes('--test-threads=1 ${SERIAL_LIBTEST_ARGS[@]}'));
+    assert.ok(e2e.includes('--test-threads=1 ${SERIAL_LIBTEST_ARGS[@]+'));
   });
 });
