@@ -503,7 +503,7 @@ describe('useAppUpdate', () => {
     });
 
     it('does not overwrite a staged update with a late successful background check', async () => {
-      let resolveProbe: ((value: typeof update) => void) | undefined;
+      let resolveProbe: ((value: unknown) => void) | undefined;
       mockCheckAppUpdate
         .mockResolvedValueOnce(update)
         .mockImplementationOnce(
