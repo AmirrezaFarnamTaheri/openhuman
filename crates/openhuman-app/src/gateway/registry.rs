@@ -78,7 +78,7 @@ pub async fn current(desktop: &crate::core_process::CoreProcessHandle) -> Active
         let current = active.clone();
         // Keep the status panel consistent with what the renderer now uses,
         // without hiding failures or overwriting an in-flight activation.
-        if is_desktop && matches!(state.status, Some(GatewayStatus::Connected { .. })) {
+        if is_desktop && matches!(state.status.as_ref(), Some(GatewayStatus::Connected { .. })) {
             state.status = Some(GatewayStatus::Connected {
                 endpoint: crate::core_rpc::redact_url_for_log(&current.rpc_url),
             });
