@@ -5,12 +5,11 @@
 //! provider's prefix cache warm across a restart. A turn can still offer a
 //! replacement, which the runtime applies only when it differs from what is
 //! recorded; a thread-bound session then seals the transcript generation it
-//! was on and carries its conversation into the next. Two things offer one:
+//! was on and carries its conversation into the next. Three things offer one:
 //!
 //! - the permanent-tool catalogue (`permanent.rs`), whenever it changes;
 //! - the whole prompt, rendered afresh, when the agent's definition sets
-//!   `refresh_prompt_on_resume`, so prompt edits reach existing threads too.
-//!
+//!   `refresh_prompt_on_resume`, so prompt edits reach existing threads too;
 //! - the memory block (`memory_block.rs`), when a generation starts; it is
 //!   left out of the comparison below like the catalogue, so a memory change
 //!   alone never seals a generation or adds the note.
