@@ -32,6 +32,13 @@ use tokio_util::sync::CancellationToken;
 
 use crate::process_kill::{kill_pid_force, kill_pid_term};
 
+/// Preserve the complete anyhow context chain when an embedded core exits
+/// before binding. The outer context alone (e.g. "opening the configured
+/// storage backend") hides the actionable SQLite/migration/filesystem cause.
+fn format_embedded_core_failure(error: &anyhow::Error) -> String {
+    format!("in-process core server exited before becoming ready: {error:#}")
+}
+
 const CORE_READY_POLL_MS: u64 = 100;
 // 60s ceiling. The embedded core boots in ~11s standalone, but inside the
 // desktop app it contends with CEF process startup (GPU/renderer/utility
@@ -407,9 +414,7 @@ impl CoreProcessHandle {
                                         break;
                                     }
                                 }
-                                Err(format!(
-                                    "in-process core server exited before becoming ready: {err}"
-                                ))
+                                Err(format_embedded_core_failure(&err))
                             }
                             Err(err) => Err(format!(
                                 "in-process core server task failed before ready: {err}"
