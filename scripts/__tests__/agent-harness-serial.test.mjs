@@ -9,7 +9,7 @@ describe('agent_harness_e2e CI isolation', () => {
   it('runs the harness coverage target with one libtest thread rather than alongside unrelated fixtures', () => {
     assert.match(
       coverage,
-      /elif\s+\[\s+"\$\{target\}"\s+=\s+"agent_harness_e2e"\s+\][\s\S]{0,400}?--test-threads=1/,
+      /elif\s+\[\s+"\$\{target\}"\s+=\s+"agent_harness_e2e"\s+\](?:(?!\n\s*elif\b)[\s\S])*?--test-threads=1/,
       'Coverage must explicitly serialize process-global harness fixtures.'
     );
   });
