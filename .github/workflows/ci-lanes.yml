@@ -328,6 +328,18 @@ jobs:
       - name: Check out submodules
         run: bash scripts/ci/checkout-submodules.sh
 
+      - name: Preflight pinned Rust toolchain before parallel lanes
+        # Rust 1.99.1 may be absent in cold containers. Installing components
+        # concurrently from separate lane workers corrupts shared RUSTUP_HOME.
+        # Prime cargo, rustfmt and clippy in a single sequential action.
+        if: matrix.container != '' && matrix.group != 'pester'
+        run: |
+          set -euo pipefail
+          cargo --version
+          rustc --version
+          cargo fmt --version
+          cargo clippy --version
+
       - name: Cache Rust build artifacts
         if: matrix.group == 'rust-lint' || startsWith(matrix.group, 'rust-cov-') || matrix.group == 'tauri' || matrix.group == 'storage'
         uses: Swatinem/rust-cache@v2
