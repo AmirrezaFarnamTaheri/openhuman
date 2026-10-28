@@ -661,43 +661,13 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
         crate::security::egress::EgressDescriptor::inference(&slug, &effective_model, true),
     );
 
-    // Authenticated provider requests may carry nonstandard secret headers such
-    // as Anthropic's x-api-key. They must not follow redirects to another host.
-    // Keep the existing platform trust roots, user proxy and optional CA.
-    let service_key = if anthropic_native {
-        "provider.anthropic"
-    } else {
-        "provider.compatible"
-    };
-    let http = if matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic) {
-        match crate::util::tls::credentialed_client_builder(
-            service_key,
-            config
-                .cloud_provider_ca_certs
-                .get(&slug)
-                .map(String::as_str)
-                .filter(|pem| !pem.is_empty()),
-        )
-        .and_then(|builder| {
-            builder.build().map_err(|_| {
-                "Could not build secure provider inference HTTP client".to_string()
-            })
-        }) {
-            Ok(client) => Some(client),
-            Err(error) => return Some(Err(anyhow::anyhow!(error))),
-        }
-    } else {
-        match config
-            .cloud_provider_ca_certs
-            .get(&slug)
-            .filter(|pem| !pem.is_empty())
-        {
-            Some(pem) => match crate::util::tls::client_with_ca_bundle(pem, service_key) {
-                Ok(http) => Some(http),
-                Err(error) => return Some(Err(anyhow::anyhow!(error))),
-            },
-            None => None,
-        }
+    let http = match super::cloud_http::build_cloud_http_client(
+        entry.auth_style,
+        anthropic_native,
+        config.cloud_provider_ca_certs.get(&slug).map(String::as_str),
+    ) {
+        Ok(client) => client,
+        Err(error) => return Some(Err(anyhow::anyhow!(error))),
     };
     let auth_style = cloud_spec::registry_auth_style(entry.auth_style)
         .expect("managed JWT entries returned above");
