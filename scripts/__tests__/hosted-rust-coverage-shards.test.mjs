@@ -76,6 +76,16 @@ test("facade shard serializes singleton embed tests without skipping coverage", 
   assert.match(coverage, /suite "openhuman-tinyhumans" llvm_cov_product_facade/);
 });
 
+test("integration shard runs agent harness E2E serially without dropping test targets", () => {
+  const coverage = fs.readFileSync(path.join(root, "scripts/ci/rust-coverage.sh"), "utf8");
+  const start = coverage.indexOf('elif [ "${target}" = "mcp_registry_multi_server" ]');
+  assert.ok(start >= 0, "the integration test selector must remain present");
+  const selector = coverage.slice(start, start + 720);
+  assert.match(selector, /agent_harness_e2e/);
+  assert.match(selector, /--test "${target}" -- --test-threads=1/);
+  assert.match(coverage, /run_integration_target "${target}"/);
+});
+
 test("all three Rust shards retain the original suite and one aggregate presence gate", () => {
   const coverage = fs.readFileSync(path.join(root, "scripts/ci/rust-coverage.sh"), "utf8");
   assert.match(coverage, /OH_COV_SHARD:-full/);
