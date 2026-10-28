@@ -82,8 +82,8 @@ test("integration shard runs agent harness E2E serially without dropping test ta
   assert.ok(start >= 0, "the integration test selector must remain present");
   const selector = coverage.slice(start, start + 720);
   assert.match(selector, /agent_harness_e2e/);
-  assert.match(selector, /--test "${target}" -- --test-threads=1/);
-  assert.match(coverage, /run_integration_target "${target}"/);
+  assert.ok(selector.includes('--test "${target}" -- --test-threads=1'));
+  assert.ok(coverage.includes('run_integration_target "${target}"'));
 });
 
 test("all three Rust shards retain the original suite and one aggregate presence gate", () => {
