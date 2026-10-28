@@ -202,6 +202,12 @@ function isPortBindingFailure(error: string): boolean {
   );
 }
 
+/** A rebound proves a different PID now owns the port; never invoke the
+ * legacy broad process reaper in this case. Preserve the diagnostic for the UI. */
+function isPortReboundFailure(error: string): boolean {
+  return /\bport\s+\d+\s+rebounded\s+to\s+pid\b/i.test(error);
+}
+
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
@@ -256,7 +262,7 @@ export async function runBootCheck(
     }
 
     // If start failed, attempt port-conflict auto-recovery before giving up.
-    if (startError !== null && transport.recoverPortConflict) {
+    if (startError !== null && transport.recoverPortConflict && !isPortReboundFailure(startError)) {
       log('[boot-check] start_core_process failed — attempting port-conflict auto-recovery');
       try {
         const recovery = await transport.recoverPortConflict();
