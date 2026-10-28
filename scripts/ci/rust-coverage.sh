@@ -245,9 +245,10 @@ run_integration_target() {
       suite "${target}::${module}" llvm_cov --no-report --no-fail-fast -p openhuman-cli \
         --test "${target}" -- "${module}::"
     done < <(in_process_modules)
-  elif [ "${target}" = "mcp_registry_multi_server" ]; then
-    # Its cases share TinyMCP's process-wide module client; keep them serial,
-    # as scripts/test-rust-with-mock.sh does.
+  elif [ "${target}" = "mcp_registry_multi_server" ] || [ "${target}" = "agent_harness_e2e" ]; then
+    # TinyMCP registry and agent harness suites share process-global runtime
+    # and module state within each integration-test binary. Run all tests
+    # serially without filtering any cases or relaxing coverage requirements.
     suite "${target}" llvm_cov --no-report --no-fail-fast -p openhuman-cli \
       --test "${target}" -- --test-threads=1
   elif [[ "${target}" =~ ^json_rpc_.*_e2e$ ]]; then
