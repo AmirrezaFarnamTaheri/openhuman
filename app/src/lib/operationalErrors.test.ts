@@ -56,6 +56,21 @@ describe('explainOperationalError', () => {
     expect(diagnosed.summary + diagnosed.technicalDetails).not.toContain('token123');
   });
 
+  it('does not expose structured credentials or URL userinfo in operational errors', () => {
+    const response = explainOperationalError(
+      new Error(
+        'Remote error: {"api_key":"sk-secret-123","password":"pw-123",' +
+          '"Authorization":"Bearer token-xyz","refreshToken":"refresh-123"}; ' +
+          'https://user:pw-789@service.example/api?token=tkn-123'
+      )
+    );
+    const displayed = response.summary + response.technicalDetails;
+    for (const secret of ['sk-secret-123', 'pw-123', 'token-xyz', 'refresh-123', 'pw-789', 'tkn-123']) {
+      expect(displayed).not.toContain(secret);
+    }
+    expect(displayed).toContain('[redacted]');
+  });
+
   it('does not infer a port conflict from an unrelated SQLite failure', () => {
     expect(
       explainOperationalError(new Error('opening the configured storage backend')).kind
