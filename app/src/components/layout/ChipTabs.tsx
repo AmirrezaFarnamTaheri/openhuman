@@ -157,7 +157,18 @@ export default function ChipTabs<T extends string>({
         onChange(v as T);
       }}
       className="contents">
-      <TabsList className={className} aria-label={ariaLabel} data-testid={testId}>
+      <TabsList
+        className={className}
+        aria-label={ariaLabel}
+        data-testid={testId}
+        onBlurCapture={() => {
+          lastRadixSelection.current = null;
+        }}
+        onKeyUpCapture={() => {
+          // Keep deduplication within one keyboard interaction. A controlled
+          // parent may reject a selection; the next arrow press must retry it.
+          lastRadixSelection.current = null;
+        }}>
         {items.map(item => {
           const chipTestId =
             item.testId ?? (testIdPrefix ? `${testIdPrefix}-${item.id}` : undefined);
