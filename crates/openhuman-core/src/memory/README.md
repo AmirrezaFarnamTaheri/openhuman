@@ -166,6 +166,19 @@ preserving queued logs; engine/credential invalidation also clears pending
 refreshes. Scoped spawns retain the caller's core context; the key carries the
 resolved identity, so queued work needs nothing ambient.
 
+A host can ask for recall of the **current** message instead
+(`[memory] recall_each_turn_ms`, set by embed's `MemoryBinding::recall_each_turn`).
+`pre_turn` then queues the same work, and waits at most that long for its
+pack while the rest of turn setup runs (the session host joins the two). In
+time, the pack reaches `MemoryPackMiddleware` like any other and its
+citations are recorded; late, missing or skipped, the turn gets no note
+(`[memory:recall] deadline` at debug for a timeout, warn for work that ended
+without an answer) and the work still finishes into the cache.
+`RecallEachTurn::excluding` is the seam for de-duplicating against memory a
+host already puts in the system prompt: a pack whose every cited hit it
+excludes is left out (TinyMemory renders the pack, so single lines cannot be
+dropped yet).
+
 The live prelude and compaction summarizer call the underlying work directly
 from the scoped prefetch workers. Their background deadlines bound engine I/O
 without a second manual timeout wrapper.
@@ -334,8 +347,8 @@ trusted call facts; queued writes retain that call's narrower reach.
   `scope::identity_pins` (`scope.rs`): derive and resolve the acting identity
   a turn's run context carries.
 - `lifecycle::prefetch::pre_turn` and `compaction`
-  (`lifecycle/prefetch.rs`): synchronous reads of completed packs plus scoped
-  background refresh. `lifecycle::hooks` contains the underlying operations;
+  (`lifecycle/prefetch.rs`): reads of completed packs plus scoped background
+  refresh, or a deadline-bounded wait for the current message's pack. `lifecycle::hooks` contains the underlying operations;
   `post_turn` is spawned after durable commit.
 - `lifecycle::jobs::enqueue` and `run_due` (`lifecycle/jobs.rs`): the
   background queue.

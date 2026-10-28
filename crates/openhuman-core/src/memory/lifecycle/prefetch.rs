@@ -1,5 +1,8 @@
-//! Best-effort, scoped automatic memory refresh. Turns only read completed
-//! packs; all engine work and date extraction run in bounded background workers.
+//! Best-effort, scoped automatic memory refresh. By default turns only read
+//! completed packs; a host that sets `[memory] recall_each_turn_ms` has each
+//! turn wait up to that long for the pack recalled for its own message
+//! ([`RecallEachTurn`]). All engine work and date extraction run in bounded
+//! background workers either way.
 //! Packs live in memory for one minute and are never persisted by this adapter.
 
 use std::hash::{Hash, Hasher};
