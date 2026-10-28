@@ -186,10 +186,7 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                     },
                 )
                 .await
-                .unwrap_or_else(|error| {
-                    eprintln!("skipped compaction failed: {error:?}");
-                    panic!("a skipped compaction succeeds")
-                });
+                .expect("a skipped compaction succeeds");
             let CompactOutcome::Skipped { tokens } = skipped else {
                 panic!("expected Skipped, got {skipped:?}");
             };
@@ -259,12 +256,18 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
             );
             let before_messages = messages(&before);
             let after_messages = messages(&after);
-            for message in &after_messages {
-                eprintln!("DUMP {} {:.120}", message["role"], text(message));
-            }
-            assert_eq!(after_messages[0]["role"], "system");
+            let system_prompt = |messages: &[serde_json::Value]| -> Vec<serde_json::Value> {
+                messages
+                    .iter()
+                    .take_while(|message| message["role"] == "system")
+                    .cloned()
+                    .collect()
+            };
+            let prompt = system_prompt(&after_messages);
+            assert!(!prompt.is_empty(), "the request opens with the system prompt");
             assert_eq!(
-                after_messages[0], before_messages[0],
+                prompt,
+                system_prompt(&before_messages),
                 "the system prompt is byte-identical"
             );
             assert_eq!(
@@ -272,11 +275,9 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                 before.body.get("tools"),
                 "the tool declarations are byte-identical"
             );
-            assert_eq!(
-                after_messages[1]["role"], "user",
-                "the summary is user-role"
-            );
-            assert!(text(&after_messages[1]).contains("SUMMARY-MARKER"));
+            let summary = &after_messages[prompt.len()];
+            assert_eq!(summary["role"], "user", "the summary follows the system prompt");
+            assert!(text(summary).contains("SUMMARY-MARKER"));
             assert!(
                 after.body.to_string().len() < before.body.to_string().len(),
                 "the compacted request is smaller"
