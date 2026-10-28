@@ -15,6 +15,10 @@ pub(crate) mod access_gates;
 mod chat_model;
 mod cloud_slug;
 mod cloud_spec;
+// The adapter is compiled and unit-tested before wiring any live BYOK route.
+// No credential group is enabled in production until explicit factory support.
+#[allow(dead_code)]
+mod credential_fleet;
 mod credentials;
 mod inspection;
 // Wave-1 scheduler foundation: remain isolated until the model-factory integration
