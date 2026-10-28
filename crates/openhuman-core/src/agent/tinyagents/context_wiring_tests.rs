@@ -106,7 +106,10 @@ async fn a_compaction_records_the_summarizer_model_it_called() {
 
     let mut history = vec![Message::system("system")];
     for round in 0..6 {
-        history.push(Message::user(format!("ask {round}: {}", "detail ".repeat(60))));
+        history.push(Message::user(format!(
+            "ask {round}: {}",
+            "detail ".repeat(60)
+        )));
         history.push(Message::assistant(format!(
             "answer {round}: {}",
             "result ".repeat(60)
@@ -114,7 +117,11 @@ async fn a_compaction_records_the_summarizer_model_it_called() {
     }
     history.push(Message::user("continue"));
     harness
-        .invoke_in_context(&(), RunContext::new(RunConfig::new("compaction"), ()), history)
+        .invoke_in_context(
+            &(),
+            RunContext::new(RunConfig::new("compaction"), ()),
+            history,
+        )
         .await
         .expect("the turn runs");
 

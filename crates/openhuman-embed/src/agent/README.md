@@ -31,7 +31,7 @@ with the same id cannot both pass the duplicate check), then calls
  5. provider model         route stays per turn, never written to config
  6. MCP servers            appended to mcp_client.servers   (mcp feature)
  7. Composio credential    pinned for this agent only
- 8. memory binding         memory.agent_id and memory.root
+ 8. memory binding         memory.agent_id, memory.root, memory.recall_each_turn_ms
  9. config escape hatch    then config_path is reset to the runtime's
 10. create dirs            action_dir, agents/<id>/, agents/<id>/skills/
 11. copy skills            (skills feature)
@@ -90,7 +90,10 @@ directories; transcripts and memory persist with the workspace.
   `sandbox` (`None`, `ReadOnly`, `Sandboxed`), `max_iterations`,
   `temperature`, `display_name` and `when_to_use`.
 - `MemoryBinding` (`spec.rs`): the memory agent id the turns are logged
-  under, and optionally a layout root such as `team:acme`.
+  under, optionally a layout root such as `team:acme`, and optionally
+  `recall_each_turn(timeout)`: recall for the current message on every turn,
+  waited on for at most `timeout` before the first model call (late recall
+  leaves the turn without a memory note).
 - `AgentLayout` ([`layout.rs`](layout.rs)): `home` is `<workspace>/agents/<id>/`, `skills`
   is `<workspace>/agents/<id>/skills/`, `transcripts` is
   `<workspace>/session_raw/`, and `action_dir` is the resolved acting root.
