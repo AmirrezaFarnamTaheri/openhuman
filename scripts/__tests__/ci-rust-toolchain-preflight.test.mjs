@@ -15,7 +15,9 @@ test("hosted CI installs its pinned Rust components before parallel lanes", () =
   const checkout = workflow.indexOf("      - name: Check out submodules");
   const start = workflow.indexOf("      - name: Start lanes", preflight);
   assert.ok(checkout >= 0 && checkout < preflight && preflight < start);
-  const step = workflow.slice(preflight, start);
+  const nextStep = workflow.indexOf("      - name:", preflight + marker.length);
+  assert.ok(nextStep > preflight, "preflight has a separate fail-closed action");
+  const step = workflow.slice(preflight, nextStep);
   assert.match(step, /if: matrix\.container != ''/);
   assert.match(step, /cargo --version/);
   assert.match(step, /rustc --version/);
