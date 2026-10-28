@@ -40,9 +40,17 @@ function errorText(error: unknown): string {
 /** Basic defence in depth for free-form error strings crossing an IPC boundary. */
 function redactSecrets(text: string): string {
   return text
-    .replace(/(\bauthorization\s*:\s*bearer\s+)[^\s,;]+/gi, '$1[redacted]')
+    // Basic-auth URLs embed a username and password before the host.
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1[redacted]@')
+    // Backend errors sometimes stringify a JSON credential-bearing response.
     .replace(
-      /((?:[?&]|\b)(?:api[_-]?key|access_token|refresh_token|token|password|secret)\s*[:=]\s*)[^\s,;&]+/gi,
+      /(["'])(api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|authorization|password|passwd|token|secret)\1(\s*:\s*)(["'])(.*?)\4/gi,
+      (_whole, quote: string, name: string, separator: string, valueQuote: string) =>
+        `${quote}${name}${quote}${separator}${valueQuote}[redacted]${valueQuote}`
+    )
+    .replace(/(\bauthorization\s*:\s*(?:bearer|basic)\s+)[^\s,;]+/gi, '$1[redacted]')
+    .replace(
+      /((?:[?&]|\b)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|password|passwd|token|secret)\s*[:=]\s*)[^\s,;&]+/gi,
       '$1[redacted]'
     );
 }
