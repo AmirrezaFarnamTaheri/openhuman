@@ -5,6 +5,7 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 vi.mock('../../services/coreRpcClient', () => ({
   callCoreRpc: vi.fn(),
   clearCoreRpcTokenCache: vi.fn(),
+  clearCoreRpcUrlCache: vi.fn(),
 }));
 
 describe('tauriCommands/core', () => {
@@ -13,6 +14,7 @@ describe('tauriCommands/core', () => {
   let restartApp: typeof import('./core').restartApp;
   let restartCoreProcess: typeof import('./core').restartCoreProcess;
   let mockClearCoreRpcTokenCache: Mock;
+  let mockClearCoreRpcUrlCache: Mock;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -22,6 +24,8 @@ describe('tauriCommands/core', () => {
     restartCoreProcess = actual.restartCoreProcess;
     const { clearCoreRpcTokenCache } = await import('../../services/coreRpcClient');
     mockClearCoreRpcTokenCache = clearCoreRpcTokenCache as Mock;
+    const { clearCoreRpcUrlCache } = await import('../../services/coreRpcClient');
+    mockClearCoreRpcUrlCache = clearCoreRpcUrlCache as Mock;
   });
 
   describe('restartApp', () => {
@@ -108,6 +112,7 @@ describe('tauriCommands/core', () => {
       // genuine "core never rotated" cases when the helper is called
       // outside Tauri (e.g. test harness).
       expect(mockClearCoreRpcTokenCache).not.toHaveBeenCalled();
+      expect(mockClearCoreRpcUrlCache).not.toHaveBeenCalled();
       expect(debug).toHaveBeenCalledWith(
         expect.stringContaining('restartCoreProcess: skipped — not running in Tauri')
       );
@@ -135,11 +140,16 @@ describe('tauriCommands/core', () => {
       await Promise.resolve();
       expect(mockInvoke).toHaveBeenCalledWith('restart_core_process');
       expect(mockClearCoreRpcTokenCache).not.toHaveBeenCalled();
+      expect(mockClearCoreRpcUrlCache).not.toHaveBeenCalled();
 
       resolveInvoke();
       await pending;
 
+      expect(mockClearCoreRpcUrlCache).toHaveBeenCalledTimes(1);
       expect(mockClearCoreRpcTokenCache).toHaveBeenCalledTimes(1);
+      expect(mockClearCoreRpcUrlCache.mock.invocationCallOrder[0]).toBeLessThan(
+        mockClearCoreRpcTokenCache.mock.invocationCallOrder[0]
+      );
     });
   });
 
