@@ -79,7 +79,10 @@ fn memory_block_reaches_the_core_definition_and_comes_from_a_template() {
         .into_core("inherits")
         .unwrap();
     assert_eq!(
-        inherited.extensions.memory_block.map(|block| block.max_tokens),
+        inherited
+            .extensions
+            .memory_block
+            .map(|block| block.max_tokens),
         Some(300)
     );
     let own = AgentDefinitionSpec::new()

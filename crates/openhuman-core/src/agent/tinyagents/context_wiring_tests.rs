@@ -222,8 +222,14 @@ async fn a_markers_compaction_sends_no_tool_output_and_caps_the_summary() {
 fn idle_history() -> Vec<Message> {
     let mut history = vec![Message::system("system prompt")];
     for round in 0..8 {
-        history.push(Message::user(format!("ask {round}: {}", "detail ".repeat(60))));
-        history.push(Message::assistant(format!("answer {round}: {}", "result ".repeat(60))));
+        history.push(Message::user(format!(
+            "ask {round}: {}",
+            "detail ".repeat(60)
+        )));
+        history.push(Message::assistant(format!(
+            "answer {round}: {}",
+            "result ".repeat(60)
+        )));
     }
     history
 }
@@ -258,7 +264,11 @@ async fn an_idle_fold_puts_the_summary_after_the_system_prompt() {
     assert_eq!(compacted[0], history[0], "the system prompt is kept as is");
     assert!(matches!(compacted[1], Message::User(_)));
     assert!(compacted[1].text().contains("IDLE-SUMMARY"));
-    assert_eq!(compacted.last(), history.last(), "the tail is kept verbatim");
+    assert_eq!(
+        compacted.last(),
+        history.last(),
+        "the tail is kept verbatim"
+    );
     assert!(compacted.len() < history.len());
     assert_eq!(summarizer_model.requests().len(), 1);
 }
