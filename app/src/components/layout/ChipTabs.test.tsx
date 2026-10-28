@@ -177,6 +177,18 @@ describe('ChipTabs', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith('two');
   });
 
+  it('can retry a rejected keyboard selection in a later interaction', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<ChipTabs items={items} value="one" onChange={onChange} testIdPrefix="t" />);
+    screen.getByTestId('t-one').focus();
+    await user.keyboard('{ArrowRight}');
+    expect(onChange).toHaveBeenCalledWith('two');
+    await user.keyboard('{ArrowLeft}');
+    await user.keyboard('{ArrowRight}');
+    expect(onChange.mock.calls.filter(([selection]) => selection === 'two')).toHaveLength(2);
+  });
+
   it('does not suppress a selection after an external controlled value change', async () => {
     const onChange = vi.fn();
     const { rerender } = render(<ChipTabs items={items} value="one" onChange={onChange} />);
