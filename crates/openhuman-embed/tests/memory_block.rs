@@ -45,7 +45,7 @@ struct FailableEngine {
 impl FailableEngine {
     fn read_gate(&self) -> memory_api::Result<()> {
         if self.fail_reads.load(Ordering::SeqCst) {
-            return Err(memory_api::Error::Backend("the engine is down".into()));
+            return Err(memory_api::Error::Unavailable("the engine is down".into()));
         }
         Ok(())
     }
