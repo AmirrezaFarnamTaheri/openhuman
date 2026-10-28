@@ -13,6 +13,8 @@
  */
 import debug from 'debug';
 
+import { explainOperationalError } from '../operationalErrors';
+
 import { clearCoreRpcUrlCache } from '../../services/coreRpcClient';
 import type { CoreMode } from '../../store/coreModeSlice';
 import { APP_VERSION } from '../../utils/config';
@@ -247,9 +249,13 @@ export async function runBootCheck(
       if (!isPortBindingFailure(startError)) {
         // Do not run a destructive port-recovery procedure for a storage
         // migration failure, invalid configuration or any other boot error.
+        const diagnosis = explainOperationalError(startError);
         return {
           kind: 'unreachable',
-          reason: `Failed to start local core: ${startError}`,
+          reason:
+            diagnosis.kind === 'unclassified'
+              ? `Failed to start local core: ${diagnosis.summary}`
+              : `${diagnosis.summary} ${diagnosis.nextStep}`,
           portConflict: false,
         };
       }
