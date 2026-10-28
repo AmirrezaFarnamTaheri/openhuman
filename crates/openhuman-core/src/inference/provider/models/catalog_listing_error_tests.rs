@@ -117,12 +117,9 @@ async fn openrouter_key_is_trimmed_for_validation_and_catalog_probe() {
 async fn multi_key_catalog_uses_one_bearer_and_never_forwards_the_group() {
     let tmp = tempfile::tempdir().expect("catalog workspace");
     let (endpoint, state) = spawn_openrouter_probe_server(StatusCode::OK).await;
-    let config = configure_openrouter_workspace(
-        &tmp,
-        endpoint,
-        "catalog-key-first;catalog-key-second",
-    )
-    .await;
+    let config =
+        configure_openrouter_workspace(&tmp, endpoint, "catalog-key-first;catalog-key-second")
+            .await;
 
     let outcome = catalog_listing::list_configured_models_from_config("openrouter", &config)
         .await
