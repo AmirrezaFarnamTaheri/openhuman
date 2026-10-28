@@ -77,7 +77,6 @@ describe('ServiceBlockingGate', () => {
       'z-10002'
     );
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toHaveClass('z-10001');
-
   });
 
   it('opens latest release page from recovery prompt', async () => {
