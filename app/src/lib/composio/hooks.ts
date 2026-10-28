@@ -145,7 +145,9 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
   // Do not repeatedly poll Composio with a rejected API key. Resume only
   // after the provider identity or credentials change.
   const authRejectedPollRef = useRef(false);
-  // Polls may overlap: only the newest response for this client can update state.
+  // Serialize polls: the fetch timeout can exceed the polling interval.
+  // Otherwise every 5s tick can invalidate a successful 6-8s response.
+  const pollInFlightRef = useRef(false);
   const pollRequestIdRef = useRef(0);
 
   useEffect(() => {
@@ -226,6 +228,9 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
       }
 
       if ('value' in connectionsResult) {
+        // A successful user-invoked refresh confirms recovery after a previous
+        // provider-auth rejection. Resume periodic updates without remounting.
+        authRejectedPollRef.current = false;
         const freshConnections = connectionsResult.value.connections ?? [];
         setConnections(freshConnections);
         // Persist the latest activation snapshot for instant cold-start paint.
@@ -253,7 +258,8 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
     void refresh();
     if (pollIntervalMs <= 0 || fetchEnabled !== true) return;
     const id = window.setInterval(() => {
-      if (authRejectedPollRef.current) return;
+      if (authRejectedPollRef.current || pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
       const generation = configGenerationRef.current;
       const pollRequestId = ++pollRequestIdRef.current;
       void listConnections({ timeoutMs: COMPOSIO_FETCH_TIMEOUT_MS })
@@ -286,6 +292,9 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
             authRejectedPollRef.current = true;
           }
           console.warn('[composio] polling connections failed:', message);
+        })
+        .finally(() => {
+          pollInFlightRef.current = false;
         });
     }, pollIntervalMs);
     return () => window.clearInterval(id);
