@@ -111,6 +111,19 @@ describe('groupThreads', () => {
     expect(windows?.threads.map(row => row.id)).toEqual(['windows-a', 'windows-b']);
   });
 
+  it('preserves literal backslashes in Unix directory identities and labels', () => {
+    const groups = groupThreads(
+      [
+        { ...thread('plain', NOW), actionDir: '/work/repo' },
+        { ...thread('backslash', NOW), actionDir: '/work/repo\\\\' },
+      ],
+      NOW
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups.map(group => group.key)).toEqual(['project:/work/repo', 'project:/work/repo\\\\']);
+    expect(groups.map(group => group.label)).toEqual(['repo', 'repo\\\\']);
+  });
+
   it('retains pinned-first semantics and keeps blank project paths in recency', () => {
     const groups = groupThreads(
       [
