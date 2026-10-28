@@ -152,6 +152,21 @@ describe('NoticeCenter', () => {
     expect(previous).toHaveFocus();
   });
 
+  it('does not steal focus after a focused notice disappears but another remains', async () => {
+    const { store } = renderCenter([keyError, modelWarning]);
+    await userEvent.click(screen.getByTestId('notice-trigger'));
+    const dismiss = screen.getAllByTestId('notice-dismiss')[0];
+    dismiss.focus();
+    act(() => store.dispatch(dismissUserError({ id: keyError.id })));
+
+    const outside = screen.getByRole('button', { name: 'Resume work' });
+    outside.focus();
+    act(() => store.dispatch(dismissUserError({ id: modelWarning.id })));
+
+    expect(screen.queryByTestId('notice-center')).not.toBeInTheDocument();
+    expect(outside).toHaveFocus();
+  });
+
   it('raises the usage limit as a notice that cannot be dismissed at the limit', async () => {
     usageState.teamUsage = { plan: 'free' };
     usageState.isAtLimit = true;
