@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { describe, it } from 'node:test';
 
 const coverage = readFileSync(new URL('../ci/rust-coverage.sh', import.meta.url), 'utf8');
@@ -20,5 +21,41 @@ describe('agent_harness_e2e CI isolation', () => {
       /\[\s+"\$suite"\s+=\s+"agent_harness_e2e"\s+\][\s\S]{0,480}?--test-threads=1/,
       'Regular E2E must not race scripted completions and process-global state.'
     );
+  });
+});
+
+const serialArgsHelper = new URL('../ci/serial-libtest-args.sh', import.meta.url);
+
+function filterSerialArgs(...args) {
+  const script = [
+    'set -euo pipefail',
+    'source "$1"',
+    'shift',
+    'EXTRA_ARGS=("$@")',
+    'filter_serial_libtest_args',
+    'printf "%s\\0" "${SERIAL_LIBTEST_ARGS[@]}"',
+  ].join('; ');
+  return spawnSync('bash', ['-c', script, 'bash', serialArgsHelper.pathname, ...args], {
+    encoding: 'utf8',
+  });
+}
+
+describe('serial libtest passthrough', () => {
+  it('removes both --test-threads syntaxes and preserves unrelated arguments', () => {
+    const result = filterSerialArgs('--nocapture', '--test-threads=8', '--exact', '--test-threads', '4', 'test_filter');
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(result.stdout.split('\\0').filter(Boolean), ['--nocapture', '--exact', 'test_filter']);
+  });
+
+  it('rejects a dangling --test-threads instead of swallowing a bad command line', () => {
+    const result = filterSerialArgs('--exact', '--test-threads');
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /requires a value/i);
+  });
+
+  it('wires the filter into the real serial launcher', () => {
+    assert.match(e2e, /source "\\$SCRIPT_DIR\\/ci\\/serial-libtest-args\\.sh"/);
+    assert.match(e2e, /filter_serial_libtest_args/);
+    assert.match(e2e, /--test-threads=1 \\${SERIAL_LIBTEST_ARGS\\[@\\]/);
   });
 });
