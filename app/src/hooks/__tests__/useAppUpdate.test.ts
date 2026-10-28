@@ -460,6 +460,63 @@ describe('useAppUpdate', () => {
   });
 
   describe('auto-check cadence', () => {
+    it('keeps failed background update probes quiet and never claims the app is current', async () => {
+      mockCheckAppUpdate.mockRejectedValueOnce(new Error('Release manifest unavailable'));
+
+      const { result } = renderHook(() =>
+        useAppUpdate({ initialCheckDelayMs: 100, recheckIntervalMs: 0, autoDownload: false })
+      );
+      await flush();
+
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1);
+      expect(result.current.phase).toBe('idle');
+      expect(result.current.info).toBeNull();
+      expect(result.current.error).toBeNull();
+    });
+
+    it('recovers from a silent failed background check on a later successful probe', async () => {
+      mockCheckAppUpdate
+        .mockRejectedValueOnce(new Error('Temporary release endpoint error'))
+        .mockResolvedValueOnce({
+          current_version: '0.50.0',
+          available: true,
+          available_version: '0.51.0',
+          body: null,
+        });
+
+      const { result } = renderHook(() =>
+        useAppUpdate({ initialCheckDelayMs: 100, recheckIntervalMs: 500, autoDownload: false })
+      );
+      await flush();
+
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(result.current.phase).toBe('idle');
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(result.current.phase).toBe('available');
+      expect(result.current.info?.available_version).toBe('0.51.0');
+    });
+
     it('runs an initial check after the configured delay', async () => {
       mockCheckAppUpdate.mockResolvedValue({
         current_version: '0.50.0',
