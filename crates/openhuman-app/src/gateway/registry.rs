@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::ops::{self, Provisioned};
-use super::types::{ActiveGateway, Gateway, GatewayStatus, DESKTOP_ID};
+use super::types::{ActiveGateway, Gateway, GatewaySpec, GatewayStatus, DESKTOP_ID};
 
 /// The active gateway and whatever is keeping it alive.
 #[derive(Default)]
@@ -20,6 +20,10 @@ struct State {
     /// Where RPC currently goes. `None` before the first activation, which the
     /// desktop fallback in [`current`] covers.
     active: Option<ActiveGateway>,
+    /// The selected gateway's transport kind. IDs alone are insufficient:
+    /// users can save a Desktop gateway under a custom ID. Only desktop
+    /// endpoints track the embedded core's port across restarts.
+    active_is_desktop: bool,
     /// Held open for as long as this gateway is selected.
     provisioned: Option<Provisioned>,
     /// What to show while activation is in flight, and after it fails.
@@ -44,6 +48,22 @@ static STATE: std::sync::LazyLock<Arc<Mutex<State>>> =
 static ACTIVATION_LOCK: std::sync::LazyLock<Mutex<()>> =
     std::sync::LazyLock::new(|| Mutex::new(()));
 
+/// Refresh an activated desktop gateway from the live embedded-core handle.
+///
+/// A restart may choose an OS-assigned port, and retaining the endpoint from
+/// activation would route every subsequent RPC request to a dead listener.
+/// Remote and provisioned gateways must keep their own bearer and URL.
+pub(super) fn refresh_desktop_endpoint(
+    active: &mut ActiveGateway,
+    active_is_desktop: bool,
+    desktop: &crate::core_process::CoreProcessHandle,
+) {
+    if active_is_desktop {
+        active.rpc_url = desktop.rpc_url();
+        active.token = Some(desktop.rpc_token().to_owned());
+    }
+}
+
 /// Where RPC should currently go.
 ///
 /// Falls back to the in-process core when nothing has been activated — which is
@@ -51,8 +71,19 @@ static ACTIVATION_LOCK: std::sync::LazyLock<Mutex<()>> =
 /// always a working answer, because the core in this process is always
 /// reachable.
 pub async fn current(desktop: &crate::core_process::CoreProcessHandle) -> ActiveGateway {
-    if let Some(active) = STATE.lock().await.active.clone() {
-        return active;
+    let mut state = STATE.lock().await;
+    let is_desktop = state.active_is_desktop;
+    if let Some(active) = state.active.as_mut() {
+        refresh_desktop_endpoint(active, is_desktop, desktop);
+        let current = active.clone();
+        // Keep the status panel consistent with what the renderer now uses,
+        // without hiding failures or overwriting an in-flight activation.
+        if is_desktop && matches!(state.status, Some(GatewayStatus::Connected { .. })) {
+            state.status = Some(GatewayStatus::Connected {
+                endpoint: crate::core_rpc::redact_url_for_log(&current.rpc_url),
+            });
+        }
+        return current;
     }
     ActiveGateway {
         id: DESKTOP_ID.to_owned(),
@@ -184,6 +215,7 @@ pub async fn activate(
     let previous = {
         let mut state = STATE.lock().await;
         let previous = state.provisioned.take();
+        state.active_is_desktop = matches!(&gateway.spec, GatewaySpec::Desktop);
         state.active = Some(active.clone());
         state.provisioned = provisioned;
         state.status = Some(GatewayStatus::Connected {
