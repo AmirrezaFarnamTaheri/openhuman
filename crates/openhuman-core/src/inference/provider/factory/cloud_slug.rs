@@ -292,6 +292,23 @@ pub(super) fn resolve_cloud_slug_with_access<'a>(
         ),
     };
 
+    // Runtime callers can retain a stored bearer even when the UI's auth
+    // inventory is temporarily unavailable. Enforce the egress boundary at
+    // the native credential resolution point, independently of React/RPC.
+    // Codex OAuth may use a different resolved endpoint than the saved URL.
+    let credential_endpoint = if entry.auth_style == AuthStyle::Bearer {
+        codex.endpoint.as_str()
+    } else {
+        entry.endpoint.as_str()
+    };
+    if !key.trim().is_empty()
+        && matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
+        && !credential_endpoint.trim().is_empty()
+        && !crate::security::transport::is_safe_endpoint_for_bearer(credential_endpoint)
+    {
+        anyhow::bail!("Credentialed cloud providers require HTTPS or loopback HTTP");
+    }
+
     Ok(CloudSlugResolution {
         entry,
         effective_model,
