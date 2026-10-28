@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useT } from '../lib/i18n/I18nContext';
+import { redactDiagnosticText } from '../lib/operationalErrors';
 import { isAnalyticsEnabled } from '../services/analytics';
 import { LATEST_APP_DOWNLOAD_URL, SUPPORT_URL, SUPPORT_URL_ACCEPTS_REF } from '../utils/config';
 import { openUrl } from '../utils/openUrl';
@@ -43,7 +44,14 @@ export default function ErrorFallbackScreen({
   const { t } = useT();
   const [copied, setCopied] = useState(false);
   const errorName = error instanceof Error ? error.name : 'Error';
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorMessage = redactDiagnosticText(
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : t('app.errorFallback.subheading')
+  );
+  const safeComponentStack = componentStack ? redactDiagnosticText(componentStack) : null;
   // Only surface the Error ID / support ref when analytics is on: with consent
   // off, `analytics.ts::beforeSend` drops the event, yet the SDK still hands the
   // boundary a generated id — showing it would let an opted-out user copy a ref
@@ -147,13 +155,13 @@ export default function ErrorFallbackScreen({
           <div className="bg-stone-800/50 border border-stone-700/50 rounded-xl p-4 mb-6">
             <p className="text-sm font-medium text-coral-400 mb-1">{errorName}</p>
             <p className="text-xs text-content-faint wrap-break-word">{errorMessage}</p>
-            {componentStack && (
+            {safeComponentStack && (
               <details className="mt-3">
                 <summary className="text-xs text-content-muted cursor-pointer hover:text-content-faint transition-colors">
                   {t('app.errorFallback.componentStack')}
                 </summary>
                 <pre className="mt-2 text-[11px] text-content-muted whitespace-pre-wrap wrap-break-word max-h-[200px] overflow-auto">
-                  {componentStack}
+                  {safeComponentStack}
                 </pre>
               </details>
             )}
