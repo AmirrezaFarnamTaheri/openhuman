@@ -7,7 +7,9 @@
 //! and the folded history opens the next generation the way a compacting
 //! turn's commit does: the head is sealed byte-for-byte
 //! (`begin_generation_from_baseline`) and the successor's first write carries
-//! the head's system prompt rows and recorded tool declarations unchanged.
+//! the head's system prompt rows and recorded tool declarations unchanged,
+//! except the memory block, which a new generation renders afresh
+//! (`memory_block_for_new_generation`; see `memory_block.rs`).
 //!
 //! It holds the session's turn lock (`lock_session_turn`, keyed by the first
 //! generation) from the read to the write, so a turn and a compaction on one
@@ -165,6 +167,15 @@ impl OpenHumanSessionHost {
             );
             return Ok(CompactOutcome::Skipped { tokens });
         };
+        let leading_system = history
+            .iter()
+            .take_while(|message| matches!(message, Message::System(_)))
+            .count();
+        let prefix_len = transcript
+            .meta
+            .prefix_message_count
+            .unwrap_or(leading_system);
+        let (compacted, prefix_len) = self.with_fresh_memory_block(compacted, prefix_len).await;
         let tokens_after = tinyagents_harness::token_estimation::estimate_slice_tokens(&compacted);
 
         // Unchanged positions keep their stored rows, so the system prompt
@@ -179,10 +190,6 @@ impl OpenHumanSessionHost {
         let rows = codec
             .reconcile(&transcript.messages, &history, &compacted, &turn_options)
             .map_err(|error| anyhow!(error.to_string()))?;
-        let leading_system = history
-            .iter()
-            .take_while(|message| matches!(message, Message::System(_)))
-            .count();
         let (successor, handle) = locator.begin_generation_from_baseline(
             &head,
             transcript.meta.clone(),
@@ -193,12 +200,7 @@ impl OpenHumanSessionHost {
         meta.turn_count = 1;
         meta.session_id = Some(successor.session_id());
         meta.parent_session_id = successor.parent_session_id();
-        meta.prefix_message_count = Some(
-            transcript
-                .meta
-                .prefix_message_count
-                .unwrap_or(leading_system),
-        );
+        meta.prefix_message_count = Some(prefix_len);
         meta.prefix_reset = false;
         meta.updated = chrono::Utc::now().to_rfc3339();
         meta.thread_id = Some(thread_id.clone());
@@ -223,5 +225,37 @@ impl OpenHumanSessionHost {
             tokens_before: tokens,
             tokens_after,
         })
+    }
+
+    /// `compacted` with its prefix's memory block rendered for the new
+    /// generation, and the prefix's length after it. Unchanged when the agent
+    /// has no block, nothing is known, or memory cannot be read: the next
+    /// turn then refreshes an inherited block itself.
+    async fn with_fresh_memory_block(
+        &self,
+        compacted: Vec<Message>,
+        prefix_len: usize,
+    ) -> (Vec<Message>, usize) {
+        let Some(block) = self.memory_block_for_new_generation().await else {
+            return (compacted, prefix_len);
+        };
+        let prefix_len = prefix_len.min(
+            compacted
+                .iter()
+                .take_while(|message| matches!(message, Message::System(_)))
+                .count(),
+        );
+        let prefix = super::memory_block::with_memory_block(
+            &tinyagents_runtime::PrefixSnapshot::new(compacted[..prefix_len].to_vec()),
+            Some(block),
+        );
+        let refreshed_len = prefix.messages().len();
+        let mut messages = prefix.messages().to_vec();
+        messages.extend(compacted[prefix_len..].iter().cloned());
+        tracing::debug!(
+            thread_id = self.thread_id.as_deref().unwrap_or(""),
+            "[compact_thread] memory block rendered for the new generation"
+        );
+        (messages, refreshed_len)
     }
 }

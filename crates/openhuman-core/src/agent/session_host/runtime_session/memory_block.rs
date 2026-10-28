@@ -254,13 +254,6 @@ impl OpenHumanSessionHost {
     /// session opens outside a turn (an out-of-band compaction): put it into
     /// the successor's prefix with [`with_memory_block`]. `None` when the
     /// agent has no memory block, nothing is known, or memory cannot be read.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the seam for an out-of-band compaction, whose caller lands separately"
-        )
-    )]
     pub(crate) async fn memory_block_for_new_generation(&self) -> Option<Message> {
         let prelude = self.create_turn_prelude(false);
         let max_tokens = prelude.memory_block_budget()?;
