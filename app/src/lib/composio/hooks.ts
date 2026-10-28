@@ -228,6 +228,10 @@ export function useComposioIntegrations(pollIntervalMs = 5_000): UseComposioInte
       }
 
       if ('value' in connectionsResult) {
+        // A successful refresh supersedes any older in-flight poll, even when
+        // both use the same credential generation. Its delayed response cannot
+        // roll the refreshed connection snapshot back to stale data.
+        pollRequestIdRef.current += 1;
         // A successful user-invoked refresh confirms recovery after a previous
         // provider-auth rejection. Resume periodic updates without remounting.
         authRejectedPollRef.current = false;
