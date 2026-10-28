@@ -427,20 +427,23 @@ async fn slow_engine_results_survive_the_manual_pre_turn_cutoff() {
         Option<tinymemory_api::ObservedActor>,
     )| {
         let (thread, index, text, in_prompt_from, at, resumed, observed_actor) = input;
-        super::pre_turn(
-            &crate::core::runtime::DispatchCtx::ambient(),
-            config,
-            identity,
-            thread,
-            index,
-            text,
-            in_prompt_from,
-            at,
-            resumed,
-            observed_actor,
-            None,
-            None,
-        )
+        async move {
+            super::pre_turn(
+                &crate::core::runtime::DispatchCtx::ambient(),
+                config,
+                identity,
+                thread,
+                index,
+                text,
+                in_prompt_from,
+                at,
+                resumed,
+                observed_actor,
+                None,
+                None,
+            )
+            .await
+        }
     };
     let config = Arc::new(config);
     assert!(pre_turn(config.clone(), identity.clone(), input(0))
