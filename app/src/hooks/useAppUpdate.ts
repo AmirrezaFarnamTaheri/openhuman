@@ -147,74 +147,102 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
   // Tracks whether we've already kicked off a download for the current
   // `available` detection so the auto-download effect doesn't loop on
   // re-renders.
-  const checkInFlightRef = useRef(false);
+  const checkInFlightRef = useRef<Promise<AppUpdateInfo | null> | null>(null);
+  // A user-triggered check must make an already-running background probe's
+  // failure actionable rather than silently returning null.
+  const showCheckErrorRef = useRef(false);
+  // An updater action always takes precedence over a prior check's result.
+  // This guards against late network responses hiding a staged update.
+  const updateActionGenerationRef = useRef(0);
   const downloadInFlightRef = useRef(false);
   // Tracks whether bytes have been staged successfully. `install()` checks
   // this so it can fall back to the legacy combined apply path if the user
   // reaches "install" without a prior download (e.g. error mid-flow).
   const stagedRef = useRef(false);
 
-  /** Probe the updater endpoint. A failed scheduled probe is logged but does
-   * not interrupt the user with a recurring error banner. Manual checks report
-   * the failure; neither kind of failure means the device is up to date. */
-  const performCheck = useCallback(async (background: boolean): Promise<AppUpdateInfo | null> => {
+  /** Probe the updater endpoint. Scheduled errors are quiet, but manual checks
+   * (including one joined to a background probe) surface the real failure. */
+  const performCheck = useCallback((background: boolean): Promise<AppUpdateInfo | null> => {
     if (!isTauri()) {
       console.debug('[app-update] hook.check: skipped — not running in Tauri');
-      return null;
-    }
-    if (checkInFlightRef.current) {
-      console.debug('[app-update] hook.check: skipped — another check is in flight');
-      return null;
+      return Promise.resolve(null);
     }
     if (
       phaseRef.current === 'downloading' ||
       phaseRef.current === 'installing' ||
-      phaseRef.current === 'ready_to_install'
+      phaseRef.current === 'ready_to_install' ||
+      phaseRef.current === 'restarting'
     ) {
       console.debug('[app-update] hook.check: skipped — flow in progress', phaseRef.current);
-      return null;
+      return Promise.resolve(null);
     }
-    checkInFlightRef.current = true;
+    // An actionable download/install failure must remain visible until the
+    // user explicitly retries; periodic probes cannot replace its error state.
+    if (background && phaseRef.current === 'error') return Promise.resolve(null);
+
+    if (checkInFlightRef.current) {
+      if (!background) {
+        showCheckErrorRef.current = true;
+        setPhase('checking');
+        setError(null);
+      }
+      return checkInFlightRef.current;
+    }
+
+    showCheckErrorRef.current = !background;
+    const generation = updateActionGenerationRef.current;
     console.debug('[app-update] hook.check: starting', background ? 'background' : 'manual');
     if (!background) {
       setPhase('checking');
       setError(null);
     }
-    try {
-      const result = await checkAppUpdate();
-      if (!mountedRef.current) return result;
-      setError(null);
-      if (result?.available) {
-        console.info(
-          `[app-update] hook.check: update available ${result.current_version} -> ${result.available_version}`
-        );
-        setInfo(result);
-        setPhase('available');
-      } else {
-        console.debug('[app-update] hook.check: up to date');
-        setInfo(result);
-        setPhase('up_to_date');
-      }
-      return result;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn('[app-update] hook.check: failed; availability unknown', message);
-      if (mountedRef.current) {
-        setInfo(null);
-        if (background) {
-          // Network probes run periodically. Preserve the failure in logs
-          // without showing a disruptive banner every time an endpoint blips.
-          setError(null);
-          setPhase('idle');
+
+    const task = (async (): Promise<AppUpdateInfo | null> => {
+      try {
+        const result = await checkAppUpdate();
+        if (!mountedRef.current || generation !== updateActionGenerationRef.current) return result;
+        if (!result) throw new Error('Update availability could not be determined');
+        setError(null);
+        if (result.available) {
+          console.info(
+            `[app-update] hook.check: update available ${result.current_version} -> ${result.available_version}`
+          );
+          setInfo(result);
+          setPhase('available');
         } else {
-          setError(message);
-          setPhase('error');
+          console.debug('[app-update] hook.check: up to date');
+          setInfo(result);
+          setPhase('up_to_date');
         }
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn('[app-update] hook.check: failed; availability unknown', message);
+        if (mountedRef.current && generation === updateActionGenerationRef.current) {
+          if (showCheckErrorRef.current) {
+            // The user explicitly requested the result, possibly while a
+            // background check was already in flight.
+            setInfo(null);
+            setError(message);
+            setPhase('error');
+          } else if (phaseRef.current !== 'error') {
+            setInfo(null);
+            setError(null);
+            setPhase('idle');
+          }
+        }
+        return null;
       }
-      return null;
-    } finally {
-      checkInFlightRef.current = false;
-    }
+    })();
+
+    const tracked = task.finally(() => {
+      if (checkInFlightRef.current === tracked) {
+        checkInFlightRef.current = null;
+        showCheckErrorRef.current = false;
+      }
+    });
+    checkInFlightRef.current = tracked;
+    return tracked;
   }, []);
 
   /** Explicit user request: show any check failure and offer a retry. */
@@ -230,6 +258,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
       console.debug('[app-update] hook.download: already in flight');
       return;
     }
+    updateActionGenerationRef.current += 1;
     downloadInFlightRef.current = true;
     stagedRef.current = false;
     setBytesDownloaded(0);
@@ -265,6 +294,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
       console.debug('[app-update] hook.install: skipped — not running in Tauri');
       return;
     }
+    updateActionGenerationRef.current += 1;
     if (!stagedRef.current) {
       console.warn('[app-update] hook.install: no staged update — falling back to apply');
       try {
@@ -314,6 +344,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
       console.debug('[app-update] hook.apply: skipped — not running in Tauri');
       return;
     }
+    updateActionGenerationRef.current += 1;
     console.info('[app-update] hook.apply: starting (legacy path)');
     setBytesDownloaded(0);
     setTotalBytes(null);
@@ -360,6 +391,14 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRes
         unlistenStatus = await listen<string>('app-update:status', event => {
           if (!mountedRef.current) return;
           const next = parseStatusPayload(event.payload);
+          if (
+            next === 'downloading' ||
+            next === 'ready_to_install' ||
+            next === 'installing' ||
+            next === 'restarting'
+          ) {
+            updateActionGenerationRef.current += 1;
+          }
           console.debug('[app-update] hook: status →', next);
           setPhase(next);
           if (next === 'downloading') {
