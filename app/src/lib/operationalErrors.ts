@@ -38,7 +38,7 @@ function errorText(error: unknown): string {
 }
 
 /** Basic defence in depth for free-form error strings crossing an IPC boundary. */
-function redactSecrets(text: string): string {
+export function redactDiagnosticText(text: string): string {
   return text
     // Basic-auth URLs embed a username and password before the host.
     .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1[redacted]@')
@@ -49,10 +49,18 @@ function redactSecrets(text: string): string {
         `${quote}${name}${quote}${separator}${valueQuote}[redacted]${valueQuote}`
     )
     .replace(/(\bauthorization\s*:\s*(?:bearer|basic)\s+)[^\s,;]+/gi, '$1[redacted]')
+    // Providers sometimes echo the submitted key in a prose error rather
+    // than a structured field: "Incorrect API key provided: sk-...".
     .replace(
-      /((?:[?&]|\b)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|password|passwd|token|secret)\s*[:=]\s*)[^\s,;&]+/gi,
+      /(\b(?:invalid|incorrect|expired)\s+(?:api[\s_-]*key|token)(?:\s+provided)?\s*:\s*)[^\s,;}"']+/gi,
       '$1[redacted]'
-    );
+    )
+    .replace(
+      /((?:[?&]|\b)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|password|passwd|token|secret)\s*[:=]\s*)[^\s,;&"']+/gi,
+      '$1[redacted]'
+    )
+    // Known SDK prefixes can appear outside an assignment or error field.
+    .replace(/\bsk-[A-Za-z0-9_-]{3,}\b/g, '[redacted]');
 }
 
 function diagnosed(
@@ -75,7 +83,7 @@ export function explainOperationalError(
   fallback = 'The operation did not complete.'
 ): OperationalErrorPresentation {
   const raw = errorText(error).trim();
-  const detail = raw ? redactSecrets(raw).slice(0, 2500) : null;
+  const detail = raw ? redactDiagnosticText(raw).slice(0, 2500) : null;
   const lower = raw.toLowerCase();
 
   if (lower.includes('legacy sqlite storage must be upgraded by the host')) {
