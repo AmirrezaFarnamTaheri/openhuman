@@ -494,7 +494,7 @@ describe('useComposioIntegrations', () => {
     }
   });
 
-  it('ignores an older overlapping poll 401 after a newer poll succeeds', async () => {
+  it('serializes poll requests and pauses on rejection until identity recovery', async () => {
     const { useComposioIntegrations } = await import('./hooks');
     mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
     mockListConnections.mockResolvedValue({ connections: [] });
@@ -521,20 +521,35 @@ describe('useComposioIntegrations', () => {
         tick?.();
         await Promise.resolve();
       });
+      const firstInFlight = mockListConnections.mock.calls.length;
       await act(async () => {
         tick?.();
         await Promise.resolve();
       });
+      expect(mockListConnections).toHaveBeenCalledTimes(firstInFlight);
       await act(async () => {
         rejectOldPoll?.(new Error('HTTP 401 invalid API key'));
         await Promise.resolve();
+        await Promise.resolve();
       });
-      const afterStaleRejection = mockListConnections.mock.calls.length;
       await act(async () => {
         tick?.();
         await Promise.resolve();
       });
-      expect(mockListConnections).toHaveBeenCalledTimes(afterStaleRejection + 1);
+      expect(mockListConnections).toHaveBeenCalledTimes(firstInFlight);
+      await act(async () => {
+        window.dispatchEvent(new Event('composio:config-changed'));
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        expect(mockListConnections.mock.calls.length).toBeGreaterThan(firstInFlight);
+      });
+      const afterRecovery = mockListConnections.mock.calls.length;
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      expect(mockListConnections).toHaveBeenCalledTimes(afterRecovery + 1);
     } finally {
       unmount();
       timer.mockRestore();
