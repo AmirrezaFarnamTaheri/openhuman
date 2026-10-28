@@ -131,6 +131,56 @@ async fn pick_listen_port_openhuman_listener_falls_back_when_asked() {
 }
 
 #[tokio::test]
+async fn desktop_port_uses_os_assigned_port_when_every_candidate_is_busy() {
+    let preferred_holder = reserve_port();
+    let preferred = preferred_holder.local_addr().unwrap().port();
+    let fallback_holder = reserve_port();
+    let occupied_fallback = fallback_holder.local_addr().unwrap().port();
+
+    let picked = pick_desktop_listen_port_with_candidates(
+        "127.0.0.1",
+        preferred,
+        &[occupied_fallback],
+        RetryPolicy {
+            attempts: 0,
+            backoff: Duration::from_millis(1),
+        },
+    )
+    .await
+    .expect("desktop must recover without taking over unrelated listeners");
+
+    assert_ne!(picked.port, preferred);
+    assert_ne!(picked.port, occupied_fallback);
+    assert_ne!(picked.port, 0);
+    assert_eq!(picked.fallback_from, Some(preferred));
+    assert_eq!(picked.listener.local_addr().unwrap().port(), picked.port);
+}
+
+#[tokio::test]
+async fn desktop_port_coexists_with_openhuman_listener_when_takeover_is_unavailable() {
+    let preferred_holder = reserve_port();
+    let preferred = preferred_holder.local_addr().unwrap().port();
+    let (server_task, shutdown_tx) = spawn_openhuman_probe_listener(preferred_holder).await;
+
+    let picked = pick_desktop_listen_port_with_candidates(
+        "127.0.0.1",
+        preferred,
+        &[],
+        RetryPolicy {
+            attempts: 0,
+            backoff: Duration::from_millis(1),
+        },
+    )
+    .await
+    .expect("desktop should move to an OS-selected port instead of demanding a kill");
+
+    assert_ne!(picked.port, preferred);
+    assert_eq!(picked.fallback_from, Some(preferred));
+    let _ = shutdown_tx.send(());
+    let _ = server_task.await;
+}
+
+#[tokio::test]
 async fn pick_listen_port_other_listener_falls_back() {
     let preferred_listener = reserve_port();
     let preferred = preferred_listener
