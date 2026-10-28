@@ -259,6 +259,9 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
             );
             let before_messages = messages(&before);
             let after_messages = messages(&after);
+            for message in &after_messages {
+                eprintln!("DUMP {} {:.120}", message["role"], text(message));
+            }
             assert_eq!(after_messages[0]["role"], "system");
             assert_eq!(
                 after_messages[0], before_messages[0],
