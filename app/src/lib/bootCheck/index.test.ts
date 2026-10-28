@@ -270,7 +270,6 @@ describe('runBootCheck — port conflict auto-recovery', () => {
   it.each([
     'failed to signal stale openhuman pid 123: permission denied',
     'failed to force-kill stale openhuman pid 123: permission denied',
-    'port 7788 rebounded to pid 456 after terminating pid 123; refusing to kill a different process',
   ])('keeps stale-listener recovery available after %s', async diagnostic => {
     const recoverPortConflict = vi.fn().mockResolvedValue({
       success: false,
@@ -290,6 +289,26 @@ describe('runBootCheck — port conflict auto-recovery', () => {
       kind: 'unreachable',
       portConflict: true,
       foreignOwner: { pid: 456, name: 'another process' },
+    });
+  });
+
+  it('does not run broad recovery when the port rebounds to a new owner', async () => {
+    const recovery = vi.fn();
+    const diagnostic =
+      'port 7788 rebounded to pid 456 after terminating pid 123; refusing to kill a different process';
+    const result = await runBootCheck(
+      { kind: 'local' },
+      {
+        callRpc: vi.fn(),
+        invokeCmd: vi.fn().mockRejectedValue(new Error(diagnostic)),
+        recoverPortConflict: recovery,
+      }
+    );
+    expect(recovery).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      kind: 'unreachable',
+      portConflict: true,
+      reason: expect.stringContaining('rebounded to pid 456'),
     });
   });
 
