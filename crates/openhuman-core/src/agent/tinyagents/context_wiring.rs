@@ -197,7 +197,7 @@ fn compression_middleware(
             let summarizer = FaultTolerantCachingSummarizer::new(
                 announced(
                     Box::new(
-                        TaskStateSummarizer::new(summarizer_model, model)
+                        TaskStateSummarizer::new(summarizer_model, summarizer_model_id)
                             .with_max_chunk_tokens(chunk),
                     ),
                     compaction_notice,
@@ -214,7 +214,7 @@ fn compression_middleware(
             tracing::info!(model, "[context_compression] strategy=summary");
             let summarizer = FaultTolerantCachingSummarizer::new(
                 announced(
-                    Box::new(ModelSummarizer::new(summarizer_model, model)),
+                    Box::new(ModelSummarizer::new(summarizer_model, summarizer_model_id)),
                     compaction_notice,
                 ),
                 &policy,
