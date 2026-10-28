@@ -17,6 +17,10 @@ mod cloud_slug;
 mod cloud_spec;
 mod credentials;
 mod inspection;
+// Wave-1 scheduler foundation: remain isolated until the model-factory integration
+// adopts it in the next stacked change. No inference behavior changes in this draft.
+#[allow(dead_code)]
+mod key_pool;
 mod local_runtime;
 mod managed_backend;
 mod routing;
