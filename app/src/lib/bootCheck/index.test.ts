@@ -245,7 +245,9 @@ describe('runBootCheck — port conflict auto-recovery', () => {
     expect(recovery).not.toHaveBeenCalled();
     expect(result).toMatchObject({ kind: 'unreachable', portConflict: false });
     if (result.kind === 'unreachable') {
-      expect(result.reason).toContain('legacy sqlite storage must be upgraded by the host');
+      expect(result.reason).toContain('older database format');
+      expect(result.reason).toContain('Do not delete');
+      expect(result.reason).not.toContain('C:\\\\Users');
     }
   });
 
