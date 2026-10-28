@@ -151,7 +151,17 @@ async fn a_configured_summarizer_model_is_pinned_on_the_managed_route() {
     crate::inference::registry::register_chat_model_in(
         &extensions,
         crate::inference::provider::factory::PROVIDER_OPENHUMAN,
-        super::scoped_model_entry("managed-default", false),
+        // The managed provider serves whichever model the host asks it for.
+        tinyinference_llm::providers::overrides::ChatModelEntry::<
+            crate::inference::registry::ProviderContext,
+        > {
+            build: Arc::new(|request| {
+                let model = request.model_override.unwrap_or_default().to_owned();
+                Ok((Arc::new(super::NamedModel("managed")), model))
+            }),
+            probe: None,
+            models: None,
+        },
     );
     let context = CoreContext::for_test_with_host_kind_and_extensions(
         crate::core::types::HostKind::Library,
