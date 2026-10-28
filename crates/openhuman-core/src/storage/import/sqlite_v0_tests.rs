@@ -157,3 +157,22 @@ async fn bad_legacy_document_rolls_back_without_destroying_user_data() {
     assert_eq!(historical, "{broken");
     assert!(!bytes_before.is_empty());
 }
+
+#[test]
+fn large_profile_upgrade_refuses_unbudgeted_backup_and_wal_growth() {
+    // A 12 GiB legacy file with 34.8 GiB free must not start a backup that
+    // could exhaust the system disk halfway through the conversion.
+    const GIB: u64 = 1 << 30;
+    let legacy_bytes = 12_909_268_992_u64;
+    let available = 34_u64 * GIB + (8_u64 * GIB / 10);
+    let required = minimum_migration_headroom(legacy_bytes);
+    assert!(required > available);
+    assert!(migration_headroom_shortfall(legacy_bytes, available).is_some());
+    assert_eq!(migration_headroom_shortfall(legacy_bytes, required), None);
+}
+
+#[test]
+fn upgrade_headroom_calculation_never_overflows_for_untrusted_file_size() {
+    assert_eq!(minimum_migration_headroom(u64::MAX), u64::MAX);
+    assert!(migration_headroom_shortfall(u64::MAX, 10).is_some());
+}
