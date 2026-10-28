@@ -206,7 +206,9 @@ describe('ProviderModelPickerDialog', () => {
     );
     await screen.findByTestId('model-picker-managed-option-openrouter/a/alpha');
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search providers and models' }), { target: { value: 'bet' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search providers and models' }), {
+      target: { value: 'bet' },
+    });
 
     expect(screen.queryByTestId('model-picker-managed-option-openrouter/a/alpha')).toBeNull();
     expect(screen.getByTestId('model-picker-managed-option-openrouter/b/beta')).toBeInTheDocument();
@@ -214,7 +216,9 @@ describe('ProviderModelPickerDialog', () => {
     expect(screen.queryByText('OpenAI')).not.toBeInTheDocument();
     expect(screen.getByText('OpenRouter')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search providers and models' }), { target: { value: 'OpenAI' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search providers and models' }), {
+      target: { value: 'OpenAI' },
+    });
     expect(screen.getByRole('button', { name: /OpenAI/ })).toBeInTheDocument();
     expect(screen.queryByTestId('model-picker-managed-option-openrouter/b/beta')).toBeNull();
   });
