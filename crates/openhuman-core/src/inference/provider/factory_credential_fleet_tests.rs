@@ -1,5 +1,45 @@
 use super::*;
 
+#[test]
+fn changing_a_byok_endpoint_does_not_inherit_the_previous_credential_cooldown() {
+    let workspace = std::path::Path::new("/test/workspace");
+    let original = cloud_slug::rotation_pool_scope(
+        workspace,
+        "user-gateway",
+        "same-model",
+        "https://first.example/v1",
+    );
+    let changed = cloud_slug::rotation_pool_scope(
+        workspace,
+        "user-gateway",
+        "same-model",
+        "https://second.example/v1",
+    );
+    assert_ne!(original, changed, "endpoint change must isolate pool health");
+    assert_eq!(
+        original,
+        cloud_slug::rotation_pool_scope(
+            workspace,
+            "user-gateway",
+            "same-model",
+            "https://first.example/v1",
+        )
+    );
+    let keys = vec!["unchanged-secret".to_owned()];
+    let (index, _) = key_pool::next_key(&original, &keys).unwrap();
+    key_pool::record_result(&original, index, Some(key_pool::KeyFailure::RateLimited));
+    assert!(
+        key_pool::next_key(&original, &keys).is_none(),
+        "original endpoint must remain cooled down"
+    );
+    assert!(
+        key_pool::next_key(&changed, &keys).is_some(),
+        "a new destination may not inherit the old destination's rate limit"
+    );
+    key_pool::forget(&original);
+    key_pool::forget(&changed);
+}
+
 #[tokio::test]
 async fn byok_multi_key_route_retries_pre_output_429_with_an_individual_credential() {
     use tinyinference_llm::message::Message;
