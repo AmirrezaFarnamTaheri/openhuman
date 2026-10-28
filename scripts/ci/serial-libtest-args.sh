@@ -11,6 +11,11 @@ filter_serial_libtest_args() {
 
   for arg in "${EXTRA_ARGS[@]}"; do
     if [ "$skip_value" -eq 1 ]; then
+      # A missing value followed by another flag must fail, not be eaten.
+      if [[ ! "$arg" =~ ^0*[1-9][0-9]*$ ]]; then
+        echo "[rust-e2e] ERROR: --test-threads requires a positive integer value" >&2
+        return 2
+      fi
       skip_value=0
       continue
     fi
@@ -19,6 +24,12 @@ filter_serial_libtest_args() {
         skip_value=1
         ;;
       --test-threads=*)
+        # Invalid values are user errors. Do not suppress them while forcing 1.
+        local value="${arg#--test-threads=}"
+        if [[ ! "$value" =~ ^0*[1-9][0-9]*$ ]]; then
+          echo "[rust-e2e] ERROR: --test-threads requires a positive integer value" >&2
+          return 2
+        fi
         ;;
       *)
         SERIAL_LIBTEST_ARGS+=("$arg")
@@ -27,7 +38,7 @@ filter_serial_libtest_args() {
   done
 
   if [ "$skip_value" -eq 1 ]; then
-    echo "[rust-e2e] ERROR: --test-threads requires a value" >&2
+    echo "[rust-e2e] ERROR: --test-threads requires a positive integer value" >&2
     return 2
   fi
 }
