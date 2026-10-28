@@ -186,7 +186,10 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                     },
                 )
                 .await
-                .expect("a skipped compaction succeeds");
+                .unwrap_or_else(|error| {
+                    eprintln!("skipped compaction failed: {error:?}");
+                    panic!("a skipped compaction succeeds")
+                });
             let CompactOutcome::Skipped { tokens } = skipped else {
                 panic!("expected Skipped, got {skipped:?}");
             };
