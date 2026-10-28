@@ -47,6 +47,12 @@ impl Agent {
             }
             .into());
         }
+        // The provider route and model a turn on this agent runs with.
+        let turn = self.turn(String::new());
+        let request = turn.request();
+        let route = crate::turn::inference_route(request);
+        let model_override = request.model_override.clone();
+        let temperature = request.temperature;
         let ctx = inner.ctx.clone();
         let runtime = inner.runtime.clone();
         let thread_id = thread_id.to_owned();
@@ -65,10 +71,14 @@ impl Agent {
                 observer: None,
                 attachments: &[],
             };
+            let mut config = agent.config.clone();
             openhuman_core::agent_runs::agent_chat::compact_thread_for(
-                &agent.config,
+                &mut config,
                 target,
                 &thread_id,
+                model_override,
+                temperature,
+                route,
                 options,
             )
             .await
