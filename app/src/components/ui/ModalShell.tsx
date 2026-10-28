@@ -24,6 +24,8 @@ export interface ModalShellProps {
   maxWidthClassName?: string;
   contentClassName?: string;
   panelClassName?: string;
+  /** Optional scrim stacking override for system-critical blocking dialogs. */
+  overlayClassName?: string;
   labelledBy?: string;
   describedBy?: string;
   closePolicy?: ModalClosePolicy;
@@ -72,6 +74,7 @@ export function ModalShell({
   maxWidthClassName = 'max-w-md',
   contentClassName = 'px-5 py-4',
   panelClassName,
+  overlayClassName,
   labelledBy,
   describedBy,
   closePolicy,
@@ -98,6 +101,7 @@ export function ModalShell({
       }}>
       <DialogContent
         container={container}
+        overlayClassName={overlayClassName}
         data-testid={testId}
         aria-modal="true"
         aria-labelledby={labelledBy ?? titleId}
