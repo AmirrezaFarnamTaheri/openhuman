@@ -193,8 +193,12 @@ async function checkVersion(callRpc: BootCheckTransport['callRpc']): Promise<Ver
 function isPortBindingFailure(error: string): boolean {
   return (
     /\b(?:eaddrinuse|addrinuse|wsaeaddrinuse|address already in use|port in use)\b/i.test(error) ||
-    /\bport\s+\d+\s+(?:is\s+)?(?:occupied|busy|in use|remained bound|did not become free)\b/i.test(error) ||
-    /\b(?:no fallback ports available|no available port|port excluded by os|stale-listener pid|failed to bind core listener|could not determine pid bound to port)\b/i.test(error)
+    /\bport\s+\d+\s+(?:is\s+)?(?:occupied|busy|in use|remained bound|did not become free)\b/i.test(
+      error
+    ) ||
+    /\b(?:no fallback ports available|no available port|port excluded by os|stale-listener pid|failed to bind core listener|could not determine pid bound to port)\b/i.test(
+      error
+    )
   );
 }
 
