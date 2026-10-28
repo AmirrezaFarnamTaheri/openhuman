@@ -43,6 +43,10 @@ pub(crate) struct OpenHumanModelFactory<'a> {
     /// Attach OpenHuman's per-turn multimodal providers using the route this
     /// factory actually selected. One-shot probes do not need host attachments.
     pub(crate) attach_host_attachments: bool,
+    /// The model the summarization request calls on its own provider route
+    /// (`[context] summarizer_model`), in place of that route's model. `None`
+    /// keeps the route's model; primary and workload requests ignore it.
+    pub(crate) summarizer_model: Option<&'a str>,
 }
 
 impl OpenHumanModelFactory<'_> {
@@ -56,10 +60,18 @@ impl OpenHumanModelFactory<'_> {
 
     fn provider_for(&self, request: &ModelBuildRequest) -> String {
         match &request.purpose {
-            ModelPurpose::Primary | ModelPurpose::Summarization => self
-                .primary_provider
-                .map(str::to_owned)
-                .unwrap_or_else(|| provider_for_role(&request.role, self.config)),
+            ModelPurpose::Primary | ModelPurpose::Summarization => {
+                let provider = self
+                    .primary_provider
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| provider_for_role(&request.role, self.config));
+                match (&request.purpose, self.summarizer_model) {
+                    (ModelPurpose::Summarization, Some(model)) => {
+                        route_with_model(&provider, model)
+                    }
+                    _ => provider,
+                }
+            }
             ModelPurpose::WorkloadTier(_) => provider_for_role(&request.role, self.config),
         }
     }
@@ -319,6 +331,21 @@ impl OpenHumanModelFactory<'_> {
     }
 }
 
+/// `provider` with its model replaced by `model`: the same provider (and so
+/// the same credentials, endpoint and route temperature) serving another
+/// model. A provider string with no model of its own (a routing sentinel such
+/// as `cloud`, or the managed backend's bare `openhuman`) is returned as is;
+/// those routes take the model from the request's pin instead.
+fn route_with_model(provider: &str, model: &str) -> String {
+    match ProviderRoute::parse(provider) {
+        Some(route) if route.kind() != RouteKind::Sentinel => match route.temperature {
+            Some(temperature) => format!("{}:{model}@{temperature}", route.provider),
+            None => format!("{}:{model}", route.provider),
+        },
+        _ => provider.to_owned(),
+    }
+}
+
 fn build_one_shot(
     ctx: &DispatchCtx,
     role: &str,
@@ -333,6 +360,7 @@ fn build_one_shot(
         egress: &egress,
         thread_id: None,
         attach_host_attachments: false,
+        summarizer_model: None,
     };
     let request = ModelBuildRequest {
         role: role.to_owned(),
