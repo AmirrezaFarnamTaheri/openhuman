@@ -74,7 +74,7 @@ const GROUP_ORDER: RecencyGroupKey[] = [
 function projectDirectoryKey(path: string): string {
   const windowsPath = /^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(path);
   const normalized = windowsPath ? path.replace(/\//g, '\\').toLowerCase() : path;
-  return normalized.replace(/[\\/]+$/, '') || normalized;
+  return (windowsPath ? normalized.replace(/\\+$/, '') : normalized.replace(/\/+$/, '')) || normalized;
 }
 
 /**
@@ -124,7 +124,8 @@ export function groupThreads(
 
 /** Last path segment of a folder, for a compact tooltip. */
 export function folderBasename(path: string): string {
-  const trimmed = path.replace(/[\\/]+$/, '');
-  const parts = trimmed.split(/[\\/]/);
+  const windowsPath = /^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(path);
+  const trimmed = windowsPath ? path.replace(/[\\/]+$/, '') : path.replace(/\/+$/, '');
+  const parts = trimmed.split(windowsPath ? /[\\/]/ : /\//);
   return parts[parts.length - 1] || trimmed || path;
 }
