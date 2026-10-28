@@ -1,5 +1,5 @@
 import debugFactory from 'debug';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useCoreState } from '../../providers/CoreStateProvider';
 import { type Announcement, fetchLatestAnnouncement } from '../../services/announcementService';
@@ -9,72 +9,53 @@ import AnnouncementModal from './AnnouncementModal';
 
 const log = debugFactory('announcement');
 
-type IdentifiedAnnouncement = { authKey: string; announcement: Announcement };
-
 /**
- * Fetches the latest active announcement once the user is authenticated and,
- * if it hasn't been seen before (per-user, persisted), shows it once over the
- * app. The modal sits at z-9998 — just below the harness-init overlay
- * (z-[9999]) — so during first-run setup the init screen covers it and the
- * announcement becomes visible only once init finishes.
+ * Mount a fresh announcement fetch state for each authenticated session.
+ * Returning null on sign-out unmounts the inner gate even when the same user
+ * and profile signs in again, preventing old results from flashing on re-login.
  */
 export default function AnnouncementGate() {
-  const dispatch = useAppDispatch();
   const { snapshot } = useCoreState();
-  const isAuthenticated = snapshot.auth.isAuthenticated;
-  const userId = snapshot.auth.userId ?? null;
-  const shownIds = useAppSelector(state => state.announcement.shownIds);
-  // Tie every fetched result to the active identity, including the selected
-  // credential profile. A previous account's announcement must never appear
-  // while a new account's fetch is pending or returns nothing.
-  const authIdentity = JSON.stringify([userId, snapshot.auth.profileId ?? null]);
-  const authKey = isAuthenticated ? authIdentity : null;
+  if (!snapshot.auth.isAuthenticated) return null;
 
-  const [result, setResult] = useState<IdentifiedAnnouncement | null>(null);
-  // One fetch per (user) auth session — keyed by userId so a user switch refetches.
-  const fetchedForRef = useRef<string | null>(null);
+  // A user or credential-profile switch must also reset a previous session's
+  // fetched result, even while both snapshots remain authenticated.
+  const identity = JSON.stringify([snapshot.auth.userId ?? null, snapshot.auth.profileId ?? null]);
+  return <AuthenticatedAnnouncementGate key={identity} />;
+}
+
+/**
+ * Fetch the latest active announcement once per mounted authentication session.
+ * The mount boundary also cancels writes from previous identities and sessions.
+ */
+function AuthenticatedAnnouncementGate() {
+  const dispatch = useAppDispatch();
+  const shownIds = useAppSelector(state => state.announcement.shownIds);
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   useEffect(() => {
-    if (authKey === null) {
-      // Reset on sign-out so the next sign-in fetches again. The render guard
-      // below hides any stale announcement while signed out (no setState here).
-      fetchedForRef.current = null;
-      return;
-    }
-
-    if (fetchedForRef.current === authKey) {
-      return;
-    }
-    fetchedForRef.current = authKey;
-
     let cancelled = false;
     void (async () => {
       try {
         const latest = await fetchLatestAnnouncement();
-        if (cancelled || !latest) {
-          return;
-        }
-        setResult({ authKey, announcement: latest });
+        if (cancelled || !latest) return;
+        setAnnouncement(latest);
         log('fetched announcement %s', latest.id);
       } catch (err) {
-        // A missing/failed announcement is never fatal — just don't show one.
+        // Missing announcements and transient requests are not fatal.
         log('fetch failed: %O', err);
       }
     })();
-
     return () => {
       cancelled = true;
     };
-  }, [authKey]);
+  }, []);
 
-  const announcement = result?.authKey === authKey ? result.announcement : null;
-  if (!announcement || shownIds.includes(announcement.id)) {
-    return null;
-  }
+  if (!announcement || shownIds.includes(announcement.id)) return null;
 
   const handleDismiss = () => {
     dispatch(markAnnouncementShown(announcement.id));
-    setResult(null);
+    setAnnouncement(null);
   };
 
   return <AnnouncementModal announcement={announcement} onDismiss={handleDismiss} />;
