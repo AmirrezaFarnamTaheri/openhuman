@@ -32,7 +32,8 @@ export function presentProviderSetupError(
   t: (key: string, fallback?: string) => string
 ): ProviderErrorPresentation {
   const details =
-    redactDiagnosticText(raw.trim()) || t('providerSetup.error.defaultDetails', 'Provider setup failed.');
+    redactDiagnosticText(raw.trim()) ||
+    t('providerSetup.error.defaultDetails', 'Provider setup failed.');
   const couldNotReach = details.match(/^Could not reach\s+([^:]+):\s*(.*)$/i);
   const provider = couldNotReach?.[1]?.trim();
   const cause = couldNotReach?.[2]?.trim() || details;
