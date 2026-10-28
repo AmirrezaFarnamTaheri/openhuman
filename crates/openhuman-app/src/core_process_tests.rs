@@ -78,6 +78,20 @@ fn test_workspace() -> TestWorkspace {
     }
 }
 
+/// A storage failure is usually wrapped in several anyhow contexts. The
+/// desktop boot error must show the root cause rather than just the outer
+/// "opening the configured storage backend" label.
+#[test]
+fn embedded_core_failure_includes_storage_error_chain() {
+    let error = anyhow::anyhow!("legacy SQLite storage layout is unsupported")
+        .context("opening the configured storage backend");
+    let message = super::format_embedded_core_failure(&error);
+
+    assert!(message.contains("opening the configured storage backend"));
+    assert!(message.contains("legacy SQLite storage layout is unsupported"));
+    assert!(!message.contains("port conflict"));
+}
+
 #[test]
 fn default_core_port_env_and_fallback() {
     let _env_lock = env_lock();
