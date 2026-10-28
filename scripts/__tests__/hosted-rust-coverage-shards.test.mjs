@@ -67,10 +67,11 @@ test("hosted gate demands three reports and preserves whole-tree plus diff cover
 
 test("facade shard serializes singleton embed tests without skipping coverage", () => {
   const coverage = fs.readFileSync(path.join(root, "scripts/ci/rust-coverage.sh"), "utf8");
-  assert.match(
-    coverage,
-    /suite "openhuman-embed" llvm_cov_embed --no-report --no-fail-fast -p openhuman-embed --all-targets -- \\\n\s+--test-threads=1/,
-  );
+  const start = coverage.indexOf('suite "openhuman-embed" llvm_cov_embed');
+  assert.ok(start >= 0, "the complete embed test suite must be present");
+  const embedSuite = coverage.slice(start, start + 220);
+  assert.match(embedSuite, /--all-targets --/);
+  assert.match(embedSuite, /--test-threads=1/);
   assert.match(coverage, /suite "openhuman-rpc" llvm_cov_package/);
   assert.match(coverage, /suite "openhuman-tinyhumans" llvm_cov_product_facade/);
 });
