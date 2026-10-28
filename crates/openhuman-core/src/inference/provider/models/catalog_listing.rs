@@ -69,7 +69,9 @@ fn catalog_request(
             if byok {
                 let keys = crate::inference::provider::factory::byok_catalog_keys(&raw);
                 if keys.len() > 1 && crate::core::runtime::is_saas() {
-                    return Err("multi-key BYOK catalog discovery is unavailable in shared mode".into());
+                    return Err(
+                        "multi-key BYOK catalog discovery is unavailable in shared mode".into(),
+                    );
                 }
                 keys.into_iter().next().unwrap_or_default()
             } else {
@@ -83,9 +85,8 @@ fn catalog_request(
         .get(slug)
         .map(String::as_str)
         .filter(|value| !value.is_empty());
-    let credentialed = entry.is_some_and(|entry| {
-        matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic)
-    });
+    let credentialed = entry
+        .is_some_and(|entry| matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic));
     // Catalog discovery carries the same credential headers as inference.
     // Its HTTP client must not forward a custom header over redirects.
     let client = if credentialed {
