@@ -418,7 +418,9 @@ describe('useComposioIntegrations', () => {
     const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
     try {
       await waitFor(() => expect(result.current.loading).toBe(false));
-      let resolveSlow!: (value: { connections: { id: string; toolkit: string; status: string }[] }) => void;
+      let resolveSlow!: (value: {
+        connections: { id: string; toolkit: string; status: string }[];
+      }) => void;
       mockListConnections.mockImplementationOnce(
         () =>
           new Promise(resolve => {
@@ -467,7 +469,9 @@ describe('useComposioIntegrations', () => {
     const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
     try {
       await waitFor(() => expect(result.current.loading).toBe(false));
-      let resolveOld!: (value: { connections: { id: string; toolkit: string; status: string }[] }) => void;
+      let resolveOld!: (value: {
+        connections: { id: string; toolkit: string; status: string }[];
+      }) => void;
       mockListConnections.mockImplementationOnce(
         () =>
           new Promise(resolve => {
