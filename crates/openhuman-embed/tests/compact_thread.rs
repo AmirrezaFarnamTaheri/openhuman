@@ -294,11 +294,18 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
             };
             let is_block = |message: &serde_json::Value| text(message).starts_with(MEMORY_MARKER);
             let static_prompt = |prompt: &[serde_json::Value]| -> Vec<serde_json::Value> {
-                prompt.iter().filter(|message| !is_block(message)).cloned().collect()
+                prompt
+                    .iter()
+                    .filter(|message| !is_block(message))
+                    .cloned()
+                    .collect()
             };
             let prompt = system_prompt(&after_messages);
             let earlier = system_prompt(&before_messages);
-            assert!(!prompt.is_empty(), "the request opens with the system prompt");
+            assert!(
+                !prompt.is_empty(),
+                "the request opens with the system prompt"
+            );
             assert_eq!(
                 static_prompt(&prompt),
                 static_prompt(&earlier),
