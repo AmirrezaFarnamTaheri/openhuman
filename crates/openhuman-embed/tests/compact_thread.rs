@@ -44,9 +44,9 @@ struct Seen {
 /// Answers the summarizer slowly with [`SUMMARY`] and every chat turn with
 /// "ok", recording each request.
 #[derive(Clone, Default)]
-struct Provider2(Arc<Mutex<Vec<Seen>>>);
+struct ScriptedProvider(Arc<Mutex<Vec<Seen>>>);
 
-impl Provider2 {
+impl ScriptedProvider {
     fn seen(&self) -> Vec<Seen> {
         self.0.lock().unwrap().clone()
     }
@@ -70,7 +70,7 @@ fn is_summary_request(body: &serde_json::Value) -> bool {
     body.get("model").and_then(|model| model.as_str()) == Some(SUMMARIZER_MODEL)
 }
 
-impl Respond for Provider2 {
+impl Respond for ScriptedProvider {
     fn respond(&self, request: &Request) -> ResponseTemplate {
         let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
         let summary = is_summary_request(&body);
@@ -108,7 +108,7 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
         tokio::spawn(async move {
             let backend = stub_backend().await;
             let server = wiremock::MockServer::start().await;
-            let provider = Provider2::default();
+            let provider = ScriptedProvider::default();
             Mock::given(wiremock::matchers::method("POST"))
                 .and(wiremock::matchers::path("/v1/chat/completions"))
                 .respond_with(provider.clone())
