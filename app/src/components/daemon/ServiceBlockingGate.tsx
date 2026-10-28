@@ -58,6 +58,10 @@ const ServiceBlockingGate = ({ children }: ServiceBlockingGateProps) => {
         testId="daemon-recovery-dialog"
         closePolicy={{ escape: false, backdrop: false, button: false }}
         maxWidthClassName="max-w-xl"
+        // Core recovery must remain operable above the mounted keyring and
+        // announcement blockers (which reach z-10000).
+        panelClassName="z-10002"
+        overlayClassName="z-10001"
         footer={
           <div className="flex flex-wrap justify-end gap-3">
             <Button
