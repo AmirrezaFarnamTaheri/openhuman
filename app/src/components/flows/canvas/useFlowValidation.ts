@@ -15,7 +15,7 @@
  * last successful `validation` is left untouched and `validating` clears.
  */
 import createDebug from 'debug';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { WorkflowGraph } from '../../../lib/flows/types';
 import { type FlowValidation, validateFlow } from '../../../services/api/flowsApi';
@@ -57,9 +57,13 @@ export function useFlowValidation(
   // validate the current draft without listing `graph` (new object each render)
   // as a dependency.
   const graphRef = useRef(graph);
-  graphRef.current = graph;
   const graphKeyRef = useRef(graphKey);
-  graphKeyRef.current = graphKey;
+  // A concurrent render can be discarded. Updating refs in render would
+  // associate an in-flight validation with a draft that never committed.
+  useLayoutEffect(() => {
+    graphRef.current = graph;
+    graphKeyRef.current = graphKey;
+  }, [graph, graphKey]);
 
   const mountedRef = useRef(true);
   useEffect(() => {
