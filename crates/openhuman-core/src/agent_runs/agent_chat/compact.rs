@@ -22,7 +22,6 @@ use super::session_turn::{apply_turn_overrides, build_turn_agent, AgentChatTarge
 ///
 /// When `thread_id` is blank, the session cannot be built, or the compaction
 /// fails.
-#[allow(clippy::too_many_arguments)]
 #[inline(never)]
 pub fn compact_thread_for<'a>(
     config: &'a mut Config,
