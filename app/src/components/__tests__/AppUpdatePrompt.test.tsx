@@ -163,12 +163,39 @@ describe('AppUpdatePrompt', () => {
     expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
   });
 
-  it('clicking "Try again" after error invokes downloadAppUpdate', async () => {
+  it('retries an updater endpoint check instead of downloading a nonexistent update', async () => {
+    mockCheckAppUpdate.mockRejectedValueOnce(new Error('update endpoint unreachable'));
+    mockCheckAppUpdate.mockResolvedValueOnce({
+      current_version: '0.50.0',
+      available: false,
+      available_version: null,
+      body: null,
+    });
+
+    renderWithProviders(
+      <AppUpdatePrompt initialCheckDelayMs={0} recheckIntervalMs={0} autoDownload={false} />
+    );
+
+    const retryBtn = await screen.findByRole('button', { name: /Try again/ });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => expect(mockCheckAppUpdate).toHaveBeenCalledTimes(2));
+    expect(mockDownloadAppUpdate).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed download directly when an available update is already known', async () => {
+    mockCheckAppUpdate.mockResolvedValueOnce({
+      current_version: '0.50.0',
+      available: true,
+      available_version: '0.51.0',
+      body: null,
+    });
     mockDownloadAppUpdate.mockResolvedValueOnce({ ready: true, version: '0.51.0', body: null });
 
     renderWithProviders(
-      <AppUpdatePrompt autoCheck={false} initialCheckDelayMs={0} recheckIntervalMs={0} />
+      <AppUpdatePrompt initialCheckDelayMs={0} recheckIntervalMs={0} autoDownload={false} />
     );
+    await waitFor(() => expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(statusListeners.length).toBeGreaterThan(0));
 
     emitStatus('error');
@@ -176,9 +203,8 @@ describe('AppUpdatePrompt', () => {
     const retryBtn = await screen.findByRole('button', { name: /Try again/ });
     fireEvent.click(retryBtn);
 
-    await waitFor(() => {
-      expect(mockDownloadAppUpdate).toHaveBeenCalledTimes(1);
-    });
+    await waitFor(() => expect(mockDownloadAppUpdate).toHaveBeenCalledTimes(1));
+    expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1);
   });
 
   it('shows the installing-phase banner with progress copy', async () => {
