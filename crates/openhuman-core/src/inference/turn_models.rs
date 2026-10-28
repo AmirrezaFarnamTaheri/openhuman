@@ -18,7 +18,9 @@ pub(crate) struct TurnModels {
     /// primary; the crate registry resolves fallback/selection across them.
     pub(crate) routes: Vec<(String, Arc<dyn tinyinference_llm::model::ChatModel<()>>)>,
     /// A model for the context-window summarizer (a distinct adapter instance so
-    /// its provider errors don't touch the turn's `error_slot`).
+    /// its provider errors don't touch the turn's `error_slot`). On a
+    /// config-built source it calls `[context] summarizer_model` on the turn's
+    /// provider route when that is set, else the turn's own model.
     pub(crate) summarizer: Arc<dyn tinyinference_llm::model::ChatModel<()>>,
     /// The model id [`summarizer`](Self::summarizer) calls, as the compaction
     /// summarizer reports it in its logs and summary provenance.
@@ -106,6 +108,28 @@ impl TurnModels {
     }
 }
 
+/// The compaction summarizer model `[context] summarizer_model` names, when it
+/// names one: a blank value is unset.
+fn configured_summarizer_model(config: &crate::config::Config) -> Option<&str> {
+    config
+        .context
+        .summarizer_model
+        .as_deref()
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+}
+
+/// The model id this turn's compaction summarizer calls: the configured one,
+/// else the turn's own. Logs the choice once per turn build.
+fn summarizer_model_id(configured: Option<&str>, turn_model: &str) -> String {
+    let (model, source) = match configured {
+        Some(model) => (model, "config"),
+        None => (turn_model, "turn"),
+    };
+    tracing::debug!("[context_compression] summarizer model={model} source={source}");
+    model.to_owned()
+}
+
 /// Build one per-turn set through TinyAgents' model-factory contract.
 ///
 /// [`OpenHumanTurnPlanner`](crate::agent::tinyagents::turn_plan::OpenHumanTurnPlanner) receives the native route resolver. Provider metadata
@@ -132,6 +156,7 @@ fn build_turn_models_crate(
     thread_id: Option<&str>,
 ) -> anyhow::Result<TurnModels> {
     let egress = crate::security::egress::EgressLedger::per_turn();
+    let configured_summarizer = configured_summarizer_model(config);
     let factory = crate::inference::provider::factory::OpenHumanModelFactory {
         ctx,
         config,
@@ -139,6 +164,7 @@ fn build_turn_models_crate(
         egress: &egress,
         thread_id,
         attach_host_attachments: true,
+        summarizer_model: configured_summarizer,
     };
     let opts = tinyagents_harness::host::BuildOpts {
         native_tools: true,
@@ -187,11 +213,12 @@ fn build_turn_models_crate(
             })
         })
         .collect();
+    let summarizer_model_id = summarizer_model_id(configured_summarizer, model);
     let built = tinyagents_harness::host::TurnModelSet::<()>::builder(&factory, &factory, role)
         .primary_model_pin(model)
         .primary_opts(opts.clone())
         .workload_requests(workload_requests)
-        .summarization(role, Some(model.to_owned()))
+        .summarization(role, Some(summarizer_model_id.clone()))
         .summarization_opts(opts)
         .build()?;
     let mut registrations = built.registrations("primary").into_iter();
@@ -205,7 +232,7 @@ fn build_turn_models_crate(
         primary,
         routes,
         summarizer,
-        summarizer_model_id: model.to_owned(),
+        summarizer_model_id,
         error_slot,
         native_model_set: Some(built),
         provider_id,
@@ -475,7 +502,9 @@ impl TurnModelSource {
                 primary,
                 routes: Vec::new(),
                 summarizer,
-                summarizer_model_id: model.to_owned(),
+                // An injected model is the whole source; there is no route
+                // to call another model on.
+                summarizer_model_id: summarizer_model_id(None, model),
                 error_slot: Arc::new(std::sync::Mutex::new(None)),
                 native_model_set: None,
                 provider_id,
@@ -629,6 +658,7 @@ impl TurnModelSource {
                 egress: &egress,
                 thread_id,
                 attach_host_attachments: true,
+                summarizer_model: None,
             };
             let opts = tinyagents_harness::host::BuildOpts {
                 native_tools: true,
