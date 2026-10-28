@@ -7,7 +7,8 @@ const MAX_PENDING: usize = 16;
 const MAX_PACK_BYTES: usize = 64 * 1024;
 pub(super) const CACHED_NOTICE: &str = "This is cached memory from a completed background lookup for an earlier turn. It may be incomplete or unrelated to the current question; use explicit memory recall or fetch when you need a current answer.\n\n";
 
-pub(super) static TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
+pub(super) static TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 fn pack(text: &str) -> TurnPack {
     TurnPack::from_native(NativeTurnPack {
