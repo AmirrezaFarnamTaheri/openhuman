@@ -54,11 +54,11 @@ type WorkspaceBackend = Arc<tokio::sync::OnceCell<Arc<dyn StorageBackend>>>;
 static WORKSPACES: LazyLock<Mutex<HashMap<PathBuf, WorkspaceBackend>>> =
     LazyLock::new(Mutex::default);
 
-#[cfg(all(test, feature = "storage-sqlite"))]
+#[cfg(test)]
 static TEST_WORKSPACE_URLS: LazyLock<Mutex<HashMap<PathBuf, String>>> =
     LazyLock::new(Mutex::default);
 
-#[cfg(all(test, feature = "storage-sqlite"))]
+#[cfg(test)]
 pub(crate) fn use_persistent_default_for_test(workspace_dir: &Path) {
     TEST_WORKSPACE_URLS
         .lock()
@@ -165,7 +165,7 @@ async fn open_default_backend(_workspace_dir: PathBuf) -> Result<Arc<dyn Storage
     #[cfg(test)]
     await_test_backend_open_gate().await;
 
-    #[cfg(all(test, feature = "storage-sqlite"))]
+    #[cfg(test)]
     {
         let persistent_url = TEST_WORKSPACE_URLS
             .lock()
