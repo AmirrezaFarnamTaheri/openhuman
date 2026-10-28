@@ -3,13 +3,14 @@
 use crate::agent::session_host::{CompactOptions, CompactOutcome};
 use crate::config::Config;
 
-use super::session_turn::{build_turn_agent, AgentChatTarget};
+use super::session_turn::{apply_turn_overrides, build_turn_agent, AgentChatTarget};
 
 /// Compact `thread_id`'s stored conversation on `target`'s session now, so
 /// its next turn resends a summary instead of the full history.
 ///
-/// The session is built and bound exactly as [`agent_chat_for`]
-/// (super::agent_chat_for) builds a turn's, so the compaction addresses the
+/// `model_override`, `temperature` and `route` are applied to `config` as a
+/// turn applies them, and the session is built and bound exactly as
+/// [`agent_chat_for`](super::agent_chat_for) builds a turn's, so the compaction addresses the
 /// transcript that turn would resume and holds the same per-session turn
 /// lock. See [`OpenHumanSessionHost::compact_bound_history`]
 /// (crate::agent::OpenHumanSessionHost::compact_bound_history).
@@ -21,14 +22,19 @@ use super::session_turn::{build_turn_agent, AgentChatTarget};
 ///
 /// When `thread_id` is blank, the session cannot be built, or the compaction
 /// fails.
+#[allow(clippy::too_many_arguments)]
 #[inline(never)]
 pub fn compact_thread_for<'a>(
-    config: &'a Config,
+    config: &'a mut Config,
     target: AgentChatTarget<'a>,
     thread_id: &'a str,
+    model_override: Option<String>,
+    temperature: Option<f64>,
+    route: Option<crate::config::schema::EphemeralRoute>,
     options: CompactOptions,
 ) -> futures::future::BoxFuture<'a, anyhow::Result<CompactOutcome>> {
     Box::pin(async move {
+        apply_turn_overrides(config, model_override, temperature, route);
         let thread_id = thread_id.trim();
         if thread_id.is_empty() {
             anyhow::bail!("compact_thread needs a thread id");
