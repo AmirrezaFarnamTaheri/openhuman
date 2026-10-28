@@ -377,3 +377,7 @@ pub(crate) async fn settle_for_test(
 #[cfg(test)]
 #[path = "prefetch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "prefetch_recall_each_turn_tests.rs"]
+mod recall_each_turn_tests;
