@@ -1,4 +1,5 @@
-import { act, renderHook } from '@testing-library/react';
+import { Suspense, startTransition, useState } from 'react';
+import { act, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowGraph } from '../../../../lib/flows/types';
@@ -27,6 +28,47 @@ describe('useFlowValidation draft revision isolation', () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('does not let a suspended, uncommitted draft invalidate the active result', async () => {
+    let finish!: (value: FlowValidation) => void;
+    validateFlow.mockImplementationOnce(
+      () =>
+        new Promise<FlowValidation>(resolve => {
+          finish = resolve;
+        })
+    );
+    const pendingForever = new Promise<void>(() => {});
+    let transitionToB!: () => void;
+    let validateNow!: () => Promise<FlowValidation | null>;
+
+    function Probe() {
+      const [revision, setRevision] = useState<'A' | 'B'>('A');
+      transitionToB = () => setRevision('B');
+      const state = useFlowValidation(graph(revision), revision, false);
+      if (revision === 'B') throw pendingForever;
+      validateNow = state.validateNow;
+      return <div>Committed draft A</div>;
+    }
+
+    render(
+      <Suspense fallback={<div>Waiting for draft B</div>}>
+        <Probe />
+      </Suspense>
+    );
+    let request!: Promise<FlowValidation | null>;
+    act(() => {
+      request = validateNow();
+    });
+    act(() => {
+      startTransition(transitionToB);
+    });
+    expect(screen.getByText('Committed draft A')).toBeInTheDocument();
+
+    await act(async () => {
+      finish(valid);
+      expect(await request).toEqual(valid);
+    });
   });
 
   it('does not let a previous draft RPC validate a newly edited draft before its debounce', async () => {
