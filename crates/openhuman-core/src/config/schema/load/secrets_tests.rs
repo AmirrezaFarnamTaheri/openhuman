@@ -151,7 +151,9 @@ async fn unreadable_startup_secret_never_becomes_a_destructive_settings_save() {
 
     let error = config.save().await.unwrap_err();
     assert!(
-        error.to_string().contains("unreadable encrypted credentials"),
+        error
+            .to_string()
+            .contains("unreadable encrypted credentials"),
         "the caller must receive a safe, actionable refusal: {error:#}"
     );
     assert_eq!(
@@ -173,4 +175,3 @@ async fn unreadable_startup_secret_never_becomes_a_destructive_settings_save() {
     assert!(saved.contains("enc2:"));
     assert!(!saved.contains("sentinel-must-survive-keyring-failure"));
 }
-
