@@ -27,7 +27,9 @@ describe('createAppHashRouter', () => {
     const router = createAppHashRouter(<Shell />);
     try {
       const view = render(<RouterProvider router={router} />);
-      const recovery = await screen.findByRole('button', { name: /Recover from route-render-canary/ });
+      const recovery = await screen.findByRole('button', {
+        name: /Recover from route-render-canary/,
+      });
       shouldCrash = false;
       fireEvent.click(recovery);
       expect(await screen.findByText('Recovered shell')).toBeInTheDocument();
