@@ -867,6 +867,9 @@ describe('BootCheckGate — foreign port owner', () => {
     await waitFor(() => {
       expect(screen.getByText(/You may need to close it manually/)).toBeInTheDocument();
     });
+    // A failed forced termination must retain both the recommended recovery
+    // and the OS/backend reason, so users know whether to check permissions.
+    expect(screen.getByText(/access denied/)).toBeInTheDocument();
   });
 
   it('upgrades to a force-quit button when Fix Automatically surfaces an owner', async () => {
