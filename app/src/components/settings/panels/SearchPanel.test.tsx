@@ -218,7 +218,8 @@ describe('SearchPanel — page and on/off', () => {
     renderWithProviders(<SearchPanel embedded />);
     await screen.findByText('settings.search.statusError: offline');
   });
-  test('explains an inaccessible encrypted credential store instead of a generic save error', async () => {
+
+  test('shows credential-store guidance when saving search settings fails', async () => {
     hoisted.updateSearchSettings.mockRejectedValue(
       new Error('Secret-storage backend error: secret store: backend: could not open the lock file')
     );
@@ -231,7 +232,9 @@ describe('SearchPanel — page and on/off', () => {
   });
 
   test('explains a failed API-key encryption without pretending a network outage', async () => {
-    hoisted.updateSearchSettings.mockRejectedValue(new Error('Failed to encrypt search.tinyfish.api_key'));
+    hoisted.updateSearchSettings.mockRejectedValue(
+      new Error('Failed to encrypt search.tinyfish.api_key')
+    );
     await renderPanel();
     fireEvent.click(screen.getByTestId('search-enabled-toggle'));
     await screen.findByText(/could not save the API key securely/i);
