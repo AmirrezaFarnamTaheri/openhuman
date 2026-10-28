@@ -787,9 +787,7 @@ describe('BootCheckGate — port conflict recovery', () => {
     fireEvent.click(screen.getByTestId('fix-automatically-btn'));
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Automatic fix didn't work. Please restart your computer and try again.")
-      ).toBeInTheDocument();
+      expect(screen.getByText('still busy')).toBeInTheDocument();
     });
   });
 
