@@ -25,6 +25,10 @@ pub(crate) struct TurnModels {
     /// The model id [`summarizer`](Self::summarizer) calls, as the compaction
     /// summarizer reports it in its logs and summary provenance.
     pub(crate) summarizer_model_id: String,
+    /// How the free-form summarizer renders tool activity and caps its output
+    /// (`[context] summarizer_tool_rendering` / `summarizer_max_output_tokens`
+    /// on a config-built source; the defaults on an injected one).
+    pub(crate) summarizer_settings: crate::config::SummarizerSettings,
     /// Recovers the primary's original (downcastable) provider error on failure.
     pub(crate) error_slot: tinyinference_llm::model::ModelErrorSlot,
     /// Native owner set retained so its route and primary error slots are
@@ -233,6 +237,7 @@ fn build_turn_models_crate(
         routes,
         summarizer,
         summarizer_model_id,
+        summarizer_settings: config.context.summarizer_settings(),
         error_slot,
         native_model_set: Some(built),
         provider_id,
@@ -505,6 +510,7 @@ impl TurnModelSource {
                 // An injected model is the whole source; there is no route
                 // to call another model on.
                 summarizer_model_id: choose_summarizer_model(None, model),
+                summarizer_settings: Default::default(),
                 error_slot: Arc::new(std::sync::Mutex::new(None)),
                 native_model_set: None,
                 provider_id,

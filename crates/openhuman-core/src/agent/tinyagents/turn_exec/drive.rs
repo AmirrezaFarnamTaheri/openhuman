@@ -115,6 +115,7 @@ pub(super) async fn drive_turn(
         routes: tier_routes,
         summarizer: summarizer_model,
         summarizer_model_id,
+        summarizer_settings,
         error_slot,
         ..
     } = turn_models;
@@ -325,8 +326,11 @@ pub(super) async fn drive_turn(
                 crate::threads::run_mode::handle_for_thread(&run_context.dispatch_ctx(), thread_id)
             }),
             memory_turn: run_context.memory_turn.clone(),
-            summarizer_model,
-            summarizer_model_id,
+            summarizer: crate::agent::tinyagents::context_wiring::CompactionSummarizer {
+                model: summarizer_model,
+                model_id: summarizer_model_id,
+                settings: summarizer_settings,
+            },
             failure_map: failure_map.clone(),
             provider_usage_carry: provider_usage_carry.clone(),
             tool_outcome_sink: tool_outcome_sink.clone(),
