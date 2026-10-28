@@ -17,10 +17,9 @@ use tinymemory_api::{LearningKind, MemoryEngine, MemoryMeta, StoreItem};
 
 const PROMPT: &str = "You are blocky.";
 
-/// The prelude of a session rendering `prompt` verbatim, with a memory
-/// block and `refresh` as its `refresh_prompt_on_resume`, reading memory
-/// under `config`.
-fn prelude(config: &Config, prompt: &str, refresh: bool) -> OpenHumanTurnPrelude {
+/// A session rendering `prompt` verbatim, with a memory block and `refresh`
+/// as its `refresh_prompt_on_resume`, reading memory under `config`.
+fn host(config: &Config, prompt: &str, refresh: bool) -> OpenHumanSessionHost {
     let _ = AgentDefinitionRegistry::init_global_builtins();
     let mut host = crate::agent::SessionHostBuilder::new()
         .with_session_history_locator(memory_locator())
@@ -42,6 +41,12 @@ fn prelude(config: &Config, prompt: &str, refresh: bool) -> OpenHumanTurnPrelude
     host.definition = Some(Arc::new(definition));
     host.runtime_config = Some(Arc::new(config.clone()));
     host.set_thread_id(Some("thread-memory-block"));
+    host
+}
+
+/// The prelude a turn of [`host`] is prepared by.
+fn prelude(config: &Config, prompt: &str, refresh: bool) -> OpenHumanTurnPrelude {
+    let mut host = host(config, prompt, refresh);
     host.ensure_runtime_session().expect("runtime session");
     let state = host
         .runtime_state
@@ -353,4 +358,22 @@ fn the_block_goes_after_every_other_prefix_message() {
         ]
     );
     assert_eq!(with_memory_block(&prefix, None).messages().len(), 2);
+}
+
+#[tokio::test]
+async fn a_generation_opened_outside_a_turn_can_take_a_fresh_block() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = config_in(&tmp);
+    learn(&bind_reference(&config), &config, "The user lives in Lisbon").await;
+    let block = host(&config, PROMPT, false)
+        .memory_block_for_new_generation()
+        .await
+        .expect("a block");
+    assert!(is_memory_block(&block) && block.text().contains("Lisbon"));
+
+    let mut without = host(&config, PROMPT, false);
+    let mut definition = (**without.definition.as_ref().expect("a definition")).clone();
+    definition.extensions.memory_block = None;
+    without.definition = Some(Arc::new(definition));
+    assert_eq!(without.memory_block_for_new_generation().await, None);
 }
