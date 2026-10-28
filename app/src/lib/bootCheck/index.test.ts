@@ -247,7 +247,7 @@ describe('runBootCheck — port conflict auto-recovery', () => {
     if (result.kind === 'unreachable') {
       expect(result.reason).toContain('older database format');
       expect(result.reason).toContain('Do not delete');
-      expect(result.reason).not.toContain('C:\\\\Users');
+      expect(result.reason).not.toContain('sqlite:C:');
     }
   });
 
