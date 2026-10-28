@@ -451,6 +451,52 @@ describe('useComposioIntegrations', () => {
     }
   });
 
+  it('does not let an earlier poll overwrite a successful manual refresh', async () => {
+    const { useComposioIntegrations } = await import('./hooks');
+    mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
+    mockListConnections.mockResolvedValue({ connections: [] });
+    let tick: (() => void) | undefined;
+    const realSetInterval = window.setInterval.bind(window);
+    const timer = vi.spyOn(window, 'setInterval').mockImplementation((handler, interval) => {
+      if (interval === 12_345 && typeof handler === 'function') {
+        tick = handler;
+        return 1234 as unknown as ReturnType<typeof window.setInterval>;
+      }
+      return realSetInterval(handler, interval) as unknown as ReturnType<typeof window.setInterval>;
+    });
+    const { result, unmount } = renderHook(() => useComposioIntegrations(12_345));
+    try {
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      let resolveOld!: (value: { connections: { id: string; toolkit: string; status: string }[] }) => void;
+      mockListConnections.mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            resolveOld = resolve;
+          })
+      );
+      await act(async () => {
+        tick?.();
+        await Promise.resolve();
+      });
+      mockListConnections.mockResolvedValueOnce({
+        connections: [{ id: 'fresh', toolkit: 'gmail', status: 'ACTIVE' }],
+      });
+      await act(async () => {
+        await result.current.refresh();
+      });
+      expect(result.current.connectionByToolkit.get('gmail')?.id).toBe('fresh');
+
+      await act(async () => {
+        resolveOld({ connections: [{ id: 'stale', toolkit: 'gmail', status: 'ACTIVE' }] });
+        await Promise.resolve();
+      });
+      expect(result.current.connectionByToolkit.get('gmail')?.id).toBe('fresh');
+    } finally {
+      unmount();
+      timer.mockRestore();
+    }
+  });
+
   it('resumes periodic polling after a successful manual refresh of rejected credentials', async () => {
     const { useComposioIntegrations } = await import('./hooks');
     mockListToolkits.mockResolvedValue({ toolkits: ['gmail'] });
