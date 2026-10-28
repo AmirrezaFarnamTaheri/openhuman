@@ -687,24 +687,17 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
             Err(error) => return Some(Err(anyhow::anyhow!(error))),
         }
     } else {
-        let http = match config
+        match config
             .cloud_provider_ca_certs
             .get(&slug)
             .filter(|pem| !pem.is_empty())
         {
-            Some(pem) => {
-                let service_key = if anthropic_native {
-                    "provider.anthropic"
-                } else {
-                    "provider.compatible"
-                };
-                match crate::util::tls::client_with_ca_bundle(pem, service_key) {
-                    Ok(http) => Some(http),
-                    Err(error) => return Some(Err(anyhow::anyhow!(error))),
-                }
-            }
+            Some(pem) => match crate::util::tls::client_with_ca_bundle(pem, service_key) {
+                Ok(http) => Some(http),
+                Err(error) => return Some(Err(anyhow::anyhow!(error))),
+            },
             None => None,
-        };
+        }
     };
     let auth_style = cloud_spec::registry_auth_style(entry.auth_style)
         .expect("managed JWT entries returned above");
