@@ -170,6 +170,7 @@ impl Config {
                 );
             }
         }
+        self.apply_summarizer_env(env);
         let context_default =
             tinyagents_harness::config::TurnConfig::default().tool_result_budget_bytes;
         let context_env_set = env.contains("OPENHUMAN_CONTEXT_TOOL_RESULT_BUDGET_BYTES");
