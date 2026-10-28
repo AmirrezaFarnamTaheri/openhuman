@@ -425,8 +425,8 @@ async fn check_app_update(app: tauri::AppHandle<AppRuntime>) -> Result<AppUpdate
         .updater()
         .map_err(|e| format!("updater plugin not initialized: {e}"))?;
 
-    match updater.check().await {
-        Ok(Some(update)) => {
+    match app_update::interpret_update_check(updater.check().await) {
+        Ok(app_update::UpdateCheck::Available(update)) => {
             log::info!(
                 "[app-update] update available: {} -> {}",
                 current_version,
@@ -439,15 +439,13 @@ async fn check_app_update(app: tauri::AppHandle<AppRuntime>) -> Result<AppUpdate
                 body: update.body.clone(),
             })
         }
-        Ok(None) => {
+        Ok(app_update::UpdateCheck::UpToDate) => {
             log::info!("[app-update] no update available");
             Ok(no_app_update_available(current_version))
         }
-        Err(e) => {
-            log::warn!(
-                "[app-update] check failed; treating as no update available for this probe: {e}"
-            );
-            Ok(no_app_update_available(current_version))
+        Err(message) => {
+            log::warn!("[app-update] {message}");
+            Err(message)
         }
     }
 }
