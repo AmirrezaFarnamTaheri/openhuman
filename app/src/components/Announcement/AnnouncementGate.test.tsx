@@ -129,6 +129,23 @@ describe('AnnouncementGate', () => {
     await waitFor(() => expect(screen.queryByTestId('modal')).not.toBeInTheDocument());
   });
 
+  it('does not resurface a previous announcement after the same identity signs out and back in', async () => {
+    fetchLatestAnnouncement.mockResolvedValueOnce(sample).mockResolvedValueOnce(null);
+
+    const view = render(<AnnouncementGate />);
+    expect(await screen.findByText('Hello')).toBeInTheDocument();
+
+    authState.isAuthenticated = false;
+    view.rerender(<AnnouncementGate />);
+    expect(screen.queryByTestId('modal')).not.toBeInTheDocument();
+
+    authState.isAuthenticated = true;
+    view.rerender(<AnnouncementGate />);
+    expect(screen.queryByTestId('modal')).not.toBeInTheDocument();
+    await waitFor(() => expect(fetchLatestAnnouncement).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId('modal')).not.toBeInTheDocument();
+  });
+
   it('ignores an older account fetch that resolves after the new account response', async () => {
     let completeOld!: (value: Announcement | null) => void;
     fetchLatestAnnouncement
