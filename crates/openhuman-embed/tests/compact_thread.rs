@@ -9,7 +9,8 @@
 //! - above it the head generation is sealed (still readable) and the next
 //!   generation opens with the summary right after the system prompt;
 //! - the next turn resends the summary instead of the full history, with the
-//!   system prompt and tool declarations byte-identical;
+//!   static system prompt and tool declarations byte-identical and a memory
+//!   block freshly rendered for the new generation;
 //! - a turn started while the compaction holds the session waits for it.
 //!
 //! One `#[test]` because a runtime claims a process-wide slot.
@@ -20,9 +21,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use common::{chat_completion, offline_config, runtime, stub_backend};
+use openhuman_embed::memory::api::conformance::ReferenceEngine;
+use openhuman_embed::memory::LearnParams;
 use openhuman_embed::SessionStoreProvider as _;
 use openhuman_embed::{
-    Access, AgentSpec, CompactOptions, CompactOutcome, Provider, Runtime, Workspace,
+    Access, AgentDefinitionSpec, AgentSpec, CompactOptions, CompactOutcome, MemoryBinding,
+    MemoryBlockSpec, Provider, Runtime, Workspace,
 };
 use tinyagents_session::port::InMemorySessionStores;
 use tinyagents_session::transcript::SessionRef;
@@ -32,6 +36,10 @@ use wiremock::{Mock, Request, Respond, ResponseTemplate};
 const SUMMARIZER_MODEL: &str = "summarizer-model";
 /// What the summarizer answers.
 const SUMMARY: &str = "## Goal\nPlan the trip to Goa. SUMMARY-MARKER";
+/// How the memory block opens (`MEMORY_BLOCK_MARKER`).
+const MEMORY_MARKER: &str = "<memory>\n";
+/// The memory tenant root the agent reads.
+const ROOT: &str = "team:acme";
 /// How long the summarizer takes to answer, so a turn can race it.
 const SLOW_SUMMARY: Duration = Duration::from_millis(1500);
 
@@ -120,6 +128,7 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                 .await;
             let store = Arc::new(InMemorySessionStores::new());
             let mut config = offline_config();
+            config.modules.allow_download = false;
             config.context.compaction_strategy =
                 openhuman_core::config::CompactionStrategy::Summary;
             config.context.summarizer_model = Some(SUMMARIZER_MODEL.into());
@@ -128,9 +137,21 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                 .workspace(Workspace::stateless())
                 .backend_url(backend.uri())
                 .session_store(store.clone())
+                .memory_engine(Arc::new(ReferenceEngine::new()))
                 .build()
                 .await
                 .expect("the runtime builds");
+            let memory = runtime.memory(ROOT).expect("the tenant's memory");
+            let learn = |text: &'static str| {
+                let memory = memory.clone();
+                async move {
+                    let params: LearnParams =
+                        serde_json::from_value(serde_json::json!({ "text": text }))
+                            .expect("learn params");
+                    memory.learn(params).await.expect("a learning");
+                }
+            };
+            learn("The user's favourite colour is teal").await;
             let agent = runtime
                 .agent(
                     AgentSpec::new("asha")
@@ -138,7 +159,12 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                             Provider::openai_compatible(format!("{}/v1", server.uri()), "sk-test")
                                 .model("chat-model"),
                         )
-                        .access(Access::readonly()),
+                        .access(Access::readonly())
+                        .definition(
+                            AgentDefinitionSpec::new()
+                                .memory_block(MemoryBlockSpec { max_tokens: 400 }),
+                        )
+                        .memory(MemoryBinding::new("asha").root(ROOT)),
                 )
                 .expect("asha instantiates");
 
@@ -202,6 +228,9 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                 .expect("an empty thread compacts to nothing");
             assert_eq!(empty, CompactOutcome::Empty);
 
+            // ── memory changes while the user is away ─────────────────────
+            learn("The user lives in Lisbon").await;
+
             // ── above it, racing a turn ───────────────────────────────────
             let compacting = {
                 let agent = agent.clone();
@@ -263,15 +292,27 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                     .cloned()
                     .collect()
             };
+            let is_block = |message: &serde_json::Value| text(message).starts_with(MEMORY_MARKER);
+            let static_prompt = |prompt: &[serde_json::Value]| -> Vec<serde_json::Value> {
+                prompt.iter().filter(|message| !is_block(message)).cloned().collect()
+            };
             let prompt = system_prompt(&after_messages);
-            assert!(
-                !prompt.is_empty(),
-                "the request opens with the system prompt"
-            );
+            let earlier = system_prompt(&before_messages);
+            assert!(!prompt.is_empty(), "the request opens with the system prompt");
             assert_eq!(
-                prompt,
-                system_prompt(&before_messages),
-                "the system prompt is byte-identical"
+                static_prompt(&prompt),
+                static_prompt(&earlier),
+                "the static system prompt is byte-identical"
+            );
+            let old_block = earlier.last().map(text).unwrap_or_default();
+            assert!(
+                old_block.starts_with(MEMORY_MARKER) && !old_block.contains("Lisbon"),
+                "the thread opened with the block of its time: {old_block}"
+            );
+            let new_block = prompt.last().map(text).unwrap_or_default();
+            assert!(
+                new_block.starts_with(MEMORY_MARKER) && new_block.contains("Lisbon"),
+                "the new generation carries a fresh memory block: {new_block}"
             );
             assert_eq!(
                 after.body.get("tools"),
