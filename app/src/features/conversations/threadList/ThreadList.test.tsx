@@ -68,8 +68,24 @@ describe('ThreadList', () => {
       'thread-group-yesterday',
     ]);
     expect(within(sections[1]).getByTestId('thread-row-t4')).toBeInTheDocument();
-    expect(sections[1]).toHaveAccessibleName('site');
+    expect(sections[1]).toHaveAccessibleName('site — /home/me/projects/site/');
     expect(within(sections[0]).getByTestId('thread-row-t3')).toBeInTheDocument();
+  });
+
+  it('distinguishes same-name projects for keyboard and screen reader users', async () => {
+    const threads = [
+      thread('workspace-a', 'First', 0, { actionDir: '/work/alpha/repo' }),
+      thread('workspace-b', 'Second', 0, { actionDir: '/work/beta/repo' }),
+    ];
+    renderList({ threads });
+    const a = screen.getByRole('region', { name: 'repo — /work/alpha/repo' });
+    const b = screen.getByRole('region', { name: 'repo — /work/beta/repo' });
+    expect(a).not.toBe(b);
+    const heading = within(a).getByRole('heading', { name: 'repo' });
+    heading.focus();
+    expect(heading).toHaveFocus();
+    expect(heading).toHaveAttribute('title', '/work/alpha/repo');
+    expect(await screen.findByTestId('tooltip')).toHaveTextContent('/work/alpha/repo');
   });
 
   it('has no search box in the conversation sidebar', () => {
