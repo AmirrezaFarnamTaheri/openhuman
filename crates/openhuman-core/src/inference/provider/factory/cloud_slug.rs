@@ -28,6 +28,37 @@ use tinyinference_llm::providers::openai::codex::{
 use tinyinference_llm::providers::registry::resolve_slug_model;
 use tinyinference_providers::route::split_model_and_temperature;
 
+/// Reject explicit credential-bearing headers on non-TLS remote endpoints.
+/// The primary API key validator cannot see an ephemeral route that carries its
+/// credential in custom headers instead of the provider's api_key field.
+pub(super) fn validate_ephemeral_header_transport(
+    headers: &[(String, String)],
+    endpoint: &str,
+) -> anyhow::Result<()> {
+    let has_credential_header = headers.iter().any(|(name, value)| {
+        !value.trim().is_empty()
+            && matches!(
+                name.trim().to_ascii_lowercase().as_str(),
+                "authorization"
+                    | "proxy-authorization"
+                    | "x-authorization"
+                    | "x-api-key"
+                    | "api-key"
+                    | "x-goog-api-key"
+                    | "x-azure-api-key"
+                    | "x-auth-token"
+                    | "x-api-token"
+                    | "cookie"
+            )
+    });
+    if has_credential_header
+        && !crate::security::transport::is_safe_endpoint_for_bearer(endpoint)
+    {
+        anyhow::bail!("Credentialed cloud providers require HTTPS or loopback HTTP");
+    }
+    Ok(())
+}
+
 type CloudSlugInspectionChatModelResult = Option<
     anyhow::Result<(
         Arc<dyn ChatModel<()>>,
@@ -564,6 +595,9 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
         })
         .map(|route| route.headers.clone())
         .unwrap_or_default();
+    if let Err(error) = validate_ephemeral_header_transport(&extra_headers, &codex.endpoint) {
+        return Some(Err(error));
+    }
     let default_provider_options = config
         .ephemeral_route
         .as_ref()
