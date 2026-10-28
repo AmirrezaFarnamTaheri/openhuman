@@ -39,6 +39,39 @@ fn entry(slug: &str, endpoint: &str) -> CloudProviderCreds {
     }
 }
 
+#[tokio::test]
+async fn rejects_unsafe_provider_update_with_persisted_key_before_saving_config() {
+    let temp = tempfile::tempdir().expect("temp credential directory");
+    let mut config = Config::default();
+    config.config_path = temp.path().join("config.toml");
+    config.workspace_dir = temp.path().join("workspace");
+    config.action_dir = temp.path().join("action");
+    config.secrets.encrypt = false;
+    crate::security::credentials::AuthService::from_config(&config)
+        .store_provider_token(
+            "provider:private",
+            "default",
+            "existing-secret",
+            Default::default(),
+            true,
+        )
+        .expect("store credential");
+
+    let patch = ModelSettingsPatch {
+        cloud_providers: Some(vec![entry("private", "http://api.example.invalid/v1")]),
+        ..Default::default()
+    };
+    let error = apply_model_settings(&mut config, patch)
+        .await
+        .expect_err("a saved key must not be routed to remote HTTP");
+    assert!(error.contains("HTTPS or loopback HTTP"), "{error}");
+    assert!(!error.contains("existing-secret"));
+    assert!(
+        !config.config_path.exists(),
+        "reject before persisting an unsafe endpoint"
+    );
+}
+
 #[test]
 fn registers_a_provider_and_pins_the_agent_turn_roles() {
     let mut config = config_with(
