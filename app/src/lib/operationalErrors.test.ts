@@ -71,6 +71,16 @@ describe('explainOperationalError', () => {
     expect(displayed).toContain('[redacted]');
   });
 
+  it('redacts echoed provider keys and arbitrarily shaped invalid-token values', () => {
+    const error = explainOperationalError(
+      new Error('Incorrect API key provided: sk-abc; Invalid token: FIXTURE-not-a-real-key-000000')
+    );
+    expect(error.summary).not.toContain('sk-abc');
+    expect(error.summary).not.toContain('FIXTURE-not-a-real-key-000000');
+    expect(error.technicalDetails).not.toContain('sk-abc');
+    expect(error.technicalDetails).not.toContain('FIXTURE-not-a-real-key-000000');
+  });
+
   it('does not infer a port conflict from an unrelated SQLite failure', () => {
     expect(
       explainOperationalError(new Error('opening the configured storage backend')).kind
