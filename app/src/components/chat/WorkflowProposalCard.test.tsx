@@ -25,6 +25,8 @@ const {
   mockPreauthorizeFlow,
   mockDispatch,
   mockNavigate,
+  mockGetThreadMessages,
+  mockUpdateMessage,
 } = vi.hoisted(() => ({
   mockCreateFlow: vi.fn(),
   mockUpdateFlow: vi.fn(),
@@ -33,6 +35,14 @@ const {
   mockPreauthorizeFlow: vi.fn(),
   mockDispatch: vi.fn(),
   mockNavigate: vi.fn(),
+  mockGetThreadMessages: vi.fn(),
+  mockUpdateMessage: vi.fn(),
+}));
+vi.mock('../../services/api/threadApi', () => ({
+  threadApi: {
+    getThreadMessages: (...args: unknown[]) => mockGetThreadMessages(...args),
+    updateMessage: (...args: unknown[]) => mockUpdateMessage(...args),
+  },
 }));
 vi.mock('../../services/api/flowsApi', () => ({
   createFlow: (...args: unknown[]) => mockCreateFlow(...args),
@@ -83,6 +93,8 @@ describe('WorkflowProposalCard', () => {
       .mockResolvedValue({ flow_id: 'f1', granted: [], already_trusted: [], gate_installed: true });
     mockDispatch.mockReset();
     mockNavigate.mockReset();
+    mockGetThreadMessages.mockReset().mockResolvedValue({ messages: [] });
+    mockUpdateMessage.mockReset().mockResolvedValue({});
   });
 
   it('renders the name, trigger, and steps with plain-language node-kind badges', () => {
@@ -393,6 +405,43 @@ describe('WorkflowProposalCard', () => {
     );
     expect(mockUpdateFlow).not.toHaveBeenCalled();
     expect(mockCreateFlow).not.toHaveBeenCalled();
+  });
+
+  it('enables the flow the agent already saved for this proposal instead of creating one', async () => {
+    // The user said "save it" in chat; the core recorded the agent's flow on
+    // the proposal's source message, which this card's state never saw.
+    mockGetThreadMessages.mockResolvedValueOnce({
+      messages: [
+        {
+          id: 'workflow-proposal:sub-1',
+          extraMetadata: { scope: 'workflow_proposal', saved_flow_id: 'agent-flow' },
+        },
+      ],
+    });
+    render(
+      <WorkflowProposalCard
+        threadId="t1"
+        proposal={proposal({ sourceMessageId: 'workflow-proposal:sub-1' })}
+      />
+    );
+    fireEvent.click(screen.getByText('chat.flowProposal.save'));
+    await waitFor(() => expect(mockSetFlowEnabled).toHaveBeenCalledWith('agent-flow', true));
+    expect(mockCreateFlow).not.toHaveBeenCalled();
+    expect(mockGetThreadMessages).toHaveBeenCalledWith('t1');
+  });
+
+  it('does not persist when it cannot check for an already-saved flow', async () => {
+    mockGetThreadMessages.mockRejectedValueOnce(new Error('core unavailable'));
+    render(
+      <WorkflowProposalCard
+        threadId="t1"
+        proposal={proposal({ sourceMessageId: 'workflow-proposal:sub-1' })}
+      />
+    );
+    fireEvent.click(screen.getByText('chat.flowProposal.save'));
+    await waitFor(() => expect(screen.getByText(/chat\.flowProposal\.error/)).toBeInTheDocument());
+    expect(mockCreateFlow).not.toHaveBeenCalled();
+    expect(mockUpdateFlow).not.toHaveBeenCalled();
   });
 
   it('resumes at the enable step for a proposal whose flow was already saved', async () => {
