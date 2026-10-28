@@ -147,6 +147,7 @@ async fn a_blank_summarizer_model_counts_as_unset() {
 async fn a_configured_summarizer_model_is_pinned_on_the_managed_route() {
     use crate::core::runtime::{CoreContext, DispatchCtx, DomainSet};
 
+    let _guard = crate::inference::inference_test_guard_async().await;
     let extensions = crate::core::slots::Extensions::new();
     crate::inference::registry::register_chat_model_in(
         &extensions,
