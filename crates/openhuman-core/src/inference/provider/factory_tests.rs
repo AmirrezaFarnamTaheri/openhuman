@@ -658,3 +658,45 @@ mod managed_ledger_tests;
 mod model_gate_tests;
 #[path = "factory_route_resolution_tests.rs"]
 mod route_resolution_tests;
+#[test]
+fn ephemeral_headers_reject_credentials_on_insecure_remote_http() {
+    let cases = ["Authorization", "authorization", "X-API-KEY", "x-api-key"];
+    for header in cases {
+        let headers = vec![(header.to_owned(), "credential-value".to_owned())];
+        assert!(
+            super::cloud_slug::validate_ephemeral_header_transport(
+                &headers,
+                "http://remote.example.invalid/v1"
+            )
+            .is_err(),
+            "{header} must not be forwarded to remote HTTP"
+        );
+        assert!(
+            super::cloud_slug::validate_ephemeral_header_transport(
+                &headers,
+                "http://127.0.0.1:8080/v1"
+            )
+            .is_ok(),
+            "loopback may receive explicit credentials"
+        );
+        assert!(
+            super::cloud_slug::validate_ephemeral_header_transport(
+                &headers,
+                "https://remote.example.invalid/v1"
+            )
+            .is_ok(),
+            "HTTPS may receive explicit credentials"
+        );
+    }
+    for headers in [vec![], vec![("X-Request-ID".to_owned(), "test".to_owned())]] {
+        assert!(
+            super::cloud_slug::validate_ephemeral_header_transport(
+                &headers,
+                "http://remote.example.invalid/v1"
+            )
+            .is_ok(),
+            "ordinary unauthenticated HTTP remains supported"
+        );
+    }
+}
+
