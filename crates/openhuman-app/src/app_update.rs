@@ -20,6 +20,24 @@
 
 use std::time::Duration;
 
+/// A successful check and its absence of an update are distinct from a
+/// failed check. Network/manifest errors must never masquerade as UpToDate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateCheck<T> {
+    Available(T),
+    UpToDate,
+}
+
+/// Normalize the updater API response without erasing the reason a check failed.
+/// The caller can show a retryable "update status unknown" state on Err.
+pub fn classify_update_check<T, E>(outcome: Result<Option<T>, E>) -> Result<UpdateCheck<T>, E> {
+    match outcome {
+        Ok(Some(update)) => Ok(UpdateCheck::Available(update)),
+        Ok(None) => Ok(UpdateCheck::UpToDate),
+        Err(error) => Err(error),
+    }
+}
+
 /// Total download attempts before giving up (1 initial + 2 retries).
 pub const MAX_DOWNLOAD_ATTEMPTS: u32 = 3;
 
