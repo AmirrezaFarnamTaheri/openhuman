@@ -105,6 +105,13 @@ fn secret_id(value: &str) -> u64 {
     SALT.get_or_init(RandomState::new).hash_one(value)
 }
 
+/// Process-local fingerprint for non-secret routing scope components. A randomized
+/// process salt avoids persisting or exposing endpoint strings in registry keys.
+/// Identical endpoints remain stable within one running process.
+pub(super) fn scope_fingerprint(endpoint: &str) -> u64 {
+    secret_id(endpoint)
+}
+
 /// Read a secret group from comma, semicolon, or newline-separated credentials.
 /// Empty segments are discarded and identical values are kept once.
 pub fn parse_api_keys(raw: &str) -> Vec<String> {
