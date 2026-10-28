@@ -264,7 +264,10 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                     .collect()
             };
             let prompt = system_prompt(&after_messages);
-            assert!(!prompt.is_empty(), "the request opens with the system prompt");
+            assert!(
+                !prompt.is_empty(),
+                "the request opens with the system prompt"
+            );
             assert_eq!(
                 prompt,
                 system_prompt(&before_messages),
@@ -276,7 +279,10 @@ fn compact_thread_seals_the_head_and_the_next_turn_resends_the_summary() {
                 "the tool declarations are byte-identical"
             );
             let summary = &after_messages[prompt.len()];
-            assert_eq!(summary["role"], "user", "the summary follows the system prompt");
+            assert_eq!(
+                summary["role"], "user",
+                "the summary follows the system prompt"
+            );
             assert!(text(summary).contains("SUMMARY-MARKER"));
             assert!(
                 after.body.to_string().len() < before.body.to_string().len(),

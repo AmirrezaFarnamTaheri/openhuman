@@ -69,12 +69,17 @@ impl OpenHumanSessionHost {
     /// When the session is bound to no thread (or is a sub-agent's), when its
     /// stores cannot be admitted or read, when the summarizer models cannot be
     /// built, or when the new generation cannot be written.
-    pub async fn compact_bound_history(&mut self, options: CompactOptions) -> Result<CompactOutcome> {
+    pub async fn compact_bound_history(
+        &mut self,
+        options: CompactOptions,
+    ) -> Result<CompactOutcome> {
         let Some(thread_id) = self.thread_id.clone() else {
             return Err(anyhow!("compact_thread needs a session bound to a thread"));
         };
         if self.session_parent_prefix.is_some() {
-            return Err(anyhow!("compact_thread does not compact a sub-agent session"));
+            return Err(anyhow!(
+                "compact_thread does not compact a sub-agent session"
+            ));
         }
         // The turn's own identity: the runtime resolves the same request with
         // the same resolver before every turn (`identity_resolver` in ensure).
@@ -107,7 +112,10 @@ impl OpenHumanSessionHost {
         let history = codec
             .decode_history(&transcript)
             .map_err(|error| anyhow!(error.to_string()))?;
-        if history.iter().all(|message| matches!(message, Message::System(_))) {
+        if history
+            .iter()
+            .all(|message| matches!(message, Message::System(_)))
+        {
             tracing::info!(thread_id = %thread_id, outcome = "empty", "[compact_thread] no conversation");
             return Ok(CompactOutcome::Empty);
         }
