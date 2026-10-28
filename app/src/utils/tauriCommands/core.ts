@@ -3,7 +3,11 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 
-import { callCoreRpc, clearCoreRpcTokenCache } from '../../services/coreRpcClient';
+import {
+  callCoreRpc,
+  clearCoreRpcTokenCache,
+  clearCoreRpcUrlCache,
+} from '../../services/coreRpcClient';
 import { IS_DEV_LIKE } from '../config';
 import { CommandResponse, isTauri } from './common';
 
@@ -78,6 +82,9 @@ export async function restartCoreProcess(): Promise<void> {
   }
   console.debug('[core] restartCoreProcess: invoking restart_core_process');
   await invoke<void>('restart_core_process');
+  // Recovery may choose another RPC port. Invalidate the endpoint *before*
+  // notifying long-lived consumers to reconnect with the newly minted bearer.
+  clearCoreRpcUrlCache();
   // The Tauri shell mints a fresh `OPENHUMAN_CORE_TOKEN` for the new core
   // process. Drop the cached bearer so token-bearing long-lived consumers
   // (e.g. webhook SSE per #1922) reconnect with the new value.
