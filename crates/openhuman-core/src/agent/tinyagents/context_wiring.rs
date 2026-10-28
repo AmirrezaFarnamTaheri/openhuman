@@ -32,6 +32,17 @@ const TASK_STATE_KEEP_RECENT_TOKENS: u64 = 20_000;
 const ARTIFACT_INDEX_STORE: &str =
     crate::agent::harness::tool_result_artifacts::TINYAGENTS_TOOL_RESULT_ARTIFACT_STORE;
 
+/// The model a compaction's summarizer calls, and how it calls it.
+pub(crate) struct CompactionSummarizer {
+    /// The model the summary request goes to.
+    pub(crate) model: Arc<dyn tinyinference_llm::model::ChatModel<()>>,
+    /// The id `model` calls, for the summarizer's logs and summary provenance.
+    pub(crate) model_id: String,
+    /// `[context] summarizer_tool_rendering` / `summarizer_max_output_tokens`;
+    /// the free-form (`Summary`) strategy applies them.
+    pub(crate) settings: crate::config::SummarizerSettings,
+}
+
 /// Called when the turn starts summarizing earlier conversation.
 pub(super) type CompactionNotice = Arc<dyn Fn() + Send + Sync>;
 
@@ -102,8 +113,7 @@ pub(super) fn install_context_ladder(
     compaction_trigger_tokens: Option<u64>,
     compaction_strategy: crate::config::CompactionStrategy,
     microcompact_keep_recent: usize,
-    summarizer_model: Arc<dyn tinyinference_llm::model::ChatModel<()>>,
-    summarizer_model_id: &str,
+    summarizer: CompactionSummarizer,
     wrap_up_at_cap: bool,
     tool_outcome_sink: &ToolOutcomeSink,
     memory_turn: Option<Arc<crate::memory::lifecycle::hooks::MemoryTurn>>,
@@ -121,8 +131,7 @@ pub(super) fn install_context_ladder(
                 policy,
                 compaction_strategy,
                 context_window,
-                summarizer_model,
-                summarizer_model_id,
+                summarizer,
                 model,
                 memory_turn,
                 compaction_notice,
@@ -170,16 +179,14 @@ pub(super) fn install_context_ladder(
 }
 
 /// The compression middleware for `strategy`: `TaskState` writes a typed
-/// checkpoint over a token-budgeted tail, `Summary` is the free-form summarizer.
-/// `summarizer_model_id` names the model `summarizer_model` calls, for the
-/// summarizer's logs and summary provenance; `model` is the turn's.
-#[allow(clippy::too_many_arguments)]
-fn compression_middleware(
+/// checkpoint over a token-budgeted tail, `Summary` is the free-form summarizer,
+/// rendering tool activity and capping its output as `summarizer.settings`
+/// say. `model` is the turn's.
+pub(crate) fn compression_middleware(
     policy: SummarizationPolicy,
     strategy: crate::config::CompactionStrategy,
     context_window: Option<u64>,
-    summarizer_model: Arc<dyn tinyinference_llm::model::ChatModel<()>>,
-    summarizer_model_id: &str,
+    summarizer: CompactionSummarizer,
     model: &str,
     memory_turn: Option<Arc<crate::memory::lifecycle::hooks::MemoryTurn>>,
     compaction_notice: Option<CompactionNotice>,
@@ -197,7 +204,7 @@ fn compression_middleware(
             let summarizer = FaultTolerantCachingSummarizer::new(
                 announced(
                     Box::new(
-                        TaskStateSummarizer::new(summarizer_model, summarizer_model_id)
+                        TaskStateSummarizer::new(summarizer.model, summarizer.model_id)
                             .with_max_chunk_tokens(chunk),
                     ),
                     compaction_notice,
@@ -211,12 +218,20 @@ fn compression_middleware(
             .with_keep_recent_tokens(keep_recent)
         }
         crate::config::CompactionStrategy::Summary => {
-            tracing::info!(model, "[context_compression] strategy=summary");
+            let settings = summarizer.settings;
+            tracing::info!(
+                model,
+                tool_rendering = ?settings.tool_rendering,
+                max_output_tokens = ?settings.max_output_tokens,
+                "[context_compression] strategy=summary"
+            );
+            let mut model_summarizer = ModelSummarizer::new(summarizer.model, summarizer.model_id)
+                .with_tool_rendering(settings.tool_rendering);
+            if let Some(cap) = settings.max_output_tokens {
+                model_summarizer = model_summarizer.with_max_output_tokens(cap);
+            }
             let summarizer = FaultTolerantCachingSummarizer::new(
-                announced(
-                    Box::new(ModelSummarizer::new(summarizer_model, summarizer_model_id)),
-                    compaction_notice,
-                ),
+                announced(Box::new(model_summarizer), compaction_notice),
                 &policy,
             );
             ContextCompressionMiddleware::with_summarizer(
