@@ -600,7 +600,7 @@ describe('useAppUpdate', () => {
   });
 
   describe('auto-check cadence', () => {
-    it('keeps failed background update probes quiet and never claims the app is current', async () => {
+    it('keeps failed background probes quiet without claiming the app is current', async () => {
       mockCheckAppUpdate.mockRejectedValueOnce(new Error('Release manifest unavailable'));
 
       const { result } = renderHook(() =>
