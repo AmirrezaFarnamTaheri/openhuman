@@ -121,7 +121,7 @@ fn configured_summarizer_model(config: &crate::config::Config) -> Option<&str> {
 
 /// The model id this turn's compaction summarizer calls: the configured one,
 /// else the turn's own. Logs the choice once per turn build.
-fn summarizer_model_id(configured: Option<&str>, turn_model: &str) -> String {
+fn choose_summarizer_model(configured: Option<&str>, turn_model: &str) -> String {
     let (model, source) = match configured {
         Some(model) => (model, "config"),
         None => (turn_model, "turn"),
@@ -213,7 +213,7 @@ fn build_turn_models_crate(
             })
         })
         .collect();
-    let summarizer_model_id = summarizer_model_id(configured_summarizer, model);
+    let summarizer_model_id = choose_summarizer_model(configured_summarizer, model);
     let built = tinyagents_harness::host::TurnModelSet::<()>::builder(&factory, &factory, role)
         .primary_model_pin(model)
         .primary_opts(opts.clone())
@@ -504,7 +504,7 @@ impl TurnModelSource {
                 summarizer,
                 // An injected model is the whole source; there is no route
                 // to call another model on.
-                summarizer_model_id: summarizer_model_id(None, model),
+                summarizer_model_id: choose_summarizer_model(None, model),
                 error_slot: Arc::new(std::sync::Mutex::new(None)),
                 native_model_set: None,
                 provider_id,
