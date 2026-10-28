@@ -82,6 +82,23 @@ pub(crate) fn resolve_cloud_slug_for<'a>(
 /// refresh-required check and the Codex reconnect classifier key on those
 /// fixed phrases; the rest of the lookup error can carry stored-credential
 /// content or a refresh response's body, so it is dropped.
+/// Health and cooldown belong to a destination, not merely a provider alias:
+/// changing the endpoint must not carry its previous 429 or invalid-key state.
+pub(super) fn rotation_pool_scope(
+    workspace: &std::path::Path,
+    slug: &str,
+    model: &str,
+    endpoint: &str,
+) -> String {
+    format!(
+        "{}:{}:{}:{:016x}",
+        workspace.display(),
+        slug,
+        model,
+        super::key_pool::scope_fingerprint(endpoint),
+    )
+}
+
 pub(super) fn lookup_failure(error: &anyhow::Error, guidance: String) -> anyhow::Error {
     let text = format!("{error:#}");
     let signal = if text.contains(super::credentials::OAUTH_REFRESH_REQUIRED) {
@@ -688,7 +705,12 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
         )));
     }
     let inspection_key = keys.first().cloned().unwrap_or_default();
-    let scope = format!("{}:{}:{}", config.workspace_dir.display(), slug, effective_model);
+    let scope = rotation_pool_scope(
+        &config.workspace_dir,
+        &slug,
+        &effective_model,
+        &codex.endpoint,
+    );
     let chat = super::cloud_fleet::build_cloud_model_with_keys(
         scope,
         keys,
