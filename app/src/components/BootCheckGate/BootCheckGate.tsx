@@ -811,7 +811,7 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
           recovery.message
         );
         if (!recovery.success) {
-          setActionError(t('bootCheck.portConflictForceQuitFailed'));
+          setActionError(recovery.message || t('bootCheck.portConflictForceQuitFailed'));
           return;
         }
         if (coreMode.kind !== 'unset') {
