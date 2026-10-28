@@ -121,11 +121,7 @@ export function groupThreads(
   });
   const pinned = buckets.get('pinned');
   const recencyStart = pinned ? 1 : 0;
-  return [
-    ...(pinned ? [pinned] : []),
-    ...orderedDynamic,
-    ...orderedRecency.slice(recencyStart),
-  ];
+  return [...(pinned ? [pinned] : []), ...orderedDynamic, ...orderedRecency.slice(recencyStart)];
 }
 
 /** Last path segment of a folder, for a compact tooltip. */
