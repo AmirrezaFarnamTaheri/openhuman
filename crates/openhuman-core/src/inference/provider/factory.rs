@@ -13,6 +13,7 @@
 
 pub(crate) mod access_gates;
 mod chat_model;
+mod cloud_fleet;
 mod cloud_http;
 mod cloud_slug;
 mod cloud_spec;
