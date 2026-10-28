@@ -101,6 +101,14 @@ impl MemoryBinding {
 
     /// Recall memory for the user's current message on every turn, and wait
     /// at most `timeout` for it before the turn's first model call.
+    ///
+    /// The recall runs alongside the rest of turn setup. A pack that arrives
+    /// in time rides every model request of the turn as an ephemeral note
+    /// after the user's message, and is never written to the transcript. A
+    /// late or failed recall leaves the turn without a note; it never fails
+    /// the turn. Without this, a turn only sees the pack the background
+    /// refresh completed for an earlier turn, which a host whose users write
+    /// minutes apart rarely has.
     #[must_use]
     pub fn recall_each_turn(mut self, timeout: std::time::Duration) -> Self {
         self.recall_each_turn = Some(timeout);
@@ -115,6 +123,12 @@ impl MemoryBinding {
     /// The layout root, when one is set.
     pub fn root_namespace(&self) -> Option<&str> {
         self.root.as_deref()
+    }
+
+    /// How long a turn waits for its own recall, when
+    /// [`recall_each_turn`](Self::recall_each_turn) is set.
+    pub fn recall_each_turn_timeout(&self) -> Option<std::time::Duration> {
+        self.recall_each_turn
     }
 }
 
