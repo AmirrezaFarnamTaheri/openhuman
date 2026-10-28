@@ -43,9 +43,8 @@ pub(crate) struct OpenHumanModelFactory<'a> {
     /// Attach OpenHuman's per-turn multimodal providers using the route this
     /// factory actually selected. One-shot probes do not need host attachments.
     pub(crate) attach_host_attachments: bool,
-    /// The model the summarization request calls on its own provider route
-    /// (`[context] summarizer_model`), in place of that route's model. `None`
-    /// keeps the route's model; primary and workload requests ignore it.
+    /// `[context] summarizer_model`: the model a summarization request calls
+    /// on its own provider route instead of the route's model.
     pub(crate) summarizer_model: Option<&'a str>,
 }
 
@@ -58,25 +57,21 @@ impl OpenHumanModelFactory<'_> {
             .unwrap_or(role)
     }
 
-    fn provider_for(&self, request: &ModelBuildRequest) -> String {
+    pub(super) fn provider_for(&self, request: &ModelBuildRequest) -> String {
         match &request.purpose {
             ModelPurpose::Primary | ModelPurpose::Summarization => {
                 let provider = self
                     .primary_provider
                     .map(str::to_owned)
                     .unwrap_or_else(|| provider_for_role(&request.role, self.config));
-                match (&request.purpose, self.summarizer_model) {
-                    (ModelPurpose::Summarization, Some(model)) => {
-                        route_with_model(&provider, model)
-                    }
-                    _ => provider,
-                }
+                let summarizes = matches!(request.purpose, ModelPurpose::Summarization);
+                route_with_model(provider, self.summarizer_model.filter(|_| summarizes))
             }
             ModelPurpose::WorkloadTier(_) => provider_for_role(&request.role, self.config),
         }
     }
 
-    fn injected(&self, request: &ModelBuildRequest) -> Option<Arc<dyn ChatModel<()>>> {
+    pub(super) fn injected(&self, request: &ModelBuildRequest) -> Option<Arc<dyn ChatModel<()>>> {
         let route = request.route.as_deref();
         let host_model = self
             .ctx
@@ -331,21 +326,6 @@ impl OpenHumanModelFactory<'_> {
     }
 }
 
-/// `provider` with its model replaced by `model`: the same provider (and so
-/// the same credentials, endpoint and route temperature) serving another
-/// model. A provider string with no model of its own (a routing sentinel such
-/// as `cloud`, or the managed backend's bare `openhuman`) is returned as is;
-/// those routes take the model from the request's pin instead.
-fn route_with_model(provider: &str, model: &str) -> String {
-    match ProviderRoute::parse(provider) {
-        Some(route) if route.kind() != RouteKind::Sentinel => match route.temperature {
-            Some(temperature) => format!("{}:{model}@{temperature}", route.provider),
-            None => format!("{}:{model}", route.provider),
-        },
-        _ => provider.to_owned(),
-    }
-}
-
 fn build_one_shot(
     ctx: &DispatchCtx,
     role: &str,
@@ -376,25 +356,6 @@ fn build_one_shot(
     factory.check(&request)?;
     let (model, route) = factory.build(&request)?;
     Ok((model, route.model))
-}
-
-impl ModelBuildGate for OpenHumanModelFactory<'_> {
-    fn check(&self, request: &ModelBuildRequest) -> tinyagents_harness::Result<()> {
-        // Explicit host model injection is authoritative and has no provider
-        // construction, credential, or egress side effect to gate.
-        if self.injected(request).is_some() {
-            return Ok(());
-        }
-        let provider = self.provider_for(request);
-        enforce_local_only_inference(&request.role, &provider)
-            .map_err(|error| tinyagents_harness::TinyAgentsError::Model(error.to_string()))?;
-        crate::inference::provider::factory::access_gates::verify_provider_session_in(
-            self.ctx,
-            self.config,
-            &provider,
-        )
-        .map_err(|error| tinyagents_harness::TinyAgentsError::Model(error.to_string()))
-    }
 }
 
 impl ModelFactory<()> for OpenHumanModelFactory<'_> {
