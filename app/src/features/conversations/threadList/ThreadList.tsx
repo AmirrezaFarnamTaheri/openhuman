@@ -169,7 +169,7 @@ function ThreadListView() {
             aria-label={
               group.key.startsWith('project:')
                 ? `${group.label} — ${group.threads[0]?.actionDir ?? ''}`
-                : group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older')
+                : (group.label ?? t(GROUP_LABEL_KEYS[group.key] ?? 'chat.sidebar.group.older'))
             }
             className="flex flex-col gap-0.5">
             {group.key.startsWith('project:') && group.threads[0]?.actionDir ? (
