@@ -39,6 +39,13 @@ pub use chat_model::{
 pub(crate) use chat_model::{resolves_to_managed_backend, OpenHumanModelFactory};
 pub(crate) use cloud_slug::resolve_cloud_slug_for;
 pub(crate) use cloud_spec::{cloud_provider_spec, CloudCredentialResolver};
+/// Catalog discovery is a one-credential HTTP call. Never give its request
+/// builder a delimited fleet: that would forward multiple secrets as a single
+/// Authorization header. The native inference path owns per-call rotation.
+pub(crate) fn byok_catalog_keys(raw: &str) -> Vec<String> {
+    key_pool::parse_api_keys(raw)
+}
+
 pub use credentials::{auth_key_for_slug, lookup_key_for_slug};
 pub(crate) use credentials::{
     openai_bearer_is_oauth, redact_endpoint_origin, resolve_codex_routing,
