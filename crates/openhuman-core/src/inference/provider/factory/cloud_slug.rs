@@ -671,25 +671,50 @@ fn try_create_cloud_slug_chat_model_from_string_with_native_tools_and_access(
     };
     let auth_style = cloud_spec::registry_auth_style(entry.auth_style)
         .expect("managed JWT entries returned above");
-    let chat = cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
-        spec: cloud_spec::cloud_provider_spec(entry, &effective_model),
-        auth_style,
-        key: key.as_str(),
-        temperature_override,
-        temperature_unsupported_models: config.temperature_unsupported_models.as_slice(),
-        native_tool_calling,
-        default_provider_options,
-        extra_headers: extra_headers.as_slice(),
-        extra_query_params: extra_query_params.as_slice(),
-        user_agent: user_agent.as_deref(),
-        codex: codex_route,
-        http,
-    });
+    // Parse only actual BYOK credentials. OAuth, hosted and unauthenticated
+    // routes retain their original single-key identity and provider semantics.
+    let eligible = !codex.using_oauth
+        && matches!(entry.auth_style, AuthStyle::Bearer | AuthStyle::Anthropic);
+    let keys = if eligible {
+        super::key_pool::parse_api_keys(&key)
+    } else {
+        vec![key.clone()]
+    };
+    if keys.len() > 1
+        && (crate::core::runtime::is_saas() || codex.account_id.is_some())
+    {
+        return Some(Err(anyhow::anyhow!(
+            "multi-key BYOK rotation is unavailable for shared or account-bound sessions"
+        )));
+    }
+    let inspection_key = keys.first().cloned().unwrap_or_default();
+    let scope = format!("{}:{}:{}", config.workspace_dir.display(), slug, effective_model);
+    let chat = super::cloud_fleet::build_cloud_model_with_keys(
+        scope,
+        keys,
+        eligible && credential_access == CredentialAccess::Runtime,
+        |credential| {
+            cloud_spec::build_cloud_model(cloud_spec::CloudBuild {
+                spec: cloud_spec::cloud_provider_spec(entry, &effective_model),
+                auth_style: auth_style.clone(),
+                key: credential,
+                temperature_override,
+                temperature_unsupported_models: config.temperature_unsupported_models.as_slice(),
+                native_tool_calling,
+                default_provider_options: default_provider_options.clone(),
+                extra_headers: extra_headers.as_slice(),
+                extra_query_params: extra_query_params.as_slice(),
+                user_agent: user_agent.as_deref(),
+                codex: codex_route,
+                http: http.clone(),
+            })
+        },
+    );
     if let Some(identity) = inspection_identity {
         let credential = if entry.auth_style == AuthStyle::None {
             String::new()
         } else {
-            key.clone()
+            inspection_key.clone()
         };
         let output_budget = inspection_output_budget_capability(&codex);
         // Doctor's live probe deduplicates on this identity, so it carries
