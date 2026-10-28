@@ -267,6 +267,32 @@ describe('runBootCheck — port conflict auto-recovery', () => {
     });
   });
 
+  it.each([
+    'failed to signal stale openhuman pid 123: permission denied',
+    'failed to force-kill stale openhuman pid 123: permission denied',
+    'port 7788 rebounded to pid 456 after terminating pid 123; refusing to kill a different process',
+  ])('keeps stale-listener recovery available after %s', async diagnostic => {
+    const recoverPortConflict = vi.fn().mockResolvedValue({
+      success: false,
+      message: 'listener requires manual recovery',
+      foreign_owner: { pid: 456, name: 'another process' },
+    });
+    const result = await runBootCheck(
+      { kind: 'local' },
+      {
+        callRpc: vi.fn(),
+        invokeCmd: vi.fn().mockRejectedValue(new Error(diagnostic)),
+        recoverPortConflict,
+      }
+    );
+    expect(recoverPortConflict).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      kind: 'unreachable',
+      portConflict: true,
+      foreignOwner: { pid: 456, name: 'another process' },
+    });
+  });
+
   it('auto-recovery succeeds: start fails, recovery succeeds, second start succeeds', async () => {
     const appVersion = (await import('../../utils/config')).APP_VERSION;
 
