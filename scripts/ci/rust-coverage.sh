@@ -384,7 +384,11 @@ fi
 # remaining crates do not expose that feature vocabulary.
 if has_cov_section facades; then
 if [ "${OH_COV_RUNNER:-cargo}" != "nextest" ]; then
-  suite "openhuman-embed" llvm_cov_embed --no-report --no-fail-fast -p openhuman-embed --all-targets
+  # The embed facade admits one live runtime process-wide. Its cleanup and
+  # build-ownership tests cannot claim that singleton concurrently within one
+  # libtest binary; execute every case serially, without filtering or skipping.
+  suite "openhuman-embed" llvm_cov_embed --no-report --no-fail-fast -p openhuman-embed --all-targets -- \
+    --test-threads=1
 fi
 suite "openhuman-rpc" llvm_cov_package --no-report --no-fail-fast -p openhuman-rpc --all-targets \
   --features storage-sqlite,secret-file
