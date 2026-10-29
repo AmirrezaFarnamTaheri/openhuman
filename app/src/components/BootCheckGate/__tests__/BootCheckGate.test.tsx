@@ -680,6 +680,12 @@ describe('BootCheckGate — unreachable', () => {
     renderGate();
 
     const disclosure = await screen.findByTestId('boot-error-details');
+    expect(
+      screen.getByRole('heading', {
+        name: 'OpenHuman could not finish upgrading the workspace database.',
+      })
+    ).toBeInTheDocument();
+    expect(screen.queryByText(copy('bootCheck.cannotReach'))).not.toBeInTheDocument();
     expect(disclosure).not.toHaveAttribute('open');
     expect(
       screen.getByText(
