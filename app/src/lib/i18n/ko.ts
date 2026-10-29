@@ -1412,6 +1412,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     '연결되었지만 이 코어에서는 실시간 기능이 꺼져 있습니다. --jsonrpc-only로 시작되었습니다. 채팅과 실시간 업데이트를 쓰려면 이 플래그 없이 다시 시작하세요.',
   'bootCheck.checkingCore': 'OpenHuman을 시작하는 중…',
+  'bootCheck.upgradingWorkspace': '작업 공간을 업그레이드하는 중…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman이 기존 데이터를 보호하며 업그레이드하고 있습니다. 완료될 때까지 앱을 열어 두세요.',
   'bootCheck.cannotReach': '연결할 수 없습니다',
   'bootCheck.cannotReachDesc': '연결하지 못했습니다. 다른 곳에서 시도해 볼까요?',
   'bootCheck.switchMode': '실행 위치 변경',
