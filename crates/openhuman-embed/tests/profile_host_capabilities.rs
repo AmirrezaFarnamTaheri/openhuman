@@ -521,14 +521,10 @@ async fn scenario() {
     tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             let event = events.recv().await.expect("profile event stream remains open");
-            observed_events.push(format!(
-                "{}:{}",
-                event.event_name(),
-                event.context().request_id
-            ));
-            if event.event_name() == "channel_outbound"
-                && event.context().request_id == request_id
-            {
+            let event_name = event.event_name();
+            let event_request_id = event.context().request_id.as_str();
+            observed_events.push(format!("{event_name}:{event_request_id}"));
+            if event_name == "channel_outbound" && event_request_id == request_id {
                 break;
             }
         }
@@ -536,8 +532,8 @@ async fn scenario() {
     .await
     .unwrap_or_else(|_| {
         panic!(
-            "reopened relay did not deliver request {request_id}; observed: {observed_events:?};              tenant tool calls: {:?}",
-            *calls.lock().unwrap()
+            "missing channel_outbound for {request_id}; events: {observed_events:?}; calls: {:?}",
+            &*calls.lock().unwrap()
         )
     });
     assert_eq!(
