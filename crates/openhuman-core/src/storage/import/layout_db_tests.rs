@@ -101,6 +101,38 @@ fn a_stale_copy_with_equal_row_counts_is_never_reused() {
 }
 
 #[test]
+fn a_copy_with_matching_rows_but_changed_schema_is_not_reused() {
+    let dir = TempDir::new().unwrap();
+    let source = dir.path().join("legacy.db");
+    let dest = dir.path().join("storage.db");
+    Connection::open(&source)
+        .unwrap()
+        .execute_batch(
+            "CREATE TABLE records (id TEXT PRIMARY KEY, body TEXT NOT NULL);
+             INSERT INTO records VALUES ('one', 'correct');",
+        )
+        .unwrap();
+    copy(&source, &dest).unwrap();
+
+    Connection::open(&dest)
+        .unwrap()
+        .execute_batch("CREATE INDEX stale_index ON records(body)")
+        .unwrap();
+    assert_eq!(table_counts(&source).unwrap(), table_counts(&dest).unwrap());
+
+    assert!(!copy(&source, &dest).unwrap().reused);
+    let stale_index: i64 = Connection::open(&dest)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE name = 'stale_index'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(stale_index, 0, "recovered schema must match the source");
+}
+
+#[test]
 fn a_count_mismatch_names_the_table() {
     let a: Counts = [("docs".to_owned(), 3), ("blobs".to_owned(), 1)].into();
     let b: Counts = [("docs".to_owned(), 2), ("blobs".to_owned(), 1)].into();
