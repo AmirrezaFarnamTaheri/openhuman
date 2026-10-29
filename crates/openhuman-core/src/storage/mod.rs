@@ -200,7 +200,6 @@ use crate::config::Config;
 /// The environment variable that overrides `[storage] url`.
 pub const STORAGE_URL_VAR: &str = "OPENHUMAN_STORAGE_URL";
 
-
 // Hosts must not abort legitimate SQLite schema or profile-layout migrations
 // merely because the RPC listener has not bound within the normal 60s startup
 // window. Track in-flight/queued work, not leftover backup artifacts.
