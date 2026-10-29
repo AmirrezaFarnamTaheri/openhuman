@@ -1469,6 +1469,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'Verbunden, aber Echtzeit ist auf diesem Core deaktiviert. Er wurde mit --jsonrpc-only gestartet; starte ihn ohne dieses Flag neu, damit Chat und Live-Updates funktionieren.',
   'bootCheck.checkingCore': 'OpenHuman wird gestartet…',
+  'bootCheck.upgradingWorkspace': 'Arbeitsbereich wird aktualisiert…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman schützt und aktualisiert Ihre vorhandenen Daten. Lassen Sie die App geöffnet, bis der Vorgang abgeschlossen ist.',
   'bootCheck.cannotReach': 'Keine Verbindung möglich',
   'bootCheck.cannotReachDesc':
     'Die Verbindung hat nicht geklappt. Möchtest du es woanders versuchen?',
