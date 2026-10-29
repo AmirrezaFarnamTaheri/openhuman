@@ -452,6 +452,16 @@ jobs:
         # the old filter (-- security::secrets) silently matched nothing.
         run: bash scripts/ci-cancel-aware.sh cargo test -p openhuman -- keyring::encrypted_store --nocapture
 
+      - name: Verify Windows legacy SQLite backup flush
+        # Win32 FlushFileBuffers requires GENERIC_WRITE. Keep this regression
+        # in the existing Windows core lane: Linux tests cannot reproduce the
+        # File::open(read-only).sync_all() access-denied failure.
+        shell: bash
+        run: |
+          bash scripts/ci-cancel-aware.sh cargo test -p openhuman --lib \
+            storage::import::sqlite_v0::tests::windows_migration_preserves_and_flushes_the_verified_rollback_backup \
+            -- --exact --nocapture
+
   rust-tauri-tests:
     if: inputs.run_rust_tauri
     name: Rust Tauri Shell Tests
