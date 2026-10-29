@@ -224,6 +224,29 @@ describe('runBootCheck — unset mode', () => {
 // ---------------------------------------------------------------------------
 
 describe('runBootCheck — port conflict auto-recovery', () => {
+  it('retains a redacted SQLite migration cause separately from the recovery guidance', async () => {
+    const cause = [
+      'opening the configured storage backend: legacy SQLite migration',
+      '(read collection metadata): database schema is locked;',
+      'Authorization: Bearer fixture-secret-value',
+    ].join(' ');
+    const transport = makeTransport({
+      invokeCmd: vi.fn().mockRejectedValue(new Error(cause)),
+      callRpc: vi.fn(),
+    });
+
+    const result = await runBootCheck({ kind: 'local' }, transport);
+    expect(result).toMatchObject({ kind: 'unreachable', portConflict: false });
+    if (result.kind === 'unreachable') {
+      expect(result.reason).toContain('could not finish upgrading');
+      expect(result.problemTitle).toContain('could not finish upgrading');
+      expect(result.technicalDetails).toContain('read collection metadata');
+      expect(result.technicalDetails).toContain('database schema is locked');
+      expect(result.technicalDetails).not.toContain('fixture-secret-value');
+      expect(result.reason).not.toContain('fixture-secret-value');
+    }
+  });
+
   it('does not mistake a legacy SQLite upgrade failure for a port collision', async () => {
     const recovery = vi.fn().mockResolvedValue({ success: false, message: 'no port owner' });
     const transport: BootCheckTransport = {
