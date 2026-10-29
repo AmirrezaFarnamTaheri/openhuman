@@ -7,6 +7,35 @@ use tinystoragedrivers::secrets::crypto;
 
 const KEY: [u8; 32] = [7; 32];
 
+#[cfg(windows)]
+#[test]
+fn windows_lock_errors_distinguish_access_denied_from_sharing_violations() {
+    for (raw_os_error, expected) in [
+        (5, "Windows access denied"),
+        (32, "Windows sharing violation"),
+    ] {
+        let source = std::io::Error::from_raw_os_error(raw_os_error);
+        let driver = tinystoragedrivers::StorageError::backend("could not open the lock file")
+            .with_source(source);
+        let message = backend_error(driver).to_string();
+        assert!(message.contains(expected), "{message}");
+        assert!(message.contains("preserve your encrypted secrets"), "{message}");
+        assert!(message.contains(&raw_os_error.to_string()), "{message}");
+    }
+}
+
+#[test]
+fn lock_error_details_never_echo_the_underlying_native_error_payload() {
+    let driver = tinystoragedrivers::StorageError::backend("could not open the lock file")
+        .with_source(std::io::Error::other(
+            "Authorization: Bearer DO_NOT_LOG_THIS_CREDENTIAL",
+        ));
+    let message = backend_error(driver).to_string();
+    assert!(message.contains("could not open the lock file"), "{message}");
+    assert!(!message.contains("DO_NOT_LOG_THIS_CREDENTIAL"), "{message}");
+}
+
+
 fn secrets_tempdir() -> tempfile::TempDir {
     let dir = {
         #[cfg(target_os = "macos")]
