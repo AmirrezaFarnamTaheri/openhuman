@@ -153,7 +153,15 @@ fn backup(
             "legacy SQLite changed during backup; migration stopped",
         ));
     }
-    std::fs::File::open(&path)
+    // On Windows, File::open obtains a read-only HANDLE, but sync_all uses
+    // FlushFileBuffers, which requires GENERIC_WRITE. Close the read-only
+    // SQLite verification connection, then open the already-verified backup
+    // with read/write access solely for a durable flush. No bytes are changed.
+    drop(copy);
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
         .and_then(|file| file.sync_all())
         .map_err(|e| error("flush backup", e))?;
     Ok(path)
