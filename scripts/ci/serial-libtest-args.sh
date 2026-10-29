@@ -38,7 +38,7 @@ filter_serial_libtest_args() {
   done
 
   if [ "$skip_value" -eq 1 ]; then
-    echo "[rust-e2e] ERROR: --test-threads requires a positive integer value" >&2
+    echo "[rust-e2e] ERROR: --test-threads requires a value" >&2
     return 2
   fi
 }
