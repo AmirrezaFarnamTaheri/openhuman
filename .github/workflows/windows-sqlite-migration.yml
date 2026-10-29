@@ -12,6 +12,8 @@ on:
       - '.github/workflows/test-reusable.yml'
       - 'crates/openhuman-core/src/storage/import/sqlite_v0.rs'
       - 'crates/openhuman-core/src/storage/import/sqlite_v0_tests.rs'
+      - 'crates/openhuman-core/src/storage/import/layout_db.rs'
+      - 'crates/openhuman-core/src/storage/import/layout_db_tests.rs'
   workflow_dispatch: {}
 
 permissions:
@@ -59,4 +61,11 @@ jobs:
         run: |
           cargo test --locked -p openhuman --lib \
             storage::import::sqlite_v0::tests::windows_migration_preserves_and_flushes_the_verified_rollback_backup \
+            -- --exact --nocapture
+
+      - name: Regress Windows profile-layout SQLite copy flush
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::import::layout_db::tests::windows_layout_database_copy_flushes_before_publication \
             -- --exact --nocapture
