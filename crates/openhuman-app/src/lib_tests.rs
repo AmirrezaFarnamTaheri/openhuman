@@ -6,7 +6,7 @@ fn startup_migration_status_can_be_read_without_a_running_rpc_listener() {
     let status = core_startup_status();
     let encoded = serde_json::to_value(status).expect("serialize startup status");
     assert!(
-        encoded["legacySqliteMigrationActive"].is_boolean(),
+        encoded["workspaceMigrationActive"].is_boolean(),
         "the pre-router UI needs a stable typed shell status before RPC binds"
     );
 }
