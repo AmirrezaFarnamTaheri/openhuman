@@ -530,9 +530,16 @@ pub(crate) fn upgrade_if_needed(path: &Path) -> Result<(), StorageError> {
     if !file.is_file() {
         return Ok(());
     }
-    // Keep the coordination handle held until success/error/panic return.
-    // A second OpenHuman process re-checks the *current* schema only after
-    // the first has either committed or rolled back its migration.
+    // The overwhelmingly common v2 path is read-only and creates no sidecar
+    // file or lock. Only historical _tsd_docs databases need coordination.
+    let probe = Connection::open_with_flags(&file, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| error("inspect existing database", e))?;
+    if !table_exists(&probe, "_tsd_docs").map_err(|e| error("inspect legacy layout", e))? {
+        return Ok(());
+    }
+    drop(probe);
+    // A second OpenHuman process must re-check the current schema *after*
+    // acquiring the lock: the first process may already have committed v2.
     let _migration_lock = MigrationLock::acquire(&file)?;
     let conn = Connection::open_with_flags(&file, OpenFlags::SQLITE_OPEN_READ_WRITE)
         .map_err(|e| error("open existing database", e))?;
