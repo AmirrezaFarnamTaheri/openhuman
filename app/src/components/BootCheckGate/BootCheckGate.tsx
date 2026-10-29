@@ -636,7 +636,6 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
   // Failure/unsupported status probes are optional: they cannot block boot.
   useEffect(() => {
     if (!canBootLocal || phase !== 'checking' || coreMode.kind !== 'local') {
-      setMigrationActive(false);
       return;
     }
 
@@ -677,6 +676,7 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
       setPhase('checking');
       setResult(null);
       setActionError(null);
+      setMigrationActive(false);
       log('[boot-check] gate — starting check mode=%s', mode.kind);
 
       try {
