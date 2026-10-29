@@ -672,15 +672,19 @@ describe('BootCheckGate — unreachable', () => {
       kind: 'unreachable',
       reason: 'OpenHuman could not finish upgrading the workspace database.',
       portConflict: false,
-      technicalDetails: 'legacy SQLite migration (read collection metadata): database schema is locked',
+      technicalDetails:
+        'legacy SQLite migration (read collection metadata): database schema is locked',
     });
 
     renderGate();
 
     const disclosure = await screen.findByTestId('boot-error-details');
     expect(disclosure).not.toHaveAttribute('open');
-    expect(screen.getByText('legacy SQLite migration (read collection metadata): database schema is locked'))
-      .toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'legacy SQLite migration (read collection metadata): database schema is locked'
+      )
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByText(`${copy('common.showMore')} · ${copy('common.error')}`));
     expect(disclosure).toHaveAttribute('open');
     expect(screen.queryByTestId('fix-automatically-btn')).not.toBeInTheDocument();
