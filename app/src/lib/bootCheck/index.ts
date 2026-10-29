@@ -42,6 +42,8 @@ export type BootCheckResult =
   | {
       kind: 'unreachable';
       reason: string;
+      /** A diagnosed startup issue is not necessarily a network outage. */
+      problemTitle?: string;
       portConflict?: boolean;
       foreignOwner?: PortOwner;
       technicalDetails?: string;
@@ -262,6 +264,9 @@ export async function runBootCheck(
               ? `Failed to start local core: ${diagnosis.summary}`
               : `${diagnosis.summary} ${diagnosis.nextStep}`,
           portConflict: false,
+          ...(diagnosis.kind !== 'unclassified' && diagnosis.kind !== 'port_in_use'
+            ? { problemTitle: diagnosis.summary }
+            : {}),
           ...(diagnosis.kind !== 'unclassified' && diagnosis.technicalDetails
             ? { technicalDetails: diagnosis.technicalDetails }
             : {}),
