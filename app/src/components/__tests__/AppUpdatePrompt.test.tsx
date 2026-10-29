@@ -163,8 +163,7 @@ describe('AppUpdatePrompt', () => {
     expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
   });
 
-  it('retries an updater endpoint check instead of downloading a nonexistent update', async () => {
-    mockCheckAppUpdate.mockRejectedValueOnce(new Error('update endpoint unreachable'));
+  it('retries the update check instead of downloading without an available release', async () => {
     mockCheckAppUpdate.mockResolvedValueOnce({
       current_version: '0.50.0',
       available: false,
@@ -172,14 +171,18 @@ describe('AppUpdatePrompt', () => {
       body: null,
     });
 
+    // A scheduled check failure is intentionally silent. The global banner is
+    // for visible shell errors; retry must probe before any download is known.
     renderWithProviders(
-      <AppUpdatePrompt initialCheckDelayMs={0} recheckIntervalMs={0} autoDownload={false} />
+      <AppUpdatePrompt autoCheck={false} initialCheckDelayMs={0} recheckIntervalMs={0} />
     );
+    await waitFor(() => expect(statusListeners.length).toBeGreaterThan(0));
+    emitStatus('error');
 
     const retryBtn = await screen.findByRole('button', { name: /Try again/ });
     fireEvent.click(retryBtn);
 
-    await waitFor(() => expect(mockCheckAppUpdate).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1));
     expect(mockDownloadAppUpdate).not.toHaveBeenCalled();
   });
 
