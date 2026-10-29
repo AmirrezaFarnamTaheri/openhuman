@@ -75,3 +75,40 @@ fn a_gateway_is_looked_up_by_the_id_the_frontend_holds() {
 
     assert_eq!(desktop.spec, GatewaySpec::Desktop);
 }
+
+#[test]
+fn selected_desktop_gateway_tracks_the_current_rpc_port_even_with_custom_id() {
+    // Activation can pin an endpoint before a core restart. The new live
+    // handle has the OS-selected port and token; the custom id must survive.
+    let earlier = crate::core_process::CoreProcessHandle::new(7788);
+    let restarted = crate::core_process::CoreProcessHandle::new(7793);
+    let mut active = super::types::ActiveGateway {
+        id: "custom-desktop".to_owned(),
+        rpc_url: earlier.rpc_url(),
+        token: Some("stale-token".to_owned()),
+    };
+
+    registry::refresh_desktop_endpoint(&mut active, true, &restarted);
+
+    assert_eq!(active.id, "custom-desktop");
+    assert_eq!(active.rpc_url, restarted.rpc_url());
+    assert_eq!(active.token.as_deref(), Some(restarted.rpc_token()));
+}
+
+#[test]
+fn selected_remote_gateway_is_not_overwritten_by_a_desktop_restart() {
+    let restarted = crate::core_process::CoreProcessHandle::new(7793);
+    let mut active = super::types::ActiveGateway {
+        id: "remote".to_owned(),
+        rpc_url: "https://remote.example.invalid/rpc".to_owned(),
+        token: Some("remote-token".to_owned()),
+    };
+    let original = active.clone();
+
+    registry::refresh_desktop_endpoint(&mut active, false, &restarted);
+
+    assert_eq!(
+        active, original,
+        "remote URL and bearer must remain untouched"
+    );
+}

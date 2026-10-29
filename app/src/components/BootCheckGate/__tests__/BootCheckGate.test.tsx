@@ -14,6 +14,8 @@ import { Provider } from 'react-redux';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import en from '../../../lib/i18n/en';
+import { bootCheckTransport } from '../../../services/bootCheckService';
+import { clearCoreRpcTokenCache, clearCoreRpcUrlCache } from '../../../services/coreRpcClient';
 import coreModeReducer, { type CoreModeState } from '../../../store/coreModeSlice';
 import localeReducer from '../../../store/localeSlice';
 import { clearStoredCoreToken, storeCoreMode, storeRpcUrl } from '../../../utils/configPersistence';
@@ -600,6 +602,34 @@ describe('BootCheckGate — outdatedLocal', () => {
   });
 });
 
+describe('BootCheckGate — core restart endpoint refresh', () => {
+  it('invalidates the cached RPC URL before the bearer when the local core restart succeeds', async () => {
+    const restart = vi.spyOn(bootCheckTransport, 'invokeCmd').mockResolvedValue(undefined);
+    const clearUrl = vi.mocked(clearCoreRpcUrlCache);
+    const clearToken = vi.mocked(clearCoreRpcTokenCache);
+    clearUrl.mockClear();
+    clearToken.mockClear();
+    mockRunBootCheck.mockReset();
+    mockRunBootCheck
+      .mockResolvedValueOnce({ kind: 'outdatedLocal' })
+      .mockResolvedValue({ kind: 'match' });
+
+    renderGate(makeStore({ kind: 'local' }));
+    fireEvent.click(await screen.findByRole('button', { name: copy('bootCheck.restartCore') }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-content')).toBeInTheDocument();
+    });
+    expect(restart).toHaveBeenCalledWith('restart_core_process', {});
+    expect(clearUrl).toHaveBeenCalledTimes(1);
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(clearUrl.mock.invocationCallOrder[0]).toBeLessThan(
+      clearToken.mock.invocationCallOrder[0]
+    );
+    restart.mockRestore();
+  });
+});
+
 describe('BootCheckGate — outdatedCloud', () => {
   it('shows outdated cloud screen', async () => {
     mockRunBootCheck.mockResolvedValue({ kind: 'outdatedCloud' });
@@ -752,7 +782,11 @@ describe('BootCheckGate — port conflict recovery', () => {
       .mockResolvedValue({ kind: 'match' });
     mockRecoverPortConflict.mockResolvedValue({ success: true, message: 'ok', new_port: 7789 });
 
-    renderGate();
+    const clearUrl = vi.mocked(clearCoreRpcUrlCache);
+    const clearToken = vi.mocked(clearCoreRpcTokenCache);
+    clearUrl.mockClear();
+    clearToken.mockClear();
+    renderGate(makeStore({ kind: 'local' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('fix-automatically-btn')).toBeInTheDocument();
@@ -764,6 +798,11 @@ describe('BootCheckGate — port conflict recovery', () => {
       expect(screen.getByTestId('app-content')).toBeInTheDocument();
     });
     expect(mockRunBootCheck).toHaveBeenCalledTimes(2);
+    expect(clearUrl).toHaveBeenCalledTimes(1);
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(clearUrl.mock.invocationCallOrder[0]).toBeLessThan(
+      clearToken.mock.invocationCallOrder[0]
+    );
   });
 
   it('shows portConflictFixFailed message when recovery fails', async () => {
@@ -787,9 +826,7 @@ describe('BootCheckGate — port conflict recovery', () => {
     fireEvent.click(screen.getByTestId('fix-automatically-btn'));
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Automatic fix didn't work. Please restart your computer and try again.")
-      ).toBeInTheDocument();
+      expect(screen.getByText('still busy')).toBeInTheDocument();
     });
   });
 
@@ -841,7 +878,11 @@ describe('BootCheckGate — foreign port owner', () => {
     mockRunBootCheck.mockResolvedValueOnce(foreignResult).mockResolvedValue({ kind: 'match' });
     mockForceQuitPortOwner.mockResolvedValue({ success: true, message: 'ok', new_port: 7789 });
 
-    renderGate();
+    const clearUrl = vi.mocked(clearCoreRpcUrlCache);
+    const clearToken = vi.mocked(clearCoreRpcTokenCache);
+    clearUrl.mockClear();
+    clearToken.mockClear();
+    renderGate(makeStore({ kind: 'local' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('force-quit-owner-btn')).toBeInTheDocument();
@@ -853,6 +894,11 @@ describe('BootCheckGate — foreign port owner', () => {
     });
     expect(mockForceQuitPortOwner).toHaveBeenCalledWith(4242);
     expect(mockRunBootCheck).toHaveBeenCalledTimes(2);
+    expect(clearUrl).toHaveBeenCalledTimes(1);
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(clearUrl.mock.invocationCallOrder[0]).toBeLessThan(
+      clearToken.mock.invocationCallOrder[0]
+    );
   });
 
   it('shows the force-quit failed message when termination fails', async () => {
@@ -869,6 +915,9 @@ describe('BootCheckGate — foreign port owner', () => {
     await waitFor(() => {
       expect(screen.getByText(/You may need to close it manually/)).toBeInTheDocument();
     });
+    // A failed forced termination must retain both the recommended recovery
+    // and the OS/backend reason, so users know whether to check permissions.
+    expect(screen.getByText(/access denied/)).toBeInTheDocument();
   });
 
   it('upgrades to a force-quit button when Fix Automatically surfaces an owner', async () => {

@@ -487,7 +487,7 @@ pub mod platform {
     pub mod connectivity {
         pub mod rpc {
             pub use openhuman_core::platform::connectivity::rpc::{
-                pick_listen_port_for_host_with, OccupiedByCore,
+                pick_desktop_listen_port_for_host, pick_listen_port_for_host_with, OccupiedByCore,
             };
         }
     }

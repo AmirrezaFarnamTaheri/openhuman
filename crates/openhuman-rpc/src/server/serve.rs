@@ -108,12 +108,23 @@ pub async fn serve(
     } else {
         crate::core_host::platform::connectivity::rpc::OccupiedByCore::Fallback
     };
-    let pick = crate::core_host::platform::connectivity::rpc::pick_listen_port_for_host_with(
-        host.as_str(),
-        preferred_port,
-        occupied_by_core,
-    )
-    .await
+    let pick = if ready_tx.is_some() {
+        // Desktop recovery must not be trapped by an OS-reserved 7788-7798
+        // range. Coexist with other listeners rather than force-terminating
+        // another user's running core.
+        crate::core_host::platform::connectivity::rpc::pick_desktop_listen_port_for_host(
+            host.as_str(),
+            preferred_port,
+        )
+        .await
+    } else {
+        crate::core_host::platform::connectivity::rpc::pick_listen_port_for_host_with(
+            host.as_str(),
+            preferred_port,
+            occupied_by_core,
+        )
+        .await
+    }
     .map_err(|err| {
         log::error!("[core] Failed to bind to {host}:{preferred_port}: {err}");
         anyhow::Error::new(err)

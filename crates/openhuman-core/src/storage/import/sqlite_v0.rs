@@ -28,6 +28,39 @@ const OLD_TABLES: &[&str] = &[
     "_tsd_collections",
 ];
 
+/// Reserve space for a full VACUUM INTO rollback image, newly copied v2
+/// tables and transaction journal/WAL. This is a conservative *lower-bound
+/// preflight*, not a guarantee of success for arbitrary index/data layouts.
+fn minimum_migration_headroom(source_bytes: u64) -> u64 {
+    const MARGIN: u64 = 256 * 1024 * 1024;
+    source_bytes.saturating_mul(3).saturating_add(MARGIN)
+}
+
+fn migration_headroom_shortfall(source_bytes: u64, free_bytes: u64) -> Option<u64> {
+    let required = minimum_migration_headroom(source_bytes);
+    (free_bytes < required).then_some(required)
+}
+
+/// Fail before VACUUM INTO, which would otherwise fill a nearly full system
+/// disk and leave an incomplete backup. Never delete user data to make room.
+fn preflight_migration_disk_space(file: &Path) -> Result<(), StorageError> {
+    let source_bytes = std::fs::metadata(file)
+        .map_err(|e| error("inspect source database size", e))?
+        .len();
+    let parent = file.parent().unwrap_or_else(|| Path::new("."));
+    let available =
+        fs2::available_space(parent).map_err(|e| error("inspect available disk space", e))?;
+    if let Some(required) = migration_headroom_shortfall(source_bytes, available) {
+        const GIB: f64 = 1_073_741_824.0;
+        return Err(StorageError::backend(format!(
+            "legacy SQLite migration needs at least {:.2} GiB free for a verified backup,              copied tables and SQLite journal; only {:.2} GiB is available.              Preserve storage.db and the entire workspace, then free space or              migrate the workspace to a larger drive before retrying",
+            required as f64 / GIB,
+            available as f64 / GIB
+        )));
+    }
+    Ok(())
+}
+
 fn database_path(path: &Path) -> PathBuf {
     if path
         .extension()
@@ -460,6 +493,7 @@ pub(crate) fn upgrade_if_needed(path: &Path) -> Result<(), StorageError> {
     }
     check_integrity(&conn)?;
     let before = inventory(&conn)?;
+    preflight_migration_disk_space(&file)?;
     // A peer can update a record without changing row counts. SQLite
     // data_version catches that write between the consistent snapshot and
     // our exclusive migration transaction.

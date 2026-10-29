@@ -40,6 +40,14 @@ import { isTauri } from '../../utils/tauriCommands/common';
 import AppBackground from '../AppBackground';
 import Button from '../ui/Button';
 
+// On a successful desktop restart or port recovery, long-lived RPC and
+// Socket.IO clients must stop using the previous endpoint before the bearer
+// invalidation notifies them to reconnect.
+function invalidateCoreEndpointAfterRestart(): void {
+  clearCoreRpcUrlCache();
+  clearCoreRpcTokenCache();
+}
+
 const log = debug('boot-check');
 const logError = debug('boot-check:error');
 
@@ -755,6 +763,7 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
       } else if (result.kind === 'outdatedLocal' || result.kind === 'noVersionMethod') {
         log('[boot-check] gate — restarting local core');
         await transport.invokeCmd('restart_core_process', {});
+        invalidateCoreEndpointAfterRestart();
         log('[boot-check] gate — local core restarted');
       } else if (result.kind === 'outdatedCloud') {
         log('[boot-check] gate — triggering cloud core update');
@@ -774,9 +783,10 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
           if (recovery.foreign_owner) {
             setResult({ ...result, foreignOwner: recovery.foreign_owner });
           }
-          setActionError(t('bootCheck.portConflictFixFailed'));
+          setActionError(recovery.message || t('bootCheck.portConflictFixFailed'));
           return;
         }
+        invalidateCoreEndpointAfterRestart();
       }
 
       // Re-run the full check after the action.
@@ -811,9 +821,14 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
           recovery.message
         );
         if (!recovery.success) {
-          setActionError(t('bootCheck.portConflictForceQuitFailed'));
+          setActionError(
+            recovery.message
+              ? `${t('bootCheck.portConflictForceQuitFailed')} ${recovery.message}`
+              : t('bootCheck.portConflictForceQuitFailed')
+          );
           return;
         }
+        invalidateCoreEndpointAfterRestart();
         if (coreMode.kind !== 'unset') {
           runCheck(coreMode);
         }
