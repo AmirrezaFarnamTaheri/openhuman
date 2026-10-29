@@ -303,6 +303,25 @@ async fn force_quit_port_owner(
     Ok(outcome)
 }
 
+/// Lightweight startup status for the pre-router recovery screen.
+///
+/// This command is deliberately independent of the RPC listener: the
+/// historical SQLite database is upgraded *before* RPC binds, and the
+/// renderer must be able to report progress during that blocking operation.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CoreStartupStatus {
+    legacy_sqlite_migration_active: bool,
+}
+
+#[tauri::command]
+fn core_startup_status() -> CoreStartupStatus {
+    CoreStartupStatus {
+        legacy_sqlite_migration_active:
+            openhuman_rpc::embed::process::legacy_sqlite_migration_in_progress(),
+    }
+}
+
 /// Start the embedded core process on demand.
 ///
 /// Called by the BootCheckGate (Local mode) before the version check.  The
@@ -2789,6 +2808,7 @@ pub fn run() {
             recover_port_conflict,
             force_quit_port_owner,
             start_core_process,
+            core_startup_status,
             local_data_reset::reset_local_data,
             app_quit,
             restart_app,
