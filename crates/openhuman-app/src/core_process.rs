@@ -164,6 +164,15 @@ impl CoreProcessHandle {
         self.restart_lock.lock().await
     }
 
+    /// Frontend boot requests share the same outer lifecycle lock as
+    /// restart, recovery and updater operations. Never let a new request
+    /// start while another operation is still stopping/rebinding the core.
+    /// Restart paths already own this lock and call ensure_running directly.
+    pub async fn ensure_running_for_ui(&self) -> Result<(), String> {
+        let _lifecycle_guard = self.restart_lock().await;
+        self.ensure_running().await
+    }
+
     async fn is_rpc_port_open(&self) -> bool {
         is_port_open(self.port()).await
     }
