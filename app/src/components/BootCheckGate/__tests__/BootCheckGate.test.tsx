@@ -671,6 +671,7 @@ describe('BootCheckGate — unreachable', () => {
     mockRunBootCheck.mockResolvedValue({
       kind: 'unreachable',
       reason: 'OpenHuman could not finish upgrading the workspace database.',
+      problemTitle: 'OpenHuman could not finish upgrading the workspace database.',
       portConflict: false,
       technicalDetails:
         'legacy SQLite migration (read collection metadata): database schema is locked',
