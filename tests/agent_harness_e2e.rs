@@ -784,7 +784,9 @@ async fn wait_for_event(
                 panic!("SSE channel closed waiting for {event_name}; seen events so far: {seen:?}")
             }
             Err(_) => panic!(
-                "timed out waiting for SSE event {event_name}; all received events: {seen:?}"
+                "timed out waiting for SSE event {event_name}; received events: {seen:?};                  model requests: {}; scripted responses remaining: {}",
+                with_captured(|requests| requests.len()),
+                with_scripted(|responses| responses.len())
             ),
         }
     }
@@ -1504,8 +1506,12 @@ where
         .stack_size(openhuman_core::core::runtime::AGENT_WORKER_STACK_BYTES)
         .spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
+                // The parent, child agents, SSE collector, and approval bridge
+                // execute concurrently. Two workers can starve progress when
+                // another task performs synchronous setup on a Tokio worker.
+                .worker_threads(4)
                 .thread_stack_size(openhuman_core::core::runtime::AGENT_WORKER_STACK_BYTES)
+                .max_blocking_threads(openhuman_core::core::runtime::MAX_BLOCKING_THREADS)
                 .enable_all()
                 .build()
                 .expect("build agent harness e2e runtime");
@@ -4759,12 +4765,27 @@ async fn orchestrator_calls_a_connected_mcp_tool_directly_inner() {
     // The same approval can reach this subscription more than once (a replay on
     // the stream); decide each request id a single time.
     let mut decided = std::collections::HashSet::new();
+    let mut seen_events = Vec::<String>::new();
     let done = loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         let event = tokio::time::timeout(remaining, events.recv())
             .await
-            .expect("MCP turn timed out")
+            .unwrap_or_else(|_| {
+                panic!(
+                    "MCP turn timed out; events: {seen_events:?}; approvals: {};                      model requests: {}; scripted responses remaining: {}",
+                    decided.len(),
+                    with_captured(|requests| requests.len()),
+                    with_scripted(|responses| responses.len())
+                )
+            })
             .expect("MCP event stream closed");
+        seen_events.push(
+            event
+                .get("event")
+                .and_then(Value::as_str)
+                .unwrap_or("<unknown>")
+                .to_string(),
+        );
         match event.get("event").and_then(Value::as_str) {
             Some("approval_request") => {
                 let request_id = event
