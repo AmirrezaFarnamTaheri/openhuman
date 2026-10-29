@@ -1,6 +1,11 @@
 //! The orchestrator: the seven steps of the module docs, resumable.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+/// A previous layout migration can be cancelled while its SQLite VACUUM
+/// worker keeps running. Never run two profile-layout copy workers at once.
+static LAYOUT_COPY_SERIAL: Mutex<()> = Mutex::new(());
 
 use super::archive::{self, Source};
 use super::plan::{self, Action, Plan};
@@ -79,6 +84,10 @@ pub async fn migrate(
             return Err(LayoutError::Live(url));
         }
     }
+    // The desktop must not abort a legitimate migration while it waits for
+    // the RPC listener to bind. This guard tracks the whole on-disk move
+    // rather than only the SQLite v0 schema converter.
+    let _migration_activity = crate::storage::WorkspaceMigrationActivity::start();
     let _lock = Lock::acquire(&target.profile_dir)?;
     // The state may have changed between the first look and the lock.
     let mut state = match LayoutState::load(&target.profile_dir)? {
@@ -129,9 +138,19 @@ pub async fn migrate(
                 if source.is_file() {
                     let source2 = source.clone();
                     let dest = target.storage_db();
-                    let copied = tokio::task::spawn_blocking(move || db::copy(&source2, &dest))
-                        .await
-                        .map_err(|e| LayoutError::Other(e.into()))??;
+                    // Own the activity in the blocking worker as well: if the
+                    // parent future is cancelled, VACUUM INTO continues and
+                    // must remain visible until it actually releases its DB.
+                    let copy_activity = crate::storage::WorkspaceMigrationActivity::start();
+                    let copied = tokio::task::spawn_blocking(move || {
+                        let _activity = copy_activity;
+                        let _serial = LAYOUT_COPY_SERIAL
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        db::copy(&source2, &dest)
+                    })
+                    .await
+                    .map_err(|e| LayoutError::Other(e.into()))??;
                     database_rows = Some(copied.counts.values().sum());
                 }
             }
@@ -182,7 +201,7 @@ fn live_conflict(target: &Target, installed_url: Option<String>) -> Option<Strin
 fn plan_of(state: &LayoutState) -> Result<&Plan, LayoutError> {
     state.plan.as_ref().ok_or_else(|| {
         LayoutError::Other(anyhow::anyhow!(
-            "the layout state holds no plan; remove .layout.state to start over"
+            "the layout state has no plan; preserve .layout.state and the original profile, and inspect the interrupted migration before recovery"
         ))
     })
 }
@@ -484,7 +503,7 @@ pub async fn auto_migrate(config: &Config) -> bool {
             tracing::warn!(
                 target: "openhuman::storage",
                 %error,
-                "[layout] auto-migration failed; the profile stays on layout v1 and retries at the next boot"
+                "[layout] auto-migration incomplete; resumable progress is preserved for the next boot"
             );
             false
         }
