@@ -6,6 +6,26 @@ use crate::storage::layout::test_fixtures::{fixture_docs, v1_profile};
 use crate::storage::layout::Target;
 use tempfile::TempDir;
 
+#[cfg(all(windows, feature = "storage-sqlite"))]
+#[test]
+fn windows_layout_database_copy_flushes_before_publication() {
+    // Win32 FlushFileBuffers rejects the read-only File::open handle. A valid
+    // snapshot must be durably flushed and published without touching its
+    // historical source.
+    let fx = v1_profile();
+    let source = legacy::v1_db(&fx.target);
+    let original = std::fs::read(&source).expect("read v1 database");
+    let dest = fx.target.storage_db();
+
+    let result = copy(&source, &dest)
+        .expect("VACUUM INTO copy flushes on Windows and is renamed into place");
+    assert!(!result.reused);
+    assert_eq!(table_counts(&dest).unwrap(), table_counts(&source).unwrap());
+    assert_eq!(std::fs::read(&source).unwrap(), original);
+    assert!(!dest.with_file_name("storage.db.tmp").exists());
+}
+
+
 #[test]
 #[cfg(feature = "storage-sqlite")]
 fn the_copy_has_the_sources_counts_and_leaves_the_source_alone() {
