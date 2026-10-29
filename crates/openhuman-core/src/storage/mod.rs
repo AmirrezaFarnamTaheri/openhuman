@@ -347,15 +347,19 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
     #[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
     if let StorageUrl::Sqlite { path } = &parsed {
         let path = path.clone();
+        // Advertise migration from the moment the work is queued, not only
+        // once the blocking pool schedules it; a cold busy pool must not
+        // cause the desktop host to time out before its worker even starts.
+        let activity = LegacySqliteMigrationActivity::start();
         crate::core::runtime::DispatchCtx::ambient()
             .spawn_blocking(move || {
+                let _activity = activity;
                 // A previous async startup waiter may have been cancelled
                 // while its SQLite worker was still running. Never start two
                 // schema upgrades/backups concurrently in the same process.
                 let _serial = LEGACY_SQLITE_MIGRATION_SERIAL
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let _activity = LegacySqliteMigrationActivity::start();
                 import::sqlite_v0::upgrade_if_needed(&path)
             })
             .await
