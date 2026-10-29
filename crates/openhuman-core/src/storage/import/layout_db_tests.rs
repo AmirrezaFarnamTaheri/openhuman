@@ -66,6 +66,41 @@ fn a_matching_copy_is_kept_and_a_stale_one_replaced() {
 }
 
 #[test]
+fn a_stale_copy_with_equal_row_counts_is_never_reused() {
+    let dir = TempDir::new().unwrap();
+    let source = dir.path().join("legacy.db");
+    let dest = dir.path().join("storage.db");
+    let conn = Connection::open(&source).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE records (id TEXT PRIMARY KEY, body TEXT NOT NULL);
+         INSERT INTO records VALUES ('one', 'correct-value');",
+    )
+    .unwrap();
+    drop(conn);
+
+    assert!(!copy(&source, &dest).unwrap().reused);
+
+    // Simulate a previously interrupted migration leaving a same-size, stale
+    // destination. Its row inventory matches, but its document bytes do not.
+    Connection::open(&dest)
+        .unwrap()
+        .execute(
+            "UPDATE records SET body = 'wrong-value' WHERE id = 'one'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(table_counts(&source).unwrap(), table_counts(&dest).unwrap());
+
+    let refreshed = copy(&source, &dest).unwrap();
+    assert!(!refreshed.reused, "row counts alone must not authorize reuse");
+    let value: String = Connection::open(&dest)
+        .unwrap()
+        .query_row("SELECT body FROM records WHERE id = 'one'", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(value, "correct-value");
+}
+
+#[test]
 fn a_count_mismatch_names_the_table() {
     let a: Counts = [("docs".to_owned(), 3), ("blobs".to_owned(), 1)].into();
     let b: Counts = [("docs".to_owned(), 2), ("blobs".to_owned(), 1)].into();
