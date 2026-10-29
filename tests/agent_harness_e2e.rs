@@ -351,12 +351,33 @@ async fn scripted_chat_completions(
     {
         return completion_response(streaming, json!({ "role": "assistant", "content": "[]" }));
     }
-    // Park an armed fan-out worker before it is answered, so a peer has a
-    // chance to arrive. Before the queue pop, not after: holding the popped
-    // entry would serialize the FIFO itself and deadlock the peer.
+    // Fan-out workers are detached and race the parent for the shared scripted
+    // FIFO. Route the workers by their own distinct canary prompts instead of
+    // allowing one to steal the parent's acknowledgement. The overlap barrier
+    // still requires *both* worker requests in flight before either receives
+    // its response, so a serial or missing spawn still fails the test.
     if !lock_or_recover(canary_barrier()).is_empty() {
         if let Some(canary) = canary_worker_request(&body) {
-            hold_for_canary_peer(canary).await;
+            hold_for_canary_peer(canary.clone()).await;
+            // The cancellation E2E uses the same barrier for a single parked
+            // worker. Its mock responses must continue through the normal FIFO.
+            if matches!(
+                canary.as_str(),
+                "PARALLEL_ALPHA_CANARY" | "PARALLEL_BETA_CANARY"
+            ) {
+                with_captured(|reqs| {
+                    reqs.push(json!({
+                        "path": uri.path(),
+                        "model": body.get("model").and_then(Value::as_str),
+                        "stream": streaming,
+                        "body": body.clone(),
+                    }));
+                });
+                return completion_response(
+                    streaming,
+                    json!({ "role": "assistant", "content": format!("{canary} worker done") }),
+                );
+            }
         }
     }
 
@@ -763,7 +784,9 @@ async fn wait_for_event(
                 panic!("SSE channel closed waiting for {event_name}; seen events so far: {seen:?}")
             }
             Err(_) => panic!(
-                "timed out waiting for SSE event {event_name}; all received events: {seen:?}"
+                "timed out waiting for SSE event {event_name}; received events: {seen:?};                  model requests: {}; scripted responses remaining: {}",
+                with_captured(|requests| requests.len()),
+                with_scripted(|responses| responses.len())
             ),
         }
     }
@@ -1483,8 +1506,12 @@ where
         .stack_size(openhuman_core::core::runtime::AGENT_WORKER_STACK_BYTES)
         .spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
+                // The parent, child agents, SSE collector, and approval bridge
+                // execute concurrently. Two workers can starve progress when
+                // another task performs synchronous setup on a Tokio worker.
+                .worker_threads(4)
                 .thread_stack_size(openhuman_core::core::runtime::AGENT_WORKER_STACK_BYTES)
+                .max_blocking_threads(openhuman_core::core::runtime::MAX_BLOCKING_THREADS)
                 .enable_all()
                 .build()
                 .expect("build agent harness e2e runtime");
@@ -2970,8 +2997,6 @@ async fn parallel_subagent_fanout_inner() {
             ),
         ]),
         text_completion("Spawned two workers; results will arrive as they land."),
-        text_completion("alpha worker done"),
-        text_completion("beta worker done"),
     ]);
     let stack = boot_stack().await;
 
@@ -4740,12 +4765,27 @@ async fn orchestrator_calls_a_connected_mcp_tool_directly_inner() {
     // The same approval can reach this subscription more than once (a replay on
     // the stream); decide each request id a single time.
     let mut decided = std::collections::HashSet::new();
+    let mut seen_events = Vec::<String>::new();
     let done = loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         let event = tokio::time::timeout(remaining, events.recv())
             .await
-            .expect("MCP turn timed out")
+            .unwrap_or_else(|_| {
+                panic!(
+                    "MCP turn timed out; events: {seen_events:?}; approvals: {};                      model requests: {}; scripted responses remaining: {}",
+                    decided.len(),
+                    with_captured(|requests| requests.len()),
+                    with_scripted(|responses| responses.len())
+                )
+            })
             .expect("MCP event stream closed");
+        seen_events.push(
+            event
+                .get("event")
+                .and_then(Value::as_str)
+                .unwrap_or("<unknown>")
+                .to_string(),
+        );
         match event.get("event").and_then(Value::as_str) {
             Some("approval_request") => {
                 let request_id = event

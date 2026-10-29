@@ -329,6 +329,18 @@ jobs:
       - name: Check out submodules
         run: bash scripts/ci/checkout-submodules.sh
 
+      - name: Preflight pinned Rust toolchain before parallel lanes
+        # A cold container may auto-install Rust 1.99.1; let a single rustup
+        # process install/recover cargo, rustfmt and clippy *before* lane
+        # workers run in parallel against the same RUSTUP_HOME.
+        if: matrix.container != '' && matrix.group != 'pester'
+        run: |
+          set -euo pipefail
+          cargo --version
+          rustc --version
+          cargo fmt --version
+          cargo clippy --version
+
       - name: Prepare native jail for sandbox regressions
         if: matrix.container != ''
         run: bash scripts/ci/prepare-native-jail.sh

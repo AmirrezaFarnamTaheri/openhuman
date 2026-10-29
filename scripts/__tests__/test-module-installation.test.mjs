@@ -466,6 +466,9 @@ for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
     const stageLib = fileURLToPath(
       new URL("../modules/stage-local-modules.sh", import.meta.url),
     );
+    const serialArgsLib = fileURLToPath(
+      new URL("../ci/serial-libtest-args.sh", import.meta.url),
+    );
     const root = mkdtempSync(join(tmpdir(), "mcp-runner-"));
     try {
       const moduleDir = join(root, "target/test-modules/tinymcp/test-digest");
@@ -534,6 +537,7 @@ for (const runner of ["test-rust-with-mock.sh", "test-rust-e2e.sh"]) {
             "module_ext=so",
             "PRODUCT_FEATURES=mcp",
             `source ${JSON.stringify(stageLib)}`,
+            `source ${JSON.stringify(serialArgsLib)}`,
             "node() { printf '%s\\tunused\\tmodule.tar.gz\\ttest-digest\\n' \"${@: -1}\"; }",
             "unset OPENHUMAN_MODULE_PATH",
             setup,
