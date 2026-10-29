@@ -200,6 +200,49 @@ use crate::config::Config;
 /// The environment variable that overrides `[storage] url`.
 pub const STORAGE_URL_VAR: &str = "OPENHUMAN_STORAGE_URL";
 
+
+// A host must not time out and abort its embedded core while a large
+// historical SQLite workspace is still being converted on a blocking worker.
+// Track the *actual* conversion worker, not the mere presence of a backup:
+// a successful upgrade intentionally leaves its rollback copy on disk.
+#[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+static LEGACY_SQLITE_MIGRATIONS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+struct LegacySqliteMigrationActivity;
+
+#[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+impl LegacySqliteMigrationActivity {
+    fn start() -> Self {
+        LEGACY_SQLITE_MIGRATIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Self
+    }
+}
+
+#[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+impl Drop for LegacySqliteMigrationActivity {
+    fn drop(&mut self) {
+        LEGACY_SQLITE_MIGRATIONS.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Whether a legacy SQLite migration worker is still active in this process.
+///
+/// Hosts may extend their *readiness* grace period while this is true.
+/// A dropped/cancelled async waiter does not stop SQLite's blocking worker,
+/// so never infer its completion from the caller's task state.
+pub fn legacy_sqlite_migration_in_progress() -> bool {
+    #[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+    {
+        return LEGACY_SQLITE_MIGRATIONS.load(std::sync::atomic::Ordering::SeqCst) > 0;
+    }
+    #[cfg(not(all(feature = "legacy-import", feature = "storage-sqlite")))]
+    {
+        false
+    }
+}
+
 /// A holder for one backend. The process has exactly one ([`BACKEND`]);
 /// tests make their own, so they never change what other tests in the same
 /// process see.
@@ -302,7 +345,10 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
     if let StorageUrl::Sqlite { path } = &parsed {
         let path = path.clone();
         crate::core::runtime::DispatchCtx::ambient()
-            .spawn_blocking(move || import::sqlite_v0::upgrade_if_needed(&path))
+            .spawn_blocking(move || {
+                let _activity = LegacySqliteMigrationActivity::start();
+                import::sqlite_v0::upgrade_if_needed(&path)
+            })
             .await
             .map_err(|e| {
                 StorageError::backend(format!("SQLite migration did not finish: {e}"))
