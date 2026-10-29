@@ -1444,6 +1444,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'Połączono, ale czas rzeczywisty jest wyłączony w tym rdzeniu. Uruchomiono go z --jsonrpc-only; uruchom go ponownie bez tej flagi, aby czat i aktualizacje na żywo działały.',
   'bootCheck.checkingCore': 'Uruchamianie OpenHuman…',
+  'bootCheck.upgradingWorkspace': 'Aktualizowanie obszaru roboczego…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman chroni i aktualizuje istniejące dane. Nie zamykaj aplikacji, dopóki proces się nie zakończy.',
   'bootCheck.cannotReach': 'Nie można się połączyć',
   'bootCheck.cannotReachDesc': 'Nie udało się połączyć. Chcesz spróbować gdzie indziej?',
   'bootCheck.switchMode': 'Zmień, gdzie działa',
