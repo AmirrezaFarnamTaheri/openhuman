@@ -336,7 +336,7 @@ async fn start_core_process(
     app: tauri::AppHandle<AppRuntime>,
 ) -> Result<(), String> {
     log::info!("[core] start_core_process: command invoked from frontend");
-    state.inner().ensure_running().await?;
+    state.inner().ensure_running_for_ui().await?;
     if let Some(notice) = state.inner().take_last_port_fallback_notice() {
         let body = format!(
             "OpenHuman is using port {} because {} was busy",
