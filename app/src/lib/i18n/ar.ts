@@ -1404,6 +1404,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'تم الاتصال، لكن الوقت الفعلي معطّل في هذا النواة. بدأ تشغيلها بالخيار --jsonrpc-only؛ أعد تشغيلها بدونه لتعمل المحادثة والتحديثات الفورية.',
   'bootCheck.checkingCore': 'جارٍ تشغيل OpenHuman…',
+  'bootCheck.upgradingWorkspace': 'جارٍ ترقية مساحة العمل…',
+  'bootCheck.upgradingWorkspaceHint':
+    'يحمي OpenHuman بياناتك الحالية ويقوم بترقيتها. أبقِ التطبيق مفتوحًا حتى تكتمل العملية.',
   'bootCheck.cannotReach': 'تعذّر الوصول إليه',
   'bootCheck.cannotReachDesc': 'تعذّر الاتصال. هل تريد المحاولة في مكان آخر؟',
   'bootCheck.switchMode': 'تغيير مكان التشغيل',
