@@ -12,6 +12,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use sha2::{Digest, Sha256};
+
 use crate::storage::layout::LayoutError;
 use crate::storage::rusqlite::{self, Connection, OpenFlags};
 
@@ -67,6 +69,64 @@ fn counts_of(conn: &Connection) -> Result<Counts, LayoutError> {
     Ok(counts)
 }
 
+/// Ordered SQLite row positions and bare row counts are not reliable
+/// equivalence checks: VACUUM INTO may renumber implicit rowids, and a
+/// concurrent v1 write may alter a document without changing any counts.
+/// Compare the multiset of typed row values, preserving duplicates, NULL,
+/// BLOB bytes and integer/real distinctions. This runs only when an existing
+/// destination is eligible for reuse, never during the ordinary first copy.
+fn row_fingerprints(conn: &Connection, table: &str) -> Result<Vec<[u8; 32]>, LayoutError> {
+    use rusqlite::types::ValueRef;
+
+    let quoted = format!("\"{}\"", table.replace('"', "\"\""));
+    let mut statement = conn.prepare(&format!("SELECT * FROM {quoted}")).map_err(sql)?;
+    let columns = statement.column_count();
+    let mut rows = statement.query([]).map_err(sql)?;
+    let mut fingerprints = Vec::new();
+    while let Some(row) = rows.next().map_err(sql)? {
+        let mut hash = Sha256::new();
+        for column in 0..columns {
+            match row.get_ref(column).map_err(sql)? {
+                ValueRef::Null => hash.update([0]),
+                ValueRef::Integer(value) => {
+                    hash.update([1]);
+                    hash.update(value.to_be_bytes());
+                }
+                ValueRef::Real(value) => {
+                    hash.update([2]);
+                    hash.update(value.to_bits().to_be_bytes());
+                }
+                ValueRef::Text(value) => {
+                    hash.update([3]);
+                    hash.update((value.len() as u64).to_be_bytes());
+                    hash.update(value);
+                }
+                ValueRef::Blob(value) => {
+                    hash.update([4]);
+                    hash.update((value.len() as u64).to_be_bytes());
+                    hash.update(value);
+                }
+            }
+        }
+        fingerprints.push(hash.finalize().into());
+    }
+    fingerprints.sort_unstable();
+    Ok(fingerprints)
+}
+
+fn same_table_contents(source: &Path, dest: &Path, counts: &Counts) -> Result<bool, LayoutError> {
+    let original =
+        Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(sql)?;
+    let candidate =
+        Connection::open_with_flags(dest, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(sql)?;
+    for table in counts.keys() {
+        if row_fingerprints(&original, table)? != row_fingerprints(&candidate, table)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 fn tmp_path(dest: &Path) -> PathBuf {
     let mut name = dest.file_name().unwrap_or_default().to_os_string();
     name.push(".tmp");
@@ -104,11 +164,21 @@ pub fn copy(source: &Path, dest: &Path) -> Result<DbCopy, LayoutError> {
     if dest.is_file() {
         if let Ok(existing) = table_counts(dest) {
             if existing == source_counts {
-                tracing::debug!(target: "openhuman::storage", dest = %dest.display(), "[layout] storage.db already matches the source; kept");
-                return Ok(DbCopy {
-                    counts: existing,
-                    reused: true,
-                });
+                match same_table_contents(source, dest, &source_counts) {
+                    Ok(true) => {
+                        tracing::debug!(target: "openhuman::storage", dest = %dest.display(), "[layout] storage.db matches source rows and content; kept");
+                        return Ok(DbCopy {
+                            counts: existing,
+                            reused: true,
+                        });
+                    }
+                    Ok(false) => {
+                        tracing::warn!(target: "openhuman::storage", dest = %dest.display(), "[layout] existing database has matching counts but different data; recreating from the preserved v1 source");
+                    }
+                    Err(error) => {
+                        tracing::warn!(target: "openhuman::storage", dest = %dest.display(), %error, "[layout] could not fully verify existing copy; recreating from the preserved v1 source");
+                    }
+                }
             }
         }
     }
