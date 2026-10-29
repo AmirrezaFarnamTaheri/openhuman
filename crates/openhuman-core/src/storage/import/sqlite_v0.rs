@@ -73,6 +73,49 @@ fn database_path(path: &Path) -> PathBuf {
     }
 }
 
+/// Coordinates the v0→v2 format cut across desktop, CLI and other
+/// processes. SQLite's BEGIN IMMEDIATE alone is too late: two processes
+/// could both read v0, create rollback snapshots, and then race the DDL.
+struct MigrationLock {
+    _handle: std::fs::File,
+}
+
+impl MigrationLock {
+    fn acquire(database: &Path) -> Result<Self, StorageError> {
+        let mut lock_name = database
+            .file_name()
+            .unwrap_or_default()
+            .to_os_string();
+        lock_name.push(".v0-upgrade.lock");
+        let lock_path = database.with_file_name(lock_name);
+        let mut options = std::fs::OpenOptions::new();
+        options.create(true).read(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        }
+        // A lockfile is not a user database and is intentionally retained:
+        // removing it while another client holds it would split the lock
+        // namespace and defeat cross-process coordination.
+        let lock = options
+            .open(&lock_path)
+            .map_err(|e| error("open migration coordination lock", e))?;
+        if !lock
+            .metadata()
+            .map_err(|e| error("inspect migration coordination lock", e))?
+            .is_file()
+        {
+            return Err(StorageError::backend(
+                "legacy SQLite migration coordination lock is not a file",
+            ));
+        }
+        fs2::FileExt::lock_exclusive(&lock)
+            .map_err(|e| error("acquire migration coordination lock", e))?;
+        Ok(Self { _handle: lock })
+    }
+}
+
 fn error(context: &str, source: impl std::fmt::Display) -> StorageError {
     StorageError::backend(format!("legacy SQLite migration ({context}): {source}"))
 }
@@ -487,6 +530,10 @@ pub(crate) fn upgrade_if_needed(path: &Path) -> Result<(), StorageError> {
     if !file.is_file() {
         return Ok(());
     }
+    // Keep the coordination handle held until success/error/panic return.
+    // A second OpenHuman process re-checks the *current* schema only after
+    // the first has either committed or rolled back its migration.
+    let _migration_lock = MigrationLock::acquire(&file)?;
     let conn = Connection::open_with_flags(&file, OpenFlags::SQLITE_OPEN_READ_WRITE)
         .map_err(|e| error("open existing database", e))?;
     if !table_exists(&conn, "_tsd_docs").map_err(|e| error("inspect legacy layout", e))? {
