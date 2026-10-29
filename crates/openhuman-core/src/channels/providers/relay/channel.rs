@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use serde_json::json;
 
-use crate::web_chat::{publish_web_channel_event, publish_web_channel_event_in, WebChannelEvent};
+use crate::web_chat::{publish_web_channel_event_in, WebChannelEvent};
 use tinychannels_bus::SendMessage;
 
 /// The event name a relayed reply is published under.
@@ -17,6 +17,8 @@ pub const CHANNEL_OUTBOUND_EVENT: &str = "channel_outbound";
 
 /// The reply sink for one relayed message.
 pub struct RelayChannel {
+    /// Explicit caller scope survives async executor / native module boundaries.
+    publisher: crate::core::runtime::DispatchCtx,
     /// The platform (`telegram`): the name the pipeline looks the sink up by.
     channel: String,
     /// The `/events` client id the gateway listens on.
@@ -33,6 +35,7 @@ pub struct RelayChannel {
 
 impl RelayChannel {
     pub fn new(
+        publisher: crate::core::runtime::DispatchCtx,
         channel: impl Into<String>,
         client_id: impl Into<String>,
         thread_id: impl Into<String>,
@@ -40,6 +43,7 @@ impl RelayChannel {
         reply_to: impl Into<String>,
     ) -> Self {
         Self {
+            publisher,
             channel: channel.into(),
             client_id: client_id.into(),
             thread_id: thread_id.into(),
@@ -70,14 +74,14 @@ impl RelayChannel {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .push(message.content.clone());
-        publish_web_channel_event(self.outbound_event(message));
+        publish_web_channel_event_in(&self.publisher, self.outbound_event(message));
         Ok(())
     }
 
     /// The event that carries `message` to the gateway. The routing stamps
-    /// (`agent`, `profile`) are left for `publish_web_channel_event`, which
-    /// takes them from the publishing context's tenant, so `/events` hands the
-    /// reply only to the caller's own stream.
+    /// (`agent`, `profile`) are left for the bound publisher context, so
+    /// `/events` hands the reply only to the caller's own stream even when
+    /// an executor polls the reply from a task without ambient tenant scope.
     pub fn outbound_event(&self, message: &SendMessage) -> WebChannelEvent {
         WebChannelEvent::ChannelOutbound {
             context: crate::web_chat::event_context(
