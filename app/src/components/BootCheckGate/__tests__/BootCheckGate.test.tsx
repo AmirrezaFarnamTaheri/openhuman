@@ -147,6 +147,26 @@ describe('BootCheckGate — first launch on desktop (unset mode)', () => {
     expect(store.getState().coreMode.mode).toEqual({ kind: 'local' });
   });
 
+  it('shows an in-progress workspace upgrade instead of the generic loading screen', async () => {
+    const statusProbe = vi
+      .spyOn(bootCheckTransport, 'invokeCmd')
+      .mockImplementation(async command => {
+        if (command === 'core_startup_status') {
+          return { legacySqliteMigrationActive: true } as never;
+        }
+        throw new Error(`unexpected command ${command}`);
+      });
+    mockRunBootCheck.mockImplementation(() => new Promise(() => {}));
+    try {
+      renderGate(makeStore({ kind: 'local' }));
+      expect(await screen.findByText(copy('bootCheck.upgradingWorkspace'))).toBeInTheDocument();
+      expect(screen.getByText(copy('bootCheck.upgradingWorkspaceHint'))).toBeInTheDocument();
+      expect(screen.queryByText(copy('bootCheck.cannotReach'))).not.toBeInTheDocument();
+    } finally {
+      statusProbe.mockRestore();
+    }
+  });
+
   it('adopts local mode and persists the marker', async () => {
     mockRunBootCheck.mockResolvedValue({ kind: 'match' });
     renderGate();
