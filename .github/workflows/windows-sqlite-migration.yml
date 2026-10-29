@@ -70,6 +70,20 @@ jobs:
             storage::import::sqlite_v0::tests::concurrent_upgrade_process_handles_are_serialized_before_database_inspection \
             -- --exact --nocapture
 
+      - name: Upgrade a historical SQLite workspace end-to-end on Windows
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::import::sqlite_v0::tests::old_sqlite_upgrades_before_backend_opens_and_retains_an_original_backup \
+            -- --exact --nocapture
+
+      - name: Verify resumable profile-layout migration on Windows
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::layout::run::tests::a_crash_at_any_step_resumes_to_the_same_result \
+            -- --exact --nocapture
+
       - name: Regress Windows profile-layout SQLite copy flush
         shell: bash
         run: |
