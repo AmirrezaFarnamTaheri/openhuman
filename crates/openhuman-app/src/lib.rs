@@ -311,14 +311,14 @@ async fn force_quit_port_owner(
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CoreStartupStatus {
-    legacy_sqlite_migration_active: bool,
+    workspace_migration_active: bool,
 }
 
 #[tauri::command]
 fn core_startup_status() -> CoreStartupStatus {
     CoreStartupStatus {
-        legacy_sqlite_migration_active:
-            openhuman_rpc::embed::process::legacy_sqlite_migration_in_progress(),
+        workspace_migration_active:
+            openhuman_rpc::embed::process::workspace_migration_in_progress(),
     }
 }
 
