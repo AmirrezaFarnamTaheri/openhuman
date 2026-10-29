@@ -381,17 +381,17 @@ impl CoreProcessHandle {
             let mut migration_finished_at = None;
             for poll in 0..MIGRATION_READY_ATTEMPTS {
                 let migration_active =
-                    openhuman_rpc::embed::process::legacy_sqlite_migration_in_progress();
+                    openhuman_rpc::embed::process::workspace_migration_in_progress();
                 if migration_active && !observed_migration {
                     observed_migration = true;
                     log::info!(
-                        "[core] legacy SQLite migration is active; allowing extended startup readiness"
+                        "[core] workspace migration active; extending startup readiness"
                     );
                 }
                 if observed_migration && !migration_active && migration_finished_at.is_none() {
                     migration_finished_at = Some(poll);
                     log::info!(
-                        "[core] legacy SQLite migration finished; allowing normal post-upgrade startup grace"
+                        "[core] workspace migration finished; allowing post-upgrade startup grace"
                     );
                 }
                 if !migration_readiness_poll_allowed(
