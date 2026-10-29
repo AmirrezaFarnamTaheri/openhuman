@@ -1,0 +1,28 @@
+name: Dispatch fork production release (one-shot)
+on:
+  push:
+    branches: [automation/fork-production-release-20261029]
+    paths:
+      - .github/workflows/fork-production-release-once.yml
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    if: github.repository == 'AmirrezaFarnamTaheri/openhuman'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch the existing production release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GH_REPO}/actions/workflows/release-production.yml/dispatches" \
+            -f ref=release \
+            -f 'inputs[release_type]=patch' \
+            -f 'inputs[commit_sha]=' \
+            -f 'inputs[signed_release]=false' \
+            -f 'inputs[create_release]=true'
+          echo "::notice::Requested production patch release from release branch; human approval still required"
