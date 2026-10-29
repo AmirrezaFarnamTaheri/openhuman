@@ -114,11 +114,34 @@ fn row_fingerprints(conn: &Connection, table: &str) -> Result<Vec<[u8; 32]>, Lay
     Ok(fingerprints)
 }
 
+fn schema_definitions(
+    conn: &Connection,
+) -> Result<Vec<(String, String, String, Option<String>)>, LayoutError> {
+    let mut statement = conn
+        .prepare(
+            "SELECT type, name, tbl_name, sql FROM sqlite_master
+             WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name, tbl_name",
+        )
+        .map_err(sql)?;
+    let records = statement
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .map_err(sql)?;
+    records.collect::<rusqlite::Result<Vec<_>>>().map_err(sql)
+}
+
 fn same_table_contents(source: &Path, dest: &Path, counts: &Counts) -> Result<bool, LayoutError> {
     let original =
         Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(sql)?;
     let candidate =
         Connection::open_with_flags(dest, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(sql)?;
+    // Matching rows are insufficient when a retained intermediate DB has a
+    // different index, trigger, view or table definition. Reuse is allowed
+    // only for the same source schema and same typed document multiset.
+    if schema_definitions(&original)? != schema_definitions(&candidate)? {
+        return Ok(false);
+    }
     for table in counts.keys() {
         if row_fingerprints(&original, table)? != row_fingerprints(&candidate, table)? {
             return Ok(false);
