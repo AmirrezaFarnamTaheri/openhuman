@@ -711,7 +711,7 @@ fn startup_timeout_cleanup_aborts_task_and_clears_slot() {
             *guard = Some(task);
         }
 
-        let message = handle.cleanup_startup_timeout(false, false, 2).await;
+        let message = handle.cleanup_startup_timeout(false, false, 2, 60_000).await;
 
         // One loose check that the human-readable diagnostic names the failure,
         // instead of pinning six exact substrings of its formatting (plan.md
