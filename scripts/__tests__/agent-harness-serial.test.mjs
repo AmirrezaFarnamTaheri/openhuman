@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const coverage = readFileSync(new URL('../ci/rust-coverage.sh', import.meta.url), 'utf8');
 const e2e = readFileSync(new URL('../test-rust-e2e.sh', import.meta.url), 'utf8');
@@ -36,7 +37,7 @@ function filterSerialArgs(...args) {
     'filter_serial_libtest_args',
     'printf "%s\\0" "${SERIAL_LIBTEST_ARGS[@]}"',
   ].join('; ');
-  return spawnSync('bash', ['-c', script, 'bash', serialArgsHelper.pathname, ...args], {
+  return spawnSync('bash', ['-c', script, 'bash', fileURLToPath(serialArgsHelper), ...args], {
     encoding: 'utf8',
   });
 }
