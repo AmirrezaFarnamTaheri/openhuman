@@ -240,6 +240,7 @@ describe('runBootCheck — port conflict auto-recovery', () => {
     expect(result).toMatchObject({ kind: 'unreachable', portConflict: false });
     if (result.kind === 'unreachable') {
       expect(result.reason).toContain('could not finish upgrading');
+      expect(result.problemTitle).toContain('could not finish upgrading');
       expect(result.technicalDetails).toContain('read collection metadata');
       expect(result.technicalDetails).toContain('database schema is locked');
       expect(result.technicalDetails).not.toContain('fixture-secret-value');
