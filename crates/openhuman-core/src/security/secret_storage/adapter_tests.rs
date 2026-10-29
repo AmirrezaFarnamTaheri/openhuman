@@ -24,6 +24,55 @@ fn windows_lock_errors_distinguish_access_denied_from_sharing_violations() {
     }
 }
 
+#[cfg(windows)]
+#[test]
+fn temporary_windows_sharing_violation_retries_and_retains_the_operation_result() {
+    let mut attempts = 0;
+    let result = retry_windows_secret_lock(|| {
+        attempts += 1;
+        if attempts < 3 {
+            Err(
+                StorageError::backend("could not open the lock file")
+                    .with_source(std::io::Error::from_raw_os_error(32)),
+            )
+        } else {
+            Ok("existing-secret")
+        }
+    });
+    assert_eq!(result.unwrap(), "existing-secret");
+    assert_eq!(attempts, 3);
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_access_denied_is_not_retried_or_misreported_as_transient() {
+    let mut attempts = 0;
+    let result = retry_windows_secret_lock(|| -> tinystoragedrivers::Result<()> {
+        attempts += 1;
+        Err(
+            StorageError::backend("could not open the lock file")
+                .with_source(std::io::Error::from_raw_os_error(5)),
+        )
+    });
+    assert_eq!(attempts, 1, "ACL problems need explicit diagnosis, not repeated writes");
+    assert!(result.is_err());
+}
+
+#[cfg(windows)]
+#[test]
+fn persistent_windows_sharing_violation_ends_with_a_real_error_after_bounded_retries() {
+    let mut attempts = 0;
+    let result = retry_windows_secret_lock(|| -> tinystoragedrivers::Result<()> {
+        attempts += 1;
+        Err(
+            StorageError::backend("could not open the lock file")
+                .with_source(std::io::Error::from_raw_os_error(32)),
+        )
+    });
+    assert_eq!(attempts, 4);
+    assert!(result.is_err(), "a repeated lock conflict must never become a fake success");
+}
+
 #[test]
 fn lock_error_details_never_echo_the_underlying_native_error_payload() {
     let driver = tinystoragedrivers::StorageError::backend("could not open the lock file")
