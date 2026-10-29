@@ -78,6 +78,37 @@ fn test_workspace() -> TestWorkspace {
     }
 }
 
+// The desktop starts the embedded core before opening the renderer's RPC
+// connection. A large legacy workspace migration may exceed the normal 60s
+// readiness cap; never abort its in-flight SQLite transaction at that cap.
+#[test]
+fn legacy_sqlite_migration_receives_a_bounded_extra_startup_budget() {
+    use super::{
+        migration_readiness_poll_allowed, CORE_READY_ATTEMPTS, MIGRATION_READY_ATTEMPTS,
+    };
+
+    assert!(migration_readiness_poll_allowed(CORE_READY_ATTEMPTS - 1, false, None));
+    assert!(!migration_readiness_poll_allowed(CORE_READY_ATTEMPTS, false, None));
+
+    // An observed active migration may continue past the ordinary timeout,
+    // but still has a finite upper bound.
+    assert!(migration_readiness_poll_allowed(CORE_READY_ATTEMPTS + 1, true, None));
+    assert!(!migration_readiness_poll_allowed(MIGRATION_READY_ATTEMPTS, true, None));
+
+    // Once migration finishes, give core startup a full normal grace period.
+    let finished_at = CORE_READY_ATTEMPTS + 100;
+    assert!(migration_readiness_poll_allowed(
+        finished_at + CORE_READY_ATTEMPTS - 1,
+        false,
+        Some(finished_at),
+    ));
+    assert!(!migration_readiness_poll_allowed(
+        finished_at + CORE_READY_ATTEMPTS,
+        false,
+        Some(finished_at),
+    ));
+}
+
 /// A storage failure is usually wrapped in several anyhow contexts. The
 /// desktop boot error must show the root cause rather than just the outer
 /// "opening the configured storage backend" label.
