@@ -133,6 +133,25 @@ fn default_core_port_env_and_fallback() {
     assert_eq!(default_core_port(), 8899);
 }
 
+// A retry must not enter another startup while the first is waiting for an
+// in-flight migration or RPC bind; otherwise competing ready receivers can
+// abort the same managed task or produce misleading port recovery failures.
+#[test]
+fn concurrent_startup_waits_for_the_existing_boot_attempt() {
+    let rt = core_test_runtime();
+    rt.block_on(async {
+        let handle = CoreProcessHandle::new(12789);
+        let first = handle.startup_lock.lock().await;
+        let second = tokio::time::timeout(
+            tokio::time::Duration::from_millis(40),
+            handle.ensure_running(),
+        ).await;
+        assert!(second.is_err(), "second boot attempt bypassed startup serialization");
+        assert!(handle.task.lock().await.is_none());
+        drop(first);
+    });
+}
+
 #[test]
 fn core_process_handle_new_creates_instance() {
     let handle = CoreProcessHandle::new(9999);
