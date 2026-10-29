@@ -1441,6 +1441,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'Terhubung, tetapi realtime nonaktif pada core ini. Core dijalankan dengan --jsonrpc-only; jalankan ulang tanpa flag itu agar chat dan pembaruan langsung berfungsi.',
   'bootCheck.checkingCore': 'Memulai OpenHuman…',
+  'bootCheck.upgradingWorkspace': 'Memutakhirkan ruang kerja Anda…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman sedang melindungi dan memutakhirkan data Anda. Biarkan aplikasi terbuka sampai proses selesai.',
   'bootCheck.cannotReach': 'Tidak dapat terhubung',
   'bootCheck.cannotReachDesc': 'Kami tidak dapat terhubung. Ingin mencoba di tempat lain?',
   'bootCheck.switchMode': 'Ubah tempat menjalankannya',
