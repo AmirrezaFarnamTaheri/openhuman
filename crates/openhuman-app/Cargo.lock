@@ -4530,7 +4530,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "aes-gcm",
  "aho-corasick",
@@ -4648,7 +4648,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-app"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4691,7 +4691,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-embed"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4725,7 +4725,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-rpc"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -4758,7 +4758,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-tinyhumans"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -7891,26 +7891,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tinystoragedrivers-types",
-]
-
-[[package]]
-name = "tinyflows"
-version = "0.9.4"
-dependencies = [
- "async-trait",
- "base64 0.23.1",
- "futures-timer",
- "futures-util",
- "getrandom 0.4.3",
- "hex",
- "jaq-core",
- "jaq-json",
- "jaq-std",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
 ]
 
 [[package]]
