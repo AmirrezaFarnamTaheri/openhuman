@@ -464,6 +464,18 @@ function ResultScreen({
               : t('bootCheck.portConflictBody')
             : result.reason || t('bootCheck.cannotReachDesc')}
         </p>
+        {!isPortConflict && result.technicalDetails && (
+          <details
+            className="mt-3 rounded-md border border-line-subtle px-3 py-2 text-xs"
+            data-testid="boot-error-details">
+            <summary className="cursor-pointer font-medium text-content-secondary">
+              {t('common.showMore')} · {t('common.error')}
+            </summary>
+            <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-all text-content-muted">
+              {result.technicalDetails}
+            </pre>
+          </details>
+        )}
         {isPortConflict && foreignOwner && (
           <p className="mt-2 text-xs text-content-muted">{t('bootCheck.portConflictGuidance')}</p>
         )}
