@@ -5,8 +5,8 @@ use super::*;
 fn active_sqlite_migration_is_visible_to_embedded_host() {
     // Never assert the global counter is initially zero: another independent
     // migration test might be running in parallel in the same test process.
-    let activity = LegacySqliteMigrationActivity::start();
-    assert!(legacy_sqlite_migration_in_progress());
+    let activity = WorkspaceMigrationActivity::start();
+    assert!(workspace_migration_in_progress());
     drop(activity);
 }
 
