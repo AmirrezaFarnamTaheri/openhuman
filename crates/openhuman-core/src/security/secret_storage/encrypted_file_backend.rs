@@ -375,10 +375,15 @@ impl EncryptedFileBackend {
         Fut: std::future::Future<Output = tinystoragedrivers::Result<T>> + Send + 'static,
     {
         self.import_legacy_dev_keychain(key)?;
-        match crate::storage::block_on(op(self.store(key))) {
+        // The Windows driver can fail to open the existing lock object while
+        // another process momentarily owns an incompatible HANDLE. Retry
+        // *that* transient sharing error only, never an ACL denial or a
+        // crypto/decryption failure. The normal driver lock remains mandatory.
+        match adapter::retry_windows_secret_lock(|| crate::storage::block_on(op(self.store(key)))) {
             Err(error) if adapter::is_corruption(&error) => {
                 adapter::recover_corrupt_file(&self.path, key, &error)?;
-                crate::storage::block_on(op(self.store(key))).map_err(adapter::backend_error)
+                adapter::retry_windows_secret_lock(|| crate::storage::block_on(op(self.store(key))))
+                    .map_err(adapter::backend_error)
             }
             result => result.map_err(adapter::backend_error),
         }
