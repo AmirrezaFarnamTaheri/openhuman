@@ -62,6 +62,30 @@ fn legacy_db(dir: &std::path::Path, broken: bool) -> std::path::PathBuf {
     db
 }
 
+#[test]
+fn concurrent_upgrade_process_handles_are_serialized_before_database_inspection() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = legacy_db(dir.path(), false);
+    let first = MigrationLock::acquire(&db).expect("own the migration lock");
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let contender_db = db.clone();
+    let contender = std::thread::spawn(move || {
+        let _second = MigrationLock::acquire(&contender_db)
+            .expect("acquire the same database migration lock after first releases it");
+        tx.send(()).unwrap();
+    });
+
+    assert!(
+        rx.recv_timeout(std::time::Duration::from_millis(75)).is_err(),
+        "a second process handle must not enter migration while the first holds the lock"
+    );
+    drop(first);
+    rx.recv_timeout(std::time::Duration::from_secs(3))
+        .expect("second migration acquires the lock after the first exits");
+    contender.join().unwrap();
+}
+
 #[tokio::test]
 async fn old_sqlite_upgrades_before_backend_opens_and_retains_an_original_backup() {
     let dir = tempfile::tempdir().unwrap();
