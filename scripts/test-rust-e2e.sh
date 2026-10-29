@@ -25,6 +25,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/ci/serial-libtest-args.sh"
 
 # The full set of `tests/*_e2e.rs` files. The default runner executes them
 # serially so CI does not link several large integration binaries at once.
@@ -363,13 +364,15 @@ for suite in "${SUITES[@]}"; do
     run_in_process_modules
     continue
   fi
-  if [ "$suite" = "mcp_registry_e2e" ]; then
-    # The registry tests open several process-global module clients across
-    # workspaces. Parallel libtest threads can race their module lifecycle.
+  if [ "$suite" = "mcp_registry_e2e" ] || [ "$suite" = "agent_harness_e2e" ]; then
+    # Both targets use process-global clients or scripted completion fixtures.
+    # Run every test, serially, so a child can receive its spawn/cancel event
+    # without unrelated tests racing a shared process-wide backend.
+    filter_serial_libtest_args
     echo "[rust-e2e]   $CARGO_BIN test --manifest-path Cargo.toml --test $suite (serial)"
     bash "$SCRIPT_DIR/ci-cancel-aware.sh" "$CARGO_BIN" test \
       --manifest-path Cargo.toml --features "$PRODUCT_FEATURES" \
-      --test "$suite" -- --test-threads=1 ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
+      --test "$suite" -- --test-threads=1 ${SERIAL_LIBTEST_ARGS[@]+"${SERIAL_LIBTEST_ARGS[@]}"}
     continue
   fi
   if [ "$suite" = "tinymcp_storage_smoke_e2e" ] || [ "$suite" = "inbound_module_e2e" ]; then

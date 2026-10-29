@@ -230,6 +230,13 @@ run_integration_target() {
     # as scripts/test-rust-with-mock.sh does.
     suite "${target}" llvm_cov --no-report --no-fail-fast -p openhuman-cli \
       --test "${target}" -- --test-threads=1
+  elif [ "${target}" = "agent_harness_e2e" ]; then
+    # The agent harness owns global scripted completions, HOME overrides and
+    # process-bound test backends. Serial libtest threads keep coverage's
+    # high-overhead instrumentation from starving subagent spawn/cancel tests.
+    # These tests are still all executed: no ignore, skip or allow-failure.
+    suite "${target}" llvm_cov --no-report --no-fail-fast -p openhuman-cli \
+      --test "${target}" -- --test-threads=1
   elif [[ "${target}" =~ ^json_rpc_.*_e2e$ ]]; then
     # JSON-RPC tests share runtime/config globals and must remain serial.
     suite "${target}" llvm_cov --no-report --no-fail-fast -p openhuman-cli \
