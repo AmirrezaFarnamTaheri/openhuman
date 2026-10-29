@@ -15,10 +15,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import en from '../../../lib/i18n/en';
 import { bootCheckTransport } from '../../../services/bootCheckService';
-import {
-  clearCoreRpcTokenCache,
-  clearCoreRpcUrlCache,
-} from '../../../services/coreRpcClient';
+import { clearCoreRpcTokenCache, clearCoreRpcUrlCache } from '../../../services/coreRpcClient';
 import coreModeReducer, { type CoreModeState } from '../../../store/coreModeSlice';
 import localeReducer from '../../../store/localeSlice';
 import { clearStoredCoreToken, storeCoreMode, storeRpcUrl } from '../../../utils/configPersistence';
@@ -618,9 +615,7 @@ describe('BootCheckGate — core restart endpoint refresh', () => {
       .mockResolvedValue({ kind: 'match' });
 
     renderGate(makeStore({ kind: 'local' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: copy('bootCheck.restartCore') })
-    );
+    fireEvent.click(await screen.findByRole('button', { name: copy('bootCheck.restartCore') }));
 
     await waitFor(() => {
       expect(screen.getByTestId('app-content')).toBeInTheDocument();
