@@ -70,6 +70,13 @@ jobs:
             storage::import::sqlite_v0::tests::concurrent_upgrade_process_handles_are_serialized_before_database_inspection \
             -- --exact --nocapture
 
+      - name: Bound a competing migration lock without losing data
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::import::sqlite_v0::tests::a_stalled_peer_cannot_hold_legacy_migration_queued_forever \
+            -- --exact --nocapture
+
       - name: Upgrade a historical SQLite workspace end-to-end on Windows
         shell: bash
         run: |
