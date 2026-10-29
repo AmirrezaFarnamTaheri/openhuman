@@ -1,0 +1,45 @@
+---
+# Temporary one-shot formatter for PR #21. Remove after the generated commit.
+name: PR21 Prettier repair (one-shot)
+on:
+  push:
+    branches: [fix/diagnostic-error-swarm-20261028]
+    paths: [.github/workflows/pr21-prettier-once.yml]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    container:
+      image: ghcr.io/tinyhumansai/openhuman_ci:latest
+    steps:
+      - name: Checkout the exact PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: fix/diagnostic-error-swarm-20261028
+          persist-credentials: true
+      - name: Install pinned dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Format only the three confirmed failing files
+        run: |
+          pnpm --dir app exec prettier --write \
+            src/components/settings/panels/SearchPanel.tsx \
+            src/lib/operationalErrors.ts \
+            src/lib/operationalErrors.test.ts
+          pnpm --dir app exec prettier --check \
+            src/components/settings/panels/SearchPanel.tsx \
+            src/lib/operationalErrors.ts \
+            src/lib/operationalErrors.test.ts
+      - name: Commit only verified formatting changes
+        run: |
+          set -euo pipefail
+          git diff --check
+          git add app/src/components/settings/panels/SearchPanel.tsx app/src/lib/operationalErrors.ts app/src/lib/operationalErrors.test.ts
+          if git diff --cached --quiet; then
+            echo 'All three files were already formatted.'
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'style(frontend): format operational diagnostics and search panel'
+          git push origin 'HEAD:fix/diagnostic-error-swarm-20261028'
