@@ -39,7 +39,13 @@ export type BootCheckResult =
   | { kind: 'outdatedLocal' }
   | { kind: 'outdatedCloud' }
   | { kind: 'noVersionMethod' }
-  | { kind: 'unreachable'; reason: string; portConflict?: boolean; foreignOwner?: PortOwner };
+  | {
+      kind: 'unreachable';
+      reason: string;
+      portConflict?: boolean;
+      foreignOwner?: PortOwner;
+      technicalDetails?: string;
+    };
 
 // ---------------------------------------------------------------------------
 // Transport interface (injectable for tests)
@@ -256,6 +262,9 @@ export async function runBootCheck(
               ? `Failed to start local core: ${diagnosis.summary}`
               : `${diagnosis.summary} ${diagnosis.nextStep}`,
           portConflict: false,
+          ...(diagnosis.kind !== 'unclassified' && diagnosis.technicalDetails
+            ? { technicalDetails: diagnosis.technicalDetails }
+            : {}),
         };
       }
     }
