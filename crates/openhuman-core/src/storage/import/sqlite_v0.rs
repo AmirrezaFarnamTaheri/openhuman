@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::storage::rusqlite::types::Value as SqlValue;
 use crate::storage::rusqlite::{self, params, Connection, OpenFlags};
@@ -82,6 +82,12 @@ struct MigrationLock {
 
 impl MigrationLock {
     fn acquire(database: &Path) -> Result<Self, StorageError> {
+        // A different instance can keep a lock while performing a legitimate
+        // long-running conversion. Wait, but never block a startup indefinitely.
+        Self::acquire_with_timeout(database, Duration::from_secs(8 * 60))
+    }
+
+    fn acquire_with_timeout(database: &Path, maximum: Duration) -> Result<Self, StorageError> {
         let mut lock_name = database
             .file_name()
             .unwrap_or_default()
@@ -110,8 +116,26 @@ impl MigrationLock {
                 "legacy SQLite migration coordination lock is not a file",
             ));
         }
-        fs2::FileExt::lock_exclusive(&lock)
-            .map_err(|e| error("acquire migration coordination lock", e))?;
+        let started = Instant::now();
+        loop {
+            match fs2::FileExt::try_lock_exclusive(&lock) {
+                Ok(()) => break,
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.raw_os_error() == Some(33) =>
+                {
+                    if started.elapsed() >= maximum {
+                        return Err(StorageError::backend(
+                            "legacy SQLite upgrade is still locked by another process; close the other OpenHuman instance and retry. Your database and backups were left unchanged",
+                        ));
+                    }
+                    std::thread::sleep(
+                        Duration::from_millis(100).min(maximum.saturating_sub(started.elapsed())),
+                    );
+                }
+                Err(e) => return Err(error("acquire migration coordination lock", e)),
+            }
+        }
         Ok(Self { _handle: lock })
     }
 }
