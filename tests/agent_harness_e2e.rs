@@ -351,12 +351,26 @@ async fn scripted_chat_completions(
     {
         return completion_response(streaming, json!({ "role": "assistant", "content": "[]" }));
     }
-    // Park an armed fan-out worker before it is answered, so a peer has a
-    // chance to arrive. Before the queue pop, not after: holding the popped
-    // entry would serialize the FIFO itself and deadlock the peer.
+    // Fan-out workers are detached and race the parent for the shared scripted
+    // FIFO. Route the workers by their own distinct canary prompts instead of
+    // allowing one to steal the parent's acknowledgement. The overlap barrier
+    // still requires *both* worker requests in flight before either receives
+    // its response, so a serial or missing spawn still fails the test.
     if !lock_or_recover(canary_barrier()).is_empty() {
         if let Some(canary) = canary_worker_request(&body) {
-            hold_for_canary_peer(canary).await;
+            hold_for_canary_peer(canary.clone()).await;
+            with_captured(|reqs| {
+                reqs.push(json!({
+                    "path": uri.path(),
+                    "model": body.get("model").and_then(Value::as_str),
+                    "stream": streaming,
+                    "body": body.clone(),
+                }));
+            });
+            return completion_response(
+                streaming,
+                json!({ "role": "assistant", "content": format!("{canary} worker done") }),
+            );
         }
     }
 
@@ -2970,8 +2984,6 @@ async fn parallel_subagent_fanout_inner() {
             ),
         ]),
         text_completion("Spawned two workers; results will arrive as they land."),
-        text_completion("alpha worker done"),
-        text_completion("beta worker done"),
     ]);
     let stack = boot_stack().await;
 
