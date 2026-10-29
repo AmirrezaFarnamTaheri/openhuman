@@ -36,6 +36,37 @@ pub(super) fn backend_error(error: StorageError) -> SecretStorageError {
     SecretStorageError::Backend(format!("secret store: {error}{guidance}"))
 }
 
+/// Retry only a *temporary Windows lock-sharing collision*, not an ACL
+/// denial or corrupt secret store. All attempts execute the normal guarded
+/// driver operation; none remove, reset, quarantine or bypass any lock.
+pub(super) fn retry_windows_secret_lock<T>(
+    mut operation: impl FnMut() -> tinystoragedrivers::Result<T>,
+) -> tinystoragedrivers::Result<T> {
+    #[cfg(windows)]
+    {
+        for retry in 0..3 {
+            match operation() {
+                Err(error) if is_windows_sharing_violation(&error) => {
+                    std::thread::sleep(std::time::Duration::from_millis(40_u64 << retry));
+                }
+                result => return result,
+            }
+        }
+    }
+    operation()
+}
+
+#[cfg(windows)]
+fn is_windows_sharing_violation(error: &StorageError) -> bool {
+    if error.message() != "could not open the lock file" {
+        return false;
+    }
+    let code = std::error::Error::source(error)
+        .and_then(|source| source.downcast_ref::<std::io::Error>())
+        .and_then(std::io::Error::raw_os_error);
+    matches!(code, Some(32 | 33))
+}
+
 /// Whether the driver reports the secrets file itself as unreadable
 /// (undecryptable under this key, or not the expected JSON).
 pub(super) fn is_corruption(error: &StorageError) -> bool {
