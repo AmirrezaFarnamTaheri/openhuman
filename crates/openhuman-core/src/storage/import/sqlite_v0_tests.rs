@@ -63,6 +63,23 @@ fn legacy_db(dir: &std::path::Path, broken: bool) -> std::path::PathBuf {
 }
 
 #[test]
+fn a_current_sqlite_database_never_creates_legacy_migration_lockfiles() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("storage.db");
+    let conn = Connection::open(&db).unwrap();
+    conn.execute_batch("CREATE TABLE docs (id TEXT PRIMARY KEY, body TEXT)")
+        .unwrap();
+    drop(conn);
+
+    upgrade_if_needed(&db).unwrap();
+
+    assert!(
+        !dir.path().join("storage.db.v0-upgrade.lock").exists(),
+        "a current DB must not require a legacy migration lock or write to disk at startup"
+    );
+}
+
+#[test]
 fn concurrent_upgrade_process_handles_are_serialized_before_database_inspection() {
     let dir = tempfile::tempdir().unwrap();
     let db = legacy_db(dir.path(), false);
