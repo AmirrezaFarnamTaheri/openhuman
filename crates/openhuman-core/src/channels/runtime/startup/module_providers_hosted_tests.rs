@@ -12,13 +12,6 @@ async fn hosted_target_projects_to_the_canonical_thread_and_keeps_one_gateway_te
     let client_id = "relay-target-projection-client";
     let thread_id = "channel:telegram/sender-7/chat-42";
     let mut web_events = crate::web_chat::subscribe_web_channel_events();
-    let relay = Arc::new(crate::channels::providers::relay::RelayChannel::new(
-        "telegram",
-        client_id,
-        thread_id,
-        request_id,
-        "provider-message-9",
-    ));
     let channel = tinychannels_bus::ChannelRef {
         id: "telegram".into(),
         account_id: Some("trusted-account-7".into()),
@@ -35,6 +28,14 @@ async fn hosted_target_projects_to_the_canonical_thread_and_keeps_one_gateway_te
         .session_agent("relay-target-agent");
     overlay.profile = Some("relay-target-profile".into());
     let ctx = DispatchCtx::new(CoreContext::for_test(DomainSet::full(), None).derive_with(overlay));
+    let relay = Arc::new(crate::channels::providers::relay::RelayChannel::new(
+        ctx.clone(),
+        "telegram",
+        client_id,
+        thread_id,
+        request_id,
+        "provider-message-9",
+    ));
     let target = crate::channels::runtime::dispatch::hosted_relay_target(
         &ctx,
         &config,
@@ -129,13 +130,6 @@ async fn hosted_target_projects_typed_media_and_voice_to_web_and_gateway_once() 
     let client_id = "relay-typed-output-client";
     let thread_id = "channel:telegram/sender-7/chat-42";
     let mut web_events = crate::web_chat::subscribe_web_channel_events();
-    let relay = Arc::new(crate::channels::providers::relay::RelayChannel::new(
-        "telegram",
-        client_id,
-        thread_id,
-        request_id,
-        "provider-message-9",
-    ));
     let channel = tinychannels_bus::ChannelRef {
         id: "telegram".into(),
         account_id: Some("trusted-account-7".into()),
@@ -152,6 +146,14 @@ async fn hosted_target_projects_typed_media_and_voice_to_web_and_gateway_once() 
         .session_agent("relay-typed-output-agent");
     overlay.profile = Some("relay-typed-output-profile".into());
     let ctx = DispatchCtx::new(CoreContext::for_test(DomainSet::full(), None).derive_with(overlay));
+    let relay = Arc::new(crate::channels::providers::relay::RelayChannel::new(
+        ctx.clone(),
+        "telegram",
+        client_id,
+        thread_id,
+        request_id,
+        "provider-message-9",
+    ));
     let target = crate::channels::runtime::dispatch::hosted_relay_target(
         &ctx,
         &config,

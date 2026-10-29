@@ -520,7 +520,10 @@ async fn scenario() {
     // Still require the exact accepted turn to deliver an outbound event.
     tokio::time::timeout(Duration::from_secs(60), async {
         loop {
-            let event = events.recv().await.expect("profile event stream remains open");
+            let event = events
+                .recv()
+                .await
+                .expect("profile event stream remains open");
             let event_name = event.event_name();
             let event_request_id = event.context().request_id.as_str();
             observed_events.push(format!("{event_name}:{event_request_id}"));
@@ -533,7 +536,7 @@ async fn scenario() {
     .unwrap_or_else(|_| {
         panic!(
             "missing channel_outbound for {request_id}; events: {observed_events:?}; calls: {:?}",
-            &*calls.lock().unwrap()
+            *calls.lock().unwrap()
         )
     });
     assert_eq!(

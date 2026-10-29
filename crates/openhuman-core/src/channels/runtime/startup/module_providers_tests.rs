@@ -217,13 +217,6 @@ async fn compiled_module_hosted_progressive_callback_is_scoped_and_typed() {
     let _env_lock = EnvVarGuard::locked_async().await;
     let _storage = crate::channels::module_fixture::install_memory_storage();
     let client = crate::channels::module_fixture::client().await;
-    let relay = Arc::new(crate::channels::providers::relay::RelayChannel::new(
-        "telegram",
-        "relay-fixture-client",
-        "channel:telegram/sender-7/chat-42",
-        "relay-fixture-request",
-        "provider-message-9",
-    ));
     let channel = tinychannels_bus::ChannelRef {
         id: "telegram".into(),
         account_id: Some("tenant-profile:7:telegram".into()),
@@ -242,6 +235,14 @@ async fn compiled_module_hosted_progressive_callback_is_scoped_and_typed() {
         .session_agent("relay-agent");
     overlay.profile = Some("relay-profile".into());
     let ctx = DispatchCtx::new(CoreContext::for_test(DomainSet::full(), None).derive_with(overlay));
+    let relay = Arc::new(crate::channels::providers::relay::RelayChannel::new(
+        ctx.clone(),
+        "telegram",
+        "relay-fixture-client",
+        "channel:telegram/sender-7/chat-42",
+        "relay-fixture-request",
+        "provider-message-9",
+    ));
     let projection = Arc::new(
         crate::web_chat::Surface::new(
             &ctx,
