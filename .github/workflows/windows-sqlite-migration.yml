@@ -1,0 +1,99 @@
+---
+# Windows-only migration regression. The legacy SQLite rollback flush invokes
+# Win32 FlushFileBuffers; Linux CI cannot reproduce the read-only HANDLE error.
+# Limit this slow Windows lane to changes that can affect this migration.
+name: Windows SQLite migration regression
+
+on:
+  pull_request:
+    branches: [main, release]
+    paths:
+      - '.github/workflows/windows-sqlite-migration.yml'
+      - '.github/workflows/test-reusable.yml'
+      - 'crates/openhuman-core/src/storage/import/sqlite_v0.rs'
+      - 'crates/openhuman-core/src/storage/import/sqlite_v0_tests.rs'
+      - 'crates/openhuman-core/src/storage/import/layout_db.rs'
+      - 'crates/openhuman-core/src/storage/import/layout_db_tests.rs'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-sqlite-migration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backup-flush:
+    name: Legacy SQLite rollback flush (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - name: Allow long submodule fixture paths
+        shell: pwsh
+        run: git config --global core.longpaths true
+
+      - name: Checkout source and vendored dependencies
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+          cache-on-failure: true
+          key: core-windows
+
+      - name: Verify pinned Rust toolchain
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Regress Windows-only verified SQLite backup flush
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::import::sqlite_v0::tests::windows_migration_preserves_and_flushes_the_verified_rollback_backup \
+            -- --exact --nocapture
+
+      - name: Verify legacy SQLite cross-process migration coordination
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::import::sqlite_v0::tests::concurrent_upgrade_process_handles_are_serialized_before_database_inspection \
+            -- --exact --nocapture
+
+      - name: Bound a competing migration lock without losing data
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::import::sqlite_v0::tests::a_stalled_peer_cannot_hold_legacy_migration_queued_forever \
+            -- --exact --nocapture
+
+      - name: Upgrade a historical SQLite workspace end-to-end on Windows
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::import::sqlite_v0::tests::old_sqlite_upgrades_before_backend_opens_and_retains_an_original_backup \
+            -- --exact --nocapture
+
+      - name: Verify resumable profile-layout migration on Windows
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::layout::run::tests::a_crash_at_any_step_resumes_to_the_same_result \
+            -- --exact --nocapture
+
+      - name: Regress Windows profile-layout SQLite copy flush
+        shell: bash
+        run: |
+          cargo test --locked -p openhuman --lib \
+            storage::import::layout_db::tests::windows_layout_database_copy_flushes_before_publication \
+            -- --exact --nocapture

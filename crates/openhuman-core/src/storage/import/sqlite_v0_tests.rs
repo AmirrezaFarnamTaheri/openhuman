@@ -62,6 +62,66 @@ fn legacy_db(dir: &std::path::Path, broken: bool) -> std::path::PathBuf {
     db
 }
 
+#[test]
+fn a_current_sqlite_database_never_creates_legacy_migration_lockfiles() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("storage.db");
+    let conn = Connection::open(&db).unwrap();
+    conn.execute_batch("CREATE TABLE docs (id TEXT PRIMARY KEY, body TEXT)")
+        .unwrap();
+    drop(conn);
+
+    upgrade_if_needed(&db).unwrap();
+
+    assert!(
+        !dir.path().join("storage.db.v0-upgrade.lock").exists(),
+        "a current DB must not require a legacy migration lock or write to disk at startup"
+    );
+}
+
+#[test]
+fn a_stalled_peer_cannot_hold_legacy_migration_queued_forever() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = legacy_db(dir.path(), false);
+    let original = std::fs::read(&db).unwrap();
+    let _peer = MigrationLock::acquire(&db).unwrap();
+    let result = MigrationLock::acquire_with_timeout(
+        &db,
+        std::time::Duration::from_millis(60),
+    );
+    let error = match result {
+        Ok(_) => panic!("the waiting process must not bypass the peer's migration lock"),
+        Err(error) => error.to_string(),
+    };
+    assert!(error.contains("another process"), "{error}");
+    assert!(error.contains("retry"), "{error}");
+    assert_eq!(std::fs::read(&db).unwrap(), original);
+}
+
+#[test]
+fn concurrent_upgrade_process_handles_are_serialized_before_database_inspection() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = legacy_db(dir.path(), false);
+    let first = MigrationLock::acquire(&db).expect("own the migration lock");
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let contender_db = db.clone();
+    let contender = std::thread::spawn(move || {
+        let _second = MigrationLock::acquire(&contender_db)
+            .expect("acquire the same database migration lock after first releases it");
+        tx.send(()).unwrap();
+    });
+
+    assert!(
+        rx.recv_timeout(std::time::Duration::from_millis(75)).is_err(),
+        "a second process handle must not enter migration while the first holds the lock"
+    );
+    drop(first);
+    rx.recv_timeout(std::time::Duration::from_secs(3))
+        .expect("second migration acquires the lock after the first exits");
+    contender.join().unwrap();
+}
+
 #[tokio::test]
 async fn old_sqlite_upgrades_before_backend_opens_and_retains_an_original_backup() {
     let dir = tempfile::tempdir().unwrap();
@@ -156,6 +216,28 @@ async fn bad_legacy_document_rolls_back_without_destroying_user_data() {
         .unwrap();
     assert_eq!(historical, "{broken");
     assert!(!bytes_before.is_empty());
+}
+
+// Windows FlushFileBuffers requires GENERIC_WRITE. A verified VACUUM INTO
+// rollback file must be durably flushed before we touch the original DB.
+// Reproduces the File::open(...).sync_all() access-denied startup failure.
+#[cfg(windows)]
+#[test]
+fn windows_migration_preserves_and_flushes_the_verified_rollback_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = legacy_db(dir.path(), false);
+    let conn = rusqlite::Connection::open_with_flags(&db, OpenFlags::SQLITE_OPEN_READ_WRITE)
+        .expect("open the historical database");
+    let counts = inventory(&conn).expect("inventory the source");
+
+    let path = backup(&conn, &db, &counts)
+        .expect("flush a validated VACUUM INTO backup using a write-capable file handle");
+
+    let verified = rusqlite::Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .expect("open the verified backup");
+    check_integrity(&verified).expect("backup integrity");
+    assert_eq!(inventory(&verified).unwrap(), counts);
+    assert!(table_exists(&verified, "_tsd_docs").unwrap());
 }
 
 #[test]

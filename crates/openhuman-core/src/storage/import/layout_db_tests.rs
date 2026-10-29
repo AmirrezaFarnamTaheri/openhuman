@@ -6,6 +6,26 @@ use crate::storage::layout::test_fixtures::{fixture_docs, v1_profile};
 use crate::storage::layout::Target;
 use tempfile::TempDir;
 
+#[cfg(all(windows, feature = "storage-sqlite"))]
+#[test]
+fn windows_layout_database_copy_flushes_before_publication() {
+    // Win32 FlushFileBuffers rejects the read-only File::open handle. A valid
+    // snapshot must be durably flushed and published without touching its
+    // historical source.
+    let fx = v1_profile();
+    let source = legacy::v1_db(&fx.target);
+    let original = std::fs::read(&source).expect("read v1 database");
+    let dest = fx.target.storage_db();
+
+    let result = copy(&source, &dest)
+        .expect("VACUUM INTO copy flushes on Windows and is renamed into place");
+    assert!(!result.reused);
+    assert_eq!(table_counts(&dest).unwrap(), table_counts(&source).unwrap());
+    assert_eq!(std::fs::read(&source).unwrap(), original);
+    assert!(!dest.with_file_name("storage.db.tmp").exists());
+}
+
+
 #[test]
 #[cfg(feature = "storage-sqlite")]
 fn the_copy_has_the_sources_counts_and_leaves_the_source_alone() {
@@ -43,6 +63,73 @@ fn a_matching_copy_is_kept_and_a_stale_one_replaced() {
     let again = copy(&source, &dest).unwrap();
     assert!(!again.reused);
     assert_eq!(table_counts(&dest).unwrap(), table_counts(&source).unwrap());
+}
+
+#[test]
+fn a_stale_copy_with_equal_row_counts_is_never_reused() {
+    let dir = TempDir::new().unwrap();
+    let source = dir.path().join("legacy.db");
+    let dest = dir.path().join("storage.db");
+    let conn = Connection::open(&source).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE records (id TEXT PRIMARY KEY, body TEXT NOT NULL);
+         INSERT INTO records VALUES ('one', 'correct-value');",
+    )
+    .unwrap();
+    drop(conn);
+
+    assert!(!copy(&source, &dest).unwrap().reused);
+
+    // Simulate a previously interrupted migration leaving a same-size, stale
+    // destination. Its row inventory matches, but its document bytes do not.
+    Connection::open(&dest)
+        .unwrap()
+        .execute(
+            "UPDATE records SET body = 'wrong-value' WHERE id = 'one'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(table_counts(&source).unwrap(), table_counts(&dest).unwrap());
+
+    let refreshed = copy(&source, &dest).unwrap();
+    assert!(!refreshed.reused, "row counts alone must not authorize reuse");
+    let value: String = Connection::open(&dest)
+        .unwrap()
+        .query_row("SELECT body FROM records WHERE id = 'one'", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(value, "correct-value");
+}
+
+#[test]
+fn a_copy_with_matching_rows_but_changed_schema_is_not_reused() {
+    let dir = TempDir::new().unwrap();
+    let source = dir.path().join("legacy.db");
+    let dest = dir.path().join("storage.db");
+    Connection::open(&source)
+        .unwrap()
+        .execute_batch(
+            "CREATE TABLE records (id TEXT PRIMARY KEY, body TEXT NOT NULL);
+             INSERT INTO records VALUES ('one', 'correct');",
+        )
+        .unwrap();
+    copy(&source, &dest).unwrap();
+
+    Connection::open(&dest)
+        .unwrap()
+        .execute_batch("CREATE INDEX stale_index ON records(body)")
+        .unwrap();
+    assert_eq!(table_counts(&source).unwrap(), table_counts(&dest).unwrap());
+
+    assert!(!copy(&source, &dest).unwrap().reused);
+    let stale_index: i64 = Connection::open(&dest)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE name = 'stale_index'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(stale_index, 0, "recovered schema must match the source");
 }
 
 #[test]

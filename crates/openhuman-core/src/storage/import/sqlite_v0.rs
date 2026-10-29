@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::storage::rusqlite::types::Value as SqlValue;
 use crate::storage::rusqlite::{self, params, Connection, OpenFlags};
@@ -70,6 +70,73 @@ fn database_path(path: &Path) -> PathBuf {
         path.to_path_buf()
     } else {
         path.join("storage.db")
+    }
+}
+
+/// Coordinates the v0→v2 format cut across desktop, CLI and other
+/// processes. SQLite's BEGIN IMMEDIATE alone is too late: two processes
+/// could both read v0, create rollback snapshots, and then race the DDL.
+struct MigrationLock {
+    _handle: std::fs::File,
+}
+
+impl MigrationLock {
+    fn acquire(database: &Path) -> Result<Self, StorageError> {
+        // A different instance can keep a lock while performing a legitimate
+        // long-running conversion. Wait, but never block a startup indefinitely.
+        Self::acquire_with_timeout(database, Duration::from_secs(8 * 60))
+    }
+
+    fn acquire_with_timeout(database: &Path, maximum: Duration) -> Result<Self, StorageError> {
+        let mut lock_name = database
+            .file_name()
+            .unwrap_or_default()
+            .to_os_string();
+        lock_name.push(".v0-upgrade.lock");
+        let lock_path = database.with_file_name(lock_name);
+        let mut options = std::fs::OpenOptions::new();
+        options.create(true).read(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        }
+        // A lockfile is not a user database and is intentionally retained:
+        // removing it while another client holds it would split the lock
+        // namespace and defeat cross-process coordination.
+        let lock = options
+            .open(&lock_path)
+            .map_err(|e| error("open migration coordination lock", e))?;
+        if !lock
+            .metadata()
+            .map_err(|e| error("inspect migration coordination lock", e))?
+            .is_file()
+        {
+            return Err(StorageError::backend(
+                "legacy SQLite migration coordination lock is not a file",
+            ));
+        }
+        let started = Instant::now();
+        loop {
+            match fs2::FileExt::try_lock_exclusive(&lock) {
+                Ok(()) => break,
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.raw_os_error() == Some(33) =>
+                {
+                    if started.elapsed() >= maximum {
+                        return Err(StorageError::backend(
+                            "legacy SQLite upgrade is still locked by another process; close the other OpenHuman instance and retry. Your database and backups were left unchanged",
+                        ));
+                    }
+                    std::thread::sleep(
+                        Duration::from_millis(100).min(maximum.saturating_sub(started.elapsed())),
+                    );
+                }
+                Err(e) => return Err(error("acquire migration coordination lock", e)),
+            }
+        }
+        Ok(Self { _handle: lock })
     }
 }
 
@@ -153,7 +220,15 @@ fn backup(
             "legacy SQLite changed during backup; migration stopped",
         ));
     }
-    std::fs::File::open(&path)
+    // On Windows, File::open obtains a read-only HANDLE, but sync_all uses
+    // FlushFileBuffers, which requires GENERIC_WRITE. Close the read-only
+    // SQLite verification connection, then open the already-verified backup
+    // with read/write access solely for a durable flush. No bytes are changed.
+    drop(copy);
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
         .and_then(|file| file.sync_all())
         .map_err(|e| error("flush backup", e))?;
     Ok(path)
@@ -479,6 +554,17 @@ pub(crate) fn upgrade_if_needed(path: &Path) -> Result<(), StorageError> {
     if !file.is_file() {
         return Ok(());
     }
+    // The overwhelmingly common v2 path is read-only and creates no sidecar
+    // file or lock. Only historical _tsd_docs databases need coordination.
+    let probe = Connection::open_with_flags(&file, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| error("inspect existing database", e))?;
+    if !table_exists(&probe, "_tsd_docs").map_err(|e| error("inspect legacy layout", e))? {
+        return Ok(());
+    }
+    drop(probe);
+    // A second OpenHuman process must re-check the current schema *after*
+    // acquiring the lock: the first process may already have committed v2.
+    let _migration_lock = MigrationLock::acquire(&file)?;
     let conn = Connection::open_with_flags(&file, OpenFlags::SQLITE_OPEN_READ_WRITE)
         .map_err(|e| error("open existing database", e))?;
     if !table_exists(&conn, "_tsd_docs").map_err(|e| error("inspect legacy layout", e))? {
