@@ -225,14 +225,13 @@ describe('runBootCheck — unset mode', () => {
 
 describe('runBootCheck — port conflict auto-recovery', () => {
   it('retains a redacted SQLite migration cause separately from the recovery guidance', async () => {
+    const cause = [
+      'opening the configured storage backend: legacy SQLite migration',
+      '(read collection metadata): database schema is locked;',
+      'Authorization: Bearer fixture-secret-value',
+    ].join(' ');
     const transport = makeTransport({
-      invokeCmd: vi.fn().mockRejectedValue(
-        new Error(
-          'opening the configured storage backend: legacy SQLite migration ' +
-            '(read collection metadata): database schema is locked; ' +
-            'Authorization: Bearer fixture-secret-value'
-        )
-      ),
+      invokeCmd: vi.fn().mockRejectedValue(new Error(cause)),
       callRpc: vi.fn(),
     });
 
