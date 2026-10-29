@@ -310,6 +310,37 @@ fn serialize_children_after_parent(parent_requests: usize, child_responses: usiz
     CHILD_RESPONSES.store(0, std::sync::atomic::Ordering::SeqCst);
 }
 
+/// Admit the initial parent handoff requests immediately; only later parent
+/// requests wait for their child responses. The old predicate blocked *all*
+/// parent requests, including the first one, for the 15s fallback deadline.
+fn scripted_response_is_ready(
+    is_orchestrator: bool,
+    parents_answered: usize,
+    required_parents: usize,
+    children_answered: usize,
+    required_children: usize,
+) -> bool {
+    if is_orchestrator {
+        parents_answered < required_parents || children_answered >= required_children
+    } else {
+        parents_answered >= required_parents
+    }
+}
+
+#[test]
+fn scripted_parent_handoff_is_not_blocked_by_its_own_child_barrier() {
+    // Parent sends the spawn request and its acknowledgement before children run.
+    assert!(scripted_response_is_ready(true, 0, 2, 0, 3));
+    assert!(scripted_response_is_ready(true, 1, 2, 0, 3));
+    // The next parent response must wait for all three child completions.
+    assert!(!scripted_response_is_ready(true, 2, 2, 0, 3));
+    assert!(!scripted_response_is_ready(true, 2, 2, 2, 3));
+    assert!(scripted_response_is_ready(true, 2, 2, 3, 3));
+    // Children cannot consume the parent's two reserved scripted responses.
+    assert!(!scripted_response_is_ready(false, 1, 2, 0, 3));
+    assert!(scripted_response_is_ready(false, 2, 2, 0, 3));
+}
+
 fn body_is_orchestrator(body: &Value) -> bool {
     body.get("messages")
         .and_then(Value::as_array)
@@ -388,15 +419,15 @@ async fn scripted_chat_completions(
     if parent_first > 0 {
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
         while std::time::Instant::now() < deadline {
-            let parent_ready =
-                PARENT_ANSWERED.load(std::sync::atomic::Ordering::SeqCst) >= parent_first;
-            let child_ready = CHILD_RESPONSES.load(std::sync::atomic::Ordering::SeqCst)
-                >= child_responses_required;
-            if if is_orchestrator {
-                parent_ready && child_ready
-            } else {
-                parent_ready
-            } {
+            let parents_answered = PARENT_ANSWERED.load(std::sync::atomic::Ordering::SeqCst);
+            let children_answered = CHILD_RESPONSES.load(std::sync::atomic::Ordering::SeqCst);
+            if scripted_response_is_ready(
+                is_orchestrator,
+                parents_answered,
+                parent_first,
+                children_answered,
+                child_responses_required,
+            ) {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
