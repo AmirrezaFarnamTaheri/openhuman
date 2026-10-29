@@ -1,5 +1,16 @@
 use super::*;
 
+#[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+#[test]
+fn active_sqlite_migration_is_visible_to_embedded_host() {
+    // Never assert the global counter is initially zero: another independent
+    // migration test might be running in parallel in the same test process.
+    let activity = LegacySqliteMigrationActivity::start();
+    assert!(legacy_sqlite_migration_in_progress());
+    drop(activity);
+}
+
+
 fn round_trip_through_storage_bridge() -> serde_json::Value {
     let backend: Arc<dyn StorageBackend> =
         Arc::new(tinystoragedrivers_testkit::MemoryBackend::new());
