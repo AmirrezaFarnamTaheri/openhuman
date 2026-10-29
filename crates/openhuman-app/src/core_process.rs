@@ -101,6 +101,9 @@ pub struct CoreProcessHandle {
     task: Arc<Mutex<Option<JoinHandle<anyhow::Result<()>>>>>,
     shutdown_token: Arc<Mutex<CancellationToken>>,
     restart_lock: Arc<Mutex<()>>,
+    /// Serializes all core boot attempts, including retries while a legacy
+    /// migration is waiting on a blocking SQLite worker.
+    startup_lock: Arc<Mutex<()>>,
     preferred_port: u16,
     active_port: Arc<RwLock<u16>>,
     last_port_fallback: Arc<RwLock<Option<PortFallbackNotice>>>,
@@ -131,6 +134,7 @@ impl CoreProcessHandle {
             task: Arc::new(Mutex::new(None)),
             shutdown_token: Arc::new(Mutex::new(CancellationToken::new())),
             restart_lock: Arc::new(Mutex::new(())),
+            startup_lock: Arc::new(Mutex::new(())),
             preferred_port: port,
             active_port: Arc::new(RwLock::new(port)),
             last_port_fallback: Arc::new(RwLock::new(None)),
@@ -165,6 +169,11 @@ impl CoreProcessHandle {
     }
 
     pub async fn ensure_running(&self) -> Result<(), String> {
+        // Only one caller may spawn, await, or abort a managed core startup.
+        // The old task-slot mutex covered allocation but not the readiness
+        // loop: a second caller could wait on its own unused ready receiver
+        // and eventually abort the first caller's legitimate migration boot.
+        let _startup_guard = self.startup_lock.lock().await;
         // Idempotent fast path: if we already spawned the embedded server in
         // *this* process and it's still alive on the port, the listener is
         // us — return Ok without identifying or taking over. Without this,
