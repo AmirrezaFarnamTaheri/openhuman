@@ -1440,6 +1440,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'Подключено, но реальное время на этом ядре отключено. Оно запущено с --jsonrpc-only; перезапусти его без этого флага, чтобы работали чат и живые обновления.',
   'bootCheck.checkingCore': 'Запускаем OpenHuman…',
+  'bootCheck.upgradingWorkspace': 'Обновляем рабочее пространство…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman сохраняет и обновляет ваши данные. Не закрывайте приложение до завершения процесса обновления.',
   'bootCheck.cannotReach': 'Не удаётся подключиться',
   'bootCheck.cannotReachDesc': 'Нам не удалось подключиться. Попробовать другой вариант?',
   'bootCheck.switchMode': 'Изменить, где он работает',
