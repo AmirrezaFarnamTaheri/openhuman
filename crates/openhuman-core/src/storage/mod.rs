@@ -210,6 +210,9 @@ static LEGACY_SQLITE_MIGRATIONS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
 #[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+static LEGACY_SQLITE_MIGRATION_SERIAL: Mutex<()> = Mutex::new(());
+
+#[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
 struct LegacySqliteMigrationActivity;
 
 #[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
@@ -346,6 +349,12 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
         let path = path.clone();
         crate::core::runtime::DispatchCtx::ambient()
             .spawn_blocking(move || {
+                // A previous async startup waiter may have been cancelled
+                // while its SQLite worker was still running. Never start two
+                // schema upgrades/backups concurrently in the same process.
+                let _serial = LEGACY_SQLITE_MIGRATION_SERIAL
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let _activity = LegacySqliteMigrationActivity::start();
                 import::sqlite_v0::upgrade_if_needed(&path)
             })
