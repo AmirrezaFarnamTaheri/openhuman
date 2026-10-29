@@ -152,7 +152,7 @@ describe('BootCheckGate — first launch on desktop (unset mode)', () => {
       .spyOn(bootCheckTransport, 'invokeCmd')
       .mockImplementation(async command => {
         if (command === 'core_startup_status') {
-          return { legacySqliteMigrationActive: true } as never;
+          return { workspaceMigrationActive: true } as never;
         }
         throw new Error(`unexpected command ${command}`);
       });
