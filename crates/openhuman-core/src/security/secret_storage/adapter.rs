@@ -11,9 +11,29 @@ use zeroize::Zeroizing;
 use crate::security::secret_storage::error::SecretStorageError;
 use crate::security::secret_storage::file_store;
 
-/// A driver error as a [`SecretStorageError::Backend`], for the file store.
+/// Map a file-secret driver error into a redacted, actionable diagnostic.
+///
+/// The pinned driver keeps native I/O details in its `source`, not its
+/// Display message. Do not print that source: it can contain paths or
+/// credential material. For legacy Windows lock failures, expose only the
+/// stable OS error category/code so support can distinguish ACL problems
+/// from a simultaneous writer without guessing or deleting secrets.
 pub(super) fn backend_error(error: StorageError) -> SecretStorageError {
-    SecretStorageError::Backend(format!("secret store: {error}"))
+    let guidance = if error.message() == "could not open the lock file" {
+        let code = std::error::Error::source(&error)
+            .and_then(|source| source.downcast_ref::<std::io::Error>())
+            .and_then(std::io::Error::raw_os_error);
+        match code {
+            #[cfg(windows)]
+            Some(5) => " — Windows access denied (Win32 5); check the existing lock file's owner and permissions; preserve your encrypted secrets and key files",
+            #[cfg(windows)]
+            Some(32) => " — Windows sharing violation (Win32 32); close other OpenHuman instances and retry; preserve your encrypted secrets and key files",
+            _ => " — secret-store lock unavailable; do not delete the lock or key files; preserve your encrypted secrets and retry after checking the file permissions",
+        }
+    } else {
+        ""
+    };
+    SecretStorageError::Backend(format!("secret store: {error}{guidance}"))
 }
 
 /// Whether the driver reports the secrets file itself as unreadable
