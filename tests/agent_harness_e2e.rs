@@ -359,18 +359,25 @@ async fn scripted_chat_completions(
     if !lock_or_recover(canary_barrier()).is_empty() {
         if let Some(canary) = canary_worker_request(&body) {
             hold_for_canary_peer(canary.clone()).await;
-            with_captured(|reqs| {
-                reqs.push(json!({
-                    "path": uri.path(),
-                    "model": body.get("model").and_then(Value::as_str),
-                    "stream": streaming,
-                    "body": body.clone(),
-                }));
-            });
-            return completion_response(
-                streaming,
-                json!({ "role": "assistant", "content": format!("{canary} worker done") }),
-            );
+            // The cancellation E2E uses the same barrier for a single parked
+            // worker. Its mock responses must continue through the normal FIFO.
+            if matches!(
+                canary.as_str(),
+                "PARALLEL_ALPHA_CANARY" | "PARALLEL_BETA_CANARY"
+            ) {
+                with_captured(|reqs| {
+                    reqs.push(json!({
+                        "path": uri.path(),
+                        "model": body.get("model").and_then(Value::as_str),
+                        "stream": streaming,
+                        "body": body.clone(),
+                    }));
+                });
+                return completion_response(
+                    streaming,
+                    json!({ "role": "assistant", "content": format!("{canary} worker done") }),
+                );
+            }
         }
     }
 
