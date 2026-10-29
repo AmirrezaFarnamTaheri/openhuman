@@ -646,10 +646,10 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
       if (inFlight) return;
       inFlight = true;
       try {
-        const status = await transport.invokeCmd<{ legacySqliteMigrationActive: boolean }>(
+        const status = await transport.invokeCmd<{ workspaceMigrationActive: boolean }>(
           'core_startup_status'
         );
-        if (!cancelled) setMigrationActive(status.legacySqliteMigrationActive === true);
+        if (!cancelled) setMigrationActive(status.workspaceMigrationActive === true);
       } catch {
         // Older local builds may not have this command. The normal boot
         // status and typed failure remain available in that case.
