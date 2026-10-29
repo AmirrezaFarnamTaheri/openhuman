@@ -153,6 +153,26 @@ fn concurrent_startup_waits_for_the_existing_boot_attempt() {
 }
 
 #[test]
+fn desktop_start_waits_for_an_in_progress_restart_or_update() {
+    let rt = core_test_runtime();
+    rt.block_on(async {
+        let handle = CoreProcessHandle::new(12789);
+        let restart_guard = handle.restart_lock().await;
+        let result = tokio::time::timeout(
+            tokio::time::Duration::from_millis(40),
+            handle.ensure_running_for_ui(),
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "desktop startup must not race shutdown and rebind during a restart"
+        );
+        assert!(handle.task.lock().await.is_none());
+        drop(restart_guard);
+    });
+}
+
+#[test]
 fn core_process_handle_new_creates_instance() {
     let handle = CoreProcessHandle::new(9999);
     assert_eq!(handle.port(), 9999);
