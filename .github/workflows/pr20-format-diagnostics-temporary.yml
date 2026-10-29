@@ -1,0 +1,27 @@
+name: PR20 Prettier Diff (temporary)
+on:
+  push:
+    branches:
+      - fix/desktop-port-recovery-20261028
+permissions:
+  contents: read
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install locked dependencies
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile --ignore-scripts
+      - name: Show exact Prettier patch
+        run: |
+          cd app
+          corepack pnpm exec prettier --write src/components/BootCheckGate/__tests__/BootCheckGate.test.tsx
+          git diff -- src/components/BootCheckGate/__tests__/BootCheckGate.test.tsx
