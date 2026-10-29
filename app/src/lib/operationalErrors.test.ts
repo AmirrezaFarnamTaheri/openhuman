@@ -90,9 +90,9 @@ describe('explainOperationalError', () => {
   });
 
   it('does not infer a port conflict from an unrelated SQLite failure', () => {
-    expect(
-      explainOperationalError(new Error('opening the configured storage backend')).kind
-    ).toBe('storage_unavailable');
+    expect(explainOperationalError(new Error('opening the configured storage backend')).kind).toBe(
+      'storage_unavailable'
+    );
   });
 
   it('classifies an actual address-in-use error distinctly', () => {

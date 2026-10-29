@@ -504,14 +504,12 @@ describe('useAppUpdate', () => {
 
     it('does not overwrite a staged update with a late successful background check', async () => {
       let resolveProbe: ((value: unknown) => void) | undefined;
-      mockCheckAppUpdate
-        .mockResolvedValueOnce(update)
-        .mockImplementationOnce(
-          () =>
-            new Promise(resolve => {
-              resolveProbe = resolve;
-            })
-        );
+      mockCheckAppUpdate.mockResolvedValueOnce(update).mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            resolveProbe = resolve;
+          })
+      );
       mockDownloadAppUpdate.mockImplementationOnce(async () => {
         await emitStatus('ready_to_install');
         return { ready: true, version: '0.51.0', body: null };
