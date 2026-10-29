@@ -303,6 +303,25 @@ async fn force_quit_port_owner(
     Ok(outcome)
 }
 
+/// Lightweight startup status for the pre-router recovery screen.
+///
+/// This command is deliberately independent of the RPC listener: the
+/// historical SQLite database is upgraded *before* RPC binds, and the
+/// renderer must be able to report progress during that blocking operation.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CoreStartupStatus {
+    workspace_migration_active: bool,
+}
+
+#[tauri::command]
+fn core_startup_status() -> CoreStartupStatus {
+    CoreStartupStatus {
+        workspace_migration_active:
+            openhuman_rpc::embed::process::workspace_migration_in_progress(),
+    }
+}
+
 /// Start the embedded core process on demand.
 ///
 /// Called by the BootCheckGate (Local mode) before the version check.  The
@@ -317,7 +336,7 @@ async fn start_core_process(
     app: tauri::AppHandle<AppRuntime>,
 ) -> Result<(), String> {
     log::info!("[core] start_core_process: command invoked from frontend");
-    state.inner().ensure_running().await?;
+    state.inner().ensure_running_for_ui().await?;
     if let Some(notice) = state.inner().take_last_port_fallback_notice() {
         let body = format!(
             "OpenHuman is using port {} because {} was busy",
@@ -2789,6 +2808,7 @@ pub fn run() {
             recover_port_conflict,
             force_quit_port_owner,
             start_core_process,
+            core_startup_status,
             local_data_reset::reset_local_data,
             app_quit,
             restart_app,

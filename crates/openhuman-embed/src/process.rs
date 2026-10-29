@@ -11,6 +11,14 @@ use std::path::{Path, PathBuf};
 
 pub use openhuman_core::core::runtime::{AGENT_WORKER_STACK_BYTES, MAX_BLOCKING_THREADS};
 
+/// True while schema or profile-layout migration work is active.
+///
+/// The desktop host polls this fact to avoid aborting legitimate, potentially
+/// long-running migrations as a false server-readiness timeout.
+pub fn workspace_migration_in_progress() -> bool {
+    openhuman_core::storage::workspace_migration_in_progress()
+}
+
 /// Scoped ownership for host commands outside an agent turn. After dropping
 /// the scoped future, await `wait()` before acknowledging cancellation.
 pub use tinyagents_harness_tools::exec::timeout::ProcessCleanup as CommandCleanup;

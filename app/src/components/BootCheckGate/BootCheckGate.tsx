@@ -406,13 +406,20 @@ function ModePicker({ onConfirm }: PickerProps) {
 // Spinner / checking
 // ---------------------------------------------------------------------------
 
-function CheckingScreen() {
+function CheckingScreen({ migrating = false }: { migrating?: boolean }) {
   const { t } = useT();
   return (
     <Panel>
       <div className="flex flex-col items-center gap-4 py-4">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-primary-500" />
-        <p className="text-sm text-content-secondary">{t('bootCheck.checkingCore')}</p>
+        <p className="text-sm text-content-secondary">
+          {t(migrating ? 'bootCheck.upgradingWorkspace' : 'bootCheck.checkingCore')}
+        </p>
+        {migrating && (
+          <p className="max-w-sm text-center text-xs text-content-muted">
+            {t('bootCheck.upgradingWorkspaceHint')}
+          </p>
+        )}
       </div>
     </Panel>
   );
@@ -614,6 +621,7 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
   const [result, setResult] = useState<BootCheckResult | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [migrationActive, setMigrationActive] = useState(false);
 
   // Prevent concurrent or stale runs.
   const runningRef = useRef(false);
@@ -621,6 +629,42 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
   // Production transport lives in services/bootCheckService so direct
   // Tauri/RPC imports stay localized there.
   const transport = bootCheckTransport;
+
+  // The embedded RPC listener does not bind until its SQLite migration
+  // completes. Poll the Tauri shell directly so the loading screen can name
+  // an actual upgrade rather than looking like a frozen network connection.
+  // Failure/unsupported status probes are optional: they cannot block boot.
+  useEffect(() => {
+    if (!canBootLocal || phase !== 'checking' || coreMode.kind !== 'local') {
+      return;
+    }
+
+    let cancelled = false;
+    let inFlight = false;
+    const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const status = await transport.invokeCmd<{ workspaceMigrationActive: boolean }>(
+          'core_startup_status'
+        );
+        if (!cancelled) setMigrationActive(status.workspaceMigrationActive === true);
+      } catch {
+        // Older local builds may not have this command. The normal boot
+        // status and typed failure remain available in that case.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void poll();
+    const interval = setInterval(() => void poll(), 1_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // The transport is a module-level singleton.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canBootLocal, phase, coreMode.kind]);
 
   const runCheck = useCallback(
     async (mode: CoreMode) => {
@@ -632,6 +676,7 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
       setPhase('checking');
       setResult(null);
       setActionError(null);
+      setMigrationActive(false);
       log('[boot-check] gate — starting check mode=%s', mode.kind);
 
       try {
@@ -851,7 +896,7 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
   // the picker branch below and flash the very screen the demotion removes.
   // Show the checking screen instead and let the effect catch up.
   if (canBootLocal && coreMode.kind === 'unset' && phase === 'checking') {
-    return <CheckingScreen />;
+    return <CheckingScreen migrating={migrationActive} />;
   }
 
   // Unset — show picker (even if Redux persisted something; phase reflects truth).
@@ -865,7 +910,7 @@ export default function BootCheckGate({ children }: BootCheckGateProps) {
 
   // Check in flight.
   if (phase === 'checking') {
-    return <CheckingScreen />;
+    return <CheckingScreen migrating={migrationActive} />;
   }
 
   // Match — pass through.

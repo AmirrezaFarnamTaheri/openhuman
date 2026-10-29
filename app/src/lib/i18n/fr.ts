@@ -1466,6 +1466,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'Connecté, mais le temps réel est désactivé sur ce cœur. Il a été lancé avec --jsonrpc-only ; relance-le sans cette option pour que le chat et les mises à jour en direct fonctionnent.',
   'bootCheck.checkingCore': "Démarrage d'OpenHuman…",
+  'bootCheck.upgradingWorkspace': 'Mise à niveau de votre espace de travail…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman protège et met à niveau vos données existantes. Gardez l’application ouverte jusqu’à la fin.',
   'bootCheck.cannotReach': 'Connexion impossible',
   'bootCheck.cannotReachDesc': "Nous n'avons pas pu nous connecter. Voulez-vous essayer ailleurs ?",
   'bootCheck.switchMode': "Changer l'endroit d'exécution",

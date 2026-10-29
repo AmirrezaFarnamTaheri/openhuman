@@ -1424,6 +1424,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'সংযুক্ত হয়েছে, কিন্তু এই কোরে রিয়েলটাইম বন্ধ আছে। এটি --jsonrpc-only দিয়ে চালু হয়েছে; চ্যাট ও লাইভ আপডেট কাজ করাতে ওই ফ্ল্যাগ ছাড়া আবার চালু করুন।',
   'bootCheck.checkingCore': 'OpenHuman চালু হচ্ছে…',
+  'bootCheck.upgradingWorkspace': 'আপনার ওয়ার্কস্পেস আপগ্রেড করা হচ্ছে…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman আপনার বিদ্যমান ডেটা সুরক্ষিত রেখে আপগ্রেড করছে। কাজ শেষ না হওয়া পর্যন্ত অ্যাপটি খোলা রাখুন।',
   'bootCheck.cannotReach': 'পৌঁছানো যাচ্ছে না',
   'bootCheck.cannotReachDesc': 'আমরা সংযোগ করতে পারিনি। অন্য কোথাও চেষ্টা করতে চান?',
   'bootCheck.switchMode': 'কোথায় চলবে তা বদলান',

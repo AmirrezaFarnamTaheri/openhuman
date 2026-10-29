@@ -6,6 +6,36 @@ fn opts() -> Options {
     Options::default()
 }
 
+#[test]
+fn missing_resume_plan_preserves_progress_and_does_not_recommend_deletion() {
+    let progress = LayoutState::new("user", 0);
+    let error = plan_of(&progress).unwrap_err().to_string();
+    assert!(error.contains("preserve .layout.state"), "{error}");
+    assert!(!error.contains("remove .layout.state"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cancelled_layout_copy_waiter_keeps_its_worker_active_until_completion() {
+    // Models the owned, blocking VACUUM worker that outlives a dropped
+    // async caller. The activity guard must be owned by the worker.
+    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+    let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+    let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+    let activity = crate::storage::WorkspaceMigrationActivity::start();
+    let copy = tokio::task::spawn_blocking(move || {
+        let _activity = activity;
+        let _ = entered_tx.send(());
+        finished_rx.recv().unwrap();
+        let _ = done_tx.send(());
+    });
+    entered_rx.await.unwrap();
+    assert!(crate::storage::workspace_migration_in_progress());
+    drop(copy);
+    assert!(crate::storage::workspace_migration_in_progress());
+    finished_tx.send(()).unwrap();
+    done_rx.await.unwrap();
+}
+
 async fn go(fx: &Fixture, options: &Options) -> Result<Outcome, LayoutError> {
     migrate(&fx.target, &fx.config, options).await
 }

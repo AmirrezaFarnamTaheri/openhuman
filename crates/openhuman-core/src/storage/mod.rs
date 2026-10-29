@@ -200,6 +200,50 @@ use crate::config::Config;
 /// The environment variable that overrides `[storage] url`.
 pub const STORAGE_URL_VAR: &str = "OPENHUMAN_STORAGE_URL";
 
+// Hosts must not abort legitimate SQLite schema or profile-layout migrations
+// merely because the RPC listener has not bound within the normal 60s startup
+// window. Track in-flight/queued work, not leftover backup artifacts.
+#[cfg(feature = "legacy-import")]
+static ACTIVE_WORKSPACE_MIGRATIONS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
+static LEGACY_SQLITE_MIGRATION_SERIAL: Mutex<()> = Mutex::new(());
+
+#[cfg(feature = "legacy-import")]
+pub(crate) struct WorkspaceMigrationActivity;
+
+#[cfg(feature = "legacy-import")]
+impl WorkspaceMigrationActivity {
+    pub(crate) fn start() -> Self {
+        ACTIVE_WORKSPACE_MIGRATIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Self
+    }
+}
+
+#[cfg(feature = "legacy-import")]
+impl Drop for WorkspaceMigrationActivity {
+    fn drop(&mut self) {
+        ACTIVE_WORKSPACE_MIGRATIONS.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Whether a queued/running SQLite schema or profile-layout migration is active.
+///
+/// Desktop hosts use this to distinguish legitimate slow upgrades from a
+/// stalled RPC bind. A dropped async waiter does not necessarily stop a
+/// blocking worker, so worker lifetime is tracked independently.
+pub fn workspace_migration_in_progress() -> bool {
+    #[cfg(feature = "legacy-import")]
+    {
+        return ACTIVE_WORKSPACE_MIGRATIONS.load(std::sync::atomic::Ordering::SeqCst) > 0;
+    }
+    #[cfg(not(feature = "legacy-import"))]
+    {
+        false
+    }
+}
+
 /// A holder for one backend. The process has exactly one ([`BACKEND`]);
 /// tests make their own, so they never change what other tests in the same
 /// process see.
@@ -301,8 +345,21 @@ pub async fn open(url: &str) -> Result<Arc<dyn StorageBackend>, StorageError> {
     #[cfg(all(feature = "legacy-import", feature = "storage-sqlite"))]
     if let StorageUrl::Sqlite { path } = &parsed {
         let path = path.clone();
+        // Advertise migration from the moment the work is queued, not only
+        // once the blocking pool schedules it; a cold busy pool must not
+        // cause the desktop host to time out before its worker even starts.
+        let activity = WorkspaceMigrationActivity::start();
         crate::core::runtime::DispatchCtx::ambient()
-            .spawn_blocking(move || import::sqlite_v0::upgrade_if_needed(&path))
+            .spawn_blocking(move || {
+                let _activity = activity;
+                // A previous async startup waiter may have been cancelled
+                // while its SQLite worker was still running. Never start two
+                // schema upgrades/backups concurrently in the same process.
+                let _serial = LEGACY_SQLITE_MIGRATION_SERIAL
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                import::sqlite_v0::upgrade_if_needed(&path)
+            })
             .await
             .map_err(|e| {
                 StorageError::backend(format!("SQLite migration did not finish: {e}"))

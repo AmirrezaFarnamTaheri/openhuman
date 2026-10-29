@@ -1431,6 +1431,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'कनेक्ट हो गया, लेकिन इस कोर पर रीयलटाइम बंद है। इसे --jsonrpc-only के साथ शुरू किया गया था; चैट और लाइव अपडेट के लिए इसे इस फ़्लैग के बिना दोबारा शुरू करें।',
   'bootCheck.checkingCore': 'OpenHuman शुरू हो रहा है…',
+  'bootCheck.upgradingWorkspace': 'आपका कार्यक्षेत्र अपग्रेड हो रहा है…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman आपके मौजूदा डेटा को सुरक्षित रखते हुए अपग्रेड कर रहा है। प्रक्रिया पूरी होने तक ऐप खुला रखें।',
   'bootCheck.cannotReach': 'पहुँच नहीं पा रहे',
   'bootCheck.cannotReachDesc': 'हम कनेक्ट नहीं कर सके। क्या कहीं और कोशिश करना चाहेंगे?',
   'bootCheck.switchMode': 'बदलें कि यह कहाँ चले',

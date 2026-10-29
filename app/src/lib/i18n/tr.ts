@@ -1450,6 +1450,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     'Bağlandı, ancak bu çekirdekte gerçek zamanlı özellik kapalı. --jsonrpc-only ile başlatılmış; sohbet ve canlı güncellemelerin çalışması için bu bayrak olmadan yeniden başlat.',
   'bootCheck.checkingCore': 'OpenHuman başlatılıyor…',
+  'bootCheck.upgradingWorkspace': 'Çalışma alanınız yükseltiliyor…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman mevcut verilerinizi koruyarak yükseltiyor. İşlem tamamlanana kadar uygulamayı açık tutun.',
   'bootCheck.cannotReach': 'Ulaşılamıyor',
   'bootCheck.cannotReachDesc': 'Bağlantı kurulamadı. Başka bir yerde denemek ister misiniz?',
   'bootCheck.switchMode': 'Çalıştığı yeri değiştir',

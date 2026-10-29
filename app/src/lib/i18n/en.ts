@@ -1650,6 +1650,10 @@ const en: TranslationMap = {
   'bootCheck.socketDisabled':
     'Connected, but realtime is off on this core. It was started with --jsonrpc-only; restart it without that flag so chat and live updates work.',
   'bootCheck.checkingCore': 'Starting OpenHuman…',
+  'bootCheck.upgradingWorkspace': 'Upgrading your workspace…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman is protecting and upgrading your existing data. Keep the app open until this finishes.',
+
   'bootCheck.cannotReach': "Can't reach it",
   'bootCheck.cannotReachDesc': "We couldn't connect. Want to try somewhere else?",
   'bootCheck.switchMode': 'Change where it runs',

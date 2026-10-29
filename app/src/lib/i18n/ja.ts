@@ -1640,6 +1640,9 @@ const messages: TranslationMap = {
   'bootCheck.socketDisabled':
     '接続できましたが、このコアではリアルタイム機能がオフです。--jsonrpc-only で起動されています。チャットとライブ更新を使うには、このフラグなしで再起動してください。',
   'bootCheck.checkingCore': 'ランタイムを起動しています…',
+  'bootCheck.upgradingWorkspace': 'ワークスペースをアップグレードしています…',
+  'bootCheck.upgradingWorkspaceHint':
+    'OpenHuman は既存のデータを保護しながら更新しています。完了するまでアプリを開いたままにしてください。',
   'bootCheck.cannotReach': 'ランタイムに接続できません',
   'bootCheck.cannotReachDesc': 'ランタイムに接続できませんでした。別のランタイムを試しますか？',
   'bootCheck.switchMode': '別のランタイムを選択',

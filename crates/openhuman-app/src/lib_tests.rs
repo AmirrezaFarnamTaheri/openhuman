@@ -2,6 +2,16 @@ use super::*;
 use crate::test_env::env_lock;
 
 #[test]
+fn startup_migration_status_can_be_read_without_a_running_rpc_listener() {
+    let status = core_startup_status();
+    let encoded = serde_json::to_value(status).expect("serialize startup status");
+    assert!(
+        encoded["workspaceMigrationActive"].is_boolean(),
+        "the pre-router UI needs a stable typed shell status before RPC binds"
+    );
+}
+
+#[test]
 fn main_window_centering_only_follows_failed_restore_and_maximize() {
     assert!(!should_center_main_window(true, false, false));
     assert!(should_center_main_window(false, true, false));

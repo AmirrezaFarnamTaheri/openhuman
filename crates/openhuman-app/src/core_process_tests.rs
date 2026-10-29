@@ -78,6 +78,37 @@ fn test_workspace() -> TestWorkspace {
     }
 }
 
+// The desktop starts the embedded core before opening the renderer's RPC
+// connection. A large legacy workspace migration may exceed the normal 60s
+// readiness cap; never abort its in-flight SQLite transaction at that cap.
+#[test]
+fn legacy_sqlite_migration_receives_a_bounded_extra_startup_budget() {
+    use super::{
+        migration_readiness_poll_allowed, CORE_READY_ATTEMPTS, MIGRATION_READY_ATTEMPTS,
+    };
+
+    assert!(migration_readiness_poll_allowed(CORE_READY_ATTEMPTS - 1, false, None));
+    assert!(!migration_readiness_poll_allowed(CORE_READY_ATTEMPTS, false, None));
+
+    // An observed active migration may continue past the ordinary timeout,
+    // but still has a finite upper bound.
+    assert!(migration_readiness_poll_allowed(CORE_READY_ATTEMPTS + 1, true, None));
+    assert!(!migration_readiness_poll_allowed(MIGRATION_READY_ATTEMPTS, true, None));
+
+    // Once migration finishes, give core startup a full normal grace period.
+    let finished_at = CORE_READY_ATTEMPTS + 100;
+    assert!(migration_readiness_poll_allowed(
+        finished_at + CORE_READY_ATTEMPTS - 1,
+        false,
+        Some(finished_at),
+    ));
+    assert!(!migration_readiness_poll_allowed(
+        finished_at + CORE_READY_ATTEMPTS,
+        false,
+        Some(finished_at),
+    ));
+}
+
 /// A storage failure is usually wrapped in several anyhow contexts. The
 /// desktop boot error must show the root cause rather than just the outer
 /// "opening the configured storage backend" label.
@@ -100,6 +131,45 @@ fn default_core_port_env_and_fallback() {
 
     let _set = EnvGuard::set("OPENHUMAN_CORE_PORT", "8899");
     assert_eq!(default_core_port(), 8899);
+}
+
+// A retry must not enter another startup while the first is waiting for an
+// in-flight migration or RPC bind; otherwise competing ready receivers can
+// abort the same managed task or produce misleading port recovery failures.
+#[test]
+fn concurrent_startup_waits_for_the_existing_boot_attempt() {
+    let rt = core_test_runtime();
+    rt.block_on(async {
+        let handle = CoreProcessHandle::new(12789);
+        let first = handle.startup_lock.lock().await;
+        let second = tokio::time::timeout(
+            tokio::time::Duration::from_millis(40),
+            handle.ensure_running(),
+        ).await;
+        assert!(second.is_err(), "second boot attempt bypassed startup serialization");
+        assert!(handle.task.lock().await.is_none());
+        drop(first);
+    });
+}
+
+#[test]
+fn desktop_start_waits_for_an_in_progress_restart_or_update() {
+    let rt = core_test_runtime();
+    rt.block_on(async {
+        let handle = CoreProcessHandle::new(12789);
+        let restart_guard = handle.restart_lock().await;
+        let result = tokio::time::timeout(
+            tokio::time::Duration::from_millis(40),
+            handle.ensure_running_for_ui(),
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "desktop startup must not race shutdown and rebind during a restart"
+        );
+        assert!(handle.task.lock().await.is_none());
+        drop(restart_guard);
+    });
 }
 
 #[test]
@@ -680,7 +750,7 @@ fn startup_timeout_cleanup_aborts_task_and_clears_slot() {
             *guard = Some(task);
         }
 
-        let message = handle.cleanup_startup_timeout(false, false, 2).await;
+        let message = handle.cleanup_startup_timeout(false, false, 2, 60_000).await;
 
         // One loose check that the human-readable diagnostic names the failure,
         // instead of pinning six exact substrings of its formatting (plan.md

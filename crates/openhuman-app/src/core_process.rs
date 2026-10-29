@@ -48,6 +48,25 @@ const CORE_READY_POLL_MS: u64 = 100;
 // aborts under contention.
 const CORE_READY_ATTEMPTS: usize = 600;
 const CORE_READY_TIMEOUT_MS: u64 = CORE_READY_POLL_MS * CORE_READY_ATTEMPTS as u64;
+// A v0-to-v2 conversion of a large SQLite workspace can exceed the normal
+// 60-second startup budget. Only extend when the *actual* migration worker
+// has been observed, with a hard upper limit so a genuine hang is diagnosable.
+const MIGRATION_READY_ATTEMPTS: usize = 9_000;
+
+/// Allow normal startup 60 seconds, or wait while SQLite is migrating and
+/// grant another 60 seconds after it finishes, capped at 15 minutes total.
+/// Pure so the exact boundary behavior is covered by core_process_tests.rs.
+fn migration_readiness_poll_allowed(
+    poll: usize,
+    migrating: bool,
+    migration_finished_at: Option<usize>,
+) -> bool {
+    poll < MIGRATION_READY_ATTEMPTS
+        && (migrating
+            || migration_finished_at
+                .is_some_and(|finished| poll < finished.saturating_add(CORE_READY_ATTEMPTS))
+            || poll < CORE_READY_ATTEMPTS)
+}
 /// How long `abort_task` waits for an aborted server task to drop its
 /// runtime. An abort lands at the task's next poll, so this is normally
 /// instant; the bound only matters if the task is stuck in blocking code.
@@ -82,6 +101,9 @@ pub struct CoreProcessHandle {
     task: Arc<Mutex<Option<JoinHandle<anyhow::Result<()>>>>>,
     shutdown_token: Arc<Mutex<CancellationToken>>,
     restart_lock: Arc<Mutex<()>>,
+    /// Serializes all core boot attempts, including retries while a legacy
+    /// migration is waiting on a blocking SQLite worker.
+    startup_lock: Arc<Mutex<()>>,
     preferred_port: u16,
     active_port: Arc<RwLock<u16>>,
     last_port_fallback: Arc<RwLock<Option<PortFallbackNotice>>>,
@@ -112,6 +134,7 @@ impl CoreProcessHandle {
             task: Arc::new(Mutex::new(None)),
             shutdown_token: Arc::new(Mutex::new(CancellationToken::new())),
             restart_lock: Arc::new(Mutex::new(())),
+            startup_lock: Arc::new(Mutex::new(())),
             preferred_port: port,
             active_port: Arc::new(RwLock::new(port)),
             last_port_fallback: Arc::new(RwLock::new(None)),
@@ -141,11 +164,25 @@ impl CoreProcessHandle {
         self.restart_lock.lock().await
     }
 
+    /// Frontend boot requests share the same outer lifecycle lock as
+    /// restart, recovery and updater operations. Never let a new request
+    /// start while another operation is still stopping/rebinding the core.
+    /// Restart paths already own this lock and call ensure_running directly.
+    pub async fn ensure_running_for_ui(&self) -> Result<(), String> {
+        let _lifecycle_guard = self.restart_lock().await;
+        self.ensure_running().await
+    }
+
     async fn is_rpc_port_open(&self) -> bool {
         is_port_open(self.port()).await
     }
 
     pub async fn ensure_running(&self) -> Result<(), String> {
+        // Only one caller may spawn, await, or abort a managed core startup.
+        // The old task-slot mutex covered allocation but not the readiness
+        // loop: a second caller could wait on its own unused ready receiver
+        // and eventually abort the first caller's legitimate migration boot.
+        let _startup_guard = self.startup_lock.lock().await;
         // Idempotent fast path: if we already spawned the embedded server in
         // *this* process and it's still alive on the port, the listener is
         // us — return Ok without identifying or taking over. Without this,
@@ -343,18 +380,36 @@ impl CoreProcessHandle {
                 }
             }
 
-            // Readiness budget: 600 iterations x 100ms = 60s (CORE_READY_ATTEMPTS).
-            // The embedded core's JSON-RPC controller registry has grown over
-            // time and earlier 4s/10s/20s budgets started flaking under CI
-            // worker load (issue: core_process tests intermittently failing with
-            // "core process did not become ready"), especially under
-            // cargo-llvm-cov instrumentation where the binary runs ~2x
-            // slower, and under desktop CEF startup contention. 60s is still
-            // well under any user-visible startup
-            // expectation: in normal runs the ready signal arrives in well
-            // under 1s and the loop exits immediately; the headroom only
-            // matters on heavily loaded instrumented CI workers.
-            for _ in 0..CORE_READY_ATTEMPTS {
+            // Ordinary startup keeps its 60s readiness deadline. A historical
+            // SQLite conversion runs on a blocking worker and can take longer
+            // than the normal boot; aborting the Tokio host task would NOT stop
+            // that worker. Observe its real activity rather than checking for
+            // leftover backup files (which are intentionally retained).
+            let wait_started = std::time::Instant::now();
+            let mut observed_migration = false;
+            let mut migration_finished_at = None;
+            for poll in 0..MIGRATION_READY_ATTEMPTS {
+                let migration_active =
+                    openhuman_rpc::embed::process::workspace_migration_in_progress();
+                if migration_active && !observed_migration {
+                    observed_migration = true;
+                    log::info!(
+                        "[core] workspace migration active; extending startup readiness"
+                    );
+                }
+                if observed_migration && !migration_active && migration_finished_at.is_none() {
+                    migration_finished_at = Some(poll);
+                    log::info!(
+                        "[core] workspace migration finished; allowing post-upgrade startup grace"
+                    );
+                }
+                if !migration_readiness_poll_allowed(
+                    poll,
+                    migration_active,
+                    migration_finished_at,
+                ) {
+                    break;
+                }
                 if !received_ready {
                     match ready_rx.try_recv() {
                         Ok(ready_signal) => {
@@ -451,12 +506,19 @@ impl CoreProcessHandle {
 
             let port_open = self.is_rpc_port_open().await;
             return Err(self
-                .cleanup_startup_timeout(received_ready, port_open, startup_attempt + 1)
+                .cleanup_startup_timeout(
+                    received_ready,
+                    port_open,
+                    startup_attempt + 1,
+                    wait_started.elapsed().as_millis(),
+                )
                 .await);
         }
 
         let port_open = self.is_rpc_port_open().await;
-        Err(self.cleanup_startup_timeout(false, port_open, 2).await)
+        Err(self
+            .cleanup_startup_timeout(false, port_open, 2, u128::from(CORE_READY_TIMEOUT_MS))
+            .await)
     }
 
     async fn cleanup_startup_timeout(
@@ -464,6 +526,7 @@ impl CoreProcessHandle {
         received_ready: bool,
         port_open: bool,
         attempt: u8,
+        elapsed_ms: u128,
     ) -> String {
         let port = self.port();
         let task_state = {
@@ -475,7 +538,7 @@ impl CoreProcessHandle {
             }
         };
         log::error!(
-            "[core] startup timed out after {CORE_READY_TIMEOUT_MS}ms \
+            "[core] startup timed out after {elapsed_ms}ms \
              (port={port}, ready_signal={received_ready}, port_open={port_open}, \
              task_state={task_state}, attempt={attempt}); \
              aborting embedded startup task before retry"
@@ -483,7 +546,7 @@ impl CoreProcessHandle {
         self.cancel_shutdown_token(" after startup timeout").await;
         self.abort_task(" after startup timeout", true).await;
         format!(
-            "core process did not become ready within {CORE_READY_TIMEOUT_MS}ms \
+            "core process did not become ready within {elapsed_ms}ms \
              (port={port}, ready_signal={received_ready}, port_open={port_open}, \
              task_state={task_state}, attempt={attempt})"
         )
