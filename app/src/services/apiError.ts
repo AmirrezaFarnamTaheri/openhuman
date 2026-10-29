@@ -1,18 +1,16 @@
+import { explainOperationalError } from '../lib/operationalErrors';
+
 /**
- * Returns the display-safe message carried by an API rejection.
+ * Return actionable, redacted display copy for API and IPC rejections.
  *
- * `apiClient` rejects with plain `{ success, error }` objects rather than
- * `Error` instances, while other callers may still throw an `Error`. Keep this
- * boundary narrow: only a non-empty string may reach the UI, never the raw
- * rejected payload.
+ * Both apiClient's { success, error } objects and native Error instances are
+ * handled by the same narrow classifier. Unknown objects do not get coerced
+ * to "[object Object]", while known storage/credential errors retain a
+ * concrete next action. Full underlying evidence belongs in redacted logs.
  */
 export function messageForApiError(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message.trim()) return error.message;
-
-  if (error && typeof error === 'object' && 'error' in error) {
-    const { error: message } = error as { error?: unknown };
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-
-  return fallback;
+  const presentation = explainOperationalError(error, fallback);
+  return presentation.kind === 'unclassified'
+    ? presentation.summary
+    : `${presentation.summary} ${presentation.nextStep}`;
 }

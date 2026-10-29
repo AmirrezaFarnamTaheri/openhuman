@@ -60,3 +60,24 @@ fn backoff_is_monotonic_and_bounded() {
         "total backoff stays bounded"
     );
 }
+
+#[test]
+fn updater_failure_cannot_be_reported_as_up_to_date() {
+    let response: Result<Option<&str>, &str> = Err("endpoint unreachable");
+    assert_eq!(
+        interpret_update_check(response),
+        Err("update check failed: endpoint unreachable".to_string())
+    );
+}
+
+#[test]
+fn verified_empty_update_check_differs_from_available_release() {
+    assert_eq!(
+        interpret_update_check::<&str, &str>(Ok(None)),
+        Ok(UpdateCheck::UpToDate)
+    );
+    assert_eq!(
+        interpret_update_check::<&str, &str>(Ok(Some("0.64.23"))),
+        Ok(UpdateCheck::Available("0.64.23"))
+    );
+}

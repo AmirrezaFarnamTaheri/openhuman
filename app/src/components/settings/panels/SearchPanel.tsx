@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 
 import { useT } from '../../../lib/i18n/I18nContext';
+import { explainOperationalError } from '../../../lib/operationalErrors';
 import { useCoreState } from '../../../providers/CoreStateProvider';
 import { isLocalSessionToken } from '../../../utils/localSession';
 import {
@@ -25,11 +26,21 @@ type Status =
   | { kind: 'loading' }
   | { kind: 'saving' }
   | { kind: 'saved' }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string; details: string | null };
 
 export type SearchPanelTab = 'providers' | 'routing' | 'websites';
 
-const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
+const errorStatus = (error: unknown): Status => {
+  const diagnosed = explainOperationalError(error);
+  return {
+    kind: 'error',
+    message:
+      diagnosed.kind === 'unclassified'
+        ? diagnosed.summary
+        : `${diagnosed.summary} ${diagnosed.nextStep}`,
+    details: diagnosed.kind === 'unclassified' ? null : diagnosed.technicalDetails,
+  };
+};
 
 /**
  * Web search settings, laid out like the LLM page: a page header carrying the
@@ -84,7 +95,7 @@ const SearchPanel = ({
       })
       .catch(err => {
         if (cancelled) return;
-        setStatus({ kind: 'error', message: errorMessage(err) });
+        setStatus(errorStatus(err));
       });
     return () => {
       cancelled = true;
@@ -101,7 +112,7 @@ const SearchPanel = ({
       setStatus({ kind: 'saved' });
       return true;
     } catch (err) {
-      setStatus({ kind: 'error', message: errorMessage(err) });
+      setStatus(errorStatus(err));
       return false;
     }
   };
@@ -199,6 +210,14 @@ const SearchPanel = ({
         }
         savingLabel={t('settings.search.statusSaving')}
       />
+      {status.kind === 'error' && status.details ? (
+        <details className="text-xs text-content-muted" data-testid="search-error-details">
+          <summary className="cursor-pointer">{t('providerSetup.error.technicalDetails')}</summary>
+          <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap wrap-break-word rounded bg-surface p-2">
+            {status.details}
+          </pre>
+        </details>
+      ) : null}
     </div>
   );
 

@@ -218,6 +218,28 @@ describe('SearchPanel — page and on/off', () => {
     renderWithProviders(<SearchPanel embedded />);
     await screen.findByText('settings.search.statusError: offline');
   });
+
+  test('shows credential-store guidance when saving search settings fails', async () => {
+    hoisted.updateSearchSettings.mockRejectedValue(
+      new Error('Secret-storage backend error: secret store: backend: could not open the lock file')
+    );
+    await renderPanel();
+    fireEvent.click(screen.getByTestId('search-enabled-toggle'));
+    await screen.findByText(/could not access encrypted credential storage/i);
+    expect(screen.getByText(/do not delete stored keys/i)).toBeInTheDocument();
+    expect(screen.getByTestId('search-error-details')).toBeInTheDocument();
+    expect(screen.getByTestId('search-enabled-toggle')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('explains a failed API-key encryption without pretending a network outage', async () => {
+    hoisted.updateSearchSettings.mockRejectedValue(
+      new Error('Failed to encrypt search.tinyfish.api_key')
+    );
+    await renderPanel();
+    fireEvent.click(screen.getByTestId('search-enabled-toggle'));
+    await screen.findByText(/could not save the API key securely/i);
+    expect(screen.getByText(/skip optional search setup/i)).toBeInTheDocument();
+  });
 });
 
 describe('SearchPanel — connected providers', () => {

@@ -63,7 +63,7 @@ describe('presentProviderSetupError', () => {
     const { summary } = present(
       'Could not reach OpenAI: {"error":{"message":"Incorrect API key provided: sk-abc","type":"invalid_request_error"}}'
     );
-    expect(summary).toBe('Could not reach OpenAI: Incorrect API key provided: sk-abc');
+    expect(summary).toBe('Could not reach OpenAI: Incorrect API key provided: [redacted]');
   });
 
   it('decodes escapes and collapses whitespace in a JSON message', () => {
@@ -110,18 +110,10 @@ describe('presentProviderSetupError', () => {
     expect(summary).toBe('Provider setup failed.');
   });
 
-  // CHARACTERISES A GAP, not desired behaviour. `presentProviderSetupError`
-  // performs no redaction: `findProviderJsonMessage` lifts the provider's
-  // `message` verbatim and `details` is the raw error. The backend redacts a
-  // fixed set of known token prefixes, so a CUSTOM provider echoing an
-  // arbitrary-shaped credential reaches the DOM intact.
-  //
-  // Pinned so the gap is visible and regression-locked rather than implied.
-  // Redacting at this boundary is a product change — it would also hide
-  // diagnostics a user may need — so it belongs in its own PR, not in a
-  // test-only one. Recorded in ~/tinyhuman/bugs/W1-ui-bugs.md. When redaction
-  // lands, invert these assertions.
-  it('echoes an arbitrary provider credential verbatim (known gap)', () => {
+  // A provider may echo a submitted credential inside arbitrary JSON or prose.
+  // Both the summary and the disclosure must scrub it; the OS-level logs can
+  // carry safe diagnostic codes without exposing the submitted value.
+  it('redacts an arbitrary provider credential from summary and details', () => {
     // A deliberately synthetic, self-describing stand-in — NOT a credential.
     // Its shape is the point: it matches none of the token prefixes the backend
     // redacts, which is exactly the case that slips through.
@@ -130,11 +122,21 @@ describe('presentProviderSetupError', () => {
       `Could not reach CustomLLM: {"error":{"message":"Invalid token: ${fakeCredential}"}}`
     );
 
-    expect(summary).toContain(fakeCredential);
-    expect(details).toContain(fakeCredential);
+    expect(summary).not.toContain(fakeCredential);
+    expect(details).not.toContain(fakeCredential);
+    expect(summary).toContain('[redacted]');
+    expect(details).toContain('[redacted]');
   });
 
-  it('preserves the raw error as details, untouched', () => {
+  it('redacts structured credentials in its technical disclosure', () => {
+    const { summary, details } = present(
+      'Could not reach CustomLLM: {"password":"pw-value", "refresh_token":"refresh-value"}'
+    );
+    expect(summary + details).not.toContain('pw-value');
+    expect(summary + details).not.toContain('refresh-value');
+  });
+
+  it('keeps non-sensitive diagnostic details available', () => {
     const raw = 'Could not reach OpenAI: provider returned 401 {"message":"nope"}';
     expect(present(raw).details).toBe(raw);
   });

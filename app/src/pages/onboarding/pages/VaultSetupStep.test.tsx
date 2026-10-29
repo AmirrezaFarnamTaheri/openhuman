@@ -88,4 +88,15 @@ describe('VaultSetupStep', () => {
 
     await waitFor(() => expect(completeAndExitMock).toHaveBeenCalledTimes(1));
   });
+  it('shows a useful explanation and redacted details when saving onboarding fails', async () => {
+    completeAndExitMock.mockRejectedValue(
+      new Error('Secret-storage backend error: secret store: backend: could not open the lock file')
+    );
+    renderPage();
+    fireEvent.click(screen.getByTestId('onboarding-next-button'));
+    const alert = await screen.findByTestId('onboarding-vault-exit-error');
+    expect(alert).toHaveTextContent('could not access encrypted credential storage');
+    expect(alert).toHaveTextContent('Do not delete stored keys');
+    expect(alert.querySelector('details')).toBeTruthy();
+  });
 });

@@ -46,7 +46,7 @@ function shouldShow(phase: ReturnType<typeof useAppUpdate>['phase']): boolean {
 
 const AppUpdatePrompt = (props: AppUpdatePromptProps) => {
   const { t } = useT();
-  const { phase, info, bytesDownloaded, totalBytes, error, install, download, reset } =
+  const { phase, info, bytesDownloaded, totalBytes, error, check, install, download, reset } =
     useAppUpdate(props);
 
   const [dismissed, setDismissed] = useState(false);
@@ -70,12 +70,19 @@ const AppUpdatePrompt = (props: AppUpdatePromptProps) => {
     setDismissed(true);
   }, []);
 
-  const handleRetryDownload = useCallback(() => {
+  const handleRetry = useCallback(() => {
     dismissedErrorRef.current = null;
     setDismissed(false);
     reset();
-    void download();
-  }, [reset, download]);
+    // A release-catalogue check that failed has no confirmed update to
+    // download. Retry the failed probe; only retry download when the last
+    // successful check actually advertised an update.
+    if (info?.available) {
+      void download();
+    } else {
+      void check();
+    }
+  }, [reset, info?.available, download, check]);
 
   const handleDismissError = useCallback(() => {
     dismissedErrorRef.current = currentErrorKey;
@@ -166,7 +173,7 @@ const AppUpdatePrompt = (props: AppUpdatePromptProps) => {
                 {error ?? t('app.update.errorFallback')}
               </p>
               <div className="mt-3 flex gap-2">
-                <Button size="sm" onClick={handleRetryDownload} className="flex-1">
+                <Button size="sm" onClick={handleRetry} className="flex-1">
                   {t('common.retry')}
                 </Button>
                 <Button variant="secondary" size="sm" onClick={handleDismissError}>

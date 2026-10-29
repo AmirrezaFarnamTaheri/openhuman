@@ -1,4 +1,5 @@
 import { useT } from '../../../lib/i18n/I18nContext';
+import { redactDiagnosticText } from '../../../lib/operationalErrors';
 
 type ProviderErrorPresentation = { summary: string; details: string };
 
@@ -30,7 +31,9 @@ export function presentProviderSetupError(
   raw: string,
   t: (key: string, fallback?: string) => string
 ): ProviderErrorPresentation {
-  const details = raw.trim() || t('providerSetup.error.defaultDetails', 'Provider setup failed.');
+  const details =
+    redactDiagnosticText(raw.trim()) ||
+    t('providerSetup.error.defaultDetails', 'Provider setup failed.');
   const couldNotReach = details.match(/^Could not reach\s+([^:]+):\s*(.*)$/i);
   const provider = couldNotReach?.[1]?.trim();
   const cause = couldNotReach?.[2]?.trim() || details;

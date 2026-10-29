@@ -163,12 +163,42 @@ describe('AppUpdatePrompt', () => {
     expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
   });
 
-  it('clicking "Try again" after error invokes downloadAppUpdate', async () => {
-    mockDownloadAppUpdate.mockResolvedValueOnce({ ready: true, version: '0.51.0', body: null });
+  it('retries the update check instead of downloading without an available release', async () => {
+    mockCheckAppUpdate.mockResolvedValueOnce({
+      current_version: '0.50.0',
+      available: false,
+      available_version: null,
+      body: null,
+    });
 
+    // A scheduled check failure is intentionally silent. The global banner is
+    // for visible shell errors; retry must probe before any download is known.
     renderWithProviders(
       <AppUpdatePrompt autoCheck={false} initialCheckDelayMs={0} recheckIntervalMs={0} />
     );
+    await waitFor(() => expect(statusListeners.length).toBeGreaterThan(0));
+    emitStatus('error');
+
+    const retryBtn = await screen.findByRole('button', { name: /Try again/ });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1));
+    expect(mockDownloadAppUpdate).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed download directly when an available update is already known', async () => {
+    mockCheckAppUpdate.mockResolvedValueOnce({
+      current_version: '0.50.0',
+      available: true,
+      available_version: '0.51.0',
+      body: null,
+    });
+    mockDownloadAppUpdate.mockResolvedValueOnce({ ready: true, version: '0.51.0', body: null });
+
+    renderWithProviders(
+      <AppUpdatePrompt initialCheckDelayMs={0} recheckIntervalMs={0} autoDownload={false} />
+    );
+    await waitFor(() => expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(statusListeners.length).toBeGreaterThan(0));
 
     emitStatus('error');
@@ -176,9 +206,8 @@ describe('AppUpdatePrompt', () => {
     const retryBtn = await screen.findByRole('button', { name: /Try again/ });
     fireEvent.click(retryBtn);
 
-    await waitFor(() => {
-      expect(mockDownloadAppUpdate).toHaveBeenCalledTimes(1);
-    });
+    await waitFor(() => expect(mockDownloadAppUpdate).toHaveBeenCalledTimes(1));
+    expect(mockCheckAppUpdate).toHaveBeenCalledTimes(1);
   });
 
   it('shows the installing-phase banner with progress copy', async () => {
