@@ -158,6 +158,28 @@ async fn bad_legacy_document_rolls_back_without_destroying_user_data() {
     assert!(!bytes_before.is_empty());
 }
 
+// Windows FlushFileBuffers requires GENERIC_WRITE. A verified VACUUM INTO
+// rollback file must be durably flushed before we touch the original DB.
+// Reproduces the File::open(...).sync_all() access-denied startup failure.
+#[cfg(windows)]
+#[test]
+fn windows_migration_preserves_and_flushes_the_verified_rollback_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = legacy_db(dir.path(), false);
+    let conn = rusqlite::Connection::open_with_flags(&db, OpenFlags::SQLITE_OPEN_READ_WRITE)
+        .expect("open the historical database");
+    let counts = inventory(&conn).expect("inventory the source");
+
+    let path = backup(&conn, &db, &counts)
+        .expect("flush a validated VACUUM INTO backup using a write-capable file handle");
+
+    let verified = rusqlite::Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .expect("open the verified backup");
+    check_integrity(&verified).expect("backup integrity");
+    assert_eq!(inventory(&verified).unwrap(), counts);
+    assert!(table_exists(&verified, "_tsd_docs").unwrap());
+}
+
 #[test]
 fn large_profile_upgrade_refuses_unbudgeted_backup_and_wal_growth() {
     // A 12 GiB legacy file with 34.8 GiB free must not start a backup that
