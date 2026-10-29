@@ -48,8 +48,8 @@ fn preflight_migration_disk_space(file: &Path) -> Result<(), StorageError> {
         .map_err(|e| error("inspect source database size", e))?
         .len();
     let parent = file.parent().unwrap_or_else(|| Path::new("."));
-    let available = fs2::available_space(parent)
-        .map_err(|e| error("inspect available disk space", e))?;
+    let available =
+        fs2::available_space(parent).map_err(|e| error("inspect available disk space", e))?;
     if let Some(required) = migration_headroom_shortfall(source_bytes, available) {
         const GIB: f64 = 1_073_741_824.0;
         return Err(StorageError::backend(format!(
