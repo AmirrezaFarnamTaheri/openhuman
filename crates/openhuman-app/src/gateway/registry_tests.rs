@@ -107,5 +107,8 @@ fn selected_remote_gateway_is_not_overwritten_by_a_desktop_restart() {
 
     registry::refresh_desktop_endpoint(&mut active, false, &restarted);
 
-    assert_eq!(active, original, "remote URL and bearer must remain untouched");
+    assert_eq!(
+        active, original,
+        "remote URL and bearer must remain untouched"
+    );
 }
