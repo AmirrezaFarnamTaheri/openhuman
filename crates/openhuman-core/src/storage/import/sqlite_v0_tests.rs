@@ -80,6 +80,25 @@ fn a_current_sqlite_database_never_creates_legacy_migration_lockfiles() {
 }
 
 #[test]
+fn a_stalled_peer_cannot_hold_legacy_migration_queued_forever() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = legacy_db(dir.path(), false);
+    let original = std::fs::read(&db).unwrap();
+    let _peer = MigrationLock::acquire(&db).unwrap();
+    let result = MigrationLock::acquire_with_timeout(
+        &db,
+        std::time::Duration::from_millis(60),
+    );
+    let error = match result {
+        Ok(_) => panic!("the waiting process must not bypass the peer's migration lock"),
+        Err(error) => error.to_string(),
+    };
+    assert!(error.contains("another process"), "{error}");
+    assert!(error.contains("retry"), "{error}");
+    assert_eq!(std::fs::read(&db).unwrap(), original);
+}
+
+#[test]
 fn concurrent_upgrade_process_handles_are_serialized_before_database_inspection() {
     let dir = tempfile::tempdir().unwrap();
     let db = legacy_db(dir.path(), false);
