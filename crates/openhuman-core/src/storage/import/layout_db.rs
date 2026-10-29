@@ -130,7 +130,15 @@ pub fn copy(source: &Path, dest: &Path) -> Result<DbCopy, LayoutError> {
             "the database copy does not match its source ({diff})"
         )));
     }
-    std::fs::File::open(&tmp)?.sync_all()?;
+    // The temporary VACUUM copy is already closed and verified. On Windows
+    // FlushFileBuffers requires a handle with GENERIC_WRITE; File::open
+    // creates a read-only handle and fails with Access Denied at this step.
+    // Reopen only the copy with write access for fsync, never the source.
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&tmp)?
+        .sync_all()?;
     std::fs::rename(&tmp, dest)?;
     tracing::info!(
         target: "openhuman::storage",
