@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 fn sink() -> RelayChannel {
     RelayChannel::new(
+        crate::core::runtime::DispatchCtx::unbound(),
         "telegram",
         "gw-1",
         "channel:telegram/42/-100",
@@ -42,7 +43,7 @@ fn the_outbound_event_names_the_chat_and_carries_the_text() {
 }
 
 #[tokio::test]
-async fn send_publishes_under_the_callers_stamp_and_records_the_text() {
+async fn send_preserves_bound_profile_stamp_without_ambient_task_scope() {
     let mut events = crate::web_chat::subscribe_web_channel_events();
     let context =
         crate::core::runtime::CoreContext::for_test(crate::core::runtime::DomainSet::full(), None)
@@ -56,6 +57,7 @@ async fn send_publishes_under_the_callers_stamp_and_records_the_text() {
                 .profile("p-relay-test"),
             );
     let channel = Arc::new(RelayChannel::new(
+        crate::core::runtime::DispatchCtx::new(context),
         "telegram",
         "gw-stamp",
         "channel:telegram/1/2",
@@ -63,13 +65,16 @@ async fn send_publishes_under_the_callers_stamp_and_records_the_text() {
         "m-9",
     ));
     let sender = Arc::clone(&channel);
-    crate::core::runtime::CoreContext::scope(context, async move {
+    // A native module or executor can poll the sender outside the task-local
+    // profile scope. Its publisher must retain the caller's explicit context.
+    tokio::spawn(async move {
         sender
             .send(&SendMessage::new("reply one", "2"))
             .await
             .expect("send");
     })
-    .await;
+    .await
+    .expect("unscoped sender task");
 
     let event = loop {
         let event = events.recv().await.expect("event");

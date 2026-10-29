@@ -418,6 +418,20 @@ impl Config {
         source: &dyn super::source::ConfigSource,
         update_snapshot: bool,
     ) -> Result<()> {
+        if self.runtime_state.unreadable_config_secrets > 0 {
+            // The forgiving startup loader cannot decrypt some credentials
+            // and replaces them with None in memory. Treat that snapshot as
+            // read-only until a fresh load can recover the correct master key.
+            // Otherwise *any* later settings write silently destroys the
+            // encrypted values still present in the original config.toml.
+            anyhow::bail!(
+                "Refusing to save config: {} unreadable encrypted credentials were \
+                 cleared after a keyring failure. The existing encrypted config \
+                 is preserved. Restore keyring access and reload OpenHuman before \
+                 saving changes.",
+                self.runtime_state.unreadable_config_secrets
+            );
+        }
         let source_anchor = source.anchor();
         let expected_snapshot = self.runtime_state.document_snapshot.lock().unwrap().clone();
         let initial_file_import = matches!(

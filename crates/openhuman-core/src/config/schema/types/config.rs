@@ -23,6 +23,10 @@ pub(crate) struct ConfigDocumentSnapshot {
 pub struct ConfigRuntimeState {
     pub(crate) provenance: super::super::load::ConfigProvenance,
     pub(crate) load_diagnostics: super::super::load::LoadDiagnostics,
+    /// Number of encrypted fields cleared in-memory because their key was
+    /// inaccessible during this config load. Prevents a later ordinary save
+    /// from overwriting the original sealed values with None.
+    pub(crate) unreadable_config_secrets: usize,
     pub(crate) doctor_profile_layout_version:
         Option<crate::config::schema::profile_layout::LayoutVersion>,
     pub(crate) doctor_profile_resolution_source: Option<String>,
@@ -38,6 +42,7 @@ impl Clone for ConfigRuntimeState {
         Self {
             provenance: self.provenance.clone(),
             load_diagnostics: self.load_diagnostics.clone(),
+            unreadable_config_secrets: self.unreadable_config_secrets,
             doctor_profile_layout_version: self.doctor_profile_layout_version,
             doctor_profile_resolution_source: self.doctor_profile_resolution_source.clone(),
             document_snapshot: std::sync::Mutex::new(

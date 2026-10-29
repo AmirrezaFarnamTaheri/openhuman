@@ -124,3 +124,54 @@ async fn a_snapshot_reload_opens_sealed_secrets() {
         Some("composio-sentinel")
     );
 }
+/// The desktop must remain usable if its keyring is inaccessible, but it must
+/// never silently commit the in-memory None used for a temporarily unreadable
+/// encrypted credential over the original ciphertext in config.toml.
+#[tokio::test]
+async fn unreadable_startup_secret_never_becomes_a_destructive_settings_save() {
+    let original = tempfile::tempdir().unwrap();
+    let wrong_key = tempfile::tempdir().unwrap();
+    let mut config = Config::default();
+    config.config_path = original.path().join("config.toml");
+    config.workspace_dir = original.path().join("workspace");
+    config.secrets.encrypt = true;
+    config.search.tinyfish.api_key = Some("sentinel-must-survive-keyring-failure".into());
+
+    encrypt_config_secrets(&mut config).unwrap();
+    let at_rest = toml::to_string_pretty(&config).unwrap();
+    assert!(at_rest.contains("enc2:"));
+    assert!(!at_rest.contains("sentinel-must-survive-keyring-failure"));
+    std::fs::write(&config.config_path, &at_rest).unwrap();
+
+    // Exercise the same forgiving decryption path as load_existing_config,
+    // simulating a host keyring inaccessible under the current Windows ACL.
+    decrypt_config_secrets(&mut config, wrong_key.path()).unwrap();
+    assert!(config.search.tinyfish.api_key.is_none());
+    config.default_model = Some("modified-during-the-outage".into());
+
+    let error = config.save().await.unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("unreadable encrypted credentials"),
+        "the caller must receive a safe, actionable refusal: {error:#}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&config.config_path).unwrap(),
+        at_rest,
+        "a failed keyring read must not erase encrypted credentials or replace the backup"
+    );
+
+    // Once the correct key is available, a fresh load can decrypt and save.
+    let recovered = Config::load_from_config_path(&config.config_path, &config.workspace_dir)
+        .await
+        .unwrap();
+    assert_eq!(
+        recovered.search.tinyfish.api_key.as_deref(),
+        Some("sentinel-must-survive-keyring-failure")
+    );
+    recovered.save().await.unwrap();
+    let saved = std::fs::read_to_string(&config.config_path).unwrap();
+    assert!(saved.contains("enc2:"));
+    assert!(!saved.contains("sentinel-must-survive-keyring-failure"));
+}

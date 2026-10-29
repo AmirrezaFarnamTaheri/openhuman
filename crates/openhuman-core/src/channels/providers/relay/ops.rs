@@ -161,6 +161,7 @@ pub(crate) async fn run_relay_turn(
     // name the thread, so the guard is taken on the thread itself; this task
     // runs in the caller's scope, which keys it to the caller's profile.
     let channel = Arc::new(RelayChannel::new(
+        dispatch_ctx.clone(),
         params.channel.clone(),
         params.client_id(),
         thread_id.clone(),

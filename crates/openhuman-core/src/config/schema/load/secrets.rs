@@ -81,9 +81,8 @@ pub(super) fn decrypt_config_secrets_strict(
     config: &mut Config,
     openhuman_dir: &Path,
 ) -> Result<()> {
-    DECRYPT_FAILURES.with(|failures| failures.set(0));
     decrypt_config_secrets(config, openhuman_dir)?;
-    let failed = DECRYPT_FAILURES.with(|failures| failures.replace(0));
+    let failed = config.runtime_state.unreadable_config_secrets;
     if failed > 0 {
         anyhow::bail!(
             "{failed} config secret(s) are sealed under this node's key and could not be opened; \
@@ -122,6 +121,10 @@ fn encrypt_optional_secret(
 /// config (e.g. `config.save()`) when this is `true` so the upgraded ciphertext
 /// is written to disk and the legacy XOR value stops persisting (audit C8).
 pub(super) fn decrypt_config_secrets(config: &mut Config, openhuman_dir: &Path) -> Result<bool> {
+    // Never carry an unrelated earlier pass's failed-decrypt count over to a
+    // config that has successfully loaded its own secrets.
+    config.runtime_state.unreadable_config_secrets = 0;
+    DECRYPT_FAILURES.with(|failures| failures.set(0));
     if !config.secrets.encrypt {
         return Ok(false);
     }
@@ -143,6 +146,11 @@ pub(super) fn decrypt_config_secrets(config: &mut Config, openhuman_dir: &Path) 
         decrypt_optional_secret(&store, value, name)
     })?;
 
+    // The forgiving startup path deliberately clears fields it cannot open so
+    // the app can continue. Propagate that *fact* to Config::save: otherwise a
+    // later unrelated settings change permanently erases ciphertext on disk.
+    config.runtime_state.unreadable_config_secrets =
+        DECRYPT_FAILURES.with(|failures| failures.replace(0));
     Ok(migration_flag().swap(false, Ordering::Relaxed))
 }
 

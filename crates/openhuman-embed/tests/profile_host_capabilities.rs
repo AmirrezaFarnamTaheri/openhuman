@@ -501,24 +501,44 @@ async fn scenario() {
         .await
         .unwrap();
     let mut events = reopened.events();
-    assert!(
-        reopened
-            .relay_inbound(RelayMessage::new(
-                "telegram",
-                "chat",
-                "sender",
-                "reopened-message",
-                "alice: call tenant_probe after reopening"
-            ))
-            .await
-            .unwrap()
-            .accepted
-    );
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while events.recv().await.unwrap().event_name() != "channel_outbound" {}
+    let accepted = reopened
+        .relay_inbound(RelayMessage::new(
+            "telegram",
+            "chat",
+            "sender",
+            "reopened-message",
+            "alice: call tenant_probe after reopening",
+        ))
+        .await
+        .unwrap();
+    assert!(accepted.accepted);
+    let request_id = accepted
+        .request_id
+        .expect("accepted reopened relay has a request id");
+    let mut observed_events = Vec::new();
+    // A lease close/reopen may cold-start modules under LLVM instrumentation.
+    // Still require the exact accepted turn to deliver an outbound event.
+    tokio::time::timeout(Duration::from_secs(60), async {
+        loop {
+            let event = events
+                .recv()
+                .await
+                .expect("profile event stream remains open");
+            let event_name = event.event_name();
+            let event_request_id = event.context().request_id.as_str();
+            observed_events.push(format!("{event_name}:{event_request_id}"));
+            if event_name == "channel_outbound" && event_request_id == request_id {
+                break;
+            }
+        }
     })
     .await
-    .unwrap();
+    .unwrap_or_else(|_| {
+        panic!(
+            "missing channel_outbound for {request_id}; events: {observed_events:?}; calls: {:?}",
+            *calls.lock().unwrap()
+        )
+    });
     assert_eq!(
         &calls.lock().unwrap()[4..],
         ["tenant_probe:alice", "tenant_probe:alice"]
