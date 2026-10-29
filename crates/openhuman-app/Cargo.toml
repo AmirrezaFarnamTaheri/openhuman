@@ -6,7 +6,7 @@
 
 [package]
 name = "openhuman-app"
-version = "1.0.1"
+version = "1.0.2"
 description = "OpenHuman - AI-powered Super Assistant"
 authors = ["OpenHuman"]
 edition = "2021"
